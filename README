@@ -1,4 +1,5 @@
 TINY KERNEL:
+------------
 The goals of the project are:
 	1) It should be modernday kernel with a small footprint.
 	2) To offload as much driver code and file system in to the Host operating system if it not running on the bare metal.
