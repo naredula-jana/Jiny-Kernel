@@ -1,1 +1,0 @@
-gcc symbol_table.c -o gen_symboltbl
