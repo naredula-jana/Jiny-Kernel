@@ -1,0 +1,8 @@
+make
+sudo losetup /dev/loop0 -d
+sudo losetup /dev/loop0  bin/g2_image
+mkdir /tmp/ab/
+sudo mount /dev/loop0 /tmp/ab/
+sudo cp bin/kernel_bin /tmp/ab/kernel
+sudo cp bin/mod_file /tmp/ab/mod_file
+sudo umount /tmp/ab

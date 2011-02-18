@@ -1,0 +1,5 @@
+sudo losetup /dev/loop0 -d
+sudo losetup /dev/loop0 -o 32256 ./g1_image 
+sudo mount /dev/loop0 /tmp/ab/
+sudo cp kernel_bin /tmp/ab/boot/kernel
+sudo umount /tmp/ab

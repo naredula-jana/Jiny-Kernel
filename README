@@ -1,0 +1,56 @@
+TINY KERNEL:
+The goals of the project are:
+	1) It should be modernday kernel with a small footprint.
+	2) To offload as much driver code and file system in to the Host operating system if it not running on the bare metal.
+	3) poweful command line similer to vxworks to debug the environment.
+	
+Design :
+
+mm : memory management
+vfs : virtual filesystem
+kernel : cpu scheduling
+
+------------------------------
+Code Organization:
+  Entire code is splitted into the following modules:
+
+1) scheduling (sc)
+	sc_fork
+	sc_createThread
+	sc_exit
+	sc_schedule
+	
+2) memory management ( vm,mm)
+	vm_brk
+	vm_mmap
+	vm_munmap
+	vm_findVma
+	vm_printMmaps
+
+	mm_getFreePages	
+	mm_putFreePages	
+	mm_malloc
+	mm_free
+	mm_kmem_*
+	
+		
+3) isr  (AR)
+4) Drivers (DR)
+5) utilities (UT)
+	ut_putchar
+	ut_printf
+	ut_memcpy
+	ut_memset
+	ut_strcmp
+	ut_strcpy
+	ut_strlen
+
+_____________________________
+ Running :
+  -> multiboot (hd0)/kernel
+  -> boot
+
+vim commands:
+    ESC V G =   for entire file
+    ESC V % =  for a block
+  V= visual mode

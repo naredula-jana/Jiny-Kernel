@@ -1,0 +1,37 @@
+URGENT:
+   when schedule is called from do_exit or any other function, at the same time schedule may be called from timer interrupt, this need to avoided by some means.
+
+Basic:
+1. scheduler improvement:
+	a) exit method.
+	b) proper bottom-half handling and schedule method calling from interrupt.
+
+2. mm improvement: 
+	a) kmalloc.
+	b) virtual address @ non-zero
+	
+3. code reorg:
+	a) defining the interface between mm/kernel/arch.
+	
+4. Improving the command line:
+	a) shell improvement, 
+	c) display,
+	
+5. misc:
+	a) stats:  scheduler
+
+Urgent:  cleanup the display.c with sti and cli commands, scroll .
+---------------------------------------------------------
+
+Advanced:
+1. VFS layer + Para virtualised Filsystem layer: 
+	a) defining the VFS interface.
+	b) defining a small para virtualised file system.
+2. elf binary interepreter:
+	a) interpreting the elf binary
+	b) hooking to the OS environment.
+3. system interface layer for the user level code to run:
+4. Misc:
+	a) implementing tickless timer interrupt .
+
+

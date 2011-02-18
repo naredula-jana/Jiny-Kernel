@@ -1,0 +1,77 @@
+K 25
+svn:wc:ra_dav:version-url
+V 32
+/svn/!svn/ver/20/trunk/arch/i386
+END
+gdt.s
+K 25
+svn:wc:ra_dav:version-url
+V 38
+/svn/!svn/ver/11/trunk/arch/i386/gdt.s
+END
+pci.h
+K 25
+svn:wc:ra_dav:version-url
+V 38
+/svn/!svn/ver/11/trunk/arch/i386/pci.h
+END
+isr.h
+K 25
+svn:wc:ra_dav:version-url
+V 38
+/svn/!svn/ver/11/trunk/arch/i386/isr.h
+END
+boot.S
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/!svn/ver/14/trunk/arch/i386/boot.S
+END
+paging.c
+K 25
+svn:wc:ra_dav:version-url
+V 41
+/svn/!svn/ver/20/trunk/arch/i386/paging.c
+END
+descriptor_tables.c
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/!svn/ver/15/trunk/arch/i386/descriptor_tables.c
+END
+paging.h
+K 25
+svn:wc:ra_dav:version-url
+V 41
+/svn/!svn/ver/11/trunk/arch/i386/paging.h
+END
+pci.c
+K 25
+svn:wc:ra_dav:version-url
+V 38
+/svn/!svn/ver/11/trunk/arch/i386/pci.c
+END
+Makefile
+K 25
+svn:wc:ra_dav:version-url
+V 41
+/svn/!svn/ver/11/trunk/arch/i386/Makefile
+END
+interrupt.s
+K 25
+svn:wc:ra_dav:version-url
+V 44
+/svn/!svn/ver/11/trunk/arch/i386/interrupt.s
+END
+descriptor_tables.h
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/!svn/ver/11/trunk/arch/i386/descriptor_tables.h
+END
+isr.c
+K 25
+svn:wc:ra_dav:version-url
+V 38
+/svn/!svn/ver/15/trunk/arch/i386/isr.c
+END
