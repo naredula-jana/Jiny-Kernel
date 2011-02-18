@@ -91,7 +91,7 @@ void ut_memcpy(uint8_t *dest, const uint8_t *src, addr_t len)
 void ut_memset(uint8_t *dest, uint8_t val, long len)
 {
 	uint8_t *temp = (uint8_t *)dest;
-	ut_printf("memset dest :%x val :%x LEN addr:%x temp:%x \n",dest,val,&len,&temp);/* TODO */
+	//ut_printf("memset dest :%x val :%x LEN addr:%x temp:%x \n",dest,val,&len,&temp);/* TODO */
 	for ( ; len != 0; len--) *temp++ = val;
 	//ut_printf("END memset temp :%x val :%x len:%x \n",temp,val,len);
 }
