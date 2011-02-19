@@ -126,9 +126,13 @@ int recv_msg()
 }
 int send_interrupt()
 {
-	if (guestos_fd == -1 ) return -1;
-	if (write(guestos_fd ,&write_one,8)==8) return 1;
-	return -2;
+	int ret=0;
+
+	if (guestos_fd == -1 ) ret= -1;
+        else if (write(guestos_fd ,&write_one,8)==8) ret= 1;
+	else ret= -2;
+	printf("Send interrupt :%d \n",ret);
+	return ret;
 }
 void init_filecache()
 {
@@ -164,18 +168,20 @@ int init()
 	init_filecache();
 	return 1;
 }
-int read_file(int i,int c)
+int read_file(int s,int c)
 {
 	int fd,ret;
-	filecache->serverFiles[i].state=STATE_UPDATE_INPROGRESS;
+//char buf[MAX_BUF+4];
+	filecache->serverFiles[s].state=STATE_UPDATE_INPROGRESS;
 	printf("Reading the file :%s: \n",filecache->clientRequests[c].filename);	
 	fd=open(filecache->clientRequests[c].filename,O_RDONLY);
 	if (fd > 0)
 	{
-		lseek(fd,filecache->clientRequests[c].offset,SEEK_SET);
-		ret=read(fd,filecache->serverFiles[i].filePtr,MAX_BUF);
-		filecache->serverFiles[i].len=ret;
-		filecache->serverFiles[i].offset=filecache->clientRequests[c].offset;
+	//	lseek(fd,filecache->clientRequests[c].offset,SEEK_SET);
+		ret=read(fd,&filecache->serverFiles[s].filePtr[0],MAX_BUF);
+//		ret=read(fd,buf,MAX_BUF);
+		filecache->serverFiles[s].len=ret;
+		filecache->serverFiles[s].offset=filecache->clientRequests[c].offset;
 		printf(" Reading the file :%s: len:%d: ret:%d :\n",filecache->clientRequests[c].filename,ret,ret);
 		ret=RESPONSE_DONE;
 	}else
@@ -183,9 +189,11 @@ int read_file(int i,int c)
 		printf(" Response failed \n");
 		ret=RESPONSE_FAILED;
 	}
-	strcpy(filecache->serverFiles[i].filename,filecache->clientRequests[c].filename);
-	filecache->serverFiles[i].state=STATE_VALID;
+	strcpy(filecache->serverFiles[s].filename,filecache->clientRequests[c].filename);
+	filecache->serverFiles[s].state=STATE_VALID;
 	filecache->clientRequests[c].server_response=ret;
+	send_interrupt();
+	system("sleep 5");
 	send_interrupt();
 	return ret;
 }
@@ -227,15 +235,15 @@ main()
 	if (init() == 0) return;
 
 	pthread_create(&thread_id,NULL,recv_thread,0);
-
+printf(" .. Ready to Process \n");
 	while(1)
 	{
-		system("sleep 5");
+	/*	system("sleep 5");
 		ret=send_interrupt();	
-		printf(" return from send interrupt : %d \n",ret);
+		printf(" return from send interrupt : %d \n",ret); */
 		for (i=0; i<filecache->client_highindex; i++)
 		{
-			if (filecache->clientRequests[i].state==STATE_VALID)
+			if (filecache->clientRequests[i].state==STATE_VALID && filecache->clientRequests[i].server_response==RESPONSE_NONE )
 			{
 				process_request(i);
 			}	

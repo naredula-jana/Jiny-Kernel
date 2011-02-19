@@ -1,4 +1,4 @@
-#define FS_VERSION 2
+#define FS_VERSION 3
 #define FS_MAGIC 0x12345678
 #define MAX_FILENAMELEN 200
 #define MAX_BUF 4096
@@ -15,17 +15,25 @@ enum {
 	RESPONSE_FAILED=1,
 	RESPONSE_DONE=2
 };
+enum {
+	REQUEST_OPEN=0,
+	REQUEST_READ=1,
+	REQUEST_EVACUATE
+};
 	
 typedef struct {
 	unsigned char state;
+	unsigned int count;
 	unsigned char filename[MAX_FILENAMELEN];
 	unsigned char filePtr[MAX_BUF+1];
 	unsigned long offset;
 	unsigned long len;
+	int fd;
 }ServerFiles_t;
 
 typedef struct {
 	unsigned char state;
+	unsigned char type;
 	unsigned char filename[MAX_FILENAMELEN];
 	unsigned char server_response;	
 	unsigned long offset;

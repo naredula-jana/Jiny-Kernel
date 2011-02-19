@@ -79,7 +79,7 @@ static inline void move_first_runqueue(struct task_struct * p)
 
 
 /******************************************  WAIT QUEUE *******************/
-void init_waitqueue(struct wait_struct *waitqueue)
+void inline init_waitqueue(struct wait_struct *waitqueue)
 {
 	waitqueue->queue=NULL;
 	waitqueue->lock=SPIN_LOCK_UNLOCKED;
@@ -166,18 +166,39 @@ static inline int del_from_waitqueue(struct wait_struct *waitqueue,struct task_s
 	return 1;
 }
 
-void sc_wakeUp(struct wait_struct *waitqueue,struct task_struct * p)
+int sc_wakeUp(struct wait_struct *waitqueue,struct task_struct * p)
 {
-	unsigned long flags;
+	int ret=0;
 
-	spin_lock_irqsave(&g_runqueue_lock, flags);
-	if (del_from_waitqueue(waitqueue,p) == 1)
+	unsigned long flags;
+	if (p == NULL)
 	{
-		p->state = TASK_RUNNING;
-		if (!p->next_run)
-			add_to_runqueue(p);
+		while (waitqueue->queue != NULL)
+		{
+			p=waitqueue->queue;
+			spin_lock_irqsave(&g_runqueue_lock, flags);
+			if (del_from_waitqueue(waitqueue,p) == 1)
+			{
+				p->state = TASK_RUNNING;
+				if (!p->next_run)
+					add_to_runqueue(p);
+				ret++;
+			}
+			spin_unlock_irqrestore(&g_runqueue_lock, flags);
+		}	
+	}else
+	{
+		spin_lock_irqsave(&g_runqueue_lock, flags);
+		if (del_from_waitqueue(waitqueue,p) == 1)
+		{
+			p->state = TASK_RUNNING;
+			if (!p->next_run)
+				add_to_runqueue(p);
+			ret++;
+		}
+		spin_unlock_irqrestore(&g_runqueue_lock, flags);
 	}
-	spin_unlock_irqrestore(&g_runqueue_lock, flags);
+	return ret;
 }
 
 
@@ -335,7 +356,7 @@ void sc_schedule()
 
 	if (!g_current_task)
 		return;
-	
+
 	spin_lock_irqsave(&g_runqueue_lock, flags);
 	prev=g_current_task;
 	if (prev!= g_init_task) 
@@ -376,6 +397,7 @@ void do_softirq()
 		sc_schedule();
 	}
 }
+extern struct wait_struct g_hfs_waitqueue;
 static void timer_callback(registers_t regs)
 {
 	g_jiffies++;
@@ -389,10 +411,24 @@ static void timer_callback(registers_t regs)
 
 			p=g_timerqueue.queue;
 			del_from_waitqueue(&g_timerqueue,p);			
-		        p->state = TASK_RUNNING;
-        		if (!p->next_run)
-                		add_to_runqueue(p);
+			p->state = TASK_RUNNING;
+			if (!p->next_run)
+				add_to_runqueue(p);
 		}
+	}
+	if (g_hfs_waitqueue.queue != NULL)
+	{
+		g_hfs_waitqueue.queue->sleep_ticks--;
+                if (g_hfs_waitqueue.queue->sleep_ticks <= 0)
+                {
+                        struct task_struct *p;
+
+                        p=g_hfs_waitqueue.queue;
+                        del_from_waitqueue(&g_hfs_waitqueue,p);
+                        p->state = TASK_RUNNING;
+                        if (!p->next_run)
+                                add_to_runqueue(p);
+                }
 	}
 	do_softirq();
 }

@@ -1,8 +1,10 @@
 #include "../util/host_fs/filecache_schema.h"
 #include "vfs.h"
+#include "common.h"
+#include "task.h"
 struct filesystem host_fs;
 static fileCache_t *filecachep=0;
-
+struct wait_struct g_hfs_waitqueue;
 
 static struct file *hfOpen(unsigned char *filename)
 {
@@ -23,7 +25,7 @@ error:
 	return 0;
 }
 
-static int hfRead(struct file *filep,unsigned char *buf, unsigned long len)
+static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 {
 	int i,j,ret,tlen;
 	unsigned long offset;
@@ -62,7 +64,12 @@ ut_printf(" filename from hs  :%s: \n",filep->filename);
 	filecachep->clientRequests[j].len=len;
 	filecachep->clientRequests[j].server_response=RESPONSE_NONE;
 	filecachep->clientRequests[j].state=STATE_VALID;
-	while(filecachep->clientRequests[j].server_response==RESPONSE_NONE) ;	
+	while(filecachep->clientRequests[j].server_response==RESPONSE_NONE) 	
+	{
+		ut_printf(" Before Wait : %d :\n",g_jiffies);
+		sc_wait(&g_hfs_waitqueue,1000);
+		ut_printf(" After Wait : %d :\n",g_jiffies);
+	}
 	if (filecachep->clientRequests[j].server_response == RESPONSE_FAILED)
 	{
 ut_printf(" error in response    \n");
@@ -99,6 +106,9 @@ static int hfClose(struct file *filep)
 }
 int init_hostFs()
 {
+	g_hfs_waitqueue.queue=NULL;
+	g_hfs_waitqueue.lock=SPIN_LOCK_UNLOCKED;
+
 	if (g_hostShmLen ==0)
 	{
 		ut_printf(" ERROR : host_shm not Initialized \n");

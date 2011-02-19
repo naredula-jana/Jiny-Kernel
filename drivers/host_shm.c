@@ -6,13 +6,15 @@
 pci_dev_header_t host_shm_pci_hdr;
 pci_bar_t host_shm_pci_bar[4];
 unsigned long g_hostShmLen=0;
+extern struct wait_struct g_hfs_waitqueue;
 static void host_shm_interrupt(registers_t regs)
 {
-	uint32_t  i,*p;
+	uint32_t  i,*p,ret;
 
 	p=(unsigned char *)HOST_SHM_CTL_ADDR+4;
        	*p=0; /* reset the irq by resetting the status  */
-	ut_printf(" GOT HOST SHM INTERRUPT  :%x: \n",p);
+	ret=sc_wakeUp(&g_hfs_waitqueue,NULL); /* wake all the waiting processes */	
+	ut_printf(" GOT HOST SHM INTERRUPT  :%x:  wakedup :%d \n",p,ret);
 }
 int init_host_shm(pci_dev_header_t *pci_hdr,pci_bar_t bars[], uint32_t len)
 {

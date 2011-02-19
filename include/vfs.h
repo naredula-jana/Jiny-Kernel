@@ -11,11 +11,12 @@ extern kmem_cache_t *vfs_cachep;
 struct file {	
 	char filename[MAX_FILENAME];
         int type;
+	unsigned long offset;
         addr_t *addr;
 };
 struct filesystem {
 	struct file *(*open)(char *filename);
-	int (*read)(struct file *file, unsigned long offset, unsigned long len,unsigned char *buff);
+	int (*read)(struct file *file,  unsigned char *buff,unsigned long len);
 	int (*close)(struct file *file);
 };
 
