@@ -77,7 +77,7 @@ static int sh_cat(char *arg1,char *arg2)
 		return 0;
 	}
 	buf[1000]=0;
-	ret=fs_read(fp,0,500,buf);
+	ret=fs_read(fp,buf,500);
 	if (ret > 0)
 	{
 		ut_printf(" Data Read :%s:\n",buf);
@@ -96,7 +96,7 @@ static int sh_create(char *arg1,char *arg2)
 static int print_help(char *arg1,char *arg2)
 {
 	int i;
-	ut_printf("Version 1.55 stacksize:%x  \n",STACK_SIZE);
+	ut_printf("Version 1.56 stacksize:%x  \n",STACK_SIZE);
 	for (i=0; i<MAX_COMMANDS; i++)
 	{
 		if (cmd_list[i].usage == 0) break;

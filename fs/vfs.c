@@ -14,10 +14,10 @@ struct file *fs_open(unsigned char *filename)
 	if (vfs_fs == 0) return 0;
 	return vfs_fs->open(filename);
 }
-int fs_read(struct file *file, unsigned long offset ,unsigned long len,unsigned char *buff)
+int fs_read(struct file *file ,sunsigned char *buff ,unsigned long len)
 {
 	if (vfs_fs == 0) return 0;
-	return vfs_fs->read(file,offset,len,buff);
+	return vfs_fs->read(file,buff,len);
 }
 int fs_close(struct file *file)
 {

@@ -44,12 +44,13 @@ static int current_pos=0;
 static int read_pos=0;
 struct task_struct *waiting_task=0;
 int keyboard_int=0;
+extern struct wait_struct g_timerqueue;
 void dr_keyBoardBH() /* bottom half */
 {
 	//keyboard_int=0;
 	if (waiting_task != 0)
 	{
-		sc_wakeUpProcess(waiting_task);
+		sc_wakeUp(&g_timerqueue,waiting_task);
 		waiting_task=0;
 	}
 }
@@ -61,9 +62,7 @@ unsigned char dr_kbGetchar()
 	while(current_pos ==0) 
 	{
 		waiting_task=g_current_task;
-	/*	current_task->state=TASK_INTERRUPTIBLE;
-		sc_schedule(); */
-		sc_sleep(1000); 
+		sc_sleep(2000); /* 20 seconds */
 	}
 	if (read_pos < current_pos)
 	{

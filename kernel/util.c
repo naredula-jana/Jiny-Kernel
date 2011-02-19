@@ -86,14 +86,22 @@ void ut_memcpy(uint8_t *dest, const uint8_t *src, addr_t len)
 	uint8_t *dp = (uint8_t *)dest;
 	for(; len != 0; len--) *dp++ = *sp++;
 }
-
+uint8_t *tem1=0;
+uint8_t tem2=0;
+long tem3=0;
 // Write len copies of val into dest.
 void ut_memset(uint8_t *dest, uint8_t val, long len)
 {
 	uint8_t *temp = (uint8_t *)dest;
-	//ut_printf("memset dest :%x val :%x LEN addr:%x temp:%x \n",dest,val,&len,&temp);/* TODO */
-	for ( ; len != 0; len--) *temp++ = val;
-	//ut_printf("END memset temp :%x val :%x len:%x \n",temp,val,len);
+	long i;
+#if 0
+tem1=&i; /* TODO : if the above two lines removed then the code hangs */
+tem2=val;
+tem3=len;
+#endif
+	ut_printf("memset NEW dest :%x val :%x LEN addr:%x temp:%x \n",dest,val,&len,&temp);/* TODO */
+	for ( i=len; i != 0; i--) *temp++ = val;
+	return ;
 }
 
 // Compare two strings. Should return -1 if 

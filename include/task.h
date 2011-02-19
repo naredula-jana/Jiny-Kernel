@@ -10,6 +10,11 @@
 #define TASK_STOPPED            4
 #define TASK_DEAD               64
 
+struct wait_struct {
+	struct task_struct *queue;	
+	spinlock_t lock;
+};
+
 struct thread_struct {
 	addr_t   sp;
 	addr_t   ip;
@@ -46,8 +51,6 @@ struct task_struct {
 	struct task_struct *next_run,  *prev_run;  /* run queue */
 	struct task_struct *next_wait,  *prev_wait;  /* wait queue */
 }; 
-
-
 
 extern struct task_struct *g_current_task;
 

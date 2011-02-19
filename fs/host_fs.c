@@ -23,9 +23,10 @@ error:
 	return 0;
 }
 
-static int hfRead(struct file *filep, unsigned long offset, unsigned long len,unsigned char *buff )
+static int hfRead(struct file *filep,unsigned char *buf, unsigned long len)
 {
 	int i,j,ret,tlen;
+	unsigned long offset;
 
 	ret=0;
 	j=-1;

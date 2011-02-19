@@ -1,16 +1,14 @@
 #include "task.h"
 
 struct task_struct *g_current_task,*g_init_task;
-struct task_struct *g_wait_queue=NULL;
 struct mm_struct *g_kernel_mm=0;
 spinlock_t g_runqueue_lock  = SPIN_LOCK_UNLOCKED;
-spinlock_t g_waitqueue_lock  = SPIN_LOCK_UNLOCKED;
+struct wait_struct g_timerqueue;
 int g_pid=0;
 addr_t g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles per second  */
-addr_t g_nr_running;
+addr_t g_nr_running = 0;
 addr_t g_nr_waiting=0;
 addr_t g_tasks[200];
-static int timer_counter=0;
 
 static addr_t g_task_dead=0;  /* TODO : remove me later */
 extern long *stack;
@@ -81,26 +79,31 @@ static inline void move_first_runqueue(struct task_struct * p)
 
 
 /******************************************  WAIT QUEUE *******************/
-
-static inline void add_to_waitqueue(struct task_struct * p,int dur) 
+void init_waitqueue(struct wait_struct *waitqueue)
+{
+	waitqueue->queue=NULL;
+	waitqueue->lock=SPIN_LOCK_UNLOCKED;
+	return;
+}
+static inline void add_to_waitqueue(struct wait_struct *waitqueue,struct task_struct * p,int dur) 
 {  
 	struct task_struct *tmp,*ptmp;
 	int cum_dur,prev_cum_dur;
 	unsigned long flags;
 
-	spin_lock_irqsave(&g_waitqueue_lock, flags);
+	spin_lock_irqsave(&waitqueue->lock, flags);
 
 	cum_dur=0;
 	prev_cum_dur=0;	
-	if (g_wait_queue == NULL) 
+	if (waitqueue->queue == NULL) 
 	{
-		g_wait_queue=p;
+		waitqueue->queue=p;
 		p->sleep_ticks=dur;
 		p->next_wait=NULL;
 		p->prev_wait=NULL;
 	}else
 	{
-		tmp=g_wait_queue;
+		tmp=waitqueue->queue;
 		while (tmp->next_wait != NULL)
 		{
 			if (dur < cum_dur) break;
@@ -112,8 +115,8 @@ static inline void add_to_waitqueue(struct task_struct * p,int dur)
 	/* prev_cum_dur < dur < cum_dir  */
 		if (tmp->prev_wait == NULL) /* Inserting at first node */
 		{
-			if (g_wait_queue != tmp) BUG();
-			g_wait_queue=p;
+			if (waitqueue->queue != tmp) BUG();
+			waitqueue->queue=p;
 			p->sleep_ticks=dur;
 			tmp->prev_wait=p;
 			p->prev_wait=NULL;
@@ -127,16 +130,17 @@ static inline void add_to_waitqueue(struct task_struct * p,int dur)
 		}
 	}
 	g_nr_waiting++;
-	spin_unlock_irqrestore(&g_waitqueue_lock, flags);
+	spin_unlock_irqrestore(&waitqueue->lock, flags);
 }
-static inline void del_from_waitqueue(struct task_struct * p)
+static inline int del_from_waitqueue(struct wait_struct *waitqueue,struct task_struct * p)
 {
 	struct task_struct *next = p->next_wait;
 	struct task_struct *prev = p->prev_wait;
 	unsigned long flags;
 
-	spin_lock_irqsave(&g_waitqueue_lock, flags);
-	g_nr_waiting--;
+	if (p->state != TASK_INTERRUPTIBLE) return 0;
+	spin_lock_irqsave(&waitqueue->lock, flags);
+	g_nr_waiting--; /* TODO : */
 	if (next != NULL)
 	{
 		next->prev_wait = prev;
@@ -147,36 +151,46 @@ static inline void del_from_waitqueue(struct task_struct * p)
 		prev->next_wait = next;
 	}
 
-	if (g_wait_queue == p)
+	if (waitqueue->queue == p)
 	{
-		g_wait_queue=next;
+		waitqueue->queue=next;
 	}
-	if (g_wait_queue == NULL)
+	if (waitqueue->queue == NULL)
 	{
-		timer_counter=0;
 	}
 	p->next_wait = NULL;
 	p->prev_wait = NULL;
 	p->sleep_ticks=0;
 
-	spin_unlock_irqrestore(&g_waitqueue_lock, flags);
+	spin_unlock_irqrestore(&waitqueue->lock, flags);
+	return 1;
 }
-void sc_wakeUpProcess(struct task_struct * p)
+
+void sc_wakeUp(struct wait_struct *waitqueue,struct task_struct * p)
 {
 	unsigned long flags;
 
 	spin_lock_irqsave(&g_runqueue_lock, flags);
-	del_from_waitqueue(p);
-	p->state = TASK_RUNNING;
-	if (!p->next_run)
-		add_to_runqueue(p);
+	if (del_from_waitqueue(waitqueue,p) == 1)
+	{
+		p->state = TASK_RUNNING;
+		if (!p->next_run)
+			add_to_runqueue(p);
+	}
 	spin_unlock_irqrestore(&g_runqueue_lock, flags);
 }
 
-int sc_sleep(int millisec)
+
+int sc_wait(struct wait_struct *waitqueue,int ticks)
 {
 	g_current_task->state=TASK_INTERRUPTIBLE;
-	add_to_waitqueue(g_current_task,millisec);
+	add_to_waitqueue(waitqueue,g_current_task,ticks);
+	sc_schedule();
+}
+int sc_sleep(int ticks) /* each tick is 100HZ or 10ms */
+{
+	g_current_task->state=TASK_INTERRUPTIBLE;
+	add_to_waitqueue(&g_timerqueue,g_current_task,ticks);
 	sc_schedule();
 }
 
@@ -310,10 +324,9 @@ void init_tasking()
 	for (i=0; i<200;i++)
 		g_tasks[0]=0;
 	init_timer();
+	init_waitqueue(&g_timerqueue);
 }
 
-extern int keyboard_int;
-extern void keybh();
 //asmlinkage void schedule(void)
 void sc_schedule()
 {
@@ -322,10 +335,7 @@ void sc_schedule()
 
 	if (!g_current_task)
 		return;
-	if (keyboard_int ==1) /* TODO remove when bottom half comes in */
-	{
-		//	key_bh();
-	}
+	
 	spin_lock_irqsave(&g_runqueue_lock, flags);
 	prev=g_current_task;
 	if (prev!= g_init_task) 
@@ -355,7 +365,7 @@ void sc_schedule()
 	}
 
 	if (prev==next) return;
-	next->counter=10;
+	next->counter=5; /* 50 ms time slice */
 	switch_to(prev,next,prev);
 }
 void do_softirq()
@@ -370,16 +380,15 @@ static void timer_callback(registers_t regs)
 {
 	g_jiffies++;
 	g_current_task->counter--;
-	if (g_wait_queue != NULL)
+	if (g_timerqueue.queue != NULL)
 	{
-		timer_counter++;
-		if (timer_counter > g_wait_queue->sleep_ticks)
+		g_timerqueue.queue->sleep_ticks--;
+		if (g_timerqueue.queue->sleep_ticks <= 0)
 		{
 			struct task_struct *p;
 
-			p=g_wait_queue;
-			timer_counter=0;
-			del_from_waitqueue(g_wait_queue);			
+			p=g_timerqueue.queue;
+			del_from_waitqueue(&g_timerqueue,p);			
 		        p->state = TASK_RUNNING;
         		if (!p->next_run)
                 		add_to_runqueue(p);
