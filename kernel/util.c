@@ -135,6 +135,7 @@ char *ut_strcpy(char *dest, const char *src)
 		*dest++ = *src++;
 	}
 	while (*src != 0);
+	*dest=0;
 }
 
 // Concatenate the NULL-terminated string src onto

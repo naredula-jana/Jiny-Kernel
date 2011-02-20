@@ -19,7 +19,8 @@ void vm_printMmaps();
 void ut_cls();
 
 void test_proc();
-static int sh_sleep(char *arg1,char *arg2);
+static int sh_test1(char *arg1,char *arg2);
+static int sh_test2(char *arg1,char *arg2);
 commands_t cmd_list[]=
 {
 	{"help      ","Print Help Menu","help",print_help},
@@ -27,7 +28,8 @@ commands_t cmd_list[]=
 	{"i         ","Print IRQ stats","i",ar_printIrqStat},
 	{"cls       ","clear screen ","cls",ut_cls},
 	{"mp        ","Memory free areas","mp",mm_printFreeAreas},
-	{"sleep     ","sleep ","sleep",sh_sleep},
+	{"test1     ","test1 ","test1",sh_test1},
+	{"test2     ","test2 ","test2",sh_test2},
 	{"maps      ","Memory map areas","maps",vm_printMmaps},
 	{"host      ","host shm test","host",test_hostshm},
 	{"cat <file>","Cat file       ","cat",sh_cat},
@@ -54,19 +56,25 @@ static int test_hostshm(char *arg1,char *arg2)
 	ut_printf(" new  hostshm : %x :%x \n",a,av);
 	return 1;
 }
-static int g_sleep=0;
-static int sh_sleep(char *arg1,char *arg2)
+static int sh_test1(char *arg1,char *arg2)
 {
-	if (g_sleep==0)
- 		g_sleep=1;
-        else
-		g_sleep=0;	
-ut_printf(" g_lseep :%d: \n",g_sleep);
+	ut_printf(" Before wait sleep: %d \n",g_jiffies);
+	sc_sleep(1000);
+	ut_printf(" After wait sleep: %d \n",g_jiffies);
 	return 1;
 }
+extern struct wait_struct g_hfs_waitqueue;
+static int sh_test2(char *arg1,char *arg2)
+{
+	ut_printf(" Before wait hfs: %d \n",g_jiffies);
+	sc_wait(&g_hfs_waitqueue,1000);
+	ut_printf(" After wait hfs: %d \n",g_jiffies);
+	return 1;
+}
+static unsigned char buf[1024];
 static int sh_cat(char *arg1,char *arg2)
 {
-	unsigned char buf[1024];
+//	unsigned char buf[1024];
 	struct file *fp;
 	int ret;
 	fp=fs_open(arg1);
@@ -78,6 +86,8 @@ static int sh_cat(char *arg1,char *arg2)
 	}
 	buf[1000]=0;
 	ret=fs_read(fp,buf,500);
+	if (ret > 0 && ret < 501) buf[ret]='\0';
+	buf[500]='\0';
 	if (ret > 0)
 	{
 		ut_printf(" Data Read :%s:\n",buf);
@@ -96,7 +106,7 @@ static int sh_create(char *arg1,char *arg2)
 static int print_help(char *arg1,char *arg2)
 {
 	int i;
-	ut_printf("Version 1.58 stacksize:%x  \n",STACK_SIZE);
+	ut_printf("Version 1.59 stacksize:%x  \n",STACK_SIZE);
 	for (i=0; i<MAX_COMMANDS; i++)
 	{
 		if (cmd_list[i].usage == 0) break;
@@ -249,12 +259,6 @@ int shell_main()
 	while(1)
 	{
 		ut_printf(CMD_PROMPT);
-		if ( g_sleep==1 )
-		{
-			ut_printf(" %d Before sleep \n",g_jiffies);
-			 sc_sleep(1000);
-			ut_printf(" %d After sleep \n",g_jiffies);
-		}
 		cmd_type=get_cmd(line);
 		if (process_command(cmd_type,line)==0)
 		{

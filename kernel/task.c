@@ -428,6 +428,8 @@ static void timer_callback(registers_t regs)
                         p->state = TASK_RUNNING;
                         if (!p->next_run)
                                 add_to_runqueue(p);
+			else
+			   ut_printf(" BUG identified \n");
                 }
 	}
 	do_softirq();

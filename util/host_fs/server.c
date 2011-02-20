@@ -131,7 +131,7 @@ int send_interrupt()
 	if (guestos_fd == -1 ) ret= -1;
         else if (write(guestos_fd ,&write_one,8)==8) ret= 1;
 	else ret= -2;
-	printf("Send interrupt :%d \n",ret);
+	printf("Send interrupt fd:%d ret :%d \n",guestos_fd,ret);
 	return ret;
 }
 void init_filecache()
@@ -193,8 +193,8 @@ int read_file(int s,int c)
 	filecache->serverFiles[s].state=STATE_VALID;
 	filecache->clientRequests[c].server_response=ret;
 	send_interrupt();
-	system("sleep 5");
-	send_interrupt();
+	//system("sleep 5");
+//	send_interrupt();
 	return ret;
 }
 int process_request(int c)

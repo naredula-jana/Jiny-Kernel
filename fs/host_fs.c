@@ -18,7 +18,7 @@ static struct file *hfOpen(unsigned char *filename)
 	{
 		goto error;
 	}	
-	
+
 	return filep;
 error:
 	kmem_cache_free(vfs_cachep, filep);	
@@ -44,7 +44,7 @@ static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 	if (j==-1)
 	{
 		j=filecachep->client_highindex;
-ut_printf(" clight high index %i \n",filecachep->client_highindex);
+		ut_printf(" clight high index %i \n",filecachep->client_highindex);
 		filecachep->client_highindex++;
 		if (j >=MAX_REQUESTS) 
 		{
@@ -53,12 +53,12 @@ ut_printf(" clight high index %i \n",filecachep->client_highindex);
 		}
 		if (filecachep->clientRequests[j].state!=STATE_INVALID)
 		{
-ut_printf(" error in state  %x \n",filecachep->clientRequests[j].state);
+			ut_printf(" error in state  %x \n",filecachep->clientRequests[j].state);
 			ret=-2;
 			goto error;
 		}
 	}
-ut_printf(" filename from hs  :%s: \n",filep->filename);
+	ut_printf(" filename from hs  :%s: \n",filep->filename);
 	ut_strcpy(filecachep->clientRequests[j].filename,filep->filename);
 	filecachep->clientRequests[j].offset=offset;
 	filecachep->clientRequests[j].len=len;
@@ -66,13 +66,13 @@ ut_printf(" filename from hs  :%s: \n",filep->filename);
 	filecachep->clientRequests[j].state=STATE_VALID;
 	while(filecachep->clientRequests[j].server_response==RESPONSE_NONE) 	
 	{
-		ut_printf(" Before Wait : %d :\n",g_jiffies);
+		//ut_printf(" Before Wait : %d :\n",g_jiffies);
 		sc_wait(&g_hfs_waitqueue,1000);
 		ut_printf(" After Wait : %d :\n",g_jiffies);
 	}
 	if (filecachep->clientRequests[j].server_response == RESPONSE_FAILED)
 	{
-ut_printf(" error in response    \n");
+		ut_printf(" error in response    \n");
 		filecachep->clientRequests[j].state=STATE_INVALID;
 		ret=-3;
 		goto error;
@@ -83,16 +83,16 @@ ut_printf(" error in response    \n");
 	{
 		if ((filecachep->serverFiles[i].state==STATE_VALID) && (ut_strcmp(filecachep->serverFiles[i].filename,filep->filename)==0))
 		{
-		if (filecachep->serverFiles[i].len < len) tlen=filecachep->serverFiles[i].len;
-		else tlen=len;
-		if (tlen < 1) 
-		{
-			ret=-4;
-			goto error;
-		}
-	ut_printf(" Sucess in reading the file :%i \n",tlen);
+			if (filecachep->serverFiles[i].len < len) tlen=filecachep->serverFiles[i].len;
+			else tlen=len;
+			if (tlen < 1) 
+			{
+				ret=-4;
+				goto error;
+			}
+			ut_printf(" SucessSS in reading the file :%i \n",tlen);
 		ut_memcpy(buff,filecachep->serverFiles[i].filePtr,tlen);		
-		return tlen;
+			return tlen;
 		}
 	}
 error:
