@@ -1,9 +1,9 @@
 #define FS_VERSION 3
 #define FS_MAGIC 0x12345678
 #define MAX_FILENAMELEN 200
-#define MAX_BUF 4096
-#define MAX_FILES 100
 #define MAX_REQUESTS 100
+#define PC_PAGESIZE 4096
+
 enum {
 	STATE_INVALID =0,
 	STATE_VALID=1,
@@ -18,35 +18,26 @@ enum {
 enum {
 	REQUEST_OPEN=0,
 	REQUEST_READ=1,
-	REQUEST_EVACUATE
+	REQUEST_WRITE=2
 };
 	
 typedef struct {
 	unsigned char state;
-	unsigned int count;
-	unsigned char filename[MAX_FILENAMELEN];
-	unsigned char filePtr[MAX_BUF+1];
-	unsigned long offset;
-	unsigned long len;
-	int fd;
-}ServerFiles_t;
-
-typedef struct {
-	unsigned char state;
 	unsigned char type;
 	unsigned char filename[MAX_FILENAMELEN];
-	unsigned char server_response;	
 	unsigned long offset;
-	unsigned long len;
-}ClientRequest_t;
+	unsigned long request_len;
+	unsigned long shm_offset ; /* offset from the begining of shared memory */
+
+	unsigned char response;	
+	unsigned long response_len;
+}Request_t;
 	
 typedef struct {
 	unsigned long magic_number;
 	unsigned char version;
 	unsigned char state;
-	unsigned int server_highindex;
-	int client_highindex;
-	ClientRequest_t clientRequests[MAX_REQUESTS];
-	ServerFiles_t serverFiles[MAX_FILES];
+	int request_highindex;
+	Request_t requests[MAX_REQUESTS];
 }fileCache_t ;
 

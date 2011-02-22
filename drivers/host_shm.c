@@ -49,6 +49,7 @@ int init_host_shm(pci_dev_header_t *pci_hdr,pci_bar_t bars[], uint32_t len)
 		}else
 		{
 			g_hostShmLen=bars[2].len;
+			pc_init(HOST_SHM_ADDR,bars[2].len);
 		}
 	}
 	if (pci_hdr->interrupt_line > 0)

@@ -14,6 +14,7 @@
 #include <sys/un.h>
 #include <pthread.h>
 fileCache_t *filecache;
+unsigned char *start_addr;
 #define MAX_FDS 50
 unsigned long write_one=1;
 int sock_fd;
@@ -141,83 +142,59 @@ void init_filecache()
 	filecache->magic_number=FS_MAGIC;	
 	filecache->state=STATE_UPDATE_INPROGRESS;
 	filecache->version=FS_VERSION;
-	for (i=0; i<MAX_FILES; i++)
-	{
-		filecache->serverFiles[i].state=STATE_INVALID;
-	}
-	filecache->server_highindex=0;
 	for (i=0; i<MAX_REQUESTS; i++)
 	{
-		filecache->clientRequests[i].state=STATE_INVALID;
+		filecache->requests[i].state=STATE_INVALID;
 	}
-	filecache->client_highindex=0;
+	filecache->request_highindex=0;
 	filecache->state=STATE_VALID;
 }
 int init()
 {
 	int fd;
-	char *p;
+	unsigned char *p;
 	init_interrupt();
 	fd=open("/dev/shm/ivshmem",O_RDWR);
 	if (fd < 1) return 0;	
 	p=mmap(0, 2*1024*1024,PROT_WRITE|PROT_READ,MAP_SHARED,fd,0);
 	if(p==0) 
 		return 0;
+	start_addr=p;
 	memset(p,0,2*1024*1024);
 	filecache=p;	
 	init_filecache();
 	return 1;
 }
-int read_file(int s,int c)
+int read_file(int c)
 {
 	int fd,ret;
-//char buf[MAX_BUF+4];
-	filecache->serverFiles[s].state=STATE_UPDATE_INPROGRESS;
-	printf("Reading the file :%s: \n",filecache->clientRequests[c].filename);	
-	fd=open(filecache->clientRequests[c].filename,O_RDONLY);
+	unsigned char *p;
+
+	printf("Reading the file :%s: \n",filecache->requests[c].filename);	
+	fd=open(filecache->requests[c].filename,O_RDONLY);
 	if (fd > 0)
 	{
-	//	lseek(fd,filecache->clientRequests[c].offset,SEEK_SET);
-		ret=read(fd,&filecache->serverFiles[s].filePtr[0],MAX_BUF);
+	//	lseek(fd,filecache->requests[c].offset,SEEK_SET);
+		p=start_addr;
+		p=p+(filecache->requests[c].shm_offset);
+		ret=read(fd,p,filecache->requests[c].request_len);
 //		ret=read(fd,buf,MAX_BUF);
-		filecache->serverFiles[s].len=ret;
-		filecache->serverFiles[s].offset=filecache->clientRequests[c].offset;
-		printf(" Reading the file :%s: len:%d: ret:%d :\n",filecache->clientRequests[c].filename,ret,ret);
+		filecache->requests[c].response_len=ret;
+		printf("New  Reading the file :%s: len:%d: ret:%d  p :%x pagecache:%x offset:%x :\n",filecache->requests[c].filename,ret,ret,p,filecache,filecache->requests[c].shm_offset);
 		ret=RESPONSE_DONE;
 	}else
 	{
 		printf(" Response failed \n");
 		ret=RESPONSE_FAILED;
 	}
-	strcpy(filecache->serverFiles[s].filename,filecache->clientRequests[c].filename);
-	filecache->serverFiles[s].state=STATE_VALID;
-	filecache->clientRequests[c].server_response=ret;
+	filecache->requests[c].response=ret;
 	send_interrupt();
-	//system("sleep 5");
-//	send_interrupt();
 	return ret;
 }
 int process_request(int c)
 {
-	int i,j;
-
 	printf(" Processing the request : %d \n",c);
-	j=-1;
-	for (i=0; i<filecache->server_highindex; i++)
-	{
-		if (filecache->serverFiles[i].state==STATE_VALID && strcmp(filecache->serverFiles[i].filename,filecache->clientRequests[c].filename)==0)
-		{
-			read_file(i,c);
-			return ;	
-		}else if (filecache->serverFiles[i].state==STATE_INVALID && j==-1)
-			j=i;
-	}
-	if (j==-1)
-	{
-		j=filecache->server_highindex; /* TODO */
-		filecache->server_highindex++;
-	} 
-	read_file(j,c);
+	read_file(c);
 	return ;	
 }
 void recv_thread(void *arg)
@@ -241,9 +218,9 @@ printf(" .. Ready to Process \n");
 	/*	system("sleep 5");
 		ret=send_interrupt();	
 		printf(" return from send interrupt : %d \n",ret); */
-		for (i=0; i<filecache->client_highindex; i++)
+		for (i=0; i<filecache->request_highindex; i++)
 		{
-			if (filecache->clientRequests[i].state==STATE_VALID && filecache->clientRequests[i].server_response==RESPONSE_NONE )
+			if (filecache->requests[i].state==STATE_VALID && filecache->requests[i].response==RESPONSE_NONE )
 			{
 				process_request(i);
 			}	

@@ -5,7 +5,7 @@
 struct filesystem host_fs;
 static fileCache_t *filecachep=0;
 struct wait_struct g_hfs_waitqueue;
-
+unsigned char * pc_getPage();
 static struct file *hfOpen(unsigned char *filename)
 {
 	struct file *filep;
@@ -29,13 +29,14 @@ static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 {
 	int i,j,ret,tlen;
 	unsigned long offset;
+	unsigned char *p;
 
 	ret=0;
 	j=-1;
 	if (filep ==0) return 0;
-	for (i=0; i<filecachep->client_highindex; i++)	
+	for (i=0; i<filecachep->request_highindex; i++)	
 	{
-		if (filecachep->clientRequests[i].state==STATE_INVALID)
+		if (filecachep->requests[i].state==STATE_INVALID)
 		{
 			j=i;
 			break;
@@ -43,60 +44,62 @@ static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 	}
 	if (j==-1)
 	{
-		j=filecachep->client_highindex;
-		ut_printf(" clight high index %i \n",filecachep->client_highindex);
-		filecachep->client_highindex++;
+		j=filecachep->request_highindex;
+		ut_printf(" clight high index %i \n",filecachep->request_highindex);
+		filecachep->request_highindex++;
 		if (j >=MAX_REQUESTS) 
 		{
 			ret=-1;
 			goto error;
 		}
-		if (filecachep->clientRequests[j].state!=STATE_INVALID)
+		if (filecachep->requests[j].state!=STATE_INVALID)
 		{
-			ut_printf(" error in state  %x \n",filecachep->clientRequests[j].state);
+			ut_printf(" error in state  %x \n",filecachep->requests[j].state);
 			ret=-2;
 			goto error;
 		}
 	}
 	ut_printf(" filename from hs  :%s: \n",filep->filename);
-	ut_strcpy(filecachep->clientRequests[j].filename,filep->filename);
-	filecachep->clientRequests[j].offset=offset;
-	filecachep->clientRequests[j].len=len;
-	filecachep->clientRequests[j].server_response=RESPONSE_NONE;
-	filecachep->clientRequests[j].state=STATE_VALID;
-	while(filecachep->clientRequests[j].server_response==RESPONSE_NONE) 	
+	ut_strcpy(filecachep->requests[j].filename,filep->filename);
+	filecachep->requests[j].offset=offset;
+	if (len > PC_PAGESIZE) 
+		filecachep->requests[j].request_len=PC_PAGESIZE;
+	else
+		filecachep->requests[j].request_len=len;
+
+	p=pc_getPage();	
+	if (p == NULL)
+	{
+		ret=-3;
+		goto error;
+	}
+	ut_printf(" Page address : %x \n",p);
+	filecachep->requests[j].shm_offset=p-HOST_SHM_ADDR;
+	filecachep->requests[j].response=RESPONSE_NONE;
+	filecachep->requests[j].state=STATE_VALID;
+	while(filecachep->requests[j].response==RESPONSE_NONE) 	
 	{
 		//ut_printf(" Before Wait : %d :\n",g_jiffies);
 		sc_wait(&g_hfs_waitqueue,1000);
 		ut_printf(" After Wait : %d :\n",g_jiffies);
 	}
-	if (filecachep->clientRequests[j].server_response == RESPONSE_FAILED)
+	if (filecachep->requests[j].response == RESPONSE_FAILED)
 	{
 		ut_printf(" error in response    \n");
-		filecachep->clientRequests[j].state=STATE_INVALID;
-		ret=-3;
+		filecachep->requests[j].state=STATE_INVALID;
+		ret=-4;
 		goto error;
 	}
 
-	filecachep->clientRequests[j].state=STATE_INVALID;
-	for (i=0; i<filecachep->server_highindex; i++)	
-	{
-		if ((filecachep->serverFiles[i].state==STATE_VALID) && (ut_strcmp(filecachep->serverFiles[i].filename,filep->filename)==0))
-		{
-			if (filecachep->serverFiles[i].len < len) tlen=filecachep->serverFiles[i].len;
-			else tlen=len;
-			if (tlen < 1) 
-			{
-				ret=-4;
-				goto error;
-			}
-			ut_printf(" SucessSS in reading the file :%i \n",tlen);
-		ut_memcpy(buff,filecachep->serverFiles[i].filePtr,tlen);		
-			return tlen;
-		}
-	}
+	tlen=filecachep->requests[j].response_len;
+	ut_printf(" Sucess in reading the file :%i %x \n",tlen,p);
+	if (tlen > 0)
+		ut_memcpy(buff,p,tlen);		
+	filecachep->requests[j].state=STATE_INVALID;
+	return tlen;
+
 error:
-	ut_printf(" Error in reading the file :%i \n",ret);
+	ut_printf(" Error in reading the file :%i \n",-ret);
 	return ret;
 }
 

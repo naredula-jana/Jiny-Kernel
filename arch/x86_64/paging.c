@@ -7,7 +7,7 @@
 addr_t g_kernel_page_dir=0;
 
 // Defined in kheap.c
-extern addr_t end;
+extern addr_t end; 
 addr_t placement_address=(addr_t)&end;
 static int handle_mm_fault(addr_t addr);
 static void mk_pte(pte_t *pte, addr_t fr,int global)

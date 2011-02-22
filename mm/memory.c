@@ -21,7 +21,7 @@ struct g_free_area_struct {
 	unsigned int * map;
 	unsigned int stat_count; /* jana Added */
 };
-mem_map_t * g_mem_map = NULL;
+page_struct_t * g_mem_map = NULL;
 unsigned long g_max_mapnr=0;
 
 #define memory_head(x) ((struct page *)(x))
@@ -119,7 +119,7 @@ void mm_putFreePages(unsigned long addr, unsigned long order)
 	unsigned long map_nr = MAP_NR(addr);
 
 	if (map_nr < g_max_mapnr) {
-		mem_map_t * map = g_mem_map + map_nr;
+		page_struct_t * map = g_mem_map + map_nr;
 		if (PageReserved(map))
 			return;
 		if (atomic_dec_and_test(&map->count)) {
@@ -273,7 +273,7 @@ void mm_printFreeAreas(void)
  */
 unsigned long init_free_area(unsigned long start_mem, unsigned long end_mem)
 {
-	mem_map_t * p;
+	page_struct_t * p;
 	long *q;
 	unsigned long mask = PAGE_MASK;
 	unsigned long i;
@@ -294,7 +294,7 @@ unsigned long init_free_area(unsigned long start_mem, unsigned long end_mem)
 	/*TODO freepages.min = i;
 	  freepages.low = i * 2;
 	  freepages.high = i * 3;*/
-	g_mem_map = (mem_map_t *) LONG_ALIGN(start_mem+8);
+	g_mem_map = (page_struct_t *) LONG_ALIGN(start_mem+8);
 	p = g_mem_map + MAP_NR(end_mem);
 	start_mem = LONG_ALIGN((unsigned long) p);
 	ut_printf(" Beforeut_memset mem map: %x diff:%x   \n",g_mem_map,(start_mem -(unsigned long) g_mem_map));

@@ -55,3 +55,23 @@ vim commands:
     ESC V G =   for entire file
     ESC V % =  for a block
   V= visual mode
+------------------------------
+Constructing the image for grub2 (Not sucessfull):
+
+dd if=/dev/zero of=bin/g2_image bs=512 count=8000
+--sudo losetup /dev/loop0 -d
+--sudo losetup /dev/loop0  bin/g2_image
+--sudo mke2fs /dev/loop0
+mke2fs bin/g2_image
+sudo mount /dev/loop0 /tmp/ab/
+populate files into /tmp/ab/
+
+sudo umount /tmp/ab
+sudo grub-install --force  /dev/loop0 
+-------------------------------
+WorkAround:
+    - use old image as bootable disk for grub, use second disk to store the kernel.
+-----------------------------------
+qemu running:
+ sudo ./qemu-system-x86_64 -s -m 1024M -L /home/njana/qemu/opt/qemu.12.5/share/qemu -hda /home/njana/tinykernel/bin/old_g2image -hdb /home/njana/tinykernel/bin/g2_image  -enable-kvm -chardev socket,path=/tmp/jana,id=jana -device ivshmem,chardev=jana,size=2m,msi=off -vnc :4
+-------------------------------------

@@ -64,8 +64,8 @@ typedef struct page {
         unsigned long flags;    /* atomic flags, some possibly updated asynchronously */
         struct page **pprev_hash;
 	struct list_head list;          /*TODO: currently used only for SLAB  */
-} mem_map_t;
-extern mem_map_t *g_mem_map;
+} page_struct_t;
+extern page_struct_t *g_mem_map;
 
 typedef struct kmem_cache_s kmem_cache_t;
 /* SLAB cache for vm_area_struct structures */
