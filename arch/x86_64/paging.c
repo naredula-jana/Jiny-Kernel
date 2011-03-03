@@ -145,7 +145,10 @@ void ar_pageFault(struct fault_ctx *ctx)
 		handle_mm_fault(faulting_address);         
 		return ;
 	}
-	if (rw) {ut_printf("read-only \n");}
+	if (rw) {
+		ut_printf("Read-only \n");
+		BUG();
+		}
 	if (us) {ut_printf("user-mode \n");}
 	if (reserved) {ut_printf("reserved \n");}
 

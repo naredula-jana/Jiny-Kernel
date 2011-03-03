@@ -1,10 +1,57 @@
 #include "common.h"
 #include "mm.h"
 #include "vfs.h"
-struct filesystem *vfs_fs=0;
-kmem_cache_t *vfs_cachep;
+static struct filesystem *vfs_fs=0;
+
+kmem_cache_t *g_slab_filep;
+kmem_cache_t *g_slab_inodep;
+LIST_HEAD(inode_list);
+
+static int inode_init(struct inode *inode,unsigned char *filename)
+{
+	if (inode == NULL) return 0;
+	inode->count=0;
+	inode->nrpages=0;
+	ut_strcpy(inode->filename,filename);
+	INIT_LIST_HEAD(&inode->page_list);
+	INIT_LIST_HEAD(&inode->inode_next);
+        list_add(&inode->inode_next,&inode_list);	
+	return 1;
+}
+
+/*************************** API functions ************************/
+
+int fs_printInodes()
+{
+        struct inode *tmp_inode;
+        struct list_head *p;
+
+        list_for_each(p, &inode_list) {
+                tmp_inode=list_entry(p, struct inode, inode_next);
+		ut_printf(" name: %s count:%d nrpages:%d \n",tmp_inode->filename,tmp_inode->count,tmp_inode->nrpages);
+        }
+}
+struct inode *fs_getInode(unsigned char *filename)
+{
+	struct inode *tmp_inode;
+	struct list_head *p;
+
+	list_for_each(p, &inode_list) {
+		tmp_inode=list_entry(p, struct inode, inode_next);
+		if (ut_strcmp(filename,tmp_inode->filename) == 0)
+		{
+			return tmp_inode;
+		}
+	}
+
+	tmp_inode=kmem_cache_alloc(g_slab_inodep, 0);	
+	inode_init(tmp_inode,filename);
+
+	return tmp_inode;	
+}
+
 int kernel_read(struct file *file, unsigned long offset,
-        char * addr, unsigned long count)
+        char *addr, unsigned long count)/* TODO : need to rework the function  */
 {
 	return 1;
 }
@@ -30,6 +77,7 @@ int fs_registerFileSystem( struct filesystem *fs)
 }
 void init_vfs()
 {
-	vfs_cachep=kmem_cache_create("file_struct",sizeof(struct file), 0,0, NULL, NULL);
+	g_slab_filep=kmem_cache_create("file_struct",sizeof(struct file), 0,0, NULL, NULL);
+	g_slab_inodep=kmem_cache_create("inode_struct",sizeof(struct inode), 0,0, NULL, NULL);
 	init_hostFs();
 }

@@ -5,6 +5,7 @@
 #define MSR_EFER 0xc0000080		/* extended feature register */
 #define _EFER_LME 8  /* Long mode enable */
 #define CR0_PG 0x80000000 /* Paging */	
+#define CR0_RW 0x10000 /* write protect, enables accedental writes by supervisor mode */	
 /*extern unsigned long  multiboot_info_ptr;
 extern unsigned long  multiboot_magic;
 */
@@ -96,6 +97,7 @@ multiboot_entry:
         /* Enable paging to activate long mode */
         movl %cr0, %eax
         orl $CR0_PG, %eax
+        orl $CR0_RW, %eax
         movl %eax, %cr0
         movl $kernel_jump_addr, %edx
         movl $(cmain), 0(%edx)
@@ -155,7 +157,7 @@ level3_pg_table:
 .org 0x3000
 level2_pg_table:
         /* 40MB for bootup.     */
-        .quad   0x0000000000000283
+        .quad   0x0000000000000283 /* made the code Readonly by changing from 283 -> 281 */
         .quad   0x0000000000200183
         .quad   0x0000000000400183
         .quad   0x0000000000600183

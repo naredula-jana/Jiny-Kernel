@@ -12,6 +12,7 @@ typedef struct {
 static int sh_create(char *arg1,char *arg2);
 static int print_help(char *arg1,char *arg2);
 static int sh_cat(char *arg1,char *arg2);
+static int sh_ls(char *arg1,char *arg2);
 void ar_printIrqStat(char *arg1,char *arg2);
 static int  test_hostshm(char *arg1,char *arg2);
 void mm_printFreeAreas(void);
@@ -32,6 +33,7 @@ commands_t cmd_list[]=
 	{"test2     ","test2 ","test2",sh_test2},
 	{"maps      ","Memory map areas","maps",vm_printMmaps},
 	{"host      ","host shm test","host",test_hostshm},
+	{"ls        ","ls","ls",sh_ls},
 	{"cat <file>","Cat file       ","cat",sh_cat},
 	{0,0,0,0}
 };
@@ -58,17 +60,57 @@ static int test_hostshm(char *arg1,char *arg2)
 }
 static int sh_test1(char *arg1,char *arg2)
 {
-	ut_printf(" Before wait sleep: %d \n",g_jiffies);
-	sc_sleep(1000);
-	ut_printf(" After wait sleep: %d \n",g_jiffies);
+	unsigned char *p;
+
+	p=0x104f20;
+	ut_printf(" Before Writing in to this Adress %x %x \n",p,*p);
+(*p)=12;	
+	ut_printf(" After Writing in to this Adress %x  %x\n",p,*p);
 	return 1;
 }
 extern struct wait_struct g_hfs_waitqueue;
+#define CR0_WP 0x00010000 /* Write protect */
+  static inline uint64_t read_cr0(void)       
+  {                                             
+    uint64_t ret;                               
+    __asm__ volatile ("movq %%cr0, %0\n"   
+                      : "=r" (ret));            
+    return ret;                                 
+  }
+
+  static inline void write_cr0(uint64_t val)  
+  {                                             
+    __asm__ volatile ("movq %0, %%cr0 \n" 
+                      :: "r" (val));          
+  }
+#define CR0_AM 0x00040000 /* Alignment mask */
 static int sh_test2(char *arg1,char *arg2)
 {
-	ut_printf(" Before wait hfs: %d \n",g_jiffies);
+uint64_t *p,val;
+p=0x103000;
+val=0x281;
+	ut_printf("Before writing table \n");
+*p=val;
+flush_tlb();
+	ut_printf("After writing table \n");
+}
+static int sh_test3(char *arg1,char *arg2)
+{
+uint64_t val;
+/*	ut_printf(" Before wait hfs: %d \n",g_jiffies);
 	sc_wait(&g_hfs_waitqueue,1000);
-	ut_printf(" After wait hfs: %d \n",g_jiffies);
+	ut_printf(" After wait hfs: %d \n",g_jiffies);*/
+	ut_printf(" BEFefore making write protect \n");
+
+  val = read_cr0();
+val &= ~CR0_AM; /* Disable alignment-check */
+  /*
+   * Set write protect bit in order to protect
+   * write access to read-only pages from supervisor mode.
+   */
+  val |= CR0_WP;
+  write_cr0(val);
+	ut_printf(" after making write protect \n");
 	return 1;
 }
 static unsigned char buf[1024];
@@ -97,6 +139,11 @@ static int sh_cat(char *arg1,char *arg2)
 	}
 	return 0;
 }
+static int sh_ls(char *arg1,char *arg2)
+{
+	fs_printInodes();
+	return 1;
+}
 static int sh_create(char *arg1,char *arg2)
 {
 	ut_printf(" arg1: %s arg2: %s: \n",arg1,arg2);
@@ -106,7 +153,7 @@ static int sh_create(char *arg1,char *arg2)
 static int print_help(char *arg1,char *arg2)
 {
 	int i;
-	ut_printf("Version 1.62 stacksize:%x  \n",STACK_SIZE);
+	ut_printf("Version 1.66 stacksize:%x  \n",STACK_SIZE);
 	for (i=0; i<MAX_COMMANDS; i++)
 	{
 		if (cmd_list[i].usage == 0) break;

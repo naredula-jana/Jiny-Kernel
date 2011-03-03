@@ -1,3 +1,6 @@
+#ifndef __FILECACHESCHEMA_H__
+#define __FILECACHESCHEMA_H__
+
 #define FS_VERSION 3
 #define FS_MAGIC 0x12345678
 #define MAX_FILENAMELEN 200
@@ -40,4 +43,4 @@ typedef struct {
 	int request_highindex;
 	Request_t requests[MAX_REQUESTS];
 }fileCache_t ;
-
+#endif

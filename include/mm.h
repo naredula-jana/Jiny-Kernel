@@ -4,6 +4,7 @@
 #include "common.h"
 #include "paging.h"
 #include "bitops.h"
+#include "../util/host_fs/filecache_schema.h"
 #define PAGE_SHIFT      12
 #define PAGE_SIZE       (1UL << PAGE_SHIFT)
 #define PAGE_MASK       (~(PAGE_SIZE-1))
@@ -59,11 +60,12 @@ typedef struct page {
         struct page *next;
         struct page *prev;
 
-        struct page *next_hash;
         atomic_t count;
         unsigned long flags;    /* atomic flags, some possibly updated asynchronously */
-        struct page **pprev_hash;
-	struct list_head list;          /*TODO: currently used only for SLAB  */
+
+	struct inode *inode;
+	unsigned long offset; /* offset in the inode */
+	struct list_head list;          /*TODO: currently used 1)  SLAB 2) pagecache:inodelist  */
 } page_struct_t;
 extern page_struct_t *g_mem_map;
 
@@ -73,6 +75,11 @@ extern kmem_cache_t *vm_area_cachep;
 
 /* SLAB cache for mm_struct structures (tsk->mm) */
 extern kmem_cache_t *mm_cachep;
+extern page_struct_t *pagecache_map;
+extern unsigned char *pc_startaddr;
+unsigned char *pc_getFreePage();
+unsigned char *pc_insertInodePage(struct inode *inode,struct page *page);
+unsigned char *pc_getInodePage(struct inode *inode,unsigned long offset);
 
 /* Page flag bit values */
 #define PG_locked                0
