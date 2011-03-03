@@ -4,68 +4,14 @@
 #include "../util/host_fs/filecache_schema.h"
 page_struct_t *pagecache_map;
 unsigned char *pc_startaddr;
-typedef struct 
-{
-	page_struct_t *list; /* pointer to the first node of the doubly linked list */
-	spinlock_t lock;
-	int length;
-}page_list_t;
 
-static page_list_t free_list,active_list,inactive_list;
+static LIST_HEAD(free_list);
+static LIST_HEAD(active_list);
+static LIST_HEAD(inactive_list);
 
 
 /*********************** local function *************************/
-static int add_to_list(page_list_t *list ,page_struct_t *page)/* add to the front */
-{
-	page_struct_t *next;
-	if (list->list == NULL) /* 1. list is empty */
-	{
-		page->prev=page->next=page;
-		list->list=page;
-	} else
-	{
-		next=list->list;
-		page->next=next;
-		page->prev=next->prev;
-		next->prev=page; 
-		list->list=page;
-	}
-	return 1;
-}
 
-static int remove_from_list(page_list_t *list ,page_struct_t *page) /* if page is empty then remove from the last node */
-{
-	page_struct_t *ret=NULL;
-	page_struct_t *prev,*next;
-
-	if (list->list == NULL) return 0; /* 1. list is empty */
-	if (page ==0)
-	{
-		page=list->list;
-		page=page->prev; /* remove from the last */
-	}
-	if (page->next == page->prev)  /* 2. list is having one node */
-	{
-		if (page != list->list) BUG();
-		list->list=NULL;
-		page->next=page->prev=NULL;
-	}else 
-	{ /* 3. list is having more then 1 node */
-		prev=page->prev;
-		next=page->next;
-		prev->next=next;
-		next->prev=prev;
-		page->next=page->prev=NULL;
-	}	
-	ret=page;
-last:
-	return ret;
-}
-static int init_list(page_list_t *list)
-{
-	list->list=NULL;
-	list->length=0;
-}
 /***************************** API function **********************/
 
 int pc_init(addr_t start_addr,unsigned long len)
@@ -80,11 +26,6 @@ int pc_init(addr_t start_addr,unsigned long len)
 	pagecache_map=start_addr + (unsigned char *)sizeof(fileCache_t);
 	ut_memset(pagecache_map, 0, sizeof(page_struct_t)*total_pages);
 
-
-	init_list(&free_list);
-	init_list(&active_list);
-	init_list(&inactive_list);
-
 	for( i=0; i<total_pages; i++)
 	{
 		p=pagecache_map+i;
@@ -94,9 +35,7 @@ int pc_init(addr_t start_addr,unsigned long len)
 			p->flags =  (1 << PG_reserved);
 		}else
 		{
-			add_to_list(&free_list,p);
-			//			p->next=free_list;
-			//			free_list=p;
+			list_add(&p->lru_list,&free_list);
 		}
 
 	}
@@ -119,39 +58,49 @@ unsigned char *pc_getInodePage(struct inode *inode,unsigned long offset)
         return NULL;
 
 }
-unsigned char *pc_insertInodePage(struct inode *inode,struct page *page)
+int pc_insertInodePage(struct inode *inode,struct page *page)
 {
         struct list_head *p;
 	struct page *tmp_page;
+	int ret=0;
 
         list_for_each(p, &(inode->page_list))
 	 {
                 tmp_page=list_entry(p, struct page, list);
                 if (page->offset < tmp_page->offset)
                 {
+			inode->nrpages++;
                       list_add(&page->list, &tmp_page->list); 
+			ret=1;
+			goto last;
                 } 
         } 
-        return NULL;
+	if (ret == 0)
+	{
+		inode->nrpages++;
+                list_add_tail(&page->list, &inode->page_list); 
+	}
+last:
+        return ret;
 
 }
+
 int pc_putFreePage(struct page *page) /* TODO : to implement */
 {
+
 }
+
 unsigned char *pc_getFreePage()
 {
+	struct list_head *node;
 	page_struct_t *p;
-	int pn=10;
-	unsigned char *addr=0;
+	int pn=0;
 
-	p=remove_from_list(&free_list,0);
-	ut_printf("New Getpage p :%x pagecacmap:%x startaddr:%x pn:%x \n",p,pagecache_map,pc_startaddr,pn);	
-	if (p != NULL)
-	{
-		pn=p-pagecache_map;
-		addr=pc_startaddr+pn*PC_PAGESIZE;
-	}
-	ut_printf("New Getpage :%x %x\n",addr,pn);	
-	return addr;
+	node=free_list.next;
+	if (node == &free_list) return 0;
+
+	list_del(node); /* delete the node from free list */
+        p=list_entry(node, struct page, lru_list);
+	return p;
 }
 

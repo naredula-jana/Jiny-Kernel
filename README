@@ -1,9 +1,12 @@
 TINY KERNEL:
 ------------
 The goals of the project are:
-	1) It should be modernday kernel with a small footprint.
+	1) It should be monalitic kernel with a small footprint.
 	2) To offload as much driver code and file system in to the Host operating system if it not running on the bare metal.
-	3) poweful command line similer to vxworks to debug the environment.
+	3) powerful command line and debug environment similer to vxworks .
+	4) create a environment to run specific applications .
+	5) Higly modularise.
+
 	
 Design :
 
@@ -34,10 +37,21 @@ Code Organization:
 	mm_free
 	mm_kmem_*
 	
-		
-3) isr  (AR)
-4) Drivers (DR)
-5) utilities (UT)
+3) VFS 
+    pagecache:
+	pc_getInodePage : get particular page of offset from inode
+	pc_insertInodePage : insert a page in to inode or pagecache
+	pc_putFreePage : put a page into free list
+	pc_getFreePage : get a free page from free list
+	pc_init : initialize the subsystem	
+
+	fs_getInode : from filename get the appropriate inode
+	fs_registerFileSystem :
+	fs_open,fs_read,fs_write,fs_close  : file operations
+	
+4) isr  (AR)
+5) Drivers (DR)
+6) utilities (UT)
 	ut_putchar
 	ut_printf
 	ut_memcpy

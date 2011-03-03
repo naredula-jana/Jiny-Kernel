@@ -148,6 +148,7 @@ void init_filecache()
 	}
 	filecache->request_highindex=0;
 	filecache->state=STATE_VALID;
+	printf(" Initalzed the File cache \n");
 }
 int init()
 {
@@ -155,7 +156,11 @@ int init()
 	unsigned char *p;
 	init_interrupt();
 	fd=open("/dev/shm/ivshmem",O_RDWR);
-	if (fd < 1) return 0;	
+	if (fd < 1) 
+	{
+		printf(" ERROR in opening shared memory \n");
+		return 0;	
+	}
 	p=mmap(0, 2*1024*1024,PROT_WRITE|PROT_READ,MAP_SHARED,fd,0);
 	if(p==0) 
 		return 0;
@@ -174,7 +179,8 @@ int read_file(int c)
 	fd=open(filecache->requests[c].filename,O_RDONLY);
 	if (fd > 0)
 	{
-	//	lseek(fd,filecache->requests[c].offset,SEEK_SET);
+		lseek(fd,filecache->requests[c].offset,SEEK_SET);
+		printf(" file offset :%d \n",filecache->requests[c].offset);
 		p=start_addr;
 		p=p+(filecache->requests[c].shm_offset);
 		ret=read(fd,p,filecache->requests[c].request_len);
@@ -215,9 +221,6 @@ main()
 printf(" .. Ready to Process \n");
 	while(1)
 	{
-	/*	system("sleep 5");
-		ret=send_interrupt();	
-		printf(" return from send interrupt : %d \n",ret); */
 		for (i=0; i<filecache->request_highindex; i++)
 		{
 			if (filecache->requests[i].state==STATE_VALID && filecache->requests[i].response==RESPONSE_NONE )

@@ -32,6 +32,7 @@ static struct file *hfOpen(unsigned char *filename)
 	inodep = fs_getInode(filep->filename);
 	if (inodep == 0) goto error;
 	filep->inode=inodep;
+	filep->offset=0;
 	inodep->count++;
 	return filep;
 error:
@@ -46,6 +47,7 @@ int request_hostserver(struct file *filep, struct page *page)
 	int i,j,ret,tlen;
 	unsigned long offset;
 
+	j=-1;
 	for (i=0; i<shm_headerp->request_highindex; i++)
 	{
 		if (shm_headerp->requests[i].state==STATE_INVALID)
@@ -54,10 +56,11 @@ int request_hostserver(struct file *filep, struct page *page)
 			break;
 		}
 	}
+	ut_printf(" request high index %i \n",shm_headerp->request_highindex);
 	if (j==-1)
 	{
 		j=shm_headerp->request_highindex;
-		ut_printf(" clight high index %i \n",shm_headerp->request_highindex);
+		ut_printf(" client high index %i \n",shm_headerp->request_highindex);
 		shm_headerp->request_highindex++;
 		if (j >=MAX_REQUESTS)
 		{
@@ -80,7 +83,6 @@ int request_hostserver(struct file *filep, struct page *page)
 	shm_headerp->requests[j].state=STATE_VALID;
 	while(shm_headerp->requests[j].response==RESPONSE_NONE)
 	{
-		//ut_printf(" Before Wait : %d :\n",g_jiffies);
 		sc_wait(&g_hfs_waitqueue,1000);
 		ut_printf(" After Wait : %d :\n",g_jiffies);
 	}
@@ -89,7 +91,7 @@ int request_hostserver(struct file *filep, struct page *page)
 	{
 		ut_printf(" error in response    \n");
 		shm_headerp->requests[j].state=STATE_INVALID;
-		tlen=-4;
+		tlen=-9;
 		goto error;
 	}
 
@@ -107,7 +109,7 @@ static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 
 	ret=0;
 	if (filep ==0) return 0;
-	ut_printf(" filename from hs  :%s: \n",filep->filename);
+	ut_printf(" filename from hs  :%s: offset:%d \n",filep->filename,filep->offset);
 	page=pc_getInodePage(filep->inode,filep->offset);
 	if (page == NULL)
 	{
@@ -118,11 +120,13 @@ static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 			goto error;
 		}
 		page->offset=filep->offset;
+		page->inode=filep->inode;
 		ut_printf("New  Page address : %x \n",page);
 
 		ret=request_hostserver(filep,page);
 		if (ret > 0)
 		{
+			filep->offset=filep->offset+ret;
 			pc_insertInodePage(filep->inode,page);
 		}else
 		{
@@ -130,10 +134,15 @@ static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 			ret=-4;
 			goto error;
 		}
+	}else
+	{
+		ret=PC_PAGESIZE;
+		filep->offset=filep->offset+ret;
 	}
 	if (page > 0  && ret > 0)
 	{
 		ut_memcpy(buff,to_ptr(page),ret);
+		ut_printf(" memcpy :%x %x  %d \n",buff,to_ptr(page),ret);
 	}
 
 	return ret;

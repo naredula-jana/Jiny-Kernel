@@ -129,7 +129,6 @@ void ar_pageFault(struct fault_ctx *ctx)
 	addr_t faulting_address;
 	asm volatile("mov %%cr2, %0" : "=r" (faulting_address));
 
-	ut_printf(" page fault : %x \n",faulting_address);
 	// The error code gives us details of what happened.
 	int present   = !(ctx->errcode & 0x1); // Page not present
 	int rw = ctx->errcode & 0x2;           // Write operation?
@@ -154,6 +153,7 @@ void ar_pageFault(struct fault_ctx *ctx)
 
 	BUG();
 }
+static int debug_paging=0;
 static int handle_mm_fault(addr_t addr)
 {
 	struct mm_struct *mm;
@@ -177,11 +177,11 @@ static int handle_mm_fault(addr_t addr)
 		pl3=p;
 		p=(pl4+(L4_INDEX(addr))); /* insert into l4   */
 		*p=((addr_t) pl3 |((addr_t) 0x3));
-		ut_printf(" Inserted into L4 :%x  p13:%x  pl4:%x \n",p,pl3,pl4);
+		if (debug_paging ==1) ut_printf(" Inserted into L4 :%x  p13:%x  pl4:%x \n",p,pl3,pl4);
 	}
 	p=(pl3+(L3_INDEX(addr)));
 	pl2=(*p) & (~0xfff);
-	ut_printf(" Pl3 :%x pl4 :%x p12:%x \n",pl3,pl4,pl2);	
+	if (debug_paging ==1) ut_printf(" Pl3 :%x pl4 :%x p12:%x \n",pl3,pl4,pl2);	
 
 	if (pl2==0)
 	{
@@ -191,11 +191,11 @@ static int handle_mm_fault(addr_t addr)
 		pl2=p;
 		p=(pl3+(L3_INDEX(addr)));
 		*p=((addr_t) pl2 |((addr_t) 0x3));
-		ut_printf(" INSERTED into L3 :%x  p12:%x  pl3:%x \n",p,pl2,pl3);
+		if (debug_paging ==1 )ut_printf(" INSERTED into L3 :%x  p12:%x  pl3:%x \n",p,pl2,pl3);
 	}
 	p=(pl2+(L2_INDEX(addr)));
 	pl1=(*p) & (~0xfff);
-	ut_printf(" Pl2 :%x pl1 :%x\n",pl2,pl1);	
+	if (debug_paging == 1)ut_printf(" Pl2 :%x pl1 :%x\n",pl2,pl1);	
 	
 	
 	if (pl1==0)
@@ -206,7 +206,7 @@ static int handle_mm_fault(addr_t addr)
 		pl1=p;
 		p=(pl2+(L2_INDEX(addr)));
 		*p=((addr_t) pl1 |((addr_t) 0x3));
-		ut_printf(" Inserted into L2 :%x :%x \n",p,pl1);
+		if (debug_paging == 1) ut_printf(" Inserted into L2 :%x :%x \n",p,pl1);
 	}
 	/* By Now we have pointer to all 4 tables , Now check th erequired page*/
 
@@ -226,7 +226,7 @@ static int handle_mm_fault(addr_t addr)
 	asm volatile("movq %%cr4,%0" : "=r" (mmu_cr4_features));
 	__flush_tlb_global();  /* TODO : need not flush entire table, flush only spoecific tables*/
 
-	ut_printf("FINALLY Inserted and global fluished into pagetable :%x pte :%x \n",pl1,p);
+	if (debug_paging == 1)
 	ut_printf("FINALLY Inserted and global fluished into pagetable :%x pte :%x \n",pl1,p);
 	return 1;	
 }

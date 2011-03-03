@@ -113,12 +113,12 @@ val &= ~CR0_AM; /* Disable alignment-check */
 	ut_printf(" after making write protect \n");
 	return 1;
 }
-static unsigned char buf[1024];
+static unsigned char buf[6024];
 static int sh_cat(char *arg1,char *arg2)
 {
 //	unsigned char buf[1024];
 	struct file *fp;
-	int ret;
+	int i,ret;
 	fp=fs_open(arg1);
 	ut_printf("filename :%s: \n",arg1);
 	if (fp ==0)
@@ -127,16 +127,21 @@ static int sh_cat(char *arg1,char *arg2)
 		return 0;
 	}
 	buf[1000]=0;
-	ret=fs_read(fp,buf,500);
-	if (ret > 0 && ret < 501) buf[ret]='\0';
+	ret=1;
+	i=1;
+while (ret > 0)
+{	
+	ret=fs_read(fp,buf,5000);
 	buf[500]='\0';
 	if (ret > 0)
 	{
-		ut_printf(" Data Read :%s:\n",buf);
+		ut_printf("%d: DATA Read :%c: %d \n",i,buf[0],ret);
 	}else
 	{
 		ut_printf(" Return value of read :%i: \n",ret);
 	}
+	i++;
+}
 	return 0;
 }
 static int sh_ls(char *arg1,char *arg2)
@@ -153,7 +158,7 @@ static int sh_create(char *arg1,char *arg2)
 static int print_help(char *arg1,char *arg2)
 {
 	int i;
-	ut_printf("Version 1.66 stacksize:%x  \n",STACK_SIZE);
+	ut_printf("Version 1.67 stacksize:%x  \n",STACK_SIZE);
 	for (i=0; i<MAX_COMMANDS; i++)
 	{
 		if (cmd_list[i].usage == 0) break;
