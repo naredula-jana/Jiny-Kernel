@@ -1,0 +1,677 @@
+Archive member included because of file (symbol)
+
+kernel.a(init.o)              mm/mmap.o (vm_area_cachep)
+kernel.a(kernel.o)            arch/x86_64/boot.o (g_multiboot_info_ptr)
+kernel.a(shell.o)             kernel.a(kernel.o) (shell_main)
+kernel.a(task.o)              arch/x86_64/paging.o (g_current_task)
+kernel.a(test.o)              arch/x86_64/isr.o (g_before_i)
+kernel.a(util.o)              kernel.a(shell.o) (ut_atol)
+
+Allocating common symbols
+Common symbol       size              file
+
+host_fs             0x18              fs/host_fs.o
+idt_ptr             0xa               arch/x86_64/descriptor_tables.o
+mmu_cr4_features    0x8               arch/x86_64/paging.o
+g_timerqueue        0x10              kernel.a(task.o)
+g_multiboot_magic   0x8               kernel.a(kernel.o)
+g_current_task      0x8               kernel.a(task.o)
+gdt_entries         0x30              arch/x86_64/descriptor_tables.o
+stack               0x4000            arch/x86_64/boot.o
+g_init_task         0x8               kernel.a(task.o)
+irq_stat            0x10              arch/x86_64/isr.o
+end                 0x8               arch/x86_64/paging.o
+idt_entries         0x1000            arch/x86_64/descriptor_tables.o
+g_hfs_waitqueue     0x10              fs/host_fs.o
+gdt_ptr             0xa               arch/x86_64/descriptor_tables.o
+g_interrupt_handlers
+                    0x1800            arch/x86_64/isr.o
+mm_cachep           0x8               kernel.a(init.o)
+vm_area_cachep      0x8               kernel.a(init.o)
+vfs_cachep          0x8               fs/vfs.o
+g_tasks             0x640             kernel.a(task.o)
+g_multiboot_info_ptr
+                    0x8               kernel.a(kernel.o)
+host_shm_pci_bar    0x20              drivers/host_shm.o
+host_shm_pci_hdr    0x100             drivers/host_shm.o
+
+Memory Configuration
+
+Name             Origin             Length             Attributes
+*default*        0x0000000000000000 0xffffffffffffffff
+
+Linker script and memory map
+
+                0x0000000000100000                . = 0x100000
+
+.text           0x0000000000100000     0xca96
+ *(.text)
+ .text          0x0000000000100000     0x4000 arch/x86_64/boot.o
+                0x0000000000100000                _start
+                0x0000000000100000                start
+ .text          0x0000000000104000      0x4fa arch/x86_64/isr.o
+                0x000000000010403c                init_handlers
+                0x0000000000104105                ar_printIrqStat
+                0x000000000010422b                ar_registerInterrupt
+                0x0000000000104259                DisableTimer
+                0x00000000001042e4                ar_faultHandler
+                0x00000000001043dd                ar_irqHandler
+ *fill*         0x00000000001044fa        0x2 00
+ .text          0x00000000001044fc      0x6be arch/x86_64/descriptor_tables.o
+                0x00000000001044fc                init_descriptor_tables
+ *fill*         0x0000000000104bba        0x2 00
+ .text          0x0000000000104bbc      0x736 arch/x86_64/pci.o
+                0x0000000000104bbc                inb
+                0x0000000000104bd6                outb
+                0x0000000000104bf0                inw
+                0x0000000000104c0c                outw
+                0x0000000000104c28                inl
+                0x0000000000104c41                outl
+                0x0000000000104e8d                pci_generic_read
+                0x0000000000105297                init_pci
+ *fill*         0x00000000001052f2        0x2 00
+ .text          0x00000000001052f4      0x967 arch/x86_64/paging.o
+                0x0000000000105579                initialise_paging
+                0x0000000000105671                flush_tlb
+                0x0000000000105686                ar_pageFault
+ *fill*         0x0000000000105c5b        0x5 00
+ .text          0x0000000000105c60     0x109d arch/x86_64/interrupt.o
+                0x0000000000105d10                ar_faultsTable
+                0x0000000000105f10                ar_irqsTable
+ *fill*         0x0000000000106cfd        0x3 00
+ .text          0x0000000000106d00      0x71c drivers/display.o
+                0x0000000000106d00                ut_cls
+                0x0000000000106f62                ut_putchar
+                0x00000000001070c7                ut_printf
+ .text          0x000000000010741c      0x216 drivers/keyboard.o
+                0x000000000010747f                dr_keyBoardBH
+                0x00000000001074b5                dr_kbGetchar
+                0x0000000000107613                init_driver_keyboard
+ *fill*         0x0000000000107632        0x2 00
+ .text          0x0000000000107634      0x132 drivers/serial.o
+                0x0000000000107634                init_serial
+                0x0000000000107701                dr_serialWrite
+ *fill*         0x0000000000107766        0x2 00
+ .text          0x0000000000107768      0x24b drivers/host_shm.o
+                0x00000000001077ba                init_host_shm
+ *fill*         0x00000000001079b3        0x1 00
+ .text          0x00000000001079b4      0xb6a mm/memory.o
+                0x0000000000107d0c                mm_putFreePages
+                0x0000000000107dd4                mm_getFreePages
+                0x0000000000107fcd                mm_printFreeAreas
+                0x00000000001080c6                init_free_area
+                0x00000000001082ac                init_mem
+                0x00000000001083e5                init_memory
+ *fill*         0x000000000010851e        0x2 00
+ .text          0x0000000000108520     0x1a2b mm/slab.o
+                0x0000000000108765                kmem_cache_init
+                0x0000000000108815                kmem_cache_sizes_init
+                0x0000000000108974                kmem_cpucache_init
+                0x0000000000108b32                kmem_cache_create
+                0x00000000001091c0                kmem_cache_shrink
+                0x0000000000109268                kmem_cache_destroy
+                0x0000000000109b20                kmem_cache_alloc
+                0x0000000000109b42                mm_malloc
+                0x0000000000109bad                kmem_cache_free
+                0x0000000000109bdd                mm_free
+                0x0000000000109c31                kmem_cache_size
+                0x0000000000109c42                kmem_find_general_cachep
+                0x0000000000109c96                kmem_cache_reap
+ *fill*         0x0000000000109f4b        0x1 00
+ .text          0x0000000000109f4c      0x5d2 mm/mmap.o
+                0x0000000000109f4c                vm_printMmaps
+                0x0000000000109fb1                vm_findVma
+                0x000000000010a1d0                make_pages_present
+                0x000000000010a1e3                vm_mmap
+                0x000000000010a2df                vm_brk
+                0x000000000010a435                mm_freePgtables
+                0x000000000010a447                vm_munmap
+ *fill*         0x000000000010a51e        0x2 00
+ .text          0x000000000010a520      0x12a fs/vfs.o
+                0x000000000010a520                kernel_read
+                0x000000000010a53b                fs_open
+                0x000000000010a56f                fs_read
+                0x000000000010a5bd                fs_close
+                0x000000000010a5f2                fs_registerFileSystem
+                0x000000000010a607                init_vfs
+ *fill*         0x000000000010a64a        0x2 00
+ .text          0x000000000010a64c      0x630 fs/host_fs.o
+                0x000000000010ab72                init_hostFs
+ .text          0x000000000010ac7c      0x10e kernel.a(init.o)
+                0x000000000010ac7c                init_kernel
+ *fill*         0x000000000010ad8a        0x2 00
+ .text          0x000000000010ad8c      0x1ed kernel.a(kernel.o)
+                0x000000000010ad8c                __stack_chk_fail
+                0x000000000010ad92                cmain
+ *fill*         0x000000000010af79        0x3 00
+ .text          0x000000000010af7c      0x85f kernel.a(shell.o)
+                0x000000000010b2a5                tokenise
+                0x000000000010b77d                shell_main
+ *fill*         0x000000000010b7db        0x1 00
+ .text          0x000000000010b7dc      0xb60 kernel.a(task.o)
+                0x000000000010b974                init_waitqueue
+                0x000000000010bc06                sc_wakeUp
+                0x000000000010bd02                sc_wait
+                0x000000000010bd44                sc_sleep
+                0x000000000010bd80                sc_fork
+                0x000000000010be8a                sc_exit
+                0x000000000010bea8                sc_createThread
+                0x000000000010bede                init_tasking
+                0x000000000010c010                sc_schedule
+                0x000000000010c17a                do_softirq
+                0x000000000010c2b4                init_timer
+ .text          0x000000000010c33c      0x1a8 kernel.a(test.o)
+                0x000000000010c33c                test_proc
+ .text          0x000000000010c4e4      0x5b2 kernel.a(util.o)
+                0x000000000010c605                ut_showTrace
+                0x000000000010c6de                ut_atol
+                0x000000000010c79c                ut_atoi
+                0x000000000010c851                ut_memcpy
+                0x000000000010c898                ut_memset
+                0x000000000010c90a                ut_strcmp
+                0x000000000010c9d8                ut_strcpy
+                0x000000000010ca0f                ut_strcat
+                0x000000000010ca62                ut_strlen
+
+.rodata         0x000000000010ca98      0xd22
+ .rodata        0x000000000010ca98       0x56 arch/x86_64/isr.o
+ *fill*         0x000000000010caee        0x2 00
+ .rodata        0x000000000010caf0       0xa1 arch/x86_64/pci.o
+ *fill*         0x000000000010cb91        0x7 00
+ .rodata        0x000000000010cb98      0x1ea arch/x86_64/paging.o
+ .rodata        0x000000000010cd82        0x7 drivers/display.o
+ *fill*         0x000000000010cd89        0x7 00
+ .rodata        0x000000000010cd90       0xfb drivers/host_shm.o
+ *fill*         0x000000000010ce8b        0x5 00
+ .rodata        0x000000000010ce90      0x13e mm/memory.o
+ *fill*         0x000000000010cfce        0x2 00
+ .rodata        0x000000000010cfd0      0x11f mm/slab.o
+ .rodata        0x000000000010d0ef        0xe mm/mmap.o
+ .rodata        0x000000000010d0fd        0xc fs/vfs.o
+ *fill*         0x000000000010d109        0x7 00
+ .rodata        0x000000000010d110      0x181 fs/host_fs.o
+ *fill*         0x000000000010d291        0x7 00
+ .rodata        0x000000000010d298       0x6c kernel.a(init.o)
+ *fill*         0x000000000010d304        0x4 00
+ .rodata        0x000000000010d308       0xda kernel.a(kernel.o)
+ .rodata        0x000000000010d3e2      0x29b kernel.a(shell.o)
+ *fill*         0x000000000010d67d        0x3 00
+ .rodata        0x000000000010d680       0x3e kernel.a(task.o)
+ *fill*         0x000000000010d6be        0x2 00
+ .rodata        0x000000000010d6c0       0x84 kernel.a(test.o)
+ *fill*         0x000000000010d744        0x4 00
+ .rodata        0x000000000010d748       0x72 kernel.a(util.o)
+
+.eh_frame       0x000000000010d7c0     0x1518
+ .eh_frame      0x000000000010d7c0      0x118 arch/x86_64/isr.o
+                                         0xf8 (size before relaxing)
+ .eh_frame      0x000000000010d8d8      0x120 arch/x86_64/descriptor_tables.o
+                                        0x118 (size before relaxing)
+ .eh_frame      0x000000000010d9f8      0x180 arch/x86_64/pci.o
+                                        0x168 (size before relaxing)
+ .eh_frame      0x000000000010db78       0xc0 arch/x86_64/paging.o
+                                         0xd0 (size before relaxing)
+ .eh_frame      0x000000000010dc38       0xc0 drivers/display.o
+                                         0xc8 (size before relaxing)
+ .eh_frame      0x000000000010dcf8       0xa0 drivers/keyboard.o
+                                         0xa8 (size before relaxing)
+ .eh_frame      0x000000000010dd98       0x40 drivers/serial.o
+                                         0x50 (size before relaxing)
+ .eh_frame      0x000000000010ddd8       0x40 drivers/host_shm.o
+                                         0x50 (size before relaxing)
+ .eh_frame      0x000000000010de18      0x200 mm/memory.o
+                                        0x1d8 (size before relaxing)
+ .eh_frame      0x000000000010e018      0x480 mm/slab.o
+                                        0x410 (size before relaxing)
+ .eh_frame      0x000000000010e498      0x120 mm/mmap.o
+                                        0x118 (size before relaxing)
+ .eh_frame      0x000000000010e5b8       0xc0 fs/vfs.o
+ .eh_frame      0x000000000010e678       0x80 fs/host_fs.o
+                                         0x88 (size before relaxing)
+ .eh_frame      0x000000000010e6f8       0x20 kernel.a(init.o)
+                                         0x38 (size before relaxing)
+ .eh_frame      0x000000000010e718       0x40 kernel.a(kernel.o)
+                                         0x50 (size before relaxing)
+ .eh_frame      0x000000000010e758      0x180 kernel.a(shell.o)
+                                        0x168 (size before relaxing)
+ .eh_frame      0x000000000010e8d8      0x2a0 kernel.a(task.o)
+                                        0x268 (size before relaxing)
+ .eh_frame      0x000000000010eb78       0x20 kernel.a(test.o)
+                                         0x38 (size before relaxing)
+ .eh_frame      0x000000000010eb98      0x140 kernel.a(util.o)
+                                        0x138 (size before relaxing)
+
+.iplt           0x000000000010ecd8        0x0
+ .iplt          0x0000000000000000        0x0 arch/x86_64/boot.o
+
+.rela.dyn       0x000000000010ecd8        0x0
+ .rela.iplt     0x0000000000000000        0x0 arch/x86_64/boot.o
+ .rela.text     0x0000000000000000        0x0 arch/x86_64/boot.o
+ .rela.data     0x0000000000000000        0x0 arch/x86_64/boot.o
+                0x0000000000200000                . = 0x200000
+
+.data           0x0000000000200000      0x4c8
+ *(.data)
+ .data          0x0000000000200000        0x0 arch/x86_64/boot.o
+ .data          0x0000000000200000        0x4 arch/x86_64/isr.o
+                0x0000000000200000                faults_with_errcode
+ .data          0x0000000000200004        0x0 arch/x86_64/descriptor_tables.o
+ .data          0x0000000000200004        0x0 arch/x86_64/pci.o
+ *fill*         0x0000000000200004        0x4 00
+ .data          0x0000000000200008        0x8 arch/x86_64/paging.o
+                0x0000000000200008                placement_address
+ .data          0x0000000000200010        0x0 arch/x86_64/interrupt.o
+ .data          0x0000000000200010        0x0 drivers/display.o
+ *fill*         0x0000000000200010       0x10 00
+ .data          0x0000000000200020      0x100 drivers/keyboard.o
+                0x0000000000200020                codes
+                0x00000000002000a0                s_codes
+ .data          0x0000000000200120        0x0 drivers/serial.o
+ .data          0x0000000000200120        0x0 drivers/host_shm.o
+ .data          0x0000000000200120        0x0 mm/memory.o
+ .data          0x0000000000200120      0x230 mm/slab.o
+ .data          0x0000000000200350        0x0 mm/mmap.o
+ .data          0x0000000000200350        0x0 fs/vfs.o
+ .data          0x0000000000200350        0x0 fs/host_fs.o
+ .data          0x0000000000200350        0x0 kernel.a(init.o)
+ .data          0x0000000000200350        0x0 kernel.a(kernel.o)
+ *fill*         0x0000000000200350       0x10 00
+ .data          0x0000000000200360      0x168 kernel.a(shell.o)
+                0x0000000000200360                cmd_list
+                0x00000000002004c0                g_debug_level
+ .data          0x00000000002004c8        0x0 kernel.a(task.o)
+ .data          0x00000000002004c8        0x0 kernel.a(test.o)
+ .data          0x00000000002004c8        0x0 kernel.a(util.o)
+LOAD arch/x86_64/boot.o
+LOAD arch/x86_64/isr.o
+LOAD arch/x86_64/descriptor_tables.o
+LOAD arch/x86_64/pci.o
+LOAD arch/x86_64/paging.o
+LOAD arch/x86_64/interrupt.o
+LOAD drivers/display.o
+LOAD drivers/keyboard.o
+LOAD drivers/serial.o
+LOAD drivers/host_shm.o
+LOAD mm/memory.o
+LOAD mm/slab.o
+LOAD mm/mmap.o
+LOAD fs/vfs.o
+LOAD fs/host_fs.o
+LOAD kernel.a
+OUTPUT(bin/kernel_bin elf64-x86-64)
+
+.igot.plt       0x00000000002004c8        0x0
+ .igot.plt      0x0000000000000000        0x0 arch/x86_64/boot.o
+
+.bss            0x00000000002004e0     0x8650
+ .bss           0x00000000002004e0        0x0 arch/x86_64/boot.o
+ COMMON         0x00000000002004e0     0x4000 arch/x86_64/boot.o
+                0x00000000002004e0                stack
+ .bss           0x00000000002044e0       0x18 arch/x86_64/isr.o
+                0x00000000002044e0                fault_ip_g
+                0x00000000002044e8                fault_error_g
+                0x00000000002044f0                fault_num_g
+ *fill*         0x00000000002044f8        0x8 00
+ COMMON         0x0000000000204500     0x1820 arch/x86_64/isr.o
+                0x0000000000204500                irq_stat
+                0x0000000000204520                g_interrupt_handlers
+ .bss           0x0000000000205d20        0x0 arch/x86_64/descriptor_tables.o
+ COMMON         0x0000000000205d20     0x106a arch/x86_64/descriptor_tables.o
+                0x0000000000205d20                idt_ptr
+                0x0000000000205d40                gdt_entries
+                0x0000000000205d80                idt_entries
+                0x0000000000206d80                gdt_ptr
+ *fill*         0x0000000000206d8a        0x2 00
+ .bss           0x0000000000206d8c        0x4 arch/x86_64/pci.o
+ .bss           0x0000000000206d90        0x8 arch/x86_64/paging.o
+                0x0000000000206d90                g_kernel_page_dir
+ COMMON         0x0000000000206d98       0x10 arch/x86_64/paging.o
+                0x0000000000206d98                mmu_cr4_features
+                0x0000000000206da0                end
+ .bss           0x0000000000206da8        0x0 arch/x86_64/interrupt.o
+ *fill*         0x0000000000206da8       0x18 00
+ .bss           0x0000000000206dc0      0xf28 drivers/display.o
+ *fill*         0x0000000000207ce8       0x18 00
+ .bss           0x0000000000207d00       0x90 drivers/keyboard.o
+                0x0000000000207d00                waiting_task
+                0x0000000000207d08                keyboard_int
+ .bss           0x0000000000207d90        0x4 drivers/serial.o
+ *fill*         0x0000000000207d94        0x4 00
+ .bss           0x0000000000207d98        0x8 drivers/host_shm.o
+                0x0000000000207d98                g_hostShmLen
+ COMMON         0x0000000000207da0      0x120 drivers/host_shm.o
+                0x0000000000207da0                host_shm_pci_bar
+                0x0000000000207dc0                host_shm_pci_hdr
+ .bss           0x0000000000207ec0       0xe0 mm/memory.o
+                0x0000000000207ec0                g_nr_swap_pages
+                0x0000000000207ec4                g_nr_free_pages
+                0x0000000000207ec8                g_mem_map
+                0x0000000000207ed0                g_max_mapnr
+                0x0000000000207ed8                g_page_alloc_lock
+                0x0000000000207edc                low_on_memory
+ .bss           0x0000000000207fa0       0x18 mm/slab.o
+ .bss           0x0000000000207fb8        0x0 mm/mmap.o
+ .bss           0x0000000000207fb8        0x8 fs/vfs.o
+                0x0000000000207fb8                vfs_fs
+ COMMON         0x0000000000207fc0        0x8 fs/vfs.o
+                0x0000000000207fc0                vfs_cachep
+ .bss           0x0000000000207fc8        0x8 fs/host_fs.o
+ COMMON         0x0000000000207fd0       0x30 fs/host_fs.o
+                0x0000000000207fd0                host_fs
+                0x0000000000207ff0                g_hfs_waitqueue
+ .bss           0x0000000000208000        0x0 kernel.a(init.o)
+ COMMON         0x0000000000208000       0x10 kernel.a(init.o)
+                0x0000000000208000                mm_cachep
+                0x0000000000208008                vm_area_cachep
+ .bss           0x0000000000208010       0x20 kernel.a(kernel.o)
+                0x0000000000208010                g_multiboot_mod_addr
+                0x0000000000208018                g_multiboot_mod_len
+                0x0000000000208020                g_symbol_table
+                0x0000000000208028                g_total_symbols
+ COMMON         0x0000000000208030       0x10 kernel.a(kernel.o)
+                0x0000000000208030                g_multiboot_magic
+                0x0000000000208038                g_multiboot_info_ptr
+ .bss           0x0000000000208040      0x420 kernel.a(shell.o)
+                0x0000000000208040                g_test_exit
+ .bss           0x0000000000208460       0x30 kernel.a(task.o)
+                0x0000000000208460                g_kernel_mm
+                0x0000000000208468                g_runqueue_lock
+                0x000000000020846c                g_pid
+                0x0000000000208470                g_jiffies
+                0x0000000000208478                g_nr_running
+                0x0000000000208480                g_nr_waiting
+ *fill*         0x0000000000208490       0x10 00
+ COMMON         0x00000000002084a0      0x660 kernel.a(task.o)
+                0x00000000002084a0                g_timerqueue
+                0x00000000002084b0                g_current_task
+                0x00000000002084b8                g_init_task
+                0x00000000002084c0                g_tasks
+ .bss           0x0000000000208b00       0x18 kernel.a(test.o)
+                0x0000000000208b00                g_before_i
+                0x0000000000208b08                g_after_i
+                0x0000000000208b10                g_error_i
+ .bss           0x0000000000208b18       0x18 kernel.a(util.o)
+                0x0000000000208b18                tem1
+                0x0000000000208b20                tem2
+                0x0000000000208b28                tem3
+
+.debug_line     0x0000000000000000     0x17f3
+ .debug_line    0x0000000000000000       0x60 arch/x86_64/boot.o
+ .debug_line    0x0000000000000060      0x105 arch/x86_64/isr.o
+ .debug_line    0x0000000000000165      0x108 arch/x86_64/descriptor_tables.o
+ .debug_line    0x000000000000026d      0x119 arch/x86_64/pci.o
+ .debug_line    0x0000000000000386      0x197 arch/x86_64/paging.o
+ .debug_line    0x000000000000051d       0x67 arch/x86_64/interrupt.o
+ .debug_line    0x0000000000000584      0x154 drivers/display.o
+ .debug_line    0x00000000000006d8       0xd8 drivers/keyboard.o
+ .debug_line    0x00000000000007b0       0x84 drivers/serial.o
+ .debug_line    0x0000000000000834       0xce drivers/host_shm.o
+ .debug_line    0x0000000000000902      0x1cf mm/memory.o
+ .debug_line    0x0000000000000ad1      0x3c2 mm/slab.o
+ .debug_line    0x0000000000000e93      0x12a mm/mmap.o
+ .debug_line    0x0000000000000fbd       0x91 fs/vfs.o
+ .debug_line    0x000000000000104e      0x153 fs/host_fs.o
+ .debug_line    0x00000000000011a1       0x77 kernel.a(init.o)
+ .debug_line    0x0000000000001218       0xae kernel.a(kernel.o)
+ .debug_line    0x00000000000012c6      0x187 kernel.a(shell.o)
+ .debug_line    0x000000000000144d      0x1f2 kernel.a(task.o)
+ .debug_line    0x000000000000163f       0xb7 kernel.a(test.o)
+ .debug_line    0x00000000000016f6       0xfd kernel.a(util.o)
+
+.debug_info     0x0000000000000000     0x835b
+ .debug_info    0x0000000000000000       0x5c arch/x86_64/boot.o
+ .debug_info    0x000000000000005c      0x665 arch/x86_64/isr.o
+ .debug_info    0x00000000000006c1      0x51e arch/x86_64/descriptor_tables.o
+ .debug_info    0x0000000000000bdf      0x74d arch/x86_64/pci.o
+ .debug_info    0x000000000000132c      0xa46 arch/x86_64/paging.o
+ .debug_info    0x0000000000001d72       0x61 arch/x86_64/interrupt.o
+ .debug_info    0x0000000000001dd3      0x4ab drivers/display.o
+ .debug_info    0x000000000000227e      0x6cc drivers/keyboard.o
+ .debug_info    0x000000000000294a      0x152 drivers/serial.o
+ .debug_info    0x0000000000002a9c      0x49a drivers/host_shm.o
+ .debug_info    0x0000000000002f36      0x96c mm/memory.o
+ .debug_info    0x00000000000038a2     0x13b9 mm/slab.o
+ .debug_info    0x0000000000004c5b      0x747 mm/mmap.o
+ .debug_info    0x00000000000053a2      0x323 fs/vfs.o
+ .debug_info    0x00000000000056c5      0x855 fs/host_fs.o
+ .debug_info    0x0000000000005f1a       0xf5 kernel.a(init.o)
+ .debug_info    0x000000000000600f      0x39e kernel.a(kernel.o)
+ .debug_info    0x00000000000063ad      0x9c7 kernel.a(shell.o)
+ .debug_info    0x0000000000006d74      0xc67 kernel.a(task.o)
+ .debug_info    0x00000000000079db      0x49a kernel.a(test.o)
+ .debug_info    0x0000000000007e75      0x4e6 kernel.a(util.o)
+
+.debug_abbrev   0x0000000000000000     0x19e9
+ .debug_abbrev  0x0000000000000000       0x14 arch/x86_64/boot.o
+ .debug_abbrev  0x0000000000000014      0x17d arch/x86_64/isr.o
+ .debug_abbrev  0x0000000000000191      0x141 arch/x86_64/descriptor_tables.o
+ .debug_abbrev  0x00000000000002d2      0x14f arch/x86_64/pci.o
+ .debug_abbrev  0x0000000000000421      0x1bc arch/x86_64/paging.o
+ .debug_abbrev  0x00000000000005dd       0x14 arch/x86_64/interrupt.o
+ .debug_abbrev  0x00000000000005f1      0x13c drivers/display.o
+ .debug_abbrev  0x000000000000072d      0x175 drivers/keyboard.o
+ .debug_abbrev  0x00000000000008a2       0xc7 drivers/serial.o
+ .debug_abbrev  0x0000000000000969      0x11d drivers/host_shm.o
+ .debug_abbrev  0x0000000000000a86      0x1e6 mm/memory.o
+ .debug_abbrev  0x0000000000000c6c      0x246 mm/slab.o
+ .debug_abbrev  0x0000000000000eb2      0x139 mm/mmap.o
+ .debug_abbrev  0x0000000000000feb       0xef fs/vfs.o
+ .debug_abbrev  0x00000000000010da      0x18e fs/host_fs.o
+ .debug_abbrev  0x0000000000001268       0x8b kernel.a(init.o)
+ .debug_abbrev  0x00000000000012f3      0x102 kernel.a(kernel.o)
+ .debug_abbrev  0x00000000000013f5      0x199 kernel.a(shell.o)
+ .debug_abbrev  0x000000000000158e      0x248 kernel.a(task.o)
+ .debug_abbrev  0x00000000000017d6       0xf2 kernel.a(test.o)
+ .debug_abbrev  0x00000000000018c8      0x121 kernel.a(util.o)
+
+.debug_aranges  0x0000000000000000      0x3f0
+ .debug_aranges
+                0x0000000000000000       0x30 arch/x86_64/boot.o
+ .debug_aranges
+                0x0000000000000030       0x30 arch/x86_64/isr.o
+ .debug_aranges
+                0x0000000000000060       0x30 arch/x86_64/descriptor_tables.o
+ .debug_aranges
+                0x0000000000000090       0x30 arch/x86_64/pci.o
+ .debug_aranges
+                0x00000000000000c0       0x30 arch/x86_64/paging.o
+ .debug_aranges
+                0x00000000000000f0       0x30 arch/x86_64/interrupt.o
+ .debug_aranges
+                0x0000000000000120       0x30 drivers/display.o
+ .debug_aranges
+                0x0000000000000150       0x30 drivers/keyboard.o
+ .debug_aranges
+                0x0000000000000180       0x30 drivers/serial.o
+ .debug_aranges
+                0x00000000000001b0       0x30 drivers/host_shm.o
+ .debug_aranges
+                0x00000000000001e0       0x30 mm/memory.o
+ .debug_aranges
+                0x0000000000000210       0x30 mm/slab.o
+ .debug_aranges
+                0x0000000000000240       0x30 mm/mmap.o
+ .debug_aranges
+                0x0000000000000270       0x30 fs/vfs.o
+ .debug_aranges
+                0x00000000000002a0       0x30 fs/host_fs.o
+ .debug_aranges
+                0x00000000000002d0       0x30 kernel.a(init.o)
+ .debug_aranges
+                0x0000000000000300       0x30 kernel.a(kernel.o)
+ .debug_aranges
+                0x0000000000000330       0x30 kernel.a(shell.o)
+ .debug_aranges
+                0x0000000000000360       0x30 kernel.a(task.o)
+ .debug_aranges
+                0x0000000000000390       0x30 kernel.a(test.o)
+ .debug_aranges
+                0x00000000000003c0       0x30 kernel.a(util.o)
+
+.debug_loc      0x0000000000000000     0x31e0
+ .debug_loc     0x0000000000000000      0x260 arch/x86_64/isr.o
+ .debug_loc     0x0000000000000260      0x2ac arch/x86_64/descriptor_tables.o
+ .debug_loc     0x000000000000050c      0x390 arch/x86_64/pci.o
+ .debug_loc     0x000000000000089c      0x1c8 arch/x86_64/paging.o
+ .debug_loc     0x0000000000000a64      0x1c8 drivers/display.o
+ .debug_loc     0x0000000000000c2c      0x17c drivers/keyboard.o
+ .debug_loc     0x0000000000000da8       0x98 drivers/serial.o
+ .debug_loc     0x0000000000000e40       0x98 drivers/host_shm.o
+ .debug_loc     0x0000000000000ed8      0x4c0 mm/memory.o
+ .debug_loc     0x0000000000001398      0xab0 mm/slab.o
+ .debug_loc     0x0000000000001e48      0x2ac mm/mmap.o
+ .debug_loc     0x00000000000020f4      0x1c8 fs/vfs.o
+ .debug_loc     0x00000000000022bc      0x130 fs/host_fs.o
+ .debug_loc     0x00000000000023ec       0x4c kernel.a(init.o)
+ .debug_loc     0x0000000000002438       0x98 kernel.a(kernel.o)
+ .debug_loc     0x00000000000024d0      0x390 kernel.a(shell.o)
+ .debug_loc     0x0000000000002860      0x63c kernel.a(task.o)
+ .debug_loc     0x0000000000002e9c       0x4c kernel.a(test.o)
+ .debug_loc     0x0000000000002ee8      0x2f8 kernel.a(util.o)
+
+.debug_pubnames
+                0x0000000000000000      0xaa6
+ .debug_pubnames
+                0x0000000000000000       0xf7 arch/x86_64/isr.o
+ .debug_pubnames
+                0x00000000000000f7       0x65 arch/x86_64/descriptor_tables.o
+ .debug_pubnames
+                0x000000000000015c       0x67 arch/x86_64/pci.o
+ .debug_pubnames
+                0x00000000000001c3       0x90 arch/x86_64/paging.o
+ .debug_pubnames
+                0x0000000000000253       0x3a drivers/display.o
+ .debug_pubnames
+                0x000000000000028d       0x86 drivers/keyboard.o
+ .debug_pubnames
+                0x0000000000000313       0x35 drivers/serial.o
+ .debug_pubnames
+                0x0000000000000348       0x5f drivers/host_shm.o
+ .debug_pubnames
+                0x00000000000003a7       0xee mm/memory.o
+ .debug_pubnames
+                0x0000000000000495      0x122 mm/slab.o
+ .debug_pubnames
+                0x00000000000005b7       0x83 mm/mmap.o
+ .debug_pubnames
+                0x000000000000063a       0x88 fs/vfs.o
+ .debug_pubnames
+                0x00000000000006c2       0x42 fs/host_fs.o
+ .debug_pubnames
+                0x0000000000000704       0x43 kernel.a(init.o)
+ .debug_pubnames
+                0x0000000000000747       0xb8 kernel.a(kernel.o)
+ .debug_pubnames
+                0x00000000000007ff       0x5d kernel.a(shell.o)
+ .debug_pubnames
+                0x000000000000085c      0x155 kernel.a(task.o)
+ .debug_pubnames
+                0x00000000000009b1       0x4b kernel.a(test.o)
+ .debug_pubnames
+                0x00000000000009fc       0xaa kernel.a(util.o)
+
+.debug_str      0x0000000000000000     0x1ae0
+ .debug_str     0x0000000000000000      0x303 arch/x86_64/isr.o
+                                        0x358 (size before relaxing)
+ .debug_str     0x0000000000000303      0x20c arch/x86_64/descriptor_tables.o
+                                        0x2f8 (size before relaxing)
+ .debug_str     0x000000000000050f      0x1fb arch/x86_64/pci.o
+                                        0x324 (size before relaxing)
+ .debug_str     0x000000000000070a      0x29f arch/x86_64/paging.o
+                                        0x40f (size before relaxing)
+ .debug_str     0x00000000000009a9      0x11d drivers/display.o
+                                        0x1cc (size before relaxing)
+ .debug_str     0x0000000000000ac6      0x10f drivers/keyboard.o
+                                        0x3bb (size before relaxing)
+ .debug_str     0x0000000000000bd5       0x37 drivers/serial.o
+                                         0xf9 (size before relaxing)
+ .debug_str     0x0000000000000c0c       0x6b drivers/host_shm.o
+                                        0x308 (size before relaxing)
+ .debug_str     0x0000000000000c77      0x2a7 mm/memory.o
+                                        0x3d2 (size before relaxing)
+ .debug_str     0x0000000000000f1e      0x470 mm/slab.o
+                                        0x69b (size before relaxing)
+ .debug_str     0x000000000000138e       0x88 mm/mmap.o
+                                        0x349 (size before relaxing)
+ .debug_str     0x0000000000001416       0x90 fs/vfs.o
+                                        0x169 (size before relaxing)
+ .debug_str     0x00000000000014a6      0x146 fs/host_fs.o
+                                        0x44e (size before relaxing)
+ .debug_str     0x00000000000015ec       0x3c kernel.a(init.o)
+                                        0x103 (size before relaxing)
+ .debug_str     0x0000000000001628      0x155 kernel.a(kernel.o)
+                                        0x297 (size before relaxing)
+ .debug_str     0x000000000000177d       0xf1 kernel.a(shell.o)
+                                        0x409 (size before relaxing)
+ .debug_str     0x000000000000186e      0x1b4 kernel.a(task.o)
+                                        0x516 (size before relaxing)
+ .debug_str     0x0000000000001a22       0x11 kernel.a(test.o)
+                                        0x2cb (size before relaxing)
+ .debug_str     0x0000000000001a33       0xad kernel.a(util.o)
+                                        0x1d2 (size before relaxing)
+
+.comment        0x0000000000000000       0x2b
+ .comment       0x0000000000000000       0x2b arch/x86_64/isr.o
+                                         0x2c (size before relaxing)
+ .comment       0x0000000000000000       0x2c arch/x86_64/descriptor_tables.o
+ .comment       0x0000000000000000       0x2c arch/x86_64/pci.o
+ .comment       0x0000000000000000       0x2c arch/x86_64/paging.o
+ .comment       0x0000000000000000       0x2c drivers/display.o
+ .comment       0x0000000000000000       0x2c drivers/keyboard.o
+ .comment       0x0000000000000000       0x2c drivers/serial.o
+ .comment       0x0000000000000000       0x2c drivers/host_shm.o
+ .comment       0x0000000000000000       0x2c mm/memory.o
+ .comment       0x0000000000000000       0x2c mm/slab.o
+ .comment       0x0000000000000000       0x2c mm/mmap.o
+ .comment       0x0000000000000000       0x2c fs/vfs.o
+ .comment       0x0000000000000000       0x2c fs/host_fs.o
+ .comment       0x0000000000000000       0x2c kernel.a(init.o)
+ .comment       0x0000000000000000       0x2c kernel.a(kernel.o)
+ .comment       0x0000000000000000       0x2c kernel.a(shell.o)
+ .comment       0x0000000000000000       0x2c kernel.a(task.o)
+ .comment       0x0000000000000000       0x2c kernel.a(test.o)
+ .comment       0x0000000000000000       0x2c kernel.a(util.o)
+
+.note.GNU-stack
+                0x0000000000000000        0x0
+ .note.GNU-stack
+                0x0000000000000000        0x0 arch/x86_64/isr.o
+ .note.GNU-stack
+                0x0000000000000000        0x0 arch/x86_64/descriptor_tables.o
+ .note.GNU-stack
+                0x0000000000000000        0x0 arch/x86_64/pci.o
+ .note.GNU-stack
+                0x0000000000000000        0x0 arch/x86_64/paging.o
+ .note.GNU-stack
+                0x0000000000000000        0x0 drivers/display.o
+ .note.GNU-stack
+                0x0000000000000000        0x0 drivers/keyboard.o
+ .note.GNU-stack
+                0x0000000000000000        0x0 drivers/serial.o
+ .note.GNU-stack
+                0x0000000000000000        0x0 drivers/host_shm.o
+ .note.GNU-stack
+                0x0000000000000000        0x0 mm/memory.o
+ .note.GNU-stack
+                0x0000000000000000        0x0 mm/slab.o
+ .note.GNU-stack
+                0x0000000000000000        0x0 mm/mmap.o
+ .note.GNU-stack
+                0x0000000000000000        0x0 fs/vfs.o
+ .note.GNU-stack
+                0x0000000000000000        0x0 fs/host_fs.o
+ .note.GNU-stack
+                0x0000000000000000        0x0 kernel.a(init.o)
+ .note.GNU-stack
+                0x0000000000000000        0x0 kernel.a(kernel.o)
+ .note.GNU-stack
+                0x0000000000000000        0x0 kernel.a(shell.o)
+ .note.GNU-stack
+                0x0000000000000000        0x0 kernel.a(task.o)
+ .note.GNU-stack
+                0x0000000000000000        0x0 kernel.a(test.o)
+ .note.GNU-stack
+                0x0000000000000000        0x0 kernel.a(util.o)
+
+.debug_ranges   0x0000000000000000       0x90
+ .debug_ranges  0x0000000000000000       0x90 mm/slab.o

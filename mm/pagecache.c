@@ -70,7 +70,8 @@ int pc_insertInodePage(struct inode *inode,struct page *page)
                 if (page->offset < tmp_page->offset)
                 {
 			inode->nrpages++;
-                      list_add(&page->list, &tmp_page->list); 
+			page->inode=inode;
+                        list_add(&page->list, &tmp_page->list); 
 			ret=1;
 			goto last;
                 } 

@@ -1,7 +1,7 @@
 #ifndef __FILECACHESCHEMA_H__
 #define __FILECACHESCHEMA_H__
 
-#define FS_VERSION 3
+#define FS_VERSION 4
 #define FS_MAGIC 0x12345678
 #define MAX_FILENAMELEN 200
 #define MAX_REQUESTS 100
@@ -28,7 +28,7 @@ typedef struct {
 	unsigned char state;
 	unsigned char type;
 	unsigned char filename[MAX_FILENAMELEN];
-	unsigned long offset;
+	unsigned long file_offset;
 	unsigned long request_len;
 	unsigned long shm_offset ; /* offset from the begining of shared memory */
 
@@ -40,6 +40,7 @@ typedef struct {
 	unsigned long magic_number;
 	unsigned char version;
 	unsigned char state;
+	unsigned char generate_interrupt;
 	int request_highindex;
 	Request_t requests[MAX_REQUESTS];
 }fileCache_t ;

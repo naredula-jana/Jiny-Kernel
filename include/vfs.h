@@ -20,6 +20,7 @@ struct file {
 struct inode {
 	int count; /* usage count */
 	int nrpages;	
+	unsigned long length; /* file length */
 	char filename[MAX_FILENAME];
 	struct list_head page_list;	
 	struct list_head inode_next;	
@@ -27,6 +28,8 @@ struct inode {
 
 struct filesystem {
 	struct file *(*open)(char *filename);
+	int (*lseek)(struct file *file,  unsigned long offset,int whence);
+	int (*write)(struct file *file,  unsigned char *buff,unsigned long len);
 	int (*read)(struct file *file,  unsigned char *buff,unsigned long len);
 	int (*close)(struct file *file);
 };
