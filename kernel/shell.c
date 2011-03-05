@@ -6,12 +6,13 @@ typedef struct {
 	unsigned char *usage;
 	unsigned char *help;
 	unsigned char *command_name;
-	void (*func)(addr_t arg1,addr_t arg2);
+	void (*func)(char *arg1,char *arg2);
 } commands_t;
 #define MAX_COMMANDS 500
 static int sh_create(char *arg1,char *arg2);
 static int print_help(char *arg1,char *arg2);
 static int sh_cat(char *arg1,char *arg2);
+static int sh_cp(char *arg1,char *arg2);
 static int sh_ls(char *arg1,char *arg2);
 void ar_printIrqStat(char *arg1,char *arg2);
 static int  test_hostshm(char *arg1,char *arg2);
@@ -35,11 +36,11 @@ commands_t cmd_list[]=
 	{"host      ","host shm test","host",test_hostshm},
 	{"ls        ","ls","ls",sh_ls},
 	{"cat <file>","Cat file       ","cat",sh_cat},
+	{"cp <f1> f2>","copy f1 f2       ","cp",sh_cp},
 	{0,0,0,0}
 };
 
 extern void ut_putchar (int c); 
-static int sh_cat(char *arg1,char *arg2);
 static int test_hostshm(char *arg1,char *arg2)
 {
 	unsigned int *a;
@@ -51,8 +52,8 @@ static int test_hostshm(char *arg1,char *arg2)
 	a=(unsigned char *)HOST_SHM_CTL_ADDR+8;
 	v=*a;
 	ut_printf(" hostshm : %x :%x \n",a,v);
-/*	a=(unsigned char *)HOST_SHM_CTL_ADDR;
-	*a=0xffffffff;*/ /* set the proper mask */
+	/*	a=(unsigned char *)HOST_SHM_CTL_ADDR;
+	 *a=0xffffffff;*/ /* set the proper mask */
 	a=(unsigned char *)HOST_SHM_CTL_ADDR+12;
 	*a=av;
 	ut_printf(" new  hostshm : %x :%x \n",a,av);
@@ -64,62 +65,98 @@ static int sh_test1(char *arg1,char *arg2)
 
 	p=0x104f20;
 	ut_printf(" Before Writing in to this Adress %x %x \n",p,*p);
-(*p)=12;	
+	(*p)=12;	
 	ut_printf(" After Writing in to this Adress %x  %x\n",p,*p);
 	return 1;
 }
 extern struct wait_struct g_hfs_waitqueue;
 #define CR0_WP 0x00010000 /* Write protect */
-  static inline uint64_t read_cr0(void)       
-  {                                             
-    uint64_t ret;                               
-    __asm__ volatile ("movq %%cr0, %0\n"   
-                      : "=r" (ret));            
-    return ret;                                 
-  }
+static inline uint64_t read_cr0(void)       
+{                                             
+	uint64_t ret;                               
+	__asm__ volatile ("movq %%cr0, %0\n"   
+			: "=r" (ret));            
+	return ret;                                 
+}
 
-  static inline void write_cr0(uint64_t val)  
-  {                                             
-    __asm__ volatile ("movq %0, %%cr0 \n" 
-                      :: "r" (val));          
-  }
+static inline void write_cr0(uint64_t val)  
+{                                             
+	__asm__ volatile ("movq %0, %%cr0 \n" 
+			:: "r" (val));          
+}
 #define CR0_AM 0x00040000 /* Alignment mask */
 static int sh_test2(char *arg1,char *arg2)
 {
-uint64_t *p,val;
-p=0x103000;
-val=0x281;
+	uint64_t *p,val;
+	p=0x103000;
+	val=0x281;
 	ut_printf("Before writing table \n");
-*p=val;
-flush_tlb();
+	*p=val;
+	flush_tlb();
 	ut_printf("After writing table \n");
 }
 static int sh_test3(char *arg1,char *arg2)
 {
-uint64_t val;
-/*	ut_printf(" Before wait hfs: %d \n",g_jiffies);
-	sc_wait(&g_hfs_waitqueue,1000);
-	ut_printf(" After wait hfs: %d \n",g_jiffies);*/
+	uint64_t val;
+	/*	ut_printf(" Before wait hfs: %d \n",g_jiffies);
+		sc_wait(&g_hfs_waitqueue,1000);
+		ut_printf(" After wait hfs: %d \n",g_jiffies);*/
 	ut_printf(" BEFefore making write protect \n");
 
-  val = read_cr0();
-val &= ~CR0_AM; /* Disable alignment-check */
-  /*
-   * Set write protect bit in order to protect
-   * write access to read-only pages from supervisor mode.
-   */
-  val |= CR0_WP;
-  write_cr0(val);
+	val = read_cr0();
+	val &= ~CR0_AM; /* Disable alignment-check */
+	/*
+	 * Set write protect bit in order to protect
+	 * write access to read-only pages from supervisor mode.
+	 */
+	val |= CR0_WP;
+	write_cr0(val);
 	ut_printf(" after making write protect \n");
 	return 1;
 }
-static unsigned char buf[6024];
+
+static char buf[6024];
+static int sh_cp(char *arg1,char *arg2)
+{
+        //      unsigned char buf[1024];
+        struct file *fp,*wfp;
+        int i,ret,wret;
+        fp=fs_open(arg1,0);
+        wfp=fs_open(arg2,1);
+        ut_printf("filename :%s: %s \n",arg1,arg2);
+        if (fp ==0)
+        {
+                ut_printf(" Error opening file :%s: \n",arg1);
+                return 0;
+        }
+        buf[1000]=0;
+        ret=1;
+        i=1;
+        while (ret > 0)
+        {
+                ret=fs_read(fp,buf,5000);
+                buf[5001]='\0';
+                if (ret > 0)
+                {
+                	wret=fs_write(wfp,buf,ret);
+                        ut_printf("%d: DATA Read :%c: ret: %d wret:%d \n",i,buf[0],ret,wret);
+                }else
+                {
+                        ut_printf(" Return value of read :%i: \n",ret);
+                }
+                i++;
+        }
+	ut_printf("Before syncing \n");
+	fs_fdatasync(wfp);
+	ut_printf("after syncing \n");
+        return 0;
+}
 static int sh_cat(char *arg1,char *arg2)
 {
-//	unsigned char buf[1024];
+	//	unsigned char buf[1024];
 	struct file *fp;
 	int i,ret;
-	fp=fs_open(arg1);
+	fp=fs_open(arg1,0);
 	ut_printf("filename :%s: \n",arg1);
 	if (fp ==0)
 	{
@@ -129,19 +166,20 @@ static int sh_cat(char *arg1,char *arg2)
 	buf[1000]=0;
 	ret=1;
 	i=1;
-while (ret > 0)
-{	
-	ret=fs_read(fp,buf,5000);
-	buf[500]='\0';
-	if (ret > 0)
-	{
-		ut_printf("%d: DATA Read :%c: %d \n",i,buf[0],ret);
-	}else
-	{
-		ut_printf(" Return value of read :%i: \n",ret);
+	while (ret > 0)
+	{	
+		ret=fs_read(fp,buf,5000);
+		buf[5001]='\0';
+		if (ret > 0)
+		{
+			buf[20]='\0';
+			ut_printf("%d: DATA Read sr :%s: %d \n",i,buf,ret);
+		}else
+		{
+			ut_printf(" Return value of read :%i: \n",ret);
+		}
+		i++;
 	}
-	i++;
-}
 	return 0;
 }
 static int sh_ls(char *arg1,char *arg2)
@@ -158,7 +196,7 @@ static int sh_create(char *arg1,char *arg2)
 static int print_help(char *arg1,char *arg2)
 {
 	int i;
-	ut_printf("Version 1.67 stacksize:%x  \n",STACK_SIZE);
+	ut_printf("Version 1.69 stacksize:%x  \n",STACK_SIZE);
 	for (i=0; i<MAX_COMMANDS; i++)
 	{
 		if (cmd_list[i].usage == 0) break;
@@ -177,7 +215,7 @@ enum{
 	CMD_GETVAR=1,
 	CMD_FILLVAR
 };
-void tokenise(char *p,char *tokens[])
+void tokenise( char *p,char *tokens[])
 {
 	int i,k,j;
 
@@ -208,7 +246,7 @@ void tokenise(char *p,char *tokens[])
 static int process_command(int cmd,char *p)
 {
 	int i,ret,symbls;
-	unsigned char *token[5];
+	char *token[5];
 
 	for (i=0; i<3; i++) token[i]=0;
 	tokenise(p,token);
@@ -303,7 +341,7 @@ static int div_by_zero()
 }
 int shell_main()
 {
-	char c,line[MAX_LINE_LENGTH];
+	unsigned char c,line[MAX_LINE_LENGTH];
 	int i,cmd_type;
 
 	int pos=0;
@@ -316,60 +354,5 @@ int shell_main()
 		{
 			line[0]='\0';
 		}
-#if 0
-		switch(line[0])
-		{
-			case 'a' : vm_brk(g_current_task->mm->start_brk,0x8000);
-				   g_current_task->mm->start_brk=g_current_task->mm->start_brk+0x8000;
-				   vm_printMmaps(); break;
-			case 'b' : 
-				   {
-					   addr_t *p;
-					   p=0xc0000000;
-					   *p=123;
-					   break;
-				   }
-			case 'f' : 
-				   {
-					   addr_t *p;
-					   p=0xd0000000;
-					   *p=0xabc;
-					   break;
-				   }
-			case 'h' : print_help(); break;
-			case 'p' : mm_printFreeAreas() ; break;
-			case 'd' : if (g_debug_level == 0) g_debug_level=1;
-					   else g_debug_level =0; 
-					   ut_printf(" New g_debug_level : %d \n",g_debug_level);
-					   break;
-			case 'x' :
-					   {
-						   unsigned long *addr=mm_malloc(1123,0);
-						   ut_printf("kmalloc  addr :%x \n",addr);
-						   mm_free(addr);
-						   ut_printf("free  addr :%x \n",addr);
-						   break;
-					   }
-			case 'c' : ut_printf("FORKING \n");  sc_createThread(test_proc);   break; 
-			case 'e' : if (g_test_exit == 0) g_test_exit=1;
-					   else g_test_exit=0;
-					   ut_printf(" New g_test_exit: %d \n",g_test_exit); break;
-			case 'm' : 
-					   for (i=0; i<30; i++)
-					   {
-						   ut_printf(CMD_PROMPT);
-						   ut_printf("mass FORKING \n");  sc_createThread(test_proc); 
-					   }
-					   break; 
-			case 's' : 
-					   ut_printf("SCHEDULE \n");sc_schedule(); 
-					   ut_printf("shell Proc p:%d laddr:%x c:%x  sp:%x slen:%d \n",g_current_task->pid,g_current_task,&c,g_current_task->thread.sp,((void *)&c-(void*)g_current_task));
-					   break; 
-			case 'i' : ar_printIrqStat(); break;
-			case 'z' : div_by_zero(); break;
-			default: ut_printf("UNSUpported   \n"); break;
-		}
-		line[0]='\0';
-#endif
 	}
 }

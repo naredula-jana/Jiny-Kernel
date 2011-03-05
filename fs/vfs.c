@@ -12,9 +12,11 @@ static int inode_init(struct inode *inode,unsigned char *filename)
 	if (inode == NULL) return 0;
 	inode->count=0;
 	inode->nrpages=0;
+	inode->length=0;
 	ut_strcpy(inode->filename,filename);
-	INIT_LIST_HEAD(&inode->page_list);
-	INIT_LIST_HEAD(&inode->inode_next);
+	INIT_LIST_HEAD(&(inode->page_list));
+	INIT_LIST_HEAD(&(inode->inode_next));
+	ut_printf(" inode init :%x  :%x \n",&inode->page_list,&(inode->page_list));
         list_add(&inode->inode_next,&inode_list);	
 	return 1;
 }
@@ -28,7 +30,7 @@ int fs_printInodes()
 
         list_for_each(p, &inode_list) {
                 tmp_inode=list_entry(p, struct inode, inode_next);
-		ut_printf(" name: %s count:%d nrpages:%d \n",tmp_inode->filename,tmp_inode->count,tmp_inode->nrpages);
+		ut_printf(" name: %s count:%d nrpages:%d length:%d \n",tmp_inode->filename,tmp_inode->count,tmp_inode->nrpages,tmp_inode->length);
         }
 }
 struct inode *fs_getInode(unsigned char *filename)
@@ -56,10 +58,15 @@ int kernel_read(struct file *file, unsigned long offset,
 	return 1;
 }
 
-struct file *fs_open(unsigned char *filename)
+struct file *fs_open(unsigned char *filename,int mode)
 {
 	if (vfs_fs == 0) return 0;
-	return vfs_fs->open(filename);
+	return vfs_fs->open(filename,mode);
+}
+struct file *fs_fdatasync(unsigned char *filename)
+{
+	if (vfs_fs == 0) return 0;
+	return vfs_fs->fdatasync(filename);
 }
 int fs_lseek(struct file *file ,unsigned long offset, int whence)
 {

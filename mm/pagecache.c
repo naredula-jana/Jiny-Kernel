@@ -11,19 +11,29 @@ static LIST_HEAD(inactive_list);
 
 
 /*********************** local function *************************/
-
+static int page_init(page_struct_t *p)
+{
+	p->next=p->prev=NULL;
+	p->count.counter=0;
+	p->flags=0;
+	p->inode=NULL;
+	p->offset=0;
+	INIT_LIST_HEAD(&(p->lru_list));
+	INIT_LIST_HEAD(&(p->list));
+	return 1;
+}
 /***************************** API function **********************/
 
-int pc_init(addr_t start_addr,unsigned long len)
+int pc_init(unsigned char *start_addr,unsigned long len)
 {
 	int total_pages,reserved_size;
 	page_struct_t *p;
 	int i;
 
-	pc_startaddr=start_addr;
+	pc_startaddr=(unsigned char *)start_addr;
 	total_pages=len/PC_PAGESIZE;
 	reserved_size=sizeof(fileCache_t)+sizeof(page_struct_t)*total_pages;
-	pagecache_map=start_addr + (unsigned char *)sizeof(fileCache_t);
+	pagecache_map=(page_struct_t *)(start_addr + sizeof(fileCache_t));
 	ut_memset(pagecache_map, 0, sizeof(page_struct_t)*total_pages);
 
 	for( i=0; i<total_pages; i++)
@@ -42,14 +52,18 @@ int pc_init(addr_t start_addr,unsigned long len)
 	ut_printf(" startaddr: %x totalpages:%d reserved size:%d \n",pc_startaddr,total_pages,reserved_size);	
 	return 1;
 }
-unsigned char *pc_getInodePage(struct inode *inode,unsigned long offset)
+struct page *pc_getInodePage(struct inode *inode,unsigned long offset)
 {
         struct list_head *p;
 	struct page *page;
+	int i;
         unsigned long page_offset=(offset/PC_PAGESIZE)*PC_PAGESIZE ;
 
+	i=0;
         list_for_each(p, &(inode->page_list)) {
                 page=list_entry(p, struct page, list);
+		i++;
+		ut_printf("get page address: %x %d \n",page,i);
                 if (page->offset == page_offset)
                 {
                         return page;
@@ -64,9 +78,11 @@ int pc_insertInodePage(struct inode *inode,struct page *page)
 	struct page *tmp_page;
 	int ret=0;
 
+	if (page->offset > inode->length) return ret;
         list_for_each(p, &(inode->page_list))
 	 {
                 tmp_page=list_entry(p, struct page, list);
+		ut_printf("insert page address: %x \n",tmp_page);
                 if (page->offset < tmp_page->offset)
                 {
 			inode->nrpages++;
@@ -80,18 +96,20 @@ int pc_insertInodePage(struct inode *inode,struct page *page)
 	{
 		inode->nrpages++;
                 list_add_tail(&page->list, &inode->page_list); 
+		ret=1;
 	}
 last:
         return ret;
 
 }
 
-int pc_putFreePage(struct page *page) /* TODO : to implement */
+int pc_putFreePage(struct page *page) 
 {
-
+	list_add_tail(&page->lru_list, &free_list); 
+	return 1;
 }
 
-unsigned char *pc_getFreePage()
+page_struct_t *pc_getFreePage()
 {
 	struct list_head *node;
 	page_struct_t *p;
@@ -102,6 +120,7 @@ unsigned char *pc_getFreePage()
 
 	list_del(node); /* delete the node from free list */
         p=list_entry(node, struct page, lru_list);
+	page_init(p);
 	return p;
 }
 

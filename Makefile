@@ -21,6 +21,7 @@ all: clean
 clean:
 	make SOURCE_ROOT=$$PWD -C kernel clean
 	make SOURCE_ROOT=$$PWD -C drivers clean
+	make SOURCE_ROOT=$$PWD -C fs clean
 	make SOURCE_ROOT=$$PWD -C arch/$(ARCH_DIR) clean
 	make SOURCE_ROOT=$$PWD -C mm clean
 

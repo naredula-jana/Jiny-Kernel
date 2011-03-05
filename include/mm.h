@@ -78,9 +78,12 @@ extern kmem_cache_t *vm_area_cachep;
 extern kmem_cache_t *mm_cachep;
 extern page_struct_t *pagecache_map;
 extern unsigned char *pc_startaddr;
-unsigned char *pc_getFreePage();
+
+extern kmem_cache_t *kmem_cache_create(const char *, long,long, unsigned long,void (*)(void *, kmem_cache_t *, unsigned long),void (*)(void *, kmem_cache_t *, unsigned long));
+void *kmem_cache_alloc (kmem_cache_t *cachep, int flags);
+struct page *pc_getFreePage();
 int pc_insertInodePage(struct inode *inode,struct page *page);
-unsigned char *pc_getInodePage(struct inode *inode,unsigned long offset);
+struct page *pc_getInodePage(struct inode *inode,unsigned long offset);
 
 /* Page flag bit values */
 #define PG_locked                0
@@ -102,5 +105,8 @@ unsigned char *pc_getInodePage(struct inode *inode,unsigned long offset);
 #define PageDMA(page)           (test_bit(PG_DMA, &(page)->flags))
 #define PageClearSlab(page)	(clear_bit(PG_slab, &(page)->flags))
 #define PageSetSlab(page)	set_bit(PG_slab, &(page)->flags)
+#define PageDirty(page)      (test_bit(PG_dirty, &(page)->flags))
+#define PageSetDirty(page)      set_bit(PG_dirty, &(page)->flags)
+#define PageClearDirty(page)    clear_bit(PG_dirty, &(page)->flags)
 
 #endif

@@ -3,51 +3,28 @@
 #include "mm.h"
 #include "common.h"
 #include "task.h"
+#define OFFSET_ALIGN(x) ((x/PC_PAGESIZE)*PC_PAGESIZE)
 struct filesystem host_fs;
 static fileCache_t *shm_headerp=0;
 struct wait_struct g_hfs_waitqueue;
 
 static inline unsigned char *to_ptr(struct page *p)  
 {
-   unsigned char *addr;
-   unsigned long pn;
-   pn=p-pagecache_map; 
-   addr=pc_startaddr+pn*PC_PAGESIZE; 
-   return addr;
- }
-static struct file *hfOpen(unsigned char *filename)
-{
-	struct file *filep;
-	struct inode *inodep;
-
-	filep = kmem_cache_alloc(g_slab_filep, 0);
-	if (filep == 0) goto error;
-	if (filename != 0) 
-	{	
-		ut_strcpy(filep->filename,filename);
-	}else
-	{
-		goto error;
-	}	
-	inodep = fs_getInode(filep->filename);
-	if (inodep == 0) goto error;
-	filep->inode=inodep;
-	filep->offset=0;
-	inodep->count++;
-	return filep;
-error:
-	if (filep != NULL)  kmem_cache_free(g_slab_filep, filep);	
-	if (inodep != NULL) 
-	{
-	}
-	return 0;
+	unsigned char *addr;
+	unsigned long pn;
+	pn=p-pagecache_map; 
+	addr=pc_startaddr+pn*PC_PAGESIZE; 
+	return addr;
 }
-int request_hostserver(unsigned char type,struct file *filep, struct page *page,int data_len)
+
+int request_hostserver(unsigned char type,struct inode *inode, struct page *page,int data_len,int mode)
 {
 	int i,j,ret,tlen;
 	unsigned long offset;
+	int wait_time=10;
 
 	j=-1;
+	ret=0;
 	for (i=0; i<shm_headerp->request_highindex; i++)
 	{
 		if (shm_headerp->requests[i].state==STATE_INVALID)
@@ -75,19 +52,28 @@ int request_hostserver(unsigned char type,struct file *filep, struct page *page,
 		}
 	}
 
-	ut_strcpy(shm_headerp->requests[j].filename,filep->filename);
+	ut_strcpy(shm_headerp->requests[j].filename,inode->filename);
 	shm_headerp->requests[j].type=type;
-	shm_headerp->requests[j].file_offset=filep->offset;
+	if (page != NULL)
+	{
+		shm_headerp->requests[j].file_offset=page->offset;
+		shm_headerp->requests[j].shm_offset=(unsigned long)to_ptr(page)-HOST_SHM_ADDR;
+	}
+	else 
+	{
+		shm_headerp->requests[j].file_offset=0;
+		shm_headerp->requests[j].shm_offset=-1;
+	}
 	shm_headerp->requests[j].request_len=data_len;
-
-	shm_headerp->requests[j].shm_offset=to_ptr(page)-HOST_SHM_ADDR;
 	shm_headerp->requests[j].response=RESPONSE_NONE;
+	shm_headerp->requests[j].flags=mode;
 	shm_headerp->requests[j].state=STATE_VALID;
 	shm_headerp->generate_interrupt=1;
 
 	while(shm_headerp->requests[j].response==RESPONSE_NONE)
 	{
-		sc_wait(&g_hfs_waitqueue,1000);
+		sc_wait(&g_hfs_waitqueue,wait_time);
+		if (wait_time < 1000) wait_time=wait_time*2;	
 		ut_printf(" After Wait : %d :\n",g_jiffies);
 	}
 
@@ -95,36 +81,89 @@ int request_hostserver(unsigned char type,struct file *filep, struct page *page,
 	{
 		ut_printf(" error in response    \n");
 		shm_headerp->requests[j].state=STATE_INVALID;
-		tlen=-9;
+		ret=-9;
 		goto error;
 	}
 
-	tlen=shm_headerp->requests[j].response_len;
+	ret=shm_headerp->requests[j].response_len;
 	ut_printf(" Sucess in reading the file :%i %x \n",tlen,page);
 	shm_headerp->requests[j].state=STATE_INVALID;
 error:
-	return tlen;
+	return ret;
+}
+
+static struct file *hfOpen(unsigned char *filename,int mode)
+{
+	struct file *filep;
+	struct inode *inodep;
+	int ret;
+
+	filep = kmem_cache_alloc(g_slab_filep, 0);
+	if (filep == 0) goto error;
+	if (filename != 0)
+	{
+		ut_strcpy(filep->filename,filename);
+	}else
+	{
+		goto error;
+	}
+
+	inodep = fs_getInode(filep->filename);
+	if (inodep == 0) goto error;
+
+	ret=request_hostserver(REQUEST_OPEN,inodep,0,0,mode);
+	if (ret < 0) goto error;
+	inodep->length=ret;
+	filep->inode=inodep;
+	filep->offset=0;
+	inodep->count++;
+	return filep;
+error:
+	if (filep != NULL)  kmem_cache_free(g_slab_filep, filep);
+	if (inodep != NULL)
+	{ /* TODO */
+	}
+	return 0;
 }
 
 static int hfLseek(struct file *filep, unsigned long offset,int whence)
 { /* TODO */
 
+
 }
 
 static int hfFdatasync(struct file *filep)
-{ /* TODO */
+{ 
+	struct list_head *p;
+	struct page *page;
+	struct inode *inode;
+	int ret;
 
+	inode=filep->inode;
+	list_for_each(p, &(inode->page_list)) {
+		page=list_entry(p, struct page, list);
+		if (PageDirty(page))
+		{
+			int len=inode->length;
+			if (len < (page->offset+PC_PAGESIZE))
+			{
+				len=len-page->offset;
+			}
+			if (len > 0)
+			ret=request_hostserver(REQUEST_WRITE,inode,page,len,0);
+		}
+	}
+	return 0;
 }
 static int hfWrite(struct file *filep,unsigned char *buff, unsigned long len)
 { 
-        int ret;
+	int ret;
 	int tmp_len,size;
-        struct page *page;
+	struct page *page;
 
 	ret=0;
 	if (filep ==0) return 0;
-	ut_printf("Write  filename from hs  :%s: offset:%d \n",filep->filename,filep->offset);
-
+	ut_printf("Write  filename from hs  :%s: offset:%d inode:%x \n",filep->filename,filep->offset,filep->inode);
 	tmp_len=0;
 
 	while(tmp_len < len)
@@ -138,16 +177,23 @@ static int hfWrite(struct file *filep,unsigned char *buff, unsigned long len)
 				ret=-3;
 				goto error;
 			}
-			page->offset=filep->offset;
+			page->offset=OFFSET_ALIGN(filep->offset);
 			pc_insertInodePage(filep->inode,page);
 		}
 		size=PC_PAGESIZE;
 		if (size > (len-tmp_len)) size=len-tmp_len;
 		ut_memcpy(to_ptr(page),buff+tmp_len,size);
+		PageSetDirty(page);
 		tmp_len=tmp_len+size;
 		ut_printf("write memcpy :%x %x  %d \n",buff,to_ptr(page),size);
 	}
-
+error:
+	if (tmp_len > 0){
+		struct inode *inode=filep->inode;
+		filep->offset=filep->offset+tmp_len;
+		if (inode->length < filep->offset)
+			inode->length=filep->offset;	
+	}
 	return tmp_len;
 }
 
@@ -155,10 +201,13 @@ static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 {
 	int ret;
 	struct page *page;
+	struct inode *inode;
 
 	ret=0;
 	if (filep ==0) return 0;
-	ut_printf("Read filename from hs  :%s: offset:%d \n",filep->filename,filep->offset);
+	ut_printf("Read filename from hs  :%s: offset:%d inode:%x \n",filep->filename,filep->offset,filep->inode);
+	inode=filep->inode;
+	if (inode->length <= filep->offset) return 0;
 	page=pc_getInodePage(filep->inode,filep->offset);
 	if (page == NULL)
 	{
@@ -168,14 +217,18 @@ static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 			ret=-3;
 			goto error;
 		}
-		page->offset=filep->offset;
+		page->offset=OFFSET_ALIGN(filep->offset);
 		ut_printf("New  Page address : %x \n",page);
 
-		ret=request_hostserver(REQUEST_READ,filep,page,PC_PAGESIZE);
+		ret=request_hostserver(REQUEST_READ,filep->inode,page,PC_PAGESIZE,0);
 		if (ret > 0)
 		{
-			filep->offset=filep->offset+ret;
-			pc_insertInodePage(filep->inode,page);
+			if (pc_insertInodePage(filep->inode,page) ==0)
+			{
+				pc_putFreePage(page);
+				ret=-5;
+				goto error;
+			}
 		}else
 		{
 			pc_putFreePage(page);
@@ -185,10 +238,14 @@ static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 	}else
 	{
 		ret=PC_PAGESIZE;
-		filep->offset=filep->offset+ret;
+	}
+	if ((filep->offset+ret) > inode->length)
+	{
+		ret=inode->length - filep->offset;
 	}
 	if (page > 0  && ret > 0)
 	{
+		filep->offset=filep->offset+ret;
 		ut_memcpy(buff,to_ptr(page),ret);
 		ut_printf(" memcpy :%x %x  %d \n",buff,to_ptr(page),ret);
 	}
@@ -222,7 +279,7 @@ int init_hostFs()
 		return 0;
 	}
 
-	shm_headerp=HOST_SHM_ADDR;
+	shm_headerp=(fileCache_t *)HOST_SHM_ADDR;
 	if (shm_headerp->magic_number!=FS_MAGIC)	
 	{
 		ut_printf("ERROR : host_fs magic number does not match \n");

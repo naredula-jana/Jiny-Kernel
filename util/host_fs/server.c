@@ -170,23 +170,60 @@ int init()
 	init_filecache();
 	return 1;
 }
-int read_file(int c)
+int open_file(int c)
+{
+        int fd,ret;
+        unsigned char *p;
+	struct stat stat;
+
+        printf("open the file :%s: flags:%d \n",filecache->requests[c].filename,filecache->requests[c].flags);   
+	if (filecache->requests[c].flags == FLAG_CREATE)  
+        	fd=open(filecache->requests[c].filename,O_WRONLY|O_CREAT|O_EXCL, 0644);
+        else
+		fd=open(filecache->requests[c].filename,O_RDONLY);
+        if (fd > 0)
+        {
+                ret=fstat(fd,&stat);
+		if (ret ==0)
+                filecache->requests[c].response_len=stat.st_size;
+		else
+                filecache->requests[c].response_len=0;
+	
+                printf("open file :%s: len:%d: offset:%x :\n",filecache->requests[c].filename,ret,filecache->requests[c].shm_offset);
+
+                ret=RESPONSE_DONE;
+        }else
+        {
+                printf(" Response failed \n");
+                ret=RESPONSE_FAILED;
+        }
+	close(fd);	
+        filecache->requests[c].response=ret;
+        send_interrupt();
+        return ret;
+}
+int rw_file(int c)
 {
 	int fd,ret;
 	unsigned char *p;
 
-	printf("Reading the file :%s: \n",filecache->requests[c].filename);	
-	fd=open(filecache->requests[c].filename,O_RDONLY);
+	printf("RW the file :%s: \n",filecache->requests[c].filename);	
+	if (filecache->requests[c].type == REQUEST_READ)
+		fd=open(filecache->requests[c].filename,O_RDONLY);
+	else
+		fd=open(filecache->requests[c].filename,O_WRONLY);
 	if (fd > 0)
 	{
-		lseek(fd,filecache->requests[c].offset,SEEK_SET);
-		printf(" file offset :%d \n",filecache->requests[c].offset);
+		lseek(fd,filecache->requests[c].file_offset,SEEK_SET);
+		printf(" file offset :%d \n",filecache->requests[c].file_offset);
 		p=start_addr;
 		p=p+(filecache->requests[c].shm_offset);
-		ret=read(fd,p,filecache->requests[c].request_len);
-//		ret=read(fd,buf,MAX_BUF);
+		if (filecache->requests[c].type == REQUEST_READ)
+			ret=read(fd,p,filecache->requests[c].request_len);
+		else
+			ret=write(fd,p,filecache->requests[c].request_len);
 		filecache->requests[c].response_len=ret;
-		printf("New  Reading the file :%s: len:%d: ret:%d  p :%x pagecache:%x offset:%x :\n",filecache->requests[c].filename,ret,ret,p,filecache,filecache->requests[c].shm_offset);
+		printf("New  Reading the file :%s: len:%d:  p :%x pagecache:%x offset:%x :\n",filecache->requests[c].filename,ret,p,filecache,filecache->requests[c].shm_offset);
 		ret=RESPONSE_DONE;
 	}else
 	{
@@ -200,7 +237,12 @@ int read_file(int c)
 int process_request(int c)
 {
 	printf(" Processing the request : %d \n",c);
-	read_file(c);
+	switch (filecache->requests[c].type)
+	{
+	case REQUEST_OPEN : open_file(c); break;
+	case REQUEST_READ : 
+	case REQUEST_WRITE : rw_file(c); break;
+	}
 	return ;	
 }
 void recv_thread(void *arg)

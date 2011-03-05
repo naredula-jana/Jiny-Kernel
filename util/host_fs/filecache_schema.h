@@ -12,7 +12,6 @@ enum {
 	STATE_VALID=1,
 	STATE_UPDATE_INPROGRESS=2
 };
-
 enum {
 	RESPONSE_NONE=0,
 	RESPONSE_FAILED=1,
@@ -23,10 +22,15 @@ enum {
 	REQUEST_READ=1,
 	REQUEST_WRITE=2
 };
-	
+enum {
+	FLAG_CREATE=1,
+	FLAG_OPEN
+};
+
 typedef struct {
 	unsigned char state;
 	unsigned char type;
+	unsigned char flags; /* used when open operation */
 	unsigned char filename[MAX_FILENAMELEN];
 	unsigned long file_offset;
 	unsigned long request_len;
