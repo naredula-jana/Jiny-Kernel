@@ -13,6 +13,8 @@ static int sh_create(char *arg1,char *arg2);
 static int print_help(char *arg1,char *arg2);
 static int sh_cat(char *arg1,char *arg2);
 static int sh_cp(char *arg1,char *arg2);
+static int sh_sync(char *arg1,char *arg2);
+static int sh_pc(char *arg1,char *arg2);
 static int sh_ls(char *arg1,char *arg2);
 void ar_printIrqStat(char *arg1,char *arg2);
 static int  test_hostshm(char *arg1,char *arg2);
@@ -35,8 +37,10 @@ commands_t cmd_list[]=
 	{"maps      ","Memory map areas","maps",vm_printMmaps},
 	{"host      ","host shm test","host",test_hostshm},
 	{"ls        ","ls","ls",sh_ls},
+	{"pc        ","page cache stats","pc",sh_pc},
 	{"cat <file>","Cat file       ","cat",sh_cat},
-	{"cp <f1> f2>","copy f1 f2       ","cp",sh_cp},
+	{"cp <f1> <f2>","copy f1 f2       ","cp",sh_cp},
+	{"sync <f1>","sync f1       ","sync",sh_sync},
 	{0,0,0,0}
 };
 
@@ -124,7 +128,7 @@ static int sh_cp(char *arg1,char *arg2)
         fp=fs_open(arg1,0);
         wfp=fs_open(arg2,1);
         ut_printf("filename :%s: %s \n",arg1,arg2);
-        if (fp ==0)
+        if (fp ==0 || wfp==0)
         {
                 ut_printf(" Error opening file :%s: \n",arg1);
                 return 0;
@@ -146,9 +150,23 @@ static int sh_cp(char *arg1,char *arg2)
                 }
                 i++;
         }
+        return 0;
+}
+static int sh_sync(char *arg1,char *arg2)
+{
+        //      unsigned char buf[1024];
+        struct file *wfp;
+        int i,ret,wret;
+
+        wfp=fs_open(arg1,0);
+        if (wfp==0)
+        {
+                ut_printf(" Error opening file :%s: \n",arg1);
+                return 0;
+        }
 	ut_printf("Before syncing \n");
-	fs_fdatasync(wfp);
-	ut_printf("after syncing \n");
+        fs_fdatasync(wfp);
+        ut_printf("after syncing \n");
         return 0;
 }
 static int sh_cat(char *arg1,char *arg2)
@@ -181,6 +199,11 @@ static int sh_cat(char *arg1,char *arg2)
 		i++;
 	}
 	return 0;
+}
+static int sh_pc(char *arg1,char *arg2)
+{
+	pc_stats();
+	return 1;
 }
 static int sh_ls(char *arg1,char *arg2)
 {

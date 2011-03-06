@@ -110,10 +110,12 @@ static struct file *hfOpen(unsigned char *filename,int mode)
 
 	inodep = fs_getInode(filep->filename);
 	if (inodep == 0) goto error;
-
-	ret=request_hostserver(REQUEST_OPEN,inodep,0,0,mode);
-	if (ret < 0) goto error;
-	inodep->length=ret;
+	if (inodep->length == -1 ) /* need to get info from host */
+	{
+		ret=request_hostserver(REQUEST_OPEN,inodep,0,0,mode);
+		if (ret < 0) goto error;
+		inodep->length=ret;
+	}
 	filep->inode=inodep;
 	filep->offset=0;
 	inodep->count++;
@@ -150,7 +152,16 @@ static int hfFdatasync(struct file *filep)
 				len=len-page->offset;
 			}
 			if (len > 0)
-			ret=request_hostserver(REQUEST_WRITE,inode,page,len,0);
+			{
+				ret=request_hostserver(REQUEST_WRITE,inode,page,len,0);
+				if (ret > 0)
+				{
+					pc_pagecleaned(page);
+				}
+			}
+		}else
+		{
+			ut_printf(" Page cleaned :%x \n",page);
 		}
 	}
 	return 0;
@@ -183,7 +194,7 @@ static int hfWrite(struct file *filep,unsigned char *buff, unsigned long len)
 		size=PC_PAGESIZE;
 		if (size > (len-tmp_len)) size=len-tmp_len;
 		ut_memcpy(to_ptr(page),buff+tmp_len,size);
-		PageSetDirty(page);
+		pc_pageDirted(page);
 		tmp_len=tmp_len+size;
 		ut_printf("write memcpy :%x %x  %d \n",buff,to_ptr(page),size);
 	}

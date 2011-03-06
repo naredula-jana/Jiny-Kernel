@@ -12,7 +12,7 @@ static int inode_init(struct inode *inode,unsigned char *filename)
 	if (inode == NULL) return 0;
 	inode->count=0;
 	inode->nrpages=0;
-	inode->length=0;
+	inode->length=-1;
 	ut_strcpy(inode->filename,filename);
 	INIT_LIST_HEAD(&(inode->page_list));
 	INIT_LIST_HEAD(&(inode->inode_next));

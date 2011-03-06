@@ -66,6 +66,7 @@ typedef struct page {
 	struct inode *inode;
 	unsigned long offset; /* offset in the inode */
 	struct list_head lru_list;          /* LRU list: the page can be in freelist,active or inactive in of the list   */
+	unsigned char list_type ; /* LRU list # is stored */
 	struct list_head list;          /*TODO: currently used 1)  SLAB 2) pagecache:inodelist  */
 } page_struct_t;
 extern page_struct_t *g_mem_map;
