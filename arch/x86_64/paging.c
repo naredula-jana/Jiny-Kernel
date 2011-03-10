@@ -137,7 +137,7 @@ void ar_pageFault(struct fault_ctx *ctx)
 	int id = ctx->errcode & 0x10;          // Caused by an instruction fetch?
 
 	// Output an error message.
-	ut_printf("Page fault! ip:%x  addr: %x ",ctx->istack_frame->rip,faulting_address);
+	DEBUG("PAGE FAULT  ip:%x  addr: %x ",ctx->istack_frame->rip,faulting_address);
 	if (present) {
 		ut_printf("page fault: Updating present \n");
 		//mm_debug=1;
@@ -148,8 +148,8 @@ void ar_pageFault(struct fault_ctx *ctx)
 		ut_printf("Read-only \n");
 		BUG();
 		}
-	if (us) {ut_printf("user-mode \n");}
-	if (reserved) {ut_printf("reserved \n");}
+	if (us) {DEBUG("user-mode \n");}
+	if (reserved) {DEBUG("reserved \n");}
 
 	BUG();
 }
@@ -177,11 +177,11 @@ static int handle_mm_fault(addr_t addr)
 		pl3=p;
 		p=(pl4+(L4_INDEX(addr))); /* insert into l4   */
 		*p=((addr_t) pl3 |((addr_t) 0x3));
-		if (debug_paging ==1) ut_printf(" Inserted into L4 :%x  p13:%x  pl4:%x \n",p,pl3,pl4);
+		if (debug_paging ==1) DEBUG(" Inserted into L4 :%x  p13:%x  pl4:%x \n",p,pl3,pl4);
 	}
 	p=(pl3+(L3_INDEX(addr)));
 	pl2=(*p) & (~0xfff);
-	if (debug_paging ==1) ut_printf(" Pl3 :%x pl4 :%x p12:%x \n",pl3,pl4,pl2);	
+	if (debug_paging ==1) DEBUG(" Pl3 :%x pl4 :%x p12:%x \n",pl3,pl4,pl2);	
 
 	if (pl2==0)
 	{
@@ -191,11 +191,11 @@ static int handle_mm_fault(addr_t addr)
 		pl2=p;
 		p=(pl3+(L3_INDEX(addr)));
 		*p=((addr_t) pl2 |((addr_t) 0x3));
-		if (debug_paging ==1 )ut_printf(" INSERTED into L3 :%x  p12:%x  pl3:%x \n",p,pl2,pl3);
+		if (debug_paging ==1 )DEBUG(" INSERTED into L3 :%x  p12:%x  pl3:%x \n",p,pl2,pl3);
 	}
 	p=(pl2+(L2_INDEX(addr)));
 	pl1=(*p) & (~0xfff);
-	if (debug_paging == 1)ut_printf(" Pl2 :%x pl1 :%x\n",pl2,pl1);	
+	if (debug_paging == 1)DEBUG(" Pl2 :%x pl1 :%x\n",pl2,pl1);	
 	
 	
 	if (pl1==0)
@@ -206,7 +206,7 @@ static int handle_mm_fault(addr_t addr)
 		pl1=p;
 		p=(pl2+(L2_INDEX(addr)));
 		*p=((addr_t) pl1 |((addr_t) 0x3));
-		if (debug_paging == 1) ut_printf(" Inserted into L2 :%x :%x \n",p,pl1);
+		if (debug_paging == 1) DEBUG(" Inserted into L2 :%x :%x \n",p,pl1);
 	}
 	/* By Now we have pointer to all 4 tables , Now check th erequired page*/
 
@@ -227,6 +227,6 @@ static int handle_mm_fault(addr_t addr)
 	__flush_tlb_global();  /* TODO : need not flush entire table, flush only spoecific tables*/
 
 	if (debug_paging == 1)
-	ut_printf("FINALLY Inserted and global fluished into pagetable :%x pte :%x \n",pl1,p);
+	DEBUG("FINALLY Inserted and global fluished into pagetable :%x pte :%x \n",pl1,p);
 	return 1;	
 }

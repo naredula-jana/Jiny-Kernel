@@ -33,11 +33,11 @@ int request_hostserver(unsigned char type,struct inode *inode, struct page *page
 			break;
 		}
 	}
-	ut_printf(" request high index %i \n",shm_headerp->request_highindex);
+	DEBUG(" request high index %i \n",shm_headerp->request_highindex);
 	if (j==-1)
 	{
 		j=shm_headerp->request_highindex;
-		ut_printf(" client high index %i \n",shm_headerp->request_highindex);
+		DEBUG(" client high index %i \n",shm_headerp->request_highindex);
 		shm_headerp->request_highindex++;
 		if (j >=MAX_REQUESTS)
 		{
@@ -46,7 +46,7 @@ int request_hostserver(unsigned char type,struct inode *inode, struct page *page
 		}
 		if (shm_headerp->requests[j].state!=STATE_INVALID)
 		{
-			ut_printf(" error in state  %x \n",shm_headerp->requests[j].state);
+			DEBUG(" error in state  %x \n",shm_headerp->requests[j].state);
 			ret=-2;
 			goto error;
 		}
@@ -57,7 +57,8 @@ int request_hostserver(unsigned char type,struct inode *inode, struct page *page
 	if (page != NULL)
 	{
 		shm_headerp->requests[j].file_offset=page->offset;
-		shm_headerp->requests[j].shm_offset=(unsigned long)to_ptr(page)-HOST_SHM_ADDR;
+		shm_headerp->requests[j].shm_offset=(unsigned char *)to_ptr(page)-(unsigned char *)HOST_SHM_ADDR;
+		DEBUG(" shm offset:%x page address :%x \n",shm_headerp->requests[j].shm_offset,to_ptr(page));
 	}
 	else 
 	{
@@ -74,19 +75,19 @@ int request_hostserver(unsigned char type,struct inode *inode, struct page *page
 	{
 		sc_wait(&g_hfs_waitqueue,wait_time);
 		if (wait_time < 1000) wait_time=wait_time*2;	
-		ut_printf(" After Wait : %d :\n",g_jiffies);
+		DEBUG(" After Wait : %d :\n",g_jiffies);
 	}
 
 	if (shm_headerp->requests[j].response == RESPONSE_FAILED)
 	{
-		ut_printf(" error in response    \n");
+		DEBUG(" error in response    \n");
 		shm_headerp->requests[j].state=STATE_INVALID;
 		ret=-9;
 		goto error;
 	}
 
 	ret=shm_headerp->requests[j].response_len;
-	ut_printf(" Sucess in reading the file :%i %x \n",tlen,page);
+	DEBUG(" Sucess in reading the file :%i %x \n",tlen,page);
 	shm_headerp->requests[j].state=STATE_INVALID;
 error:
 	return ret;
@@ -150,8 +151,11 @@ static int hfFdatasync(struct file *filep)
 			if (len < (page->offset+PC_PAGESIZE))
 			{
 				len=len-page->offset;
+			}else
+			{
+				len=PC_PAGESIZE;
 			}
-			if (len > 0)
+			if (len > 0) 
 			{
 				ret=request_hostserver(REQUEST_WRITE,inode,page,len,0);
 				if (ret > 0)
@@ -161,7 +165,7 @@ static int hfFdatasync(struct file *filep)
 			}
 		}else
 		{
-			ut_printf(" Page cleaned :%x \n",page);
+			DEBUG(" Page cleaned :%x \n",page);
 		}
 	}
 	return 0;
@@ -174,7 +178,7 @@ static int hfWrite(struct file *filep,unsigned char *buff, unsigned long len)
 
 	ret=0;
 	if (filep ==0) return 0;
-	ut_printf("Write  filename from hs  :%s: offset:%d inode:%x \n",filep->filename,filep->offset,filep->inode);
+	DEBUG("Write  filename from hs  :%s: offset:%d inode:%x \n",filep->filename,filep->offset,filep->inode);
 	tmp_len=0;
 
 	while(tmp_len < len)
@@ -196,7 +200,7 @@ static int hfWrite(struct file *filep,unsigned char *buff, unsigned long len)
 		ut_memcpy(to_ptr(page),buff+tmp_len,size);
 		pc_pageDirted(page);
 		tmp_len=tmp_len+size;
-		ut_printf("write memcpy :%x %x  %d \n",buff,to_ptr(page),size);
+		DEBUG("write memcpy :%x %x  %d \n",buff,to_ptr(page),size);
 	}
 error:
 	if (tmp_len > 0){
@@ -216,7 +220,7 @@ static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 
 	ret=0;
 	if (filep ==0) return 0;
-	ut_printf("Read filename from hs  :%s: offset:%d inode:%x \n",filep->filename,filep->offset,filep->inode);
+	DEBUG("Read filename from hs  :%s: offset:%d inode:%x \n",filep->filename,filep->offset,filep->inode);
 	inode=filep->inode;
 	if (inode->length <= filep->offset) return 0;
 	page=pc_getInodePage(filep->inode,filep->offset);
@@ -229,7 +233,7 @@ static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 			goto error;
 		}
 		page->offset=OFFSET_ALIGN(filep->offset);
-		ut_printf("New  Page address : %x \n",page);
+		DEBUG("New  Page address : %x \n",page);
 
 		ret=request_hostserver(REQUEST_READ,filep->inode,page,PC_PAGESIZE,0);
 		if (ret > 0)
@@ -258,13 +262,13 @@ static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 	{
 		filep->offset=filep->offset+ret;
 		ut_memcpy(buff,to_ptr(page),ret);
-		ut_printf(" memcpy :%x %x  %d \n",buff,to_ptr(page),ret);
+		DEBUG(" memcpy :%x %x  %d \n",buff,to_ptr(page),ret);
 	}
 
 	return ret;
 
 error:
-	ut_printf(" Error in reading the file :%i \n",-ret);
+	DEBUG(" Error in reading the file :%i \n",-ret);
 	return ret;
 }
 
@@ -286,24 +290,24 @@ int init_hostFs()
 
 	if (g_hostShmLen ==0)
 	{
-		ut_printf(" ERROR : host_shm not Initialized \n");
+		DEBUG(" ERROR : host_shm not Initialized \n");
 		return 0;
 	}
 
 	shm_headerp=(fileCache_t *)HOST_SHM_ADDR;
 	if (shm_headerp->magic_number!=FS_MAGIC)	
 	{
-		ut_printf("ERROR : host_fs magic number does not match \n");
+		DEBUG("ERROR : host_fs magic number does not match \n");
 		return 0;	
 	}
 	if (shm_headerp->version!=FS_VERSION)	
 	{
-		ut_printf("ERROR : host_fs version number does not  match :%x \n",shm_headerp->version);
+		DEBUG("ERROR : host_fs version number does not  match :%x \n",shm_headerp->version);
 		return 0;	
 	}
 	if (shm_headerp->state !=STATE_VALID)	
 	{
-		ut_printf("ERROR : host_fs  cache not valid state \n");
+		DEBUG("ERROR : host_fs  cache not valid state \n");
 		return 0;	
 	}
 	host_fs.open=hfOpen;

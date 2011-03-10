@@ -219,13 +219,13 @@ static int sh_create(char *arg1,char *arg2)
 static int print_help(char *arg1,char *arg2)
 {
 	int i;
-	ut_printf("Version 1.69 stacksize:%x  \n",STACK_SIZE);
+	ut_printf("Version 1.70 stacksize:%x  \n",STACK_SIZE);
 	for (i=0; i<MAX_COMMANDS; i++)
 	{
 		if (cmd_list[i].usage == 0) break;
 		ut_printf(" %s %s \n",cmd_list[i].usage,cmd_list[i].help);
 	}	
-	//dr_serialWrite("TEST\n",5);
+
 	return 1;
 }
 

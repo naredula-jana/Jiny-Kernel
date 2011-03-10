@@ -29,6 +29,13 @@ __asm__ __volatile__("pushl %0 ; popfl": /* no output */ :"g" (x):"memory")
 #define restore_flags(x) __restore_flags(x)
 extern void schedule();
 
+#define DEBUG(x...) do { \
+g_serial_output=1; \
+ut_printf(x); \
+g_serial_output=1; } while (0) 
+
+
+
 #define MAX_SYMBOLLEN 40
 #define TYPE_TEXT 0
 #define TYPE_DATA 1
@@ -60,6 +67,7 @@ typedef struct registers
 typedef void (*isr_t)();
 int strcmp(char *str1, char *str2);
 void ut_printf (const char *format, ...);
+extern int g_serial_output;
 #define printk ut_printf
 unsigned char kb_getchar();
 void register_interrupt_handler(uint8_t n, isr_t handler);

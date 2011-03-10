@@ -135,13 +135,22 @@ static void scroll()
 	}
 	refresh_screen(); 
 }
+int g_serial_output =0 ;
 /* Put the character C on the screen.  */
 static spinlock_t putchar_lock  = SPIN_LOCK_UNLOCKED;
 void ut_putchar (int c)
 {
 	unsigned char *ptr;
 	unsigned long  flags;
-
+	if (g_serial_output == 1)
+	{
+		char buf[5];
+		buf[0]=(char) c;
+		buf[1]='\0';
+		dr_serialWrite(buf,1);
+		return ;
+	}
+	
 	spin_lock_irqsave(&putchar_lock, flags);	
 	ptr=&(video_buffer_g[0][0]);	
 	if (c == '\n' || c == '\r')

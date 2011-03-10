@@ -87,5 +87,11 @@ WorkAround:
     - use old image as bootable disk for grub, use second disk to store the kernel.
 -----------------------------------
 qemu running:
- sudo ./qemu-system-x86_64 -s -m 1024M -L /home/njana/qemu/opt/qemu.12.5/share/qemu -hda /home/njana/tinykernel/bin/old_g2image -hdb /home/njana/tinykernel/bin/g2_image  -enable-kvm -chardev socket,path=/tmp/jana,id=jana -device ivshmem,chardev=jana,size=2m,msi=off -vnc :4
+ sudo ./qemu-system-x86_64 -s -m 1024M -L /home/njana/qemu/opt/qemu.12.5/share/qemu -hda /home/njana/tinykernel/bin/g2_bootdisk -hdb /home/njana/tinykernel/bin/g2_image  -enable-kvm -chardev socket,path=/tmp/jana,id=jana -device ivshmem,chardev=jana,size=2m,msi=off -vnc :4
+ 
+serial :
+  -serial /dev/pt/1 
+
+where /dev/pts/1 is the pty for the console running qemu
+
 -------------------------------------

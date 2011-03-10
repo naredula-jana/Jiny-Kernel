@@ -54,10 +54,11 @@ static int page_init(page_struct_t *p)
 	INIT_LIST_HEAD(&(p->list));
 	return 1;
 }
-static int init_pagelist(page_list_t *list)
+static int init_pagelist(page_list_t *list,unsigned char type)
 {
 	INIT_LIST_HEAD(&(list->head));
 	list->count.counter=0;
+	list->list_type=type;
 	return 1;
 }
 static int pagelist_move(page_struct_t *page, page_list_t *list)
@@ -87,6 +88,7 @@ static int pagelist_add(page_struct_t *page, page_list_t *list,int tail)
 	}	
 	page->list_type=list->list_type;
 	atomic_inc(&list->count);
+	DEBUG(" List INCREASE :%d: type:%d: \n",list->count.counter,list->list_type); 
 	return 1;
 }
 static page_struct_t *pagelist_remove(page_list_t *list)
@@ -101,6 +103,7 @@ static page_struct_t *pagelist_remove(page_list_t *list)
 	page=list_entry(node, struct page, lru_list);	
 	page->list_type=0;
 	atomic_dec(&list->count);
+	DEBUG(" List DECREASE :%d: type:%d: \n",list->count.counter,list->list_type); 
 	return page;
 }
 /***************************** API function **********************/
@@ -117,15 +120,15 @@ int pc_init(unsigned char *start_addr,unsigned long len)
 	pagecache_map=(page_struct_t *)(start_addr + sizeof(fileCache_t));
 	ut_memset(pagecache_map, 0, sizeof(page_struct_t)*total_pages);
 
-	init_pagelist(&free_list);
-	init_pagelist(&active_list);
-	init_pagelist(&dirty_list);
-	init_pagelist(&inactive_list);
+	init_pagelist(&free_list,FREE_LIST);
+	init_pagelist(&active_list,ACTIVE_LIST);
+	init_pagelist(&dirty_list,DIRTY_LIST);
+	init_pagelist(&inactive_list,INACTIVE_LIST);
 
 	for( i=0; i<total_pages; i++)
 	{
 		p=pagecache_map+i;
-		atomic_set(&p->count, 0);
+		page_init(p);
 		if ( i < (reserved_size/PC_PAGESIZE))
 		{
 			p->flags =  (1 << PG_reserved);
@@ -136,7 +139,7 @@ int pc_init(unsigned char *start_addr,unsigned long len)
 
 	}
 	pc_totalpages=free_list.count.counter;
-	ut_printf(" startaddr: %x totalpages:%d reserved size:%d \n",pc_startaddr,total_pages,reserved_size);	
+	DEBUG(" startaddr: %x totalpages:%d reserved size:%d \n",pc_startaddr,total_pages,reserved_size);	
 	return 1;
 }
 void pc_stats()
@@ -175,7 +178,8 @@ struct page *pc_getInodePage(struct inode *inode,unsigned long offset)
 	list_for_each(p, &(inode->page_list)) {
 		page=list_entry(p, struct page, list);
 		i++;
-		ut_printf("get page address: %x %d \n",page,i);
+		if (i>20) return NULL ; /* TODO : remove me later ; just for debugging purpose */
+		DEBUG(" %d: get page address: %x  offset :%d \n",i,page,page->offset);
 		if (page->offset == page_offset)
 		{
 			return page;
@@ -189,17 +193,19 @@ int pc_insertInodePage(struct inode *inode,struct page *page)
 	struct list_head *p;
 	struct page *tmp_page;
 	int ret=0;
+	int i=0;
 
 	if (page->offset > inode->length) return ret;
 	list_for_each(p, &(inode->page_list))
 	{
 		tmp_page=list_entry(p, struct page, list);
-		ut_printf("insert page address: %x \n",tmp_page);
+		i++;
+		DEBUG("insert page address: %x %d \n",tmp_page,i);
 		if (page->offset < tmp_page->offset)
 		{
 			inode->nrpages++;
 			page->inode=inode;
-			list_add(&page->list, &tmp_page->list); 
+			list_add_tail(&page->list, &tmp_page->list); /* add page before tmp_Page */
 			pagelist_add(page,&active_list,TAIL); /* add to the tail of ACTIVE list */
 			ret=1;
 			goto last;
@@ -208,7 +214,8 @@ int pc_insertInodePage(struct inode *inode,struct page *page)
 	if (ret == 0)
 	{
 		inode->nrpages++;
-		list_add_tail(&page->list, &inode->page_list); 
+		DEBUG("insert page address at end : %x  \n",page);
+		list_add_tail(&page->list, &(inode->page_list)); 
 		pagelist_add(page,&active_list,TAIL); /* add to the tail of ACTIVE list */
 		ret=1;
 	}

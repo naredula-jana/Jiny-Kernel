@@ -80,11 +80,28 @@ m=0;
 return a;
 }
 // Copy len bytes from src to dest.
+uint8_t *g_dest=0;
+uint8_t *g_src=0;
+unsigned long g_len=0;
 void ut_memcpy(uint8_t *dest, const uint8_t *src, addr_t len)
 {
 	const uint8_t *sp = (const uint8_t *)src;
 	uint8_t *dp = (uint8_t *)dest;
-	for(; len != 0; len--) *dp++ = *sp++;
+	unsigned long k=0;
+
+	g_dest=dp;
+	g_src=sp;
+	g_len=len;
+
+//ut_printf(" src:%x dest:%x len:%x \n",src,dest,len);
+	for(; len != 0; len--) 
+	{
+		*dp = *sp;
+		dp++;
+		sp++;
+		k++;
+	}
+	//ut_printf(" memcpy Len :%x k:%x \n",len,k);
 }
 uint8_t *tem1=0;
 uint8_t tem2=0;
