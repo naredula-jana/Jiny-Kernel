@@ -1,8 +1,20 @@
+/*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+*   fs/host_fs.c
+*   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
+*
+*/
 #include "../util/host_fs/filecache_schema.h"
 #include "vfs.h"
 #include "mm.h"
 #include "common.h"
 #include "task.h"
+#include "interface.h"
+
 #define OFFSET_ALIGN(x) ((x/PC_PAGESIZE)*PC_PAGESIZE)
 struct filesystem host_fs;
 static fileCache_t *shm_headerp=0;
@@ -20,11 +32,11 @@ static inline unsigned char *to_ptr(struct page *p)
 int request_hostserver(unsigned char type,struct inode *inode, struct page *page,int data_len,int mode)
 {
 	int i,j,ret,tlen;
-	unsigned long offset;
 	int wait_time=10;
 
 	j=-1;
 	ret=0;
+	tlen=0;
 	for (i=0; i<shm_headerp->request_highindex; i++)
 	{
 		if (shm_headerp->requests[i].state==STATE_INVALID)
@@ -93,7 +105,7 @@ error:
 	return ret;
 }
 
-static struct file *hfOpen(unsigned char *filename,int mode)
+static struct file *hfOpen(char *filename,int mode)
 {
 	struct file *filep;
 	struct inode *inodep;
@@ -132,7 +144,7 @@ error:
 static int hfLseek(struct file *filep, unsigned long offset,int whence)
 { /* TODO */
 
-
+	return 1;
 }
 
 static int hfFdatasync(struct file *filep)
@@ -193,7 +205,10 @@ static int hfWrite(struct file *filep,unsigned char *buff, unsigned long len)
 				goto error;
 			}
 			page->offset=OFFSET_ALIGN(filep->offset);
-			pc_insertInodePage(filep->inode,page);
+			if (pc_insertInodePage(filep->inode,page)== 0)
+			{
+				BUG();
+			}
 		}
 		size=PC_PAGESIZE;
 		if (size > (len-tmp_len)) size=len-tmp_len;

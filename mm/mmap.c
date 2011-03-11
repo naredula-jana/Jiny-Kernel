@@ -1,35 +1,17 @@
+/*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+*   kernel/mmap.c
+*   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
+*
+*/
 #include "common.h"
 #include "mm.h"
 #include "task.h"
-void vm_printMmaps()
-{
-	struct mm_struct *mm;
-	struct vm_area_struct *vma;
-
-	mm=g_current_task->mm;
-	if (mm == 0) return;
-        vma=mm->mmap;
-
-        while (vma) {
-	     ut_printf(" [ %x - %x ]\n",vma->vm_start,vma->vm_end);
-             vma = vma->vm_next;
-        }
-        return ;
-}
-struct vm_area_struct *vm_findVma(struct mm_struct *mm,unsigned long addr, unsigned long len)
-{
-	struct vm_area_struct *vma;
-	vma=mm->mmap;
-	if (vma ==0) return 0;
-        while (vma) {
-             if ((vma->vm_start <= addr) && ((addr+len) <  vma->vm_end))
-             {
-                    return vma;
-             }
-             vma = vma->vm_next;
-        }
-	return 0;
-}
+#include "interface.h"
 static int vma_unlink(struct mm_struct *mm,struct vm_area_struct *vma)
 {
         struct vm_area_struct *tmp;
@@ -99,9 +81,41 @@ static int vma_link(struct mm_struct *mm,struct vm_area_struct *vma)
         }
         return -3;
 }
+
+/************************** API function *****************/
+
 int make_pages_present(unsigned long start, unsigned long end)
 {
 	return 0;
+}
+void vm_printMmaps()
+{
+        struct mm_struct *mm;
+        struct vm_area_struct *vma;
+
+        mm=g_current_task->mm;
+        if (mm == 0) return;
+        vma=mm->mmap;
+
+        while (vma) {
+             ut_printf(" [ %x - %x ]\n",vma->vm_start,vma->vm_end);
+             vma = vma->vm_next;
+        }
+        return ;
+}
+struct vm_area_struct *vm_findVma(struct mm_struct *mm,unsigned long addr, unsigned long len)
+{
+        struct vm_area_struct *vma;
+        vma=mm->mmap;
+        if (vma ==0) return 0;
+        while (vma) {
+             if ((vma->vm_start <= addr) && ((addr+len) <  vma->vm_end))
+             {
+                    return vma;
+             }
+             vma = vma->vm_next;
+        }
+        return 0;
 }
 unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len,
         unsigned long prot, unsigned long flags, unsigned long pgoff)
@@ -180,6 +194,7 @@ int mm_freePgtables(struct mm_struct *mm, unsigned long start_addr,unsigned long
                 clear_page_tables(mm, start_index, end_index - start_index);
                 flush_tlb_pgtables(mm, first & PGDIR_MASK, last & PGDIR_MASK);
         } */
+	return 1;
 }
 
 int vm_munmap(struct mm_struct *mm, unsigned long addr, int len)

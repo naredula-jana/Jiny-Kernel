@@ -47,7 +47,6 @@ long fault_error_g=0;
 long fault_num_g=0;
 static void gpFault(struct fault_ctx *ctx)
 {
-	int i;
 
 	fault_ip_g=ctx->istack_frame->rip;
 	fault_error_g=ctx->errcode;

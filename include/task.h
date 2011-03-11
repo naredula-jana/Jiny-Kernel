@@ -16,12 +16,12 @@ struct wait_struct {
 };
 
 struct thread_struct {
-	addr_t   sp;
-	addr_t   ip;
+	void *sp;
+	void *ip;
 };
 struct mm_struct {
         struct vm_area_struct *mmap;           /* list of VMAs */
-        addr_t *pgd; 
+        unsigned char *pgd; 
         atomic_t mm_users;                      /* How many users with user space? */
         atomic_t mm_count;                      /* How many references to "struct mm_struct" (users count as 1) */
         int map_count;                          /* number of VMAs */

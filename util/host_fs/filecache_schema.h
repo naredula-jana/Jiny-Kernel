@@ -31,7 +31,7 @@ typedef struct {
 	unsigned char state;
 	unsigned char type;
 	unsigned char flags; /* used when open operation */
-	unsigned char filename[MAX_FILENAMELEN];
+	char filename[MAX_FILENAMELEN];
 	unsigned long file_offset;
 	unsigned long request_len;
 	unsigned long shm_offset ; /* offset from the begining of shared memory */

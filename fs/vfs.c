@@ -1,13 +1,25 @@
+/*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+*   fs/vfs.c
+*   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
+*
+*/
 #include "common.h"
 #include "mm.h"
 #include "vfs.h"
+#include "interface.h"
+
 static struct filesystem *vfs_fs=0;
 
 kmem_cache_t *g_slab_filep;
 kmem_cache_t *g_slab_inodep;
 LIST_HEAD(inode_list);
 
-static int inode_init(struct inode *inode,unsigned char *filename)
+static int inode_init(struct inode *inode,char *filename)
 {
 	if (inode == NULL) return 0;
 	inode->count=0;
@@ -32,8 +44,9 @@ int fs_printInodes()
                 tmp_inode=list_entry(p, struct inode, inode_next);
 		ut_printf(" name: %s count:%d nrpages:%d length:%d \n",tmp_inode->filename,tmp_inode->count,tmp_inode->nrpages,tmp_inode->length);
         }
+	return 1;
 }
-struct inode *fs_getInode(unsigned char *filename)
+struct inode *fs_getInode(char *filename)
 {
 	struct inode *tmp_inode;
 	struct list_head *p;
@@ -58,15 +71,15 @@ int kernel_read(struct file *file, unsigned long offset,
 	return 1;
 }
 
-struct file *fs_open(unsigned char *filename,int mode)
+struct file *fs_open(char *filename,int mode)
 {
 	if (vfs_fs == 0) return 0;
 	return vfs_fs->open(filename,mode);
 }
-struct file *fs_fdatasync(unsigned char *filename)
+int fs_fdatasync(struct file *file )
 {
 	if (vfs_fs == 0) return 0;
-	return vfs_fs->fdatasync(filename);
+	return vfs_fs->fdatasync(file);
 }
 int fs_lseek(struct file *file ,unsigned long offset, int whence)
 {
@@ -91,6 +104,7 @@ int fs_close(struct file *file)
 int fs_registerFileSystem( struct filesystem *fs)
 {
 	vfs_fs=fs;
+	return 1;
 }
 void init_vfs()
 {

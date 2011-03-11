@@ -80,12 +80,6 @@ extern kmem_cache_t *mm_cachep;
 extern page_struct_t *pagecache_map;
 extern unsigned char *pc_startaddr;
 
-extern kmem_cache_t *kmem_cache_create(const char *, long,long, unsigned long,void (*)(void *, kmem_cache_t *, unsigned long),void (*)(void *, kmem_cache_t *, unsigned long));
-void *kmem_cache_alloc (kmem_cache_t *cachep, int flags);
-struct page *pc_getFreePage();
-int pc_insertInodePage(struct inode *inode,struct page *page);
-struct page *pc_getInodePage(struct inode *inode,unsigned long offset);
-
 /* Page flag bit values */
 #define PG_locked                0
 #define PG_error                 1

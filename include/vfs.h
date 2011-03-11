@@ -32,21 +32,12 @@ struct inode {
 };
 
 struct filesystem {
-	struct file *(*open)(unsigned char *filename,int mode);
+	struct file *(*open)(char *filename,int mode);
 	int (*lseek)(struct file *file,  unsigned long offset,int whence);
 	int (*write)(struct file *file,  unsigned char *buff,unsigned long len);
 	int (*read)(struct file *file,  unsigned char *buff,unsigned long len);
 	int (*close)(struct file *file);
 	int (*fdatasync)(struct file *file);
 };
-
-int fs_registerFileSystem( struct filesystem *fs);
-struct inode *fs_getInode(unsigned char *filename);
-int fs_printInodes();
-struct file *fs_open(unsigned char *filename,int mode);
-int fs_lseek(struct file *file ,unsigned long offset, int whence);
-int fs_write(struct file *file ,unsigned char *buff ,unsigned long len);
-int fs_read(struct file *file ,unsigned char *buff ,unsigned long len);
-int fs_close(struct file *file);
 
 #endif

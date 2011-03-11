@@ -1,6 +1,6 @@
 
 /*
- * DEBUG	- 1 for kmem_cache_create() to honour; SLAB_DEBUG_INITIAL,
+ * SLAB_DEBUG	- 1 for kmem_cache_create() to honour; SLAB_DEBUG_INITIAL,
  *		  SLAB_RED_ZONE & SLAB_POISON.
  *		  0 for faster, smaller code (especially in the critical paths).
  *
@@ -11,6 +11,8 @@
  */
 #include "common.h"
 #include "mm.h"
+#include "interface.h"
+
 #define __init  /* TODO */
 #define KERN_ERR  /* TODO */
 #define unlikely(x)     (x) /* TODO */
@@ -20,11 +22,11 @@ extern void kmem_cache_sizes_init(void);
 
 
 #ifdef CONFIG_DEBUG_SLAB
-#define	DEBUG		1
+#define	SLAB_DEBUG		1
 #define	STATS		1
 #define	FORCED_DEBUG	1
 #else
-#define	DEBUG		0
+#define	SLAB_DEBUG		0
 #define	STATS		0
 #define	FORCED_DEBUG	0
 #endif
@@ -105,7 +107,7 @@ do {\
 #define	BYTES_PER_WORD		sizeof(void *)
 
 /* Legal flag mask for kmem_cache_create(). */
-#if DEBUG
+#if SLAB_DEBUG
 # define CREATE_MASK	(SLAB_DEBUG_INITIAL | SLAB_RED_ZONE | \
 			 SLAB_POISON | SLAB_HWCACHE_ALIGN | \
 			 SLAB_NO_REAP | SLAB_CACHE_DMA | \
@@ -186,6 +188,8 @@ typedef struct cpucache_s {
 #define CACHE_NAMELEN	20	/* max name length for a slab cache */
 typedef  long 	size_t;
 void * kmem_cache_alloc (kmem_cache_t *cachep, int flags);
+#if 1
+
 struct kmem_cache_s {
 /* 1) each alloc & free */
 	/* full, partial first, then free */
@@ -245,6 +249,7 @@ struct kmem_cache_s {
 #endif
 };
 
+#endif
 extern kmem_cache_t *kmem_find_general_cachep(size_t, int gfpflags);
 extern kmem_cache_t *kmem_cache_create(const char *, size_t, size_t, unsigned long,
                                        void (*)(void *, kmem_cache_t *, unsigned long),
@@ -293,7 +298,7 @@ extern kmem_cache_t *kmem_cache_create(const char *, size_t, size_t, unsigned lo
 #define STATS_INC_FREEMISS(x)	do { } while (0)
 #endif
 
-#if DEBUG
+#if SLAB_DEBUG
 /* Magic nums for obj red zoning.
  * Placed in the first word before and the first word after an obj.
  */
@@ -488,7 +493,7 @@ int __init kmem_cpucache_init(void)
 	return 0;
 }
 
-__initcall(kmem_cpucache_init);
+/*__initcall(kmem_cpucache_init); */
 
 /* Interface to system's page allocator. No need to hold the cache-lock.
  */
@@ -530,7 +535,7 @@ static inline void kmem_freepages (kmem_cache_t *cachep, void *addr)
 	mm_putFreePages((unsigned long)addr, cachep->gfporder);
 }
 
-#if DEBUG
+#if SLAB_DEBUG
 static inline void kmem_poison_obj (kmem_cache_t *cachep, void *addr)
 {
 	int size = cachep->objsize;
@@ -564,14 +569,14 @@ static inline int kmem_check_poison_obj (kmem_cache_t *cachep, void *addr)
 static void kmem_slab_destroy (kmem_cache_t *cachep, slab_t *slabp)
 {
 	if (cachep->dtor
-#if DEBUG
+#if SLAB_DEBUG
 		|| cachep->flags & (SLAB_POISON | SLAB_RED_ZONE)
 #endif
 	) {
 		int i;
 		for (i = 0; i < cachep->num; i++) {
 			void* objp = slabp->s_mem+cachep->objsize*i;
-#if DEBUG
+#if SLAB_DEBUG
 			if (cachep->flags & SLAB_RED_ZONE) {
 				if (*((unsigned long*)(objp)) != RED_MAGIC1)
 					BUG();
@@ -583,7 +588,7 @@ static void kmem_slab_destroy (kmem_cache_t *cachep, slab_t *slabp)
 #endif
 			if (cachep->dtor)
 				(cachep->dtor)(objp, cachep, 0);
-#if DEBUG
+#if SLAB_DEBUG
 			if (cachep->flags & SLAB_RED_ZONE) {
 				objp -= BYTES_PER_WORD;
 			}	
@@ -649,7 +654,7 @@ kmem_cache_create (const char *name, size_t size, size_t offset,
 		(offset < 0 || offset > size))
 			BUG();
 
-#if DEBUG
+#if SLAB_DEBUG
 	if ((flags & SLAB_DEBUG_INITIAL) && !ctor) {
 		/* No constructor, but inital state check requested */
 		printk("%sNo con, but init state check requested - %s\n", func_nm, name);
@@ -683,7 +688,7 @@ kmem_cache_create (const char *name, size_t size, size_t offset,
 	cachep = (kmem_cache_t *) kmem_cache_alloc(&cache_cache, SLAB_KERNEL);
 	if (!cachep)
 		goto opps;
-	ut_memset(cachep, 0, sizeof(kmem_cache_t));
+	ut_memset((unsigned char *)cachep, 0, sizeof(kmem_cache_t));
 
 	/* Check that size is in terms of words.  This is needed to avoid
 	 * unaligned accesses for some archs when redzoning is used, and makes
@@ -695,7 +700,7 @@ kmem_cache_create (const char *name, size_t size, size_t offset,
 		printk("%sForcing size word alignment - %s\n", func_nm, name);
 	}
 	
-#if DEBUG
+#if SLAB_DEBUG
 	if (flags & SLAB_RED_ZONE) {
 		/*
 		 * There is no point trying to honour cache alignment
@@ -815,15 +820,15 @@ next:
 	/* Need the semaphore to access the chain. */
 	down(irq_flags,&cache_chain_sem);
 	{
-		struct list_head *p;
+//		struct list_head *p;
 
-		list_for_each(p, &cache_chain) {
+	/*	list_for_each(p, &cache_chain) {
 			kmem_cache_t *pc = list_entry(p, kmem_cache_t, next);
-
+*/
 			/* The name field is constant - no lock needed. */
 		/*	if (!strcmp(pc->name, name)) TODO: implementing sut_printf to correctly update the name 
 				BUG();*/
-		}
+//		}
 	}
 
 	/* There is no reason to lock our new cache before we
@@ -836,7 +841,7 @@ opps:
 }
 
 
-#if DEBUG
+#if SLAB_DEBUG
 /*
  * This check if the kmem_cache_t pointer is chained in the cache_cache
  * list. -arca
@@ -938,7 +943,7 @@ static int __kmem_cache_shrink_locked(kmem_cache_t *cachep)
 			break;
 
 		slabp = list_entry(cachep->slabs_free.prev, slab_t, list);
-#if DEBUG
+#if SLAB_DEBUG
 		if (slabp->inuse)
 			BUG();
 #endif
@@ -1073,7 +1078,7 @@ static inline void kmem_cache_init_objs (kmem_cache_t * cachep,
 
 	for (i = 0; i < cachep->num; i++) {
 		void* objp = slabp->s_mem+cachep->objsize*i;
-#if DEBUG
+#if SLAB_DEBUG
 		if (cachep->flags & SLAB_RED_ZONE) {
 			*((unsigned long*)(objp)) = RED_MAGIC1;
 			*((unsigned long*)(objp + cachep->objsize -
@@ -1089,7 +1094,7 @@ static inline void kmem_cache_init_objs (kmem_cache_t * cachep,
 		 */
 		if (cachep->ctor)
 			cachep->ctor(objp, cachep, ctor_flags);
-#if DEBUG
+#if SLAB_DEBUG
 		if (cachep->flags & SLAB_RED_ZONE)
 			objp -= BYTES_PER_WORD;
 		if (cachep->flags & SLAB_POISON)
@@ -1218,7 +1223,7 @@ failed:
  * Called with the cache-lock held.
  */
 
-#if DEBUG
+#if SLAB_DEBUG
 static int kmem_extra_free_checks (kmem_cache_t * cachep,
 			slab_t *slabp, void * objp)
 {
@@ -1268,7 +1273,7 @@ static inline void * kmem_cache_alloc_one_tail (kmem_cache_t *cachep,
 		list_del(&slabp->list);
 		list_add(&slabp->list, &cachep->slabs_full);
 	}
-#if DEBUG
+#if SLAB_DEBUG
 	if (cachep->flags & SLAB_POISON)
 		if (kmem_check_poison_obj(cachep, objp))
 			BUG();
@@ -1399,7 +1404,7 @@ alloc_new_slab_nolock:
  * - caller is responsible for the synchronization
  */
 
-#if DEBUG
+#if SLAB_DEBUG
 # define CHECK_NR(pg)						\
 	do {							\
 		if (!VALID_PAGE(pg)) {				\
@@ -1435,7 +1440,7 @@ static inline void kmem_cache_free_one(kmem_cache_t *cachep, void *objp)
 	 */
 	slabp = GET_PAGE_SLAB(virt_to_page(objp));
 
-#if DEBUG
+#if SLAB_DEBUG
 	if (cachep->flags & SLAB_DEBUG_INITIAL)
 		/* Need to call the slab's constructor so the
 		 * caller can perform a verify of its state (debugging).
@@ -1587,7 +1592,7 @@ void * mm_malloc (size_t size, int flags)
 void kmem_cache_free (kmem_cache_t *cachep, void *objp)
 {
 	unsigned long flags;
-#if DEBUG
+#if SLAB_DEBUG
 	CHECK_PAGE(virt_to_page(objp));
 	if (cachep != GET_PAGE_CACHE(virt_to_page(objp)))
 		BUG();
@@ -1621,7 +1626,7 @@ void mm_free (const void *objp)
 
 unsigned int kmem_cache_size(kmem_cache_t *cachep)
 {
-#if DEBUG
+#if SLAB_DEBUG
 	if (cachep->flags & SLAB_RED_ZONE)
 		return (cachep->objsize - 2*BYTES_PER_WORD);
 #endif
@@ -1796,7 +1801,7 @@ int  kmem_cache_reap (int gfp_mask)
 		full_free = 0;
 		p = searchp->slabs_free.next;
 		while (p != &searchp->slabs_free) {
-#if DEBUG
+#if SLAB_DEBUG
 			slabp = list_entry(p, slab_t, list);
 
 			if (slabp->inuse)
@@ -1851,7 +1856,7 @@ perfect:
 		if (p == &best_cachep->slabs_free)
 			break;
 		slabp = list_entry(p,slab_t,list);
-#if DEBUG
+#if SLAB_DEBUG
 		if (slabp->inuse)
 			BUG();
 #endif

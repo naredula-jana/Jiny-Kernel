@@ -1,6 +1,15 @@
-// common.c -- Defines some global functions.
-//             From JamesM's kernel development tutorials.
+/*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+*   kernel/util.c
+*   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
+*
+*/
 #include "common.h"
+#include "interface.h"
 extern unsigned long stack,placement_address;
 static void print_symbol(addr_t addr)
 {
@@ -22,10 +31,10 @@ void ut_showTrace(unsigned long *stack_top)
 	unsigned long  sz,stack_end,code_end;
 	int i;
 
-	sz=stack_top;
+	sz=(long)stack_top;
 	sz=sz/4;
 	sz=sz*4;
-	stack_top=sz;
+	stack_top=(unsigned char *)sz;
 	i = 0;
 	sz=(STACK_SIZE-1);
 	sz=~sz;
@@ -62,7 +71,7 @@ m=0;
         }
 return a;
 }
-unsigned long ut_atoi(char *p)
+unsigned int ut_atoi(char *p)
 {         
         unsigned int a;
         int i,m,k;
@@ -81,26 +90,29 @@ return a;
 }
 // Copy len bytes from src to dest.
 uint8_t *g_dest=0;
-uint8_t *g_src=0;
+unsigned long *g_src=0;
+//uint8_t *g_sp=0;
 unsigned long g_len=0;
-void ut_memcpy(uint8_t *dest, const uint8_t *src, addr_t len)
+//unsigned long g_ddd=0x123;
+void ut_memcpy(uint8_t *dest, uint8_t *src, long len)
 {
-	const uint8_t *sp = (const uint8_t *)src;
+	uint8_t *sp = (const uint8_t *)src;
 	uint8_t *dp = (uint8_t *)dest;
-	unsigned long k=0;
+	long i=0;
 
 	g_dest=dp;
-	g_src=sp;
 	g_len=len;
-
-//ut_printf(" src:%x dest:%x len:%x \n",src,dest,len);
-	for(; len != 0; len--) 
+//	g_sp=&k;
+//g_ddd=0x123;
+ut_printf(" src:%x dest:%x len:%x \n",src,dest,len);
+	for(i=len; i>0; i--) 
 	{
 		*dp = *sp;
+	//	g_ddd++;
 		dp++;
 		sp++;
-		k++;
 	}
+//g_ddd=0x123;
 	//ut_printf(" memcpy Len :%x k:%x \n",len,k);
 }
 uint8_t *tem1=0;
@@ -153,6 +165,7 @@ char *ut_strcpy(char *dest, const char *src)
 	}
 	while (*src != 0);
 	*dest=0;
+	return dest;
 }
 
 // Concatenate the NULL-terminated string src onto

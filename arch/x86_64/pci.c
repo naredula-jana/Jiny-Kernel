@@ -180,11 +180,10 @@ static int read_dev_conf(uint8_t bus , uint8_t dev,uint8_t func)
 	pci_dev_header_t header;
 	pci_addr_t addr;
 	pci_bar_t bars[5];
-	uint32_t start,len;
 	int ret;
-	int consumed = 0; //number of read BARs
-	int produced = 0; //number of filled resources;
-	int max_bar;
+	//int consumed = 0; //number of read BARs
+	//int produced = 0; //number of filled resources;
+	//int max_bar;
 	int i;
 
 	addr.bus=bus;

@@ -1,11 +1,22 @@
+/*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+*   kernel/shell.c
+*   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
+*
+*/
 #include "common.h"
 #include "task.h"
 #include "vfs.h"
+#include "interface.h"
 
 typedef struct {
-	unsigned char *usage;
-	unsigned char *help;
-	unsigned char *command_name;
+	char *usage;
+	char *help;
+	char *command_name;
 	void (*func)(char *arg1,char *arg2);
 } commands_t;
 #define MAX_COMMANDS 500
@@ -219,7 +230,7 @@ static int sh_create(char *arg1,char *arg2)
 static int print_help(char *arg1,char *arg2)
 {
 	int i;
-	ut_printf("Version 1.70 stacksize:%x  \n",STACK_SIZE);
+	ut_printf("Version 2.0 stacksize:%x  \n",STACK_SIZE);
 	for (i=0; i<MAX_COMMANDS; i++)
 	{
 		if (cmd_list[i].usage == 0) break;
@@ -367,7 +378,6 @@ int shell_main()
 	unsigned char c,line[MAX_LINE_LENGTH];
 	int i,cmd_type;
 
-	int pos=0;
 	line[0]='\0';
 	while(1)
 	{

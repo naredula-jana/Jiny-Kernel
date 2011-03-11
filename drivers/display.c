@@ -118,7 +118,7 @@ static void itoa (char *buf, int buf_len, int base, unsigned long d)
 }
 static void scroll()
 {
-	int i,x,y;
+	int i;
 	unsigned char *ptr;
 
 	ptr=&(video_buffer_g[0][0]);	

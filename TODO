@@ -1,6 +1,3 @@
-URGENT:
-   when schedule is called from do_exit or any other function, at the same time schedule may be called from timer interrupt, this need to avoided by some means.
-
 Basic:
 1) Page cache Implemenatation & Host FS
 
@@ -9,19 +6,11 @@ Basic:
 3) User level code & system calls
 	
 4) code reorg:
-	
-Urgent:  cleanup the display.c with sti and cli commands, scroll .
----------------------------------------------------------
 
-Advanced:
-1. VFS layer + Para virtualised Filsystem layer: 
-	a) defining the VFS interface.
-	b) defining a small para virtualised file system.
-2. elf binary interepreter:
-	a) interpreting the elf binary
-	b) hooking to the OS environment.
-3. system interface layer for the user level code to run:
-4. Misc:
-	a) implementing tickless timer interrupt .
+5) init functions streamlining
+
+6) enhancing debugging,logging and shell features 	
+
+---------------------------------------------------------
 
 

@@ -1,4 +1,15 @@
+/*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+*   kernel/task.c
+*   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
+*
+*/
 #include "task.h"
+#include "interface.h"
 
 struct task_struct *g_current_task,*g_init_task;
 struct mm_struct *g_kernel_mm=0;
@@ -22,6 +33,7 @@ static struct task_struct *alloc_task_struct(void)
 static void free_task_struct(struct task_struct *p)
 {
 	mm_putFreePages((unsigned long) p, 2);
+	return ;
 }
 static inline void add_to_runqueue(struct task_struct * p) /* Add at the first */
 {
@@ -207,12 +219,14 @@ int sc_wait(struct wait_struct *waitqueue,int ticks)
 	g_current_task->state=TASK_INTERRUPTIBLE;
 	add_to_waitqueue(waitqueue,g_current_task,ticks);
 	sc_schedule();
+	return 1;
 }
 int sc_sleep(int ticks) /* each tick is 100HZ or 10ms */
 {
 	g_current_task->state=TASK_INTERRUPTIBLE;
 	add_to_waitqueue(&g_timerqueue,g_current_task,ticks);
 	sc_schedule();
+	return 1;
 }
 
 int sc_fork(unsigned long clone_flags, unsigned long usp, int (*fn)(void *))
@@ -223,7 +237,7 @@ int sc_fork(unsigned long clone_flags, unsigned long usp, int (*fn)(void *))
 
 	p = alloc_task_struct();
 	ut_memset(p,0xab,STACK_SIZE);
-	p->thread.ip=fn;
+	p->thread.ip=(void *)fn;
 	p->thread.sp=(addr_t)p+(addr_t)STACK_SIZE;
 	p->pid=g_pid;
 	p->state=TASK_RUNNING;
@@ -237,12 +251,15 @@ int sc_fork(unsigned long clone_flags, unsigned long usp, int (*fn)(void *))
 	spin_lock_irqsave(&g_runqueue_lock, flags);
 	add_to_runqueue(p);
 	spin_unlock_irqrestore(&g_runqueue_lock, flags);
+
+	return 1;
 }
 
 int sc_exit()
 {
 	g_current_task->state=TASK_DEAD;
 	sc_schedule();
+	return 0;
 }
 
 int sc_createThread(int (*fn)(void *))
@@ -332,10 +349,10 @@ void init_tasking()
 	atomic_set(&g_kernel_mm->mm_count,1);
 	g_kernel_mm->start_brk=0xc0000000;
 	g_kernel_mm->mmap=0x0;
-	g_kernel_mm->pgd=g_kernel_page_dir;
+	g_kernel_mm->pgd=(unsigned char *)g_kernel_page_dir;
 
-	g_current_task = &stack;
-	g_init_task = &stack;
+	g_current_task =(struct task_struct *) &stack;
+	g_init_task =(struct task_struct *) &stack;
 	g_current_task->next_run=g_init_task;
 	g_current_task->prev_run=g_init_task;
 	g_current_task->state=TASK_RUNNING;

@@ -55,8 +55,6 @@ typedef struct registers
     addr_t eip, cs, eflags, useresp, ss; // Pushed by the processor automatically.
 } registers_t;
 
-//#define BUG()  printf(" Kernel BUG  file : %s : line :%d \n",__FILE__,__LINE__);  \
-//		cli(); while(1) 
 #define BUG() do { ut_printf(" Kernel BUG  file : %s : line :%d \n",__FILE__,__LINE__);  \
 		cli(); while(1) ; } while(0)
 #define BUG_ON(condition) do { if (unlikely((condition)!=0)) BUG(); } while(0)
@@ -65,8 +63,6 @@ typedef struct registers
 // For IRQs, to ease confusion, use the #defines above as the
 // first parameter.
 typedef void (*isr_t)();
-int strcmp(char *str1, char *str2);
-void ut_printf (const char *format, ...);
 extern int g_serial_output;
 #define printk ut_printf
 unsigned char kb_getchar();

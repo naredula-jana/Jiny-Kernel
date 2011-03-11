@@ -1,5 +1,5 @@
-
 #include "mm.h"
+#include "interface.h"
 int g_nr_swap_pages = 0;
 int g_nr_free_pages = 0;
 
@@ -102,7 +102,7 @@ static inline void free_pages_ok(unsigned long map_nr, unsigned long order)
 
 	spin_unlock_irqrestore(&g_page_alloc_lock, flags);
 }
-
+/*
 static void __free_page(struct page *page)
 {
 	if (!PageReserved(page) && atomic_dec_and_test(&page->count)) {
@@ -112,7 +112,7 @@ static void __free_page(struct page *page)
 		free_pages_ok(page - g_mem_map, 0);
 		return;
 	}
-}
+} */
 
 void mm_putFreePages(unsigned long addr, unsigned long order)
 {
@@ -219,7 +219,7 @@ unsigned long mm_getFreePages(int gfp_mask, unsigned long order)
 	   if (!freed && !(gfp_mask & (__GFP_MED | __GFP_HIGH)))
 	   goto nopage;
 	   }*/
-ok_to_allocate:
+//ok_to_allocate:
 	spin_lock_irqsave(&g_page_alloc_lock, flags);
 	RMQUEUE(order, gfp_mask);
 	spin_unlock_irqrestore(&g_page_alloc_lock, flags);
@@ -274,7 +274,6 @@ void mm_printFreeAreas(void)
 unsigned long init_free_area(unsigned long start_mem, unsigned long end_mem)
 {
 	page_struct_t * p;
-	long *q;
 	unsigned long mask = PAGE_MASK;
 	unsigned long i;
 
@@ -298,7 +297,7 @@ unsigned long init_free_area(unsigned long start_mem, unsigned long end_mem)
 	p = g_mem_map + MAP_NR(end_mem);
 	start_mem = LONG_ALIGN((unsigned long) p);
 	ut_printf(" Beforeut_memset mem map: %x diff:%x   \n",g_mem_map,(start_mem -(unsigned long) g_mem_map));
-	ut_memset(g_mem_map, 0, start_mem -(unsigned long) g_mem_map);
+	ut_memset((unsigned char *)g_mem_map, 0, start_mem -(unsigned long) g_mem_map);
 	do {
 		--p;
 		atomic_set(&p->count, 0);
@@ -322,11 +321,11 @@ unsigned long init_free_area(unsigned long start_mem, unsigned long end_mem)
 
 void init_mem(unsigned long start_mem, unsigned long end_mem)
 {
-	unsigned long start_low_mem = PAGE_SIZE;
-	int codepages = 0;
+	//unsigned long start_low_mem = PAGE_SIZE;
 	int reservedpages = 0;
+	/*int codepages = 0;
 	int datapages = 0;
-	int initpages = 0;
+	int initpages = 0; */
 	unsigned long tmp;
 
 	end_mem &= PAGE_MASK;
@@ -375,15 +374,14 @@ extern unsigned long g_multiboot_mod_len;
 void init_memory(addr_t end_addr)
 {
 	addr_t start_addr;
-	unsigned char c;
 
 	ut_printf(" Initializing memory endaddr : %x \n",end_addr);
 	start_addr=initialise_paging( end_addr);
 	if (g_multiboot_mod_len > 0) /* symbol file  reside at the end of memory, it can acess only when page table is initialised */
 	{
-		g_symbol_table=start_addr;
+		g_symbol_table=(unsigned char *)start_addr;
 		g_total_symbols=(g_multiboot_mod_len)/sizeof(symb_table_t);
-		ut_memcpy((char *)g_symbol_table,(char *)g_multiboot_mod_addr,g_multiboot_mod_len);
+		ut_memcpy((unsigned char *)g_symbol_table,(unsigned char *)g_multiboot_mod_addr,g_multiboot_mod_len);
 		start_addr=(unsigned long)start_addr+g_multiboot_mod_len;
 		ut_printf(" symbol:  %x : %d  :%d :%x : \n", g_symbol_table,g_total_symbols,sizeof(symb_table_t),g_symbol_table[5].address);
 		ut_printf(" symbol:  %s \n",&g_symbol_table[5].name[0]);

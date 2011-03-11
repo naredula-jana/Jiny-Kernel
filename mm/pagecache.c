@@ -1,7 +1,19 @@
+/*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+*   mm/paging.c
+*   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
+*
+*/
 #include "mm.h"
 #include "vfs.h"
 #include "list.h"
 #include "../util/host_fs/filecache_schema.h"
+#include "interface.h"
+
 enum {
         FRONT=0,
         TAIL=1
@@ -118,7 +130,7 @@ int pc_init(unsigned char *start_addr,unsigned long len)
 	total_pages=len/PC_PAGESIZE;
 	reserved_size=sizeof(fileCache_t)+sizeof(page_struct_t)*total_pages;
 	pagecache_map=(page_struct_t *)(start_addr + sizeof(fileCache_t));
-	ut_memset(pagecache_map, 0, sizeof(page_struct_t)*total_pages);
+	ut_memset((unsigned char *)pagecache_map, 0, sizeof(page_struct_t)*total_pages);
 
 	init_pagelist(&free_list,FREE_LIST);
 	init_pagelist(&active_list,ACTIVE_LIST);
@@ -178,7 +190,7 @@ struct page *pc_getInodePage(struct inode *inode,unsigned long offset)
 	list_for_each(p, &(inode->page_list)) {
 		page=list_entry(p, struct page, list);
 		i++;
-		if (i>20) return NULL ; /* TODO : remove me later ; just for debugging purpose */
+		if (i>200) return NULL ; /* TODO : remove me later ; just for debugging purpose */
 		DEBUG(" %d: get page address: %x  offset :%d \n",i,page,page->offset);
 		if (page->offset == page_offset)
 		{
@@ -201,6 +213,7 @@ int pc_insertInodePage(struct inode *inode,struct page *page)
 		tmp_page=list_entry(p, struct page, list);
 		i++;
 		DEBUG("insert page address: %x %d \n",tmp_page,i);
+		if (ret > 200 ) return 0; /* TODO : remove later */
 		if (page->offset < tmp_page->offset)
 		{
 			inode->nrpages++;
