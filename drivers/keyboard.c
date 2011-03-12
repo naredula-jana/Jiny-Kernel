@@ -28,6 +28,26 @@ char s_codes[128] = {
 static int en_scan_to_ascii(unsigned char *buf, uint8_t scancode, uint8_t comb_flags, uint8_t state_flags)
 {
 
+	if (scancode ==75 ) /* leftArrow */
+	{
+		*buf=3;
+		return 1;
+	}
+	if (scancode ==77 ) /* RightArrow */
+	{
+		*buf=4;
+		return 1;
+	}
+	if (scancode ==72 ) /* uppArrow */
+	{
+		*buf=1;
+		return 1;
+	}
+	if (scancode ==80 ) /* lowArrow */
+	{
+		*buf=2;
+		return 1;
+	}
 	if(codes[scancode]) {
 		*buf = (comb_flags & SHIFT_MASK) ? s_codes[scancode] : codes[scancode];
 		/*  if(state_flags & CAPS_MASK && isalpha(*buf)) {

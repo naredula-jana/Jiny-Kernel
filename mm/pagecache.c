@@ -154,14 +154,14 @@ int pc_init(unsigned char *start_addr,unsigned long len)
 	DEBUG(" startaddr: %x totalpages:%d reserved size:%d \n",pc_startaddr,total_pages,reserved_size);	
 	return 1;
 }
-void pc_stats()
+int pc_stats(char *arg1,char *arg2)
 {
 	ut_printf(" Total Pages : %d \n",pc_totalpages);
 	ut_printf(" Free List        : %d \n",free_list.count.counter);
 	ut_printf(" Active clean List: %d \n",active_list.count.counter);
 	ut_printf(" Dirty List       : %d \n",dirty_list.count.counter);
 	ut_printf(" Inactive List    : %d \n",inactive_list.count.counter);
-	return;
+	return 1;
 }
 int pc_pageDirted(struct page *page) 
 {

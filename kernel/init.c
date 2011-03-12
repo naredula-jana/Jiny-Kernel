@@ -30,6 +30,7 @@ int init_kernel(unsigned long end_addr)
 	init_descriptor_tables();
 	init_driver_keyboard();
 	init_serial();
+	g_serial_output=1;
 	ut_printf("Initalising MEMORY par:%x \n",end_addr);
 	init_memory(end_addr);
 	kmem_cache_init();

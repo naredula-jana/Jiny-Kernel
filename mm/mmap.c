@@ -88,7 +88,7 @@ int make_pages_present(unsigned long start, unsigned long end)
 {
 	return 0;
 }
-void vm_printMmaps()
+int vm_printMmaps(char *arg1,char *arg2)
 {
         struct mm_struct *mm;
         struct vm_area_struct *vma;
@@ -101,7 +101,7 @@ void vm_printMmaps()
              ut_printf(" [ %x - %x ]\n",vma->vm_start,vma->vm_end);
              vma = vma->vm_next;
         }
-        return ;
+        return 1;
 }
 struct vm_area_struct *vm_findVma(struct mm_struct *mm,unsigned long addr, unsigned long len)
 {

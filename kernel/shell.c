@@ -17,20 +17,18 @@ typedef struct {
 	char *usage;
 	char *help;
 	char *command_name;
-	void (*func)(char *arg1,char *arg2);
+	int (*func)(char *arg1,char *arg2);
 } commands_t;
 #define MAX_COMMANDS 500
 static int sh_create(char *arg1,char *arg2);
 static int print_help(char *arg1,char *arg2);
 static int sh_cat(char *arg1,char *arg2);
 static int sh_cp(char *arg1,char *arg2);
+static int sh_alloc_mem(char *arg1,char *arg2);
+static int sh_free_mem(char *arg1,char *arg2);
 static int sh_sync(char *arg1,char *arg2);
-static int sh_pc(char *arg1,char *arg2);
-static int sh_ls(char *arg1,char *arg2);
 void ar_printIrqStat(char *arg1,char *arg2);
 static int  test_hostshm(char *arg1,char *arg2);
-void mm_printFreeAreas(void);
-void vm_printMmaps();
 void ut_cls();
 
 void test_proc();
@@ -47,8 +45,11 @@ commands_t cmd_list[]=
 	{"test2     ","test2 ","test2",sh_test2},
 	{"maps      ","Memory map areas","maps",vm_printMmaps},
 	{"host      ","host shm test","host",test_hostshm},
-	{"ls        ","ls","ls",sh_ls},
-	{"pc        ","page cache stats","pc",sh_pc},
+	{"ls        ","ls","ls",fs_printInodes},
+	{"pc        ","page cache stats","pc",pc_stats},
+	{"mem        ","memstat","mem",mm_printFreeAreas},
+	{"amem <order>","mem allocate ","amem",sh_alloc_mem},
+	{"fmem <address>","mem allocate ","fmem",sh_free_mem},
 	{"cat <file>","Cat file       ","cat",sh_cat},
 	{"cp <f1> <f2>","copy f1 f2       ","cp",sh_cp},
 	{"sync <f1>","sync f1       ","sync",sh_sync},
@@ -211,15 +212,26 @@ static int sh_cat(char *arg1,char *arg2)
 	}
 	return 0;
 }
-static int sh_pc(char *arg1,char *arg2)
+static int sh_alloc_mem(char *arg1,char *arg2)
 {
-	pc_stats();
-	return 1;
+	unsigned long order;
+ 	unsigned long addr;
+	
+	order=ut_atol(arg1);
+ 	addr=mm_getFreePages(0,order);
+	ut_printf(" alloc order:%x addr:%x \n",order,addr);
+	return 1;	
 }
-static int sh_ls(char *arg1,char *arg2)
+static int sh_free_mem(char *arg1,char *arg2)
 {
-	fs_printInodes();
-	return 1;
+	unsigned long addr;
+	unsigned long order;
+	
+	addr=ut_atol(arg1);
+	order=ut_atol(arg2);
+	mm_putFreePages(addr,order);
+	ut_printf(" free addr  %s :%x  order:%x\n",arg1,addr,order);
+	return 1;	
 }
 static int sh_create(char *arg1,char *arg2)
 {
@@ -239,16 +251,25 @@ static int print_help(char *arg1,char *arg2)
 
 	return 1;
 }
+/**************************************** shell logic ***********************/
 
-addr_t g_debug_level=1;
+unsigned long g_debug_level=1;
 int g_test_exit=0;
 #define MAX_LINE_LENGTH 200
 #define CMD_PROMPT "->"
-
+#define MAX_CMD_HISTORY 50
+static char cmd_history[MAX_CMD_HISTORY][MAX_LINE_LENGTH];
+static int curr_line_no=0;
+static int his_line_no=0;
+char curr_line[MAX_LINE_LENGTH];
 enum{
 	CMD_GETVAR=1,
-	CMD_FILLVAR
+	CMD_FILLVAR,
+	CMD_UPARROW,
+	CMD_DOWNARROW,
+	CMD_LEFTARROW
 };
+
 void tokenise( char *p,char *tokens[])
 {
 	int i,k,j;
@@ -282,6 +303,35 @@ static int process_command(int cmd,char *p)
 	int i,ret,symbls;
 	char *token[5];
 
+	if (cmd == CMD_UPARROW)
+	{
+		his_line_no--;
+		if (his_line_no < 0) his_line_no=MAX_CMD_HISTORY-1;
+		ut_strcpy(p,cmd_history[his_line_no]);
+		ut_putchar((int)'\n');
+		return 0;	
+	}
+	else if (cmd == CMD_DOWNARROW)
+	{
+		his_line_no++;
+		if (his_line_no >= MAX_CMD_HISTORY) his_line_no=0;
+		ut_strcpy(p,cmd_history[his_line_no]);
+		ut_putchar((int)'\n');
+		return 0;	
+	}
+	else if (cmd == CMD_LEFTARROW)
+	{
+		curr_line[0]='\0';
+		ut_putchar((int)'\n');
+		return 0;	
+	}
+	if (p[0] != '\0')
+	{
+		ut_strcpy(cmd_history[curr_line_no],p);
+		curr_line_no++;
+		if (curr_line_no >= MAX_CMD_HISTORY ) curr_line_no=0;
+		his_line_no=curr_line_no;
+	}
 	for (i=0; i<3; i++) token[i]=0;
 	tokenise(p,token);
 	symbls=0;
@@ -306,6 +356,7 @@ static int process_command(int cmd,char *p)
 		return 1;
 	}else if (ret != 0)
 		ut_printf("Not found :%s: \n",p);
+	p[0]='\0';		
 	return 0;
 }
 static int process_symbol(int cmd,char *p)
@@ -348,7 +399,30 @@ static int get_cmd(char *line)
 	}
 	while (i<MAX_LINE_LENGTH)
 	{ 
+		int c;
 		while((line[i]=dr_kbGetchar())==0);
+		c=line[i];
+		if (line[i]==1) /* upArrow */
+		{
+			cmd=CMD_UPARROW;
+			line[i]='\0';
+			break;
+		//	ut_printf(" Upp Arrow \n");
+		}
+		if (line[i]==2) /* upArrow */
+		{
+			cmd=CMD_DOWNARROW;
+			line[i]='\0';
+			break;
+		//	ut_printf(" DOWNArrow \n");
+		}
+		if (line[i]==3) /* leftArrow */
+		{
+			cmd=CMD_LEFTARROW;
+			line[i]='\0';
+			break;
+		//	ut_printf(" LeftArrow \n");
+		}
 		if (line[i]=='\t')
 		{ 
 			line[i]='\0';
@@ -367,25 +441,19 @@ static int get_cmd(char *line)
 	line[i]='\0';
 	return cmd;
 }
-static int div_by_zero()
-{
-	int i,k;
-	k=0;
-	i=32/k;
-}
 int shell_main()
 {
-	unsigned char c,line[MAX_LINE_LENGTH];
 	int i,cmd_type;
 
-	line[0]='\0';
+	for (i=0; i<MAX_CMD_HISTORY;i++)
+		cmd_history[i][0]='\0';
+	
+	curr_line[0]='\0';
 	while(1)
 	{
 		ut_printf(CMD_PROMPT);
-		cmd_type=get_cmd(line);
-		if (process_command(cmd_type,line)==0)
-		{
-			line[0]='\0';
-		}
+		cmd_type=get_cmd(curr_line);
+		process_command(cmd_type,curr_line);
 	}
+	return 1;
 }
