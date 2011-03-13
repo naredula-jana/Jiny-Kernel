@@ -34,6 +34,7 @@ typedef struct page_list{
 
 page_struct_t *pagecache_map;
 unsigned char *pc_startaddr;
+unsigned char *pc_endaddr;
 int pc_totalpages=0;
 static page_list_t free_list,active_list,dirty_list,inactive_list;
 /**
@@ -54,6 +55,21 @@ inactive->free :
 
 /*********************** local function *************************/
 static int pagelist_add(page_struct_t *page, page_list_t *list,int tail);
+static inline unsigned char *to_ptr(struct page *p) /* TODO remove me later the function is duplicated in fs/host_fs.c */
+{
+        unsigned char *addr;
+        unsigned long pn;
+        pn=p-pagecache_map;
+        addr=pc_startaddr+pn*PC_PAGESIZE;
+        return addr;
+}
+static inline struct page *to_page(unsigned char *addr) /* TODO remove me later the function is duplicated in fs/host_fs.c */
+{
+	struct page *p;
+        unsigned long pn;
+	pn=(addr-pc_startaddr)/PC_PAGESIZE;
+	return pagecache_map+pn;
+}
 static int page_init(page_struct_t *p)
 {
 	p->next=p->prev=NULL;
@@ -127,6 +143,7 @@ int pc_init(unsigned char *start_addr,unsigned long len)
 	int i;
 
 	pc_startaddr=(unsigned char *)start_addr;
+	pc_endaddr=(unsigned char *)start_addr+len;
 	total_pages=len/PC_PAGESIZE;
 	reserved_size=sizeof(fileCache_t)+sizeof(page_struct_t)*total_pages;
 	pagecache_map=(page_struct_t *)(start_addr + sizeof(fileCache_t));
@@ -191,7 +208,7 @@ struct page *pc_getInodePage(struct inode *inode,unsigned long offset)
 		page=list_entry(p, struct page, list);
 		i++;
 		if (i>200) return NULL ; /* TODO : remove me later ; just for debugging purpose */
-		DEBUG(" %d: get page address: %x  offset :%d \n",i,page,page->offset);
+		DEBUG(" %d: get page address: %x  addr:%x offset :%d \n",i,page,to_ptr(page),page->offset);
 		if (page->offset == page_offset)
 		{
 			return page;
@@ -254,3 +271,24 @@ page_struct_t *pc_getFreePage()
 	return p;
 }
 
+/***************************** House keeping functionality ******************/
+static struct addr_list acc_list;
+int scan_pagecache(char *arg1 , char *arg2)
+{
+	int i,ret;
+	acc_list.total=0;
+	ret=ar_scanPtes(pc_startaddr,pc_endaddr,&acc_list);
+	DEBUG(" ScanPtes  ret:%x total:%d \n",ret,acc_list.total);
+	for (i=0; i<acc_list.total; i++)
+	{
+		struct page *p;
+	
+		if (!(acc_list.addr[i] >= pc_startaddr && acc_list.addr[i] <= pc_endaddr ))
+		{
+			BUG();
+		}	
+		p=to_page(acc_list.addr[i]);	
+		p->age=0;
+		DEBUG("%d: page addr :%x \n",i,acc_list.addr[i]);
+	}
+}

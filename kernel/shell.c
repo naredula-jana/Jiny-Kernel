@@ -34,6 +34,7 @@ void ut_cls();
 void test_proc();
 static int sh_test1(char *arg1,char *arg2);
 static int sh_test2(char *arg1,char *arg2);
+int scan_pagecache(char *arg1 , char *arg2);
 commands_t cmd_list[]=
 {
 	{"help      ","Print Help Menu","help",print_help},
@@ -47,6 +48,7 @@ commands_t cmd_list[]=
 	{"host      ","host shm test","host",test_hostshm},
 	{"ls        ","ls","ls",fs_printInodes},
 	{"pc        ","page cache stats","pc",pc_stats},
+	{"scan        ","scan page cache ","scan",scan_pagecache},
 	{"mem        ","memstat","mem",mm_printFreeAreas},
 	{"amem <order>","mem allocate ","amem",sh_alloc_mem},
 	{"fmem <address>","mem allocate ","fmem",sh_free_mem},

@@ -230,3 +230,68 @@ static int handle_mm_fault(addr_t addr)
 	DEBUG("FINALLY Inserted and global fluished into pagetable :%x pte :%x \n",pl1,p);
 	return 1;	
 }
+
+/************************ house keeping thread related function ****************/
+unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,struct addr_list *addr_list )
+{
+	struct mm_struct *mm;
+	struct vm_area_struct *vma;
+	addr_t *pl4,*pl3,*pl2,*pl1,*p;	
+	unsigned int index;
+	pte_t *pte;
+	unsigned long addr;
+	int i;
+
+	mm=g_current_task->mm;
+	if (mm==0 || mm->pgd == 0) BUG();
+
+	addr=start_addr;
+	addr_list->total=0;
+	while (addr <end_addr)
+	{
+		pl4=mm->pgd;
+		if (pl4 == 0) return 0;
+
+		p=(pl4+(L4_INDEX(addr))) ;
+		pl3=(*p) & (~0xfff);
+		if (pl3==0)
+		{
+			return 0;
+		}
+
+		p=(pl3+(L3_INDEX(addr)));
+		pl2=(*p) & (~0xfff);
+		if (pl2==0)
+		{
+			return 0;
+		}
+
+		p=(pl2+(L2_INDEX(addr)));
+		pl1=(*p) & (~0xfff);
+		if (pl1==0)
+		{
+			return 0;
+		}
+		pte=(pl1+(L1_INDEX(addr)));
+		if (pte->accessed == 1) 
+		{
+			pte->accessed=0;
+			i=addr_list->total;
+			if (i<ADDR_LIST_MAX)
+			{
+				addr_list->addr[i]=addr;
+				addr_list->total++;
+			}else
+			{
+				break;
+			}	
+		}
+		addr=addr+PAGE_SIZE;
+	}
+	if (addr_list->total > 0)
+	{
+		asm volatile("movq %%cr4,%0" : "=r" (mmu_cr4_features));
+		__flush_tlb_global();  /* TODO : need not flush entire table, flush only spoecific tables*/
+	}
+	return addr;
+}
