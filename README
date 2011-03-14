@@ -10,23 +10,49 @@ JINY KERNEL 0.1  (JINY :  Jana's tINY)
  JINY will be used initially to model the page cache suitable for hadoop like applications.
 
 ------------------------------------------
-
 The goals of the project are:
-	1) It should be monalitic kernel with a small footprint.
-	2) To keep kernel size small. This is done by writing paravirtualised drivers  if it not running on the bare metal. To begin with, file system is implemented  with a paravirtualised driver.
-	3) powerful command line and debug environment.
-	4) Higly modularise:  To define well defined interface between modules , so as any module can be replaced by keeping the interface same. (see include/interface.h for more details.
+	1) It should be monalitic kernel with a small footprint: To keep kernel size small. This is done by writing paravirtualised drivers  if it not running on the bare metal. To begin with, file system is implemented  with a paravirtualised driver.
+	2) powerful command line and debug environment.
+	3) Higly modularise:  To define well defined interface between modules , so as any module can be replaced by keeping the interface same. (see include/interface.h for more details.
+
 ------------------------------------------
-page cache Modeling:
-	page : Every page containg age entry, age is updated when ever the page is accessed or dirted.
-	1) when page is read,
-				 if it MRU type the age is changed to eldest and moved to end of inactive list if it is in active list,
-				 if it is LRU it is changed to youngest and moved to front of acive list.
-	2)  when page is written,
-	LRU dirty :
-	MRU dirty :
-	house keeper thread :1) It scans the pages periodically and updates the age.
-			     2) It scan active , inactive list . based on the age,type of page(MRU or LRU) it alter the list.
+page cache Algorithm based on paper:
+
+Data Structures:
+	page : Every page containg age entry, age is updated when ever the page is accessed(read) or dirted(write).
+	queues : active,inactive,LRU dirty,MRU dirty and free queue.
+
+Tasks:
+	1) when page is read:
+		 if it is MRU type the age is changed to eldest and moved to end of inactive list.
+		 if it is LRU it is changed to youngest and moved to end of acive list.
+	2) when page is written:
+		LRU dirty : if it is LRU type moved to end of LRU dirty queue.
+		MRU dirty : if it is MRU type, moved to end of MRU dirty queue.
+	3) when fle is synced using fdatasync:
+		If the file is LRU: after flushing the page, the page is made youngest and queued at the end of active list.
+		If the file is MRU: after flushing the page, the page is made eldest and queued at the end of inactive list.
+	4) Background house keeper thread: flush the dirty pages and create enough free pages for page cache.
+		a) It scans the pagetables periodically and updates the age.( this is needed only if the file is mmaped. TODO : currently partially implemented).
+		b) flush MRU dirty queues: MRU dirty queue is flushed as soon as possible whenever disk bandwidth is available.
+		c) flush LRU dirty queue LAZILY : It is flushed only when the page cache is running short of free pages or amount of LRU dirty pages execeed threshould.
+					    
+Interface functions:
+	Initialization and stat:
+		int pc_init(unsigned char *start_addr,unsigned long len);
+		int pc_stats(char *arg1,char *arg2);
+	When page is written:
+		int pc_insertInodePage(struct inode *inode,struct page *page); /* this api is used while reading unpresent page  */
+		int pc_pageDirted(struct page *p);
+	When page is flushed:
+		int pc_pagecleaned(struct page *page);
+	when page is read:
+		struct page *pc_getInodePage(struct inode *inode,unsigned long offset);
+	when empty page is needed:
+		page_struct_t *pc_getFreePage();
+	when page freed:
+		int pc_putFreePage(struct page *page);
+
 ------------------------------------------	
 Design :
 mm : memory management
@@ -34,6 +60,7 @@ pc : page cache
 vfs : virtual filesystem
 kernel : cpu scheduling
 --------------------------------------------
+
 Code Organization:
   Entire code is splitted into the following modules:
 
