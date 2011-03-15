@@ -135,20 +135,18 @@ int send_interrupt()
 	printf("Send interrupt fd:%d ret :%d \n",guestos_fd,ret);
 	return ret;
 }
-void init_filecache()
+int init_filecache()
 {
 	int i;
-
-	filecache->magic_number=FS_MAGIC;	
-	filecache->state=STATE_UPDATE_INPROGRESS;
-	filecache->version=FS_VERSION;
-	for (i=0; i<MAX_REQUESTS; i++)
+	
+	if (filecache->magic_number!=FS_MAGIC)	
 	{
-		filecache->requests[i].state=STATE_INVALID;
+		return 0;
 	}
-	filecache->request_highindex=0;
-	filecache->state=STATE_VALID;
+	if (filecache->version!=FS_VERSION) return 0;
+	if (filecache->state!=STATE_VALID) return 0;
 	printf(" Initalzed the File cache \n");
+	return 1;
 }
 int init()
 {
@@ -165,9 +163,11 @@ int init()
 	if(p==0) 
 		return 0;
 	start_addr=p;
-	memset(p,0,2*1024*1024);
 	filecache=p;	
-	init_filecache();
+	while(init_filecache()==0)
+	{
+		system("sleep 3");
+	}
 	return 1;
 }
 int open_file(int c)

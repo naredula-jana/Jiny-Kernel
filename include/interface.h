@@ -36,7 +36,8 @@ int pc_stats(char *arg1,char *arg2);
 int pc_pageDirted(struct page *p);
 int pc_pagecleaned(struct page *page);
 struct page *pc_getInodePage(struct inode *inode,unsigned long offset);
-int pc_insertInodePage(struct inode *inode,struct page *page);
+int pc_insertPage(struct inode *inode,struct page *page);
+int pc_removePage(struct page *page);
 int pc_putFreePage(struct page *page);
 page_struct_t *pc_getFreePage();
 

@@ -134,7 +134,7 @@ static inline int list_empty(struct list_head *head)
 {
 	return head->next == head;
 }
-
+#if 0
 static inline void __list_splice(struct list_head *list,
 				 struct list_head *head)
 {
@@ -175,7 +175,7 @@ static inline void list_splice_init(struct list_head *list,
 		INIT_LIST_HEAD(list);
 	}
 }
-
+#endif
 /**
  * list_entry - get the struct for this entry
  * @ptr:	the &struct list_head pointer.

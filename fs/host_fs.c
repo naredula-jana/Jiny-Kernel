@@ -205,7 +205,7 @@ static int hfWrite(struct file *filep,unsigned char *buff, unsigned long len)
 				goto error;
 			}
 			page->offset=OFFSET_ALIGN(filep->offset);
-			if (pc_insertInodePage(filep->inode,page)== 0)
+			if (pc_insertPage(filep->inode,page)== 0)
 			{
 				BUG();
 			}
@@ -253,7 +253,7 @@ static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 		ret=request_hostserver(REQUEST_READ,filep->inode,page,PC_PAGESIZE,0);
 		if (ret > 0)
 		{
-			if (pc_insertInodePage(filep->inode,page) ==0)
+			if (pc_insertPage(filep->inode,page) ==0)
 			{
 				pc_putFreePage(page);
 				ret=-5;
@@ -297,7 +297,21 @@ static int hfClose(struct file *filep)
 	kmem_cache_free(g_slab_filep, filep);	
 	return 1;	
 }
+static void init_filecache_header(fileCache_t *filecache)
+{
+        int i;
 
+        filecache->magic_number=FS_MAGIC;
+        filecache->state=STATE_UPDATE_INPROGRESS;
+        filecache->version=FS_VERSION;
+        for (i=0; i<MAX_REQUESTS; i++)
+        {
+                filecache->requests[i].state=STATE_INVALID;
+        }
+        filecache->request_highindex=0;
+        filecache->state=STATE_VALID;
+        DEBUG("Initialized the shared memory  Header \n");
+}
 int init_hostFs()
 {
 	g_hfs_waitqueue.queue=NULL;
@@ -310,21 +324,8 @@ int init_hostFs()
 	}
 
 	shm_headerp=(fileCache_t *)HOST_SHM_ADDR;
-	if (shm_headerp->magic_number!=FS_MAGIC)	
-	{
-		DEBUG("ERROR : host_fs magic number does not match \n");
-		return 0;	
-	}
-	if (shm_headerp->version!=FS_VERSION)	
-	{
-		DEBUG("ERROR : host_fs version number does not  match :%x \n",shm_headerp->version);
-		return 0;	
-	}
-	if (shm_headerp->state !=STATE_VALID)	
-	{
-		DEBUG("ERROR : host_fs  cache not valid state \n");
-		return 0;	
-	}
+	init_filecache_header(shm_headerp);
+	
 	host_fs.open=hfOpen;
 	host_fs.read=hfRead;
 	host_fs.close=hfClose;

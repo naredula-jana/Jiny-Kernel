@@ -44,7 +44,8 @@ Interface functions:
 		int pc_init(unsigned char *start_addr,unsigned long len);
 		int pc_stats(char *arg1,char *arg2);
 	When page is written:
-		int pc_insertInodePage(struct inode *inode,struct page *page); /* this api is used while reading unpresent page  */
+		int pc_insertPage(struct inode *inode,struct page *page); /* this api is used while reading unpresent page  */
+		int pc_removePage(struct page *page); 
 		int pc_pageDirted(struct page *p);
 	When page is flushed:
 		int pc_pagecleaned(struct page *page);
@@ -88,7 +89,7 @@ Code Organization:
 3) VFS 
     pagecache:
 	pc_getInodePage : get particular page of offset from inode
-	pc_insertInodePage : insert a page in to inode or pagecache
+	pc_insertPage : insert a page in to inode or pagecache
 	pc_putFreePage : put a page into free list
 	pc_getFreePage : get a free page from free list
 	pc_init : initialize the subsystem	

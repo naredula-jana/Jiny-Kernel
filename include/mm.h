@@ -63,7 +63,7 @@ typedef struct page {
         atomic_t count;
         unsigned long flags;    /* atomic flags, some possibly updated asynchronously */
 
-	unsigned int age;
+	unsigned int age; /* youngest =1 or eldest =100 */
 
 	struct inode *inode;
 	unsigned long offset; /* offset in the inode */

@@ -137,6 +137,7 @@ void ar_pageFault(struct fault_ctx *ctx)
 	int id = ctx->errcode & 0x10;          // Caused by an instruction fetch?
 
 	// Output an error message.
+	DEBUG("new PAGE FAULT  ip:%x  addr: %x \n",ctx->istack_frame->rip,faulting_address);
 	DEBUG("PAGE FAULT  ip:%x  addr: %x ",ctx->istack_frame->rip,faulting_address);
 	if (present) {
 		ut_printf("page fault: Updating present \n");
@@ -164,6 +165,10 @@ static int handle_mm_fault(addr_t addr)
 	mm=g_current_task->mm;
 	
 	if (mm==0 || mm->pgd == 0) BUG();
+	
+	vma=vm_findVma(mm,(addr & PAGE_MASK),(4*1024)-1);
+	if (vma == 0) BUG();
+
 	pl4=mm->pgd;
 	if (pl4 == 0) return 0;
  		
@@ -210,8 +215,6 @@ static int handle_mm_fault(addr_t addr)
 	}
 	/* By Now we have pointer to all 4 tables , Now check th erequired page*/
 
-	vma=vm_findVma(mm,(addr & PAGE_MASK),(4*1024)-1);
-	if (vma == 0) BUG();
 	if (vma->vm_flags & MAP_ANONYMOUS)
 	{
 		p=mm_getFreePages(0,0); /* get page of 4k size for actual page */	

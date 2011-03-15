@@ -24,11 +24,18 @@ static int inode_init(struct inode *inode,char *filename)
 	if (inode == NULL) return 0;
 	inode->count=0;
 	inode->nrpages=0;
+	if (filename && filename[0]=='t') /* TODO : temporary solution need to replace with fadvise call */
+	{
+		inode->type=TYPE_SHORTLIVED;
+	}else
+	{
+		inode->type=TYPE_LONGLIVED;
+	}	
 	inode->length=-1;
 	ut_strcpy(inode->filename,filename);
 	INIT_LIST_HEAD(&(inode->page_list));
 	INIT_LIST_HEAD(&(inode->inode_next));
-	ut_printf(" inode init :%x  :%x \n",&inode->page_list,&(inode->page_list));
+	ut_printf(" inode init filename:%s: :%x  :%x \n",filename,&inode->page_list,&(inode->page_list));
         list_add(&inode->inode_next,&inode_list);	
 	return 1;
 }

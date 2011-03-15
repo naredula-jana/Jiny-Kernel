@@ -9,7 +9,10 @@
 enum {
  O_CREATE=1
 };
-
+enum {
+TYPE_SHORTLIVED=1,
+TYPE_LONGLIVED=2
+};
 extern unsigned long g_hostShmLen;
 extern kmem_cache_t *g_slab_inodep;
 extern kmem_cache_t *g_slab_filep;
@@ -25,6 +28,7 @@ struct file {
 struct inode {
 	int count; /* usage count */
 	int nrpages;	
+	int type; /* short leaved (MRU) or long leaved (LRU) */
 	unsigned long length; /* file length */
 	char filename[MAX_FILENAME];
 	struct list_head page_list;	
