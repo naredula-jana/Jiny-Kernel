@@ -6,6 +6,7 @@
 pci_dev_header_t host_shm_pci_hdr;
 pci_bar_t host_shm_pci_bar[4];
 unsigned long g_hostShmLen=0;
+unsigned long g_hostShmPhyAddr=0;
 extern struct wait_struct g_hfs_waitqueue;
 static void host_shm_interrupt(registers_t regs)
 {
@@ -48,6 +49,7 @@ int init_host_shm(pci_dev_header_t *pci_hdr,pci_bar_t bars[], uint32_t len)
 			return 0;
 		}else
 		{
+			g_hostShmPhyAddr=bars[2].addr;
 			g_hostShmLen=bars[2].len;
 			pc_init(HOST_SHM_ADDR,bars[2].len);
 		}

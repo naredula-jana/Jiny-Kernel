@@ -36,6 +36,7 @@ int pc_stats(char *arg1,char *arg2);
 int pc_pageDirted(struct page *p);
 int pc_pagecleaned(struct page *page);
 struct page *pc_getInodePage(struct inode *inode,unsigned long offset);
+unsigned long pc_mapInodePage(struct vm_area_struct *vma,unsigned long offset);
 int pc_insertPage(struct inode *inode,struct page *page);
 int pc_removePage(struct page *page);
 int pc_putFreePage(struct page *page);
@@ -50,6 +51,7 @@ int fs_lseek(struct file *file ,unsigned long offset, int whence);
 int fs_write(struct file *file ,unsigned char *buff ,unsigned long len);
 int fs_read(struct file *file ,unsigned char *buff ,unsigned long len);
 int fs_close(struct file *file);
+struct page *fs_generic_read(struct inode *inode,unsigned long offset);
 
 /* Utilities */
 void ut_showTrace(unsigned long *stack_top);

@@ -7,7 +7,9 @@ JINY KERNEL 0.1  (JINY :  Jana's tINY)
  It will be fully tested for x86-64. partially done for x86-32 but discontinued.
 
 3) For What purpose JINY will be used initially?
- JINY will be used initially to model the page cache suitable for hadoop like applications.
+ JINY will be used initially 
+	a) To model the page cache(MRU+LRU) suitable for hadoop like applications.
+	b) To model Host based filesystem(HFS): HFS is filesystem run in guest OS but does file i/o using the shared memory between the guest and host os. HFS does not need any block drivers, it communicated with block devices using the shared memory between guest and host OS.  
 
 ------------------------------------------
 The goals of the project are:
@@ -57,6 +59,9 @@ Interface functions:
 		int pc_putFreePage(struct page *page);
 
 ------------------------------------------	
+Host based File System (HFS):
+
+------------------------------------------
 Design :
 mm : memory management
 pc : page cache 

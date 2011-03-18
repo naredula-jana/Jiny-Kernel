@@ -24,6 +24,7 @@ struct {
 } connections[MAX_FDS];
 int curr_index=0;
 int guestos_fd=-1;
+
 void init_interrupt()
 {
 	struct sockaddr_un un;
@@ -81,8 +82,8 @@ int recv_msg()
 			if (connections[i].fd != -1)  continue;
 			connections[i].fd=fd;
 			connections[i].position=pos;
-		printf("ADDING in existing  FD :%d pos:%d \n",fd,pos);	
-		added=1;
+			printf("ADDING in existing  FD :%d pos:%d \n",fd,pos);	
+			added=1;
 			break;
 		}
 		if (i==curr_index)
@@ -90,8 +91,8 @@ int recv_msg()
 			curr_index++;	
 			connections[i].fd=fd;
 			connections[i].position=pos;
-		added=1;
-		printf("ADDING in NEW : FD :%d pos:%d \n",fd,pos);	
+			added=1;
+			printf("ADDING in NEW : FD :%d pos:%d \n",fd,pos);	
 		}
 	}
 	if (added==0)
@@ -118,8 +119,8 @@ int recv_msg()
 			if (connections[2].fd != -1)
 			{
 				for (i=1; i<3;i++)
-				 if (connections[i].position != connections[0].position) 
-					guestos_fd=dup(connections[i].fd);	
+					if (connections[i].position != connections[0].position) 
+						guestos_fd=dup(connections[i].fd);	
 			}
 		}
 	}
@@ -130,7 +131,7 @@ int send_interrupt()
 	int ret=0;
 
 	if (guestos_fd == -1 ) ret= -1;
-        else if (write(guestos_fd ,&write_one,8)==8) ret= 1;
+	else if (write(guestos_fd ,&write_one,8)==8) ret= 1;
 	else ret= -2;
 	printf("Send interrupt fd:%d ret :%d \n",guestos_fd,ret);
 	return ret;
@@ -138,7 +139,7 @@ int send_interrupt()
 int init_filecache()
 {
 	int i;
-	
+
 	if (filecache->magic_number!=FS_MAGIC)	
 	{
 		return 0;
@@ -172,35 +173,35 @@ int init()
 }
 int open_file(int c)
 {
-        int fd,ret;
-        unsigned char *p;
+	int fd,ret;
+	unsigned char *p;
 	struct stat stat;
 
-        printf("open the file :%s: flags:%d \n",filecache->requests[c].filename,filecache->requests[c].flags);   
+	printf("open the file :%s: flags:%d \n",filecache->requests[c].filename,filecache->requests[c].flags);   
 	if (filecache->requests[c].flags == FLAG_CREATE)  
-        	fd=open(filecache->requests[c].filename,O_WRONLY|O_CREAT|O_EXCL, 0644);
-        else
+		fd=open(filecache->requests[c].filename,O_WRONLY|O_CREAT|O_EXCL, 0644);
+	else
 		fd=open(filecache->requests[c].filename,O_RDONLY);
-        if (fd > 0)
-        {
-                ret=fstat(fd,&stat);
+	if (fd > 0)
+	{
+		ret=fstat(fd,&stat);
 		if (ret ==0)
-                filecache->requests[c].response_len=stat.st_size;
+			filecache->requests[c].response_len=stat.st_size;
 		else
-                filecache->requests[c].response_len=0;
-	
-                printf("open file :%s: len:%d: offset:%x :\n",filecache->requests[c].filename,ret,filecache->requests[c].shm_offset);
+			filecache->requests[c].response_len=0;
 
-                ret=RESPONSE_DONE;
-        }else
-        {
-                printf(" Response failed \n");
-                ret=RESPONSE_FAILED;
-        }
+		printf("open file :%s: len:%d: offset:%x :\n",filecache->requests[c].filename,ret,filecache->requests[c].shm_offset);
+
+		ret=RESPONSE_DONE;
+	}else
+	{
+		printf(" Response failed \n");
+		ret=RESPONSE_FAILED;
+	}
 	close(fd);	
-        filecache->requests[c].response=ret;
-        send_interrupt();
-        return ret;
+	filecache->requests[c].response=ret;
+	send_interrupt();
+	return ret;
 }
 int rw_file(int c)
 {
@@ -232,6 +233,8 @@ int rw_file(int c)
 	}
 	filecache->requests[c].response=ret;
 	send_interrupt();
+	if (fd > 0)
+		close(fd);
 	return ret;
 }
 int process_request(int c)
@@ -239,37 +242,43 @@ int process_request(int c)
 	printf(" Processing the request : %d \n",c);
 	switch (filecache->requests[c].type)
 	{
-	case REQUEST_OPEN : open_file(c); break;
-	case REQUEST_READ : 
-	case REQUEST_WRITE : rw_file(c); break;
+		case REQUEST_OPEN : open_file(c); break;
+		case REQUEST_READ : 
+		case REQUEST_WRITE : rw_file(c); break;
 	}
 	return ;	
 }
 void recv_thread(void *arg)
 {
-  while(1)
-        {
-                recv_msg();
-        }
+	while(1)
+	{
+		recv_msg();
+	}
 }
 main()
 {
 	pthread_t thread_id;
 	int i;
-	int ret;
+	int requests,ret;
 	if (init() == 0) return;
 
 	pthread_create(&thread_id,NULL,recv_thread,0);
-printf(" .. Ready to Process \n");
+	printf(" .. Ready to Process \n");
 	while(1)
 	{
+		requests=0;
 		for (i=0; i<filecache->request_highindex; i++)
 		{
 			if (filecache->requests[i].state==STATE_VALID && filecache->requests[i].response==RESPONSE_NONE )
 			{
 				process_request(i);
+				requests++;
 			}	
 		}		
+		if (requests == 0)
+		{
+			system("sleep 1");
+		}
 	}
 }
 

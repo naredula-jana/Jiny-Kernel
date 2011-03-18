@@ -125,7 +125,8 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len,
 
 	vma=vm_findVma(mm,addr,len);
 	if (vma) return 0;
-	if (flags & MAP_FIXED)
+//	if (flags & MAP_FIXED)
+	if (1)
 	{
         	vma = kmem_cache_alloc(vm_area_cachep, 0);
 		if (vma==0) return 0;
@@ -134,6 +135,15 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len,
 		vma->vm_end=addr+len;
 		vma->vm_prot=prot;
 		vma->vm_private_data = pgoff ;
+		if (file != 0)
+		{
+			if (file->inode != 0)
+			{
+				vma->vm_inode=file->inode;
+				vma->vm_end=addr+file->inode->length;
+				
+			}
+		}
         	vma_link(mm, vma);
 		return 1;
 	}
@@ -175,7 +185,7 @@ unsigned long vm_brk(unsigned long addr, unsigned long len)
         vma->vm_flags = flags;
     //    vma->vm_page_prot = protection_map[flags & 0x0f];
         vma->vm_pgoff = 0;
-        vma->vm_file = NULL;
+        vma->vm_inode = NULL;
         vma->vm_private_data = NULL;
 
         vma_link(mm, vma);

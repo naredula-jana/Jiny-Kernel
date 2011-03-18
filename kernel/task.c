@@ -10,7 +10,8 @@
 */
 #include "task.h"
 #include "interface.h"
-
+#define MAGIC_CHAR 0xab
+#define MAGIC_LONG 0xabababababababab
 struct task_struct *g_current_task,*g_init_task;
 struct mm_struct *g_kernel_mm=0;
 spinlock_t g_runqueue_lock  = SPIN_LOCK_UNLOCKED;
@@ -160,6 +161,11 @@ static inline int del_from_waitqueue(struct wait_struct *waitqueue,struct task_s
 	}
 	if (prev != NULL)
 	{
+		if (prev <0x100)   /* TODO : remove me later , for debugging purpose only */
+		{
+			DEBUG(" prev:%x p:%x waitqueue:%x \n",prev,p,waitqueue);
+			BUG();
+		}
 		prev->next_wait = next;
 	}
 
@@ -236,7 +242,7 @@ int sc_fork(unsigned long clone_flags, unsigned long usp, int (*fn)(void *))
 	unsigned long flags;
 
 	p = alloc_task_struct();
-	ut_memset(p,0xab,STACK_SIZE);
+	ut_memset(p,MAGIC_CHAR,STACK_SIZE);
 	p->thread.ip=(void *)fn;
 	p->thread.sp=(addr_t)p+(addr_t)STACK_SIZE;
 	p->pid=g_pid;
@@ -353,6 +359,7 @@ void init_tasking()
 
 	g_current_task =(struct task_struct *) &stack;
 	g_init_task =(struct task_struct *) &stack;
+	g_init_task->magic_numbers[0]=g_init_task->magic_numbers[1]=MAGIC_LONG;
 	g_current_task->next_run=g_init_task;
 	g_current_task->prev_run=g_init_task;
 	g_current_task->state=TASK_RUNNING;
@@ -374,6 +381,11 @@ void sc_schedule()
 	if (!g_current_task)
 		return;
 
+	if (g_current_task->magic_numbers[0]!=MAGIC_LONG || g_current_task->magic_numbers[1]!=MAGIC_LONG) /* safety check */
+	{
+		DEBUG(" Task Stack got CORRUPTED task:%x :%x :%x \n",g_current_task,g_current_task->magic_numbers[0],g_current_task->magic_numbers[1]);
+		BUG();
+	}
 	spin_lock_irqsave(&g_runqueue_lock, flags);
 	prev=g_current_task;
 	if (prev!= g_init_task) 

@@ -50,6 +50,7 @@ struct task_struct {
 	struct mm_struct *mm;
 	struct task_struct *next_run,  *prev_run;  /* run queue */
 	struct task_struct *next_wait,  *prev_wait;  /* wait queue */
+	unsigned long magic_numbers[4]; /* already stack is default fill with magic numbers */
 }; 
 
 extern struct task_struct *g_current_task;

@@ -227,6 +227,49 @@ error:
 	return tmp_len;
 }
 
+struct page *fs_generic_read(struct inode *inode,unsigned long offset)
+{
+	struct page *page;
+	int tret;
+	int err=0;
+
+	page=pc_getInodePage(inode,offset);
+        if (page == NULL)
+        {
+                page=pc_getFreePage();
+                if (page == NULL)
+                {
+                        err=-3;
+                        goto error;
+                }
+                page->offset=OFFSET_ALIGN(offset);
+
+                tret=request_hostserver(REQUEST_READ,inode,page,PC_PAGESIZE,0);
+                if (tret > 0)
+                {
+                        if (pc_insertPage(inode,page) ==0)
+                        {
+                                pc_putFreePage(page);
+                                err=-5;
+                                goto error;
+                        }
+                }else
+                {
+                        pc_putFreePage(page);
+                        err=-4;
+                        goto error;
+                }
+        }
+	
+error:
+	if (err < 0) 
+	{
+		DEBUG(" Error in reading the file :%i \n",-err);
+		page=0;
+	}
+	return page;
+}
+
 static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 {
 	int ret;
@@ -238,52 +281,25 @@ static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 	DEBUG("Read filename from hs  :%s: offset:%d inode:%x \n",filep->filename,filep->offset,filep->inode);
 	inode=filep->inode;
 	if (inode->length <= filep->offset) return 0;
-	page=pc_getInodePage(filep->inode,filep->offset);
-	if (page == NULL)
-	{
-		page=pc_getFreePage();	
-		if (page == NULL)
-		{
-			ret=-3;
-			goto error;
-		}
-		page->offset=OFFSET_ALIGN(filep->offset);
-		DEBUG("New  Page address : %x \n",page);
 
-		ret=request_hostserver(REQUEST_READ,filep->inode,page,PC_PAGESIZE,0);
-		if (ret > 0)
-		{
-			if (pc_insertPage(filep->inode,page) ==0)
-			{
-				pc_putFreePage(page);
-				ret=-5;
-				goto error;
-			}
-		}else
-		{
-			pc_putFreePage(page);
-			ret=-4;
-			goto error;
-		}
-	}else
-	{
-		ret=PC_PAGESIZE;
-	}
+	page=fs_generic_read(filep->inode,filep->offset);
+	if (page == 0) return 0;
+
+	ret=PC_PAGESIZE;
+	ret=ret-(filep->offset-OFFSET_ALIGN(filep->offset));
+	if (ret> len) ret=len;
 	if ((filep->offset+ret) > inode->length)
 	{
-		ret=inode->length - filep->offset;
+		int r;
+		r=inode->length - filep->offset;
+		if (r <ret) ret=r;
 	}
 	if (page > 0  && ret > 0)
 	{
+		ut_memcpy(buff,to_ptr(page)+(filep->offset-OFFSET_ALIGN(filep->offset)),ret);
 		filep->offset=filep->offset+ret;
-		ut_memcpy(buff,to_ptr(page),ret);
 		DEBUG(" memcpy :%x %x  %d \n",buff,to_ptr(page),ret);
 	}
-
-	return ret;
-
-error:
-	DEBUG(" Error in reading the file :%i \n",-ret);
 	return ret;
 }
 
@@ -297,20 +313,21 @@ static int hfClose(struct file *filep)
 	kmem_cache_free(g_slab_filep, filep);	
 	return 1;	
 }
+
 static void init_filecache_header(fileCache_t *filecache)
 {
-        int i;
+	int i;
 
-        filecache->magic_number=FS_MAGIC;
-        filecache->state=STATE_UPDATE_INPROGRESS;
-        filecache->version=FS_VERSION;
-        for (i=0; i<MAX_REQUESTS; i++)
-        {
-                filecache->requests[i].state=STATE_INVALID;
-        }
-        filecache->request_highindex=0;
-        filecache->state=STATE_VALID;
-        DEBUG("Initialized the shared memory  Header \n");
+	filecache->magic_number=FS_MAGIC;
+	filecache->state=STATE_UPDATE_INPROGRESS;
+	filecache->version=FS_VERSION;
+	for (i=0; i<MAX_REQUESTS; i++)
+	{
+		filecache->requests[i].state=STATE_INVALID;
+	}
+	filecache->request_highindex=0;
+	filecache->state=STATE_VALID;
+	DEBUG("Initialized the shared memory  Header \n");
 }
 int init_hostFs()
 {
@@ -325,7 +342,7 @@ int init_hostFs()
 
 	shm_headerp=(fileCache_t *)HOST_SHM_ADDR;
 	init_filecache_header(shm_headerp);
-	
+
 	host_fs.open=hfOpen;
 	host_fs.read=hfRead;
 	host_fs.close=hfClose;

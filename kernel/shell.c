@@ -34,6 +34,7 @@ void ut_cls();
 void test_proc();
 static int sh_test1(char *arg1,char *arg2);
 static int sh_test2(char *arg1,char *arg2);
+static int sh_mmap(char *arg1,char *arg2);
 int scan_pagecache(char *arg1 , char *arg2);
 commands_t cmd_list[]=
 {
@@ -50,6 +51,7 @@ commands_t cmd_list[]=
 	{"pc        ","page cache stats","pc",pc_stats},
 	{"scan        ","scan page cache ","scan",scan_pagecache},
 	{"mem        ","memstat","mem",mm_printFreeAreas},
+	{"mmap <file> <addr>","mmap file","mmap",sh_mmap},
 	{"amem <order>","mem allocate ","amem",sh_alloc_mem},
 	{"fmem <address>","mem allocate ","fmem",sh_free_mem},
 	{"cat <file>","Cat file       ","cat",sh_cat},
@@ -134,6 +136,23 @@ static int sh_test3(char *arg1,char *arg2)
 }
 
 static char buf[6024];
+static int sh_mmap(char *arg1,char *arg2)
+{
+        struct file *fp;
+	unsigned long addr;
+	unsigned char c,*p;	
+        int i,ret,wret;
+        fp=fs_open(arg1,0);
+	addr=ut_atol(arg2);
+
+	ut_printf(" filename:%s: addr :%x: \n",arg1,addr);
+	
+	vm_mmap(fp,  addr, 0,0,0,0);
+p=addr;
+	p=p+10;
+c=*p;	
+	return 0;
+}
 static int sh_cp(char *arg1,char *arg2)
 {
         //      unsigned char buf[1024];

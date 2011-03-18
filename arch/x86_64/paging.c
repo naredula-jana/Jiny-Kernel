@@ -220,7 +220,17 @@ static int handle_mm_fault(addr_t addr)
 		p=mm_getFreePages(0,0); /* get page of 4k size for actual page */	
 	}else if (vma->vm_flags & MAP_FIXED)
 	{
-		p=vma->vm_private_data + (addr-vma->vm_start) ;		
+		if ( vma->vm_inode != NULL)
+		{
+			DEBUG(" page fault of mmapped page \n");
+			asm volatile("sti");
+			p=pc_mapInodePage(vma,addr-vma->vm_start);
+			asm volatile("cli");
+		}else
+		{
+			DEBUG(" page fault of anonymous page \n");
+			p=vma->vm_private_data + (addr-vma->vm_start) ; 	
+		}
 	}
 	if (p==0) BUG();
 	pl1=(pl1+(L1_INDEX(addr)));
