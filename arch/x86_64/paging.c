@@ -2,6 +2,7 @@
 #include "mm.h"
 #include "paging.h"
 #include "isr.h"
+#include "interface.h"
 
 // The kernel's page directory
 addr_t g_kernel_page_dir=0;
@@ -166,7 +167,8 @@ static int handle_mm_fault(addr_t addr)
 	
 	if (mm==0 || mm->pgd == 0) BUG();
 	
-	vma=vm_findVma(mm,(addr & PAGE_MASK),(4*1024)-1);
+	//vma=vm_findVma(mm,(addr & PAGE_MASK),(4*1024)-1);
+	vma=vm_findVma(mm,(addr & PAGE_MASK),8); /* length changed to just 8 bytes at maximum , instead of entire page*/
 	if (vma == 0) BUG();
 
 	pl4=mm->pgd;
@@ -224,7 +226,7 @@ static int handle_mm_fault(addr_t addr)
 		{
 			DEBUG(" page fault of mmapped page \n");
 			asm volatile("sti");
-			p=pc_mapInodePage(vma,addr-vma->vm_start);
+			p=(unsigned long *)pc_mapInodePage(vma,addr-vma->vm_start);
 			asm volatile("cli");
 		}else
 		{

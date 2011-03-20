@@ -153,6 +153,16 @@ int ut_strcmp(char *str1, char *str2)
 	if (failed == 1 && str1[i] =='\0') failed=2;
 	return failed;
 }
+int ut_memcmp(unsigned char *m1, unsigned char *m2,int len)
+{
+        int i = 0;
+        while(i<len && m1[i] == m2[i])
+        {
+                i++;
+        }
+	if (i == len) return 0;
+	return 1;
+}
 
 // Copy the NULL-terminated string src into dest, and
 // return dest.

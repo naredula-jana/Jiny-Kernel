@@ -22,6 +22,8 @@ int mm_printFreeAreas(char *arg1,char *arg2);
 void kmem_cache_free (kmem_cache_t *cachep, void *objp);
 extern kmem_cache_t *kmem_cache_create(const char *, long,long, unsigned long,void (*)(void *, kmem_cache_t *, unsigned long),void (*)(void *, kmem_cache_t *, unsigned long));
 void *kmem_cache_alloc (kmem_cache_t *cachep, int flags);
+void *mm_malloc (long size, int flags);
+void mm_free (const void *objp);
 
 /* vm */
 int vm_printMmaps(char *arg1,char *arg2);
@@ -52,6 +54,7 @@ int fs_write(struct file *file ,unsigned char *buff ,unsigned long len);
 int fs_read(struct file *file ,unsigned char *buff ,unsigned long len);
 int fs_close(struct file *file);
 struct page *fs_generic_read(struct inode *inode,unsigned long offset);
+unsigned long fs_loadElfLibrary(struct file  *file);
 
 /* Utilities */
 void ut_showTrace(unsigned long *stack_top);
@@ -59,6 +62,7 @@ int ut_strcmp(char *str1, char *str2);
 void ut_printf (const char *format, ...);
 void ut_memcpy(uint8_t *dest, uint8_t *src, long len);
 void ut_memset(uint8_t *dest, uint8_t val, long len);
+int ut_memcmp(unsigned char *m1, unsigned char *m2,int len);
 char *ut_strcpy(char *dest, const char *src);
 char *ut_strcat(char *dest, const char *src);
 int ut_strlen(const char * s);

@@ -24,6 +24,8 @@ static int sh_create(char *arg1,char *arg2);
 static int print_help(char *arg1,char *arg2);
 static int sh_cat(char *arg1,char *arg2);
 static int sh_cp(char *arg1,char *arg2);
+static int sh_load(char *arg1,char *arg2);
+static int sh_run(char *arg1,char *arg2);
 static int sh_alloc_mem(char *arg1,char *arg2);
 static int sh_free_mem(char *arg1,char *arg2);
 static int sh_sync(char *arg1,char *arg2);
@@ -48,6 +50,8 @@ commands_t cmd_list[]=
 	{"maps      ","Memory map areas","maps",vm_printMmaps},
 	{"host      ","host shm test","host",test_hostshm},
 	{"ls        ","ls","ls",fs_printInodes},
+	{"load <file1>","load the file ","load",sh_load},
+	{"run","run previously loaded ","run",sh_run},
 	{"pc        ","page cache stats","pc",pc_stats},
 	{"scan        ","scan page cache ","scan",scan_pagecache},
 	{"mem        ","memstat","mem",mm_printFreeAreas},
@@ -153,9 +157,32 @@ p=addr;
 c=*p;	
 	return 0;
 }
+int (*start_func)()=0;
+static int sh_load(char *arg1,char *arg2)
+{
+        struct file *fp;
+	char *p,c;
+long x,*xp;
+
+        fp=fs_open("/home/njana/tinykernel/test/a.out",0);
+	start_func=fs_loadElfLibrary(fp);
+//	p=0xa04003d0;
+//	xp=0xa04003d0;
+//	c=*p;
+//x=*xp;
+	ut_printf("  start_func:%x %x \n",start_func,x);
+}
+static int sh_run(char *arg1,char *arg2)
+{
+//	unsigned long addr;
+//	addr=ut_atol(arg1);
+//	ut_printf("  addr :%x: \n",addr);
+//start_func=addr;
+	if (start_func != 0)
+	start_func();
+}
 static int sh_cp(char *arg1,char *arg2)
 {
-        //      unsigned char buf[1024];
         struct file *fp,*wfp;
         int i,ret,wret;
         fp=fs_open(arg1,0);

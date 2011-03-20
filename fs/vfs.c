@@ -72,12 +72,6 @@ struct inode *fs_getInode(char *filename)
 	return tmp_inode;	
 }
 
-int kernel_read(struct file *file, unsigned long offset,
-        char *addr, unsigned long count)/* TODO : need to rework the function  */
-{
-	return 1;
-}
-
 struct file *fs_open(char *filename,int mode)
 {
 	if (vfs_fs == 0) return 0;

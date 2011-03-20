@@ -1,10 +1,12 @@
-#if 0
+
 #define DLINFO_ITEMS 13
 
 #include <elf.h>
 #include "mm.h"
+#include "interface.h"
+
 //static int load_elf_binary(struct linux_binprm * bprm, struct pt_regs * regs);
-static int load_elf_library(unsigned long  *);
+//static int load_elf_library(unsigned long  *);
 //static unsigned long elf_map (struct file *, unsigned long, struct elf_phdr *, int, int);
 
 #ifndef elf_addr_t
@@ -448,7 +450,7 @@ static int load_elf_binary(struct linux_binprm * bprm, struct pt_regs * regs)
 
 	retval = -ENOEXEC;
 	/* First of all, some simple consistency checks */
-	if (memcmp(elf_ex.e_ident, ELFMAG, SELFMAG) != 0)
+	if (ut_memcmp((unsigned char *)elf_ex.e_ident, (unsigned char *)ELFMAG, SELFMAG) != 0)
 		goto out;
 
 	if (elf_ex.e_type != ET_EXEC && elf_ex.e_type != ET_DYN)
@@ -895,7 +897,7 @@ out_free_ph:
 /* This is really simpleminded and specialized - we are loading an
    a.out library that is given an ELF header. */
 
-static int load_elf_library(struct file  *file)
+unsigned long fs_loadElfLibrary(struct file  *file)
 {
 	struct elf_phdr *elf_phdata;
 	struct elf_phdr *eppnt;
@@ -903,72 +905,101 @@ static int load_elf_library(struct file  *file)
 	int retval, error, i, j;
 	struct elfhdr elf_ex;
 
-	error = -ENOEXEC;
-	retval = kernel_read(file, 0, (char *) &elf_ex, sizeof(elf_ex));
+	error = 0;
+	fs_lseek(file,0,0);
+	retval = fs_read(file,  (unsigned char *) &elf_ex, sizeof(elf_ex));
 	if (retval != sizeof(elf_ex))
+	{
+		error= -1;
 		goto out;
+	}
 
-	if (memcmp(elf_ex.e_ident, ELFMAG, SELFMAG) != 0)
+	if (ut_memcmp((unsigned char *)elf_ex.e_ident,(unsigned char *) ELFMAG, SELFMAG) != 0)
+	{
+		error= -2;
 		goto out;
+	}
 
 	/* First of all, some simple consistency checks */
-	if (elf_ex.e_type != ET_EXEC || elf_ex.e_phnum > 2 ||
-	   !elf_check_arch(&elf_ex) || !file->f_op || !file->f_op->mmap)
+	//if (elf_ex.e_type != ET_EXEC || elf_ex.e_phnum > 2 ||
+	if (elf_ex.e_type != ET_EXEC || 
+			!elf_check_arch(&elf_ex) )
+	{
+		DEBUG("error:(not executable type or mismatch in architecture %x  %x %x \n",elf_ex.e_type,elf_ex.e_phnum,elf_check_arch(&elf_ex));
+		error= -3;
 		goto out;
+	}
 
 	/* Now read in all of the header information */
 
 	j = sizeof(struct elf_phdr) * elf_ex.e_phnum;
 	/* j < ELF_MIN_ALIGN because elf_ex.e_phnum <= 2 */
 
-	error = -ENOMEM;
-	elf_phdata = kmalloc(j, GFP_KERNEL);
+	elf_phdata = mm_malloc(j, 0);
 	if (!elf_phdata)
+	{
+		error = -4;
 		goto out;
+	}
 
 	eppnt = elf_phdata;
-	error = -ENOEXEC;
-	retval = kernel_read(file, elf_ex.e_phoff, (char *)eppnt, j);
+	DEBUG("start address : %x offset :%x \n",ELF_PAGESTART(eppnt->p_vaddr),eppnt->p_offset);
+	fs_lseek(file,elf_ex.e_phoff,0);
+	retval = fs_read(file, (char *)eppnt, j);
 	if (retval != j)
+	{
+		error = -5;
 		goto out_free_ph;
+	}
 
 	for (j = 0, i = 0; i<elf_ex.e_phnum; i++)
 		if ((eppnt + i)->p_type == PT_LOAD) j++;
-	if (j != 1)
+	//if (j != 1)
+	if (j == 0)
+	{
+		error = -6;
 		goto out_free_ph;
-
-	while (eppnt->p_type != PT_LOAD) 
-		eppnt++;
-
-	/* Now use mmap to map the library into memory. */
-	down_write(&current->mm->mmap_sem);
-	error = do_mmap(file,
-			ELF_PAGESTART(eppnt->p_vaddr),
-			(eppnt->p_filesz +
-			 ELF_PAGEOFFSET(eppnt->p_vaddr)),
-			PROT_READ | PROT_WRITE | PROT_EXEC,
-			MAP_FIXED | MAP_PRIVATE | MAP_DENYWRITE,
-			(eppnt->p_offset -
-			 ELF_PAGEOFFSET(eppnt->p_vaddr)));
-	up_write(&current->mm->mmap_sem);
-	if (error != ELF_PAGESTART(eppnt->p_vaddr))
-		goto out_free_ph;
-
-	elf_bss = eppnt->p_vaddr + eppnt->p_filesz;
-	padzero(elf_bss);
-
-	len = ELF_PAGESTART(eppnt->p_filesz + eppnt->p_vaddr + ELF_MIN_ALIGN - 1);
-	bss = eppnt->p_memsz + eppnt->p_vaddr;
-	if (bss > len) {
-		down_write(&current->mm->mmap_sem);
-		do_brk(len, bss - len);
-		up_write(&current->mm->mmap_sem);
 	}
-	error = 0;
+	for (i = 0; i<elf_ex.e_phnum; i++,eppnt++) /* mmap all loadable program headers */
+	{
+		if (eppnt->p_type != PT_LOAD ) continue;
+		DEBUG("%d: LOAD section: vaddr:%x filesz:%x offset:%x  \n",i,ELF_PAGESTART(eppnt->p_vaddr),eppnt->p_filesz,eppnt->p_offset);
+		/* Now use mmap to map the library into memory. */
+		error = vm_mmap(file,
+				0xa0000000+ELF_PAGESTART(eppnt->p_vaddr),
+				eppnt->p_filesz+ELF_PAGEOFFSET(eppnt->p_vaddr) ,
+				PROT_READ | PROT_WRITE | PROT_EXEC,
+				0,
+				(eppnt->p_offset -
+				 ELF_PAGEOFFSET(eppnt->p_vaddr)));
+		//if (error != ELF_PAGESTART(eppnt->p_vaddr))
+		if (error != 1)
+		{
+			error = -6;
+			goto out_free_ph;
+		}
+
+		elf_bss = eppnt->p_vaddr + eppnt->p_filesz;
+		//	padzero(elf_bss);
+
+		len = ELF_PAGESTART(eppnt->p_filesz + eppnt->p_vaddr + ELF_MIN_ALIGN - 1);
+		bss = eppnt->p_memsz + eppnt->p_vaddr;
+		DEBUG(" bss :%x len:%x memsz:%x elf_bss:%x \n",bss,len,eppnt->p_memsz,elf_bss);
+		if (bss > len) {
+			vm_brk(len, bss - len);
+		}
+		error = 0;
+	}
 
 out_free_ph:
-	kfree(elf_phdata);
+	mm_free(elf_phdata);
 out:
-	return error;
+	if (error != 0)
+	{
+		DEBUG(" ERROR in elf loader :%d\n",-error);
+	}
+	if ( error == 0)
+	return 0xa04004ca; /* TODO : remove later , hardcoded address for main */
+	//return 0xa0000000+elf_ex.e_entry;
+	else return 0;
 }
-#endif

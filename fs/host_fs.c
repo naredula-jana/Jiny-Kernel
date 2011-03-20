@@ -142,8 +142,8 @@ error:
 }
 
 static int hfLseek(struct file *filep, unsigned long offset,int whence)
-{ /* TODO */
-
+{ 
+	filep->offset=offset;
 	return 1;
 }
 
