@@ -127,7 +127,7 @@ tem1=&i; /* TODO : if the above two lines removed then the code hangs */
 tem2=val;
 tem3=len;
 #endif
-	ut_printf("memset NEW dest :%x val :%x LEN addr:%x temp:%x \n",dest,val,&len,&temp);/* TODO */
+	ut_printf("memset NEW dest :%x val :%x LEN addr:%x len:%x temp:%x \n",dest,val,&len,len,&temp);/* TODO */
 	for ( i=len; i != 0; i--) *temp++ = val;
 	return ;
 }

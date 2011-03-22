@@ -52,7 +52,8 @@ void cmain ()
 
 	/* Set MBI to the address of the Multiboot information structure.  */
 	mbi = (multiboot_info_t *) g_multiboot_info_ptr;
-	ut_printf("mem_lower = %xKB , mem_upper= %xKB count:%d addr:%x mmaplen:%d mmpaddr:%x \n",  mbi->mem_lower, mbi->mem_upper,mbi->mods_count,mbi->mods_addr,mbi->mmap_length,mbi->mmap_addr);
+	mbi=__va(mbi);
+	ut_printf("mbi: %x mem_lower = %x(%d)KB , mem_upper=%x(%d)KB count:%d addr:%x mmaplen:%d mmpaddr:%x \n",mbi,  mbi->mem_lower,mbi->mem_lower, mbi->mem_upper,mbi->mem_upper,mbi->mods_count,mbi->mods_addr,mbi->mmap_length,mbi->mmap_addr);
 	/* Are mmap_* valid?  */
 	if (CHECK_FLAG (mbi->flags, 6))
 	{
@@ -60,13 +61,13 @@ void cmain ()
 
 		ut_printf ("mmap_addr = 0x%x, mmap_length = 0x%x\n",
 				(unsigned) mbi->mmap_addr, (unsigned) mbi->mmap_length);
-		for (mmap = (memory_map_t *) mbi->mmap_addr;
-				(unsigned long) mmap < mbi->mmap_addr + mbi->mmap_length;
+		for (mmap = (memory_map_t *) __va(mbi->mmap_addr);
+				(unsigned long) mmap < __va(mbi->mmap_addr) + mbi->mmap_length;
 				mmap = (memory_map_t *) ((unsigned long) mmap
 					+ mmap->size + sizeof (mmap->size)))
 		{
-			ut_printf (" size = 0x%x, base_addr = 0x%x %x,"
-					" length = 0x%x %x, type = 0x%x\n",
+			ut_printf ("mmap:%x size=0x%x, base_addr high=0x%x low=0x%x,"
+					" length = %x %x, type = 0x%x\n",mmap,
 					(unsigned) mmap->size,
 					(unsigned) mmap->base_addr_high,
 					(unsigned) mmap->base_addr_low,

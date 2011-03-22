@@ -12,8 +12,10 @@ all:
 	make SOURCE_ROOT=$$PWD -C mm
 	make SOURCE_ROOT=$$PWD -C fs
 	rm drivers.a  fs.a mm.a $(ARCH_DIR).a
-#	ld -T kernel.ld $(LDFLAGS) -q $(OBJECTS) -o bin/kernel_bin -Map kernel.map
-	gcc -g -I. $(LINK_FLAG)  $(OBJECTS) -nostdlib -Wl,-N -Wl,-Ttext -Wl,100000 -o bin/kernel_bin
+#	ld -T kernel.ld $(LDFLAGS) -o bin/kernel_bin $(OBJECTS) -Map kernel.map
+	gcc -g -I. $(LINK_FLAG)  $(OBJECTS) -nostdlib -Wl,-N -Wl,-Ttext -Wl,40100000 -o bin/kernel_bin
+#	gcc -g -I. $(LINK_FLAG)  $(OBJECTS) -nostdlib -Wl,-N -Wl,-Ttext -Wl,100000 -o bin/kernel_bin
+#	gcc -mcmodel=large -shared-intel -g -I. $(LINK_FLAG)  $(OBJECTS) -nostdlib -Wl,-N -Wl,-Ttext -Wl,c0000000 -o bin/kernel_bin
 #	gcc -g -I. $(LINK_FLAG)  $(OBJECTS) -nostdlib -Wl,-N -Wl,-Ttext  -Wl,-Tkernel.ld  -o bin/kernel_bin
 	objdump -D -l bin/kernel_bin > bin/obj_file
 	nm bin/kernel_bin | sort > util/in

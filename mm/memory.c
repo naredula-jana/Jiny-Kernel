@@ -126,6 +126,7 @@ static inline void free_pages_ok(unsigned long map_nr, unsigned long order)
 					g_nr_free_pages -= 1 << order; \
 					EXPAND(ret, map_nr, order, new_order, area); \
 					spin_unlock_irqrestore(&free_area_lock, flags); \
+					DEBUG(" page alloc return address: %x \n",ADDRESS(map_nr)); \
 					return ADDRESS(map_nr); \
 				} \
 				prev = ret; \
@@ -171,7 +172,7 @@ static unsigned long init_free_area(unsigned long start_mem, unsigned long end_m
 	 * This is fairly arbitrary, but based on some behaviour
 	 * analysis.
 	 */
-	ut_printf(" Beforeut_memset start_mem: %x endmem:%x   \n",start_mem,end_mem);
+	ut_printf("init_free_area start_mem: %x endmem:%x   \n",start_mem,end_mem);
 	i = (end_mem - PAGE_OFFSET) >> (PAGE_SHIFT+7);
 	if (i < 10)
 		i = 10;
@@ -299,24 +300,25 @@ nopage:
 }
 extern unsigned long g_multiboot_mod_addr;
 extern unsigned long g_multiboot_mod_len;
-void init_memory(unsigned long end_addr)
+void init_memory(unsigned long phy_end_addr)
 {
-	unsigned long start_addr;
+	unsigned long virt_start_addr,virt_end_addr;
 
-	ut_printf(" Initializing memory endaddr : %x \n",end_addr);
-	start_addr=initialise_paging( end_addr);
-	ut_printf(" After Paging initalized start_addr: %x endaddr: %x \n",start_addr,end_addr);
+	ut_printf(" Initializing memory phy_endaddr : %x \n",phy_end_addr);
+	virt_start_addr=initialise_paging( phy_end_addr);
+	virt_end_addr=__va(phy_end_addr);
+	ut_printf(" After Paging initalized start_addr: %x endaddr: %x \n",virt_start_addr,virt_end_addr);
 
 	if (g_multiboot_mod_len > 0) /* symbol file  reside at the end of memory, it can acess only when page table is initialised */
 	{
-		g_symbol_table=(unsigned char *)start_addr;
+		g_symbol_table=(unsigned char *)virt_start_addr;
 		g_total_symbols=(g_multiboot_mod_len)/sizeof(symb_table_t);
 		ut_memcpy((unsigned char *)g_symbol_table,(unsigned char *)g_multiboot_mod_addr,g_multiboot_mod_len);
-		start_addr=(unsigned long)start_addr+g_multiboot_mod_len;
+		virt_start_addr=(unsigned long)virt_start_addr+g_multiboot_mod_len;
 		ut_printf(" symbol:  %x : %d  :%d :%x : \n", g_symbol_table,g_total_symbols,sizeof(symb_table_t),g_symbol_table[5].address);
 		ut_printf(" symbol:  %s \n",&g_symbol_table[5].name[0]);
 	}
 
-	start_addr=init_free_area( start_addr, end_addr);
-	init_mem(start_addr, end_addr);
+	virt_start_addr=init_free_area( virt_start_addr, virt_end_addr);
+	init_mem(virt_start_addr, virt_end_addr);
 }

@@ -9,7 +9,7 @@
 #define PAGE_SIZE       (1UL << PAGE_SHIFT)
 #define PAGE_MASK       (~(PAGE_SIZE-1))
 #define PAGE_ALIGN(addr)	(((addr)+PAGE_SIZE-1)&PAGE_MASK)
-#define __PAGE_OFFSET           (0x0) /* TODO   changed to  #define __PAGE_OFFSET           (0xC0000000) */
+#define __PAGE_OFFSET           (0x40000000) 
 #define PAGE_OFFSET             ((unsigned long)__PAGE_OFFSET)
 #define __pa(x)                 ((unsigned long)(x)-PAGE_OFFSET)
 #define __va(x)                 ((void *)((unsigned long)(x)+PAGE_OFFSET))

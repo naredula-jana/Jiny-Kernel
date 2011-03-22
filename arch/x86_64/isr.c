@@ -26,7 +26,7 @@ enum fault_idx {
   FLT_SX = 30, /* Security Exception */
   /* #31 is reserved */
 };
-addr_t dummy_data[124596]={0xabcd}; /* TODO : REMOVE me later this to place data in seprate area */
+//addr_t dummy_data[124596]={0xabcd}; /* TODO : REMOVE me later this to place data in seprate area */
 uint32_t faults_with_errcode =
   (POW2(FLT_DF) | POW2(FLT_TS) | POW2(FLT_NP) |
    POW2(FLT_SS) | POW2(FLT_GP) | POW2(FLT_PF) |

@@ -9,6 +9,7 @@
 /*extern unsigned long  multiboot_info_ptr;
 extern unsigned long  multiboot_magic;
 */
+#define BOOT_SHIFT 0x40000000
 
 .set KTEXT_SEG,   8
 .set KDATA_SEG,   16
@@ -32,40 +33,44 @@ multiboot_header:
 	.long	MULTIBOOT_HEADER_FLAGS
 	/* checksum */
 	.long	-(MULTIBOOT_HEADER_MAGIC + MULTIBOOT_HEADER_FLAGS)
-#ifndef __ELF__
+/*#ifndef __ELF__ */
 	/* header_addr */
-	.long	multiboot_header
+	.long	0x100004
 	/* load_addr */
-	.long	_start
+	.long	0x100024
 	/* load_end_addr */
-	.long	_edata
+	.long	_edata-BOOT_SHIFT
 	/* bss_end_addr */
-	.long	_end
+	.long	_end-BOOT_SHIFT
 	/* entry_addr */
-	.long	multiboot_entry
-#endif /* ! __ELF__ */
+	.long	multiboot_entry-BOOT_SHIFT
+/* #endif  ! __ELF__ */ 
 
 multiboot_entry:
 	
-#	jmp multiboot_entry
+#	jmp 0x100024
 	/* Initialize the stack pointer.  */
-	movl	$(stack + STACK_SIZE), %esp
+	movl	$(stack + STACK_SIZE-BOOT_SHIFT), %esp
 #loop1:	jmp loop1
 	/* Reset EFLAGS.  */
 	pushl	$0
 	popf
 
 	/* save multiboot info pointer */
-        movl %ebx, g_multiboot_info_ptr
+        movl %ebx, g_multiboot_info_ptr-BOOT_SHIFT
         /* and multiboot magic value */
-        movl %eax, g_multiboot_magic
+        movl %eax, g_multiboot_magic-BOOT_SHIFT
 	/*pushl   $0
 	pushl   %ebx
 	pushl   $0
 	pushl   %eax */
-#tloop:	jmp tloop
+tloop:	
+#	jmp tloop
 
-        lgdt boot_gdt_descr
+#	lgdt boot_gdt_descr
+	lgdt 0x100900
+t1:	
+#	jmp t1
         movl $KDATA_SEG, %eax
         movl %eax, %ds
         movl %eax, %es
@@ -94,14 +99,14 @@ multiboot_entry:
         btsl    $_EFER_LME, %eax
 	wrmsr
 
+#loop4:	jmp loop4
         /* Enable paging to activate long mode */
         movl %cr0, %eax
         orl $CR0_PG, %eax
-        orl $CR0_RW, %eax
-        movl %eax, %cr0
-        movl $kernel_jump_addr, %edx
+	orl $CR0_RW, %eax
+	movl %eax, %cr0
+        movl $kernel_jump_addr-BOOT_SHIFT, %edx
         movl $(cmain), 0(%edx)
-#loop4:	jmp loop4
 	jmpl $KTEXT_SEG, $start64
 	
 /* Now enter the C main function...  */
@@ -109,9 +114,7 @@ multiboot_entry:
 start64:
         movq $(stack + STACK_SIZE -16), %rsp
         movq kernel_jump_addr, %rax
-#loop3:	jmp loop3
         callq *%rax
-	call	EXT_C(cmain)
 
 	/* Halt.  */
 	#pushl	$halt_message
@@ -123,18 +126,19 @@ loop:	hlt
 halt_message:
 	.asciz	"Halted."
 
-	/* Our stack area.  */
-#.fill 1024, 8, 0
-#.global stack
 #stack:
 	.comm	stack, STACK_SIZE
 #.globl kernel_jump_addr
 kernel_jump_addr:
         .quad 0x00000000000000
+
+.org 0x900
 boot_gdt_descr:
         .word boot_gdt_end - boot_gdt_table
-        .long boot_gdt_table
+#        .long boot_gdt_table
+        .long 0x100930
 
+.org 0x930
 boot_gdt_table:
         .quad   0x0000000000000000  /* NULL descriptor */
         .quad   0x00af9a000000ffff  /* Code segment */
@@ -144,15 +148,16 @@ boot_gdt_end:
 
 .org 0x1000
 level4_pg_directory:
-        /* default: 1023 entries */
+        /* default: 512 entries */
         .quad   0x0000000000102007              /* -> level3_ident_pgt */
         .fill   511,8,0
 
 .org 0x2000
 /* Kernel does not "know" about 4-th level of page tables. */
 level3_pg_table:
-        .quad   0x0000000000103007
-        .fill   511,8,0
+        .quad   0x0000000000103007 /* TODO : currently used only while initializing */
+        .quad   0x0000000000103007 /* TODO : currently based on harcoded of kernel offset it is located in 2nd location*/
+        .fill   510,8,0
 
 .org 0x3000
 level2_pg_table:
