@@ -13,7 +13,7 @@
 #include "list.h"
 #include "../util/host_fs/filecache_schema.h"
 #include "interface.h"
-
+#define DEBUG_ENABLE 1
 enum {
         FRONT=0,
         TAIL=1
@@ -83,9 +83,9 @@ static int page_init(page_struct_t *p)
 	p->offset=0;
 	p->list_type=0;
 
-	p->lru_list.prev=p->lru_list.next=0;
+	p->lru_link.prev=p->lru_link.next=0;
 	p->list.prev=p->list.next=0;
-/*	INIT_LIST_HEAD(&(p->lru_list));
+/*	INIT_LIST_HEAD(&(p->lru_link));
 	INIT_LIST_HEAD(&(p->list)); */
 	return 1;
 }
@@ -100,7 +100,7 @@ static int pagelist_move(page_struct_t *page, page_list_t *list)
 { 
 	if (page->list_type != 0)
 	{
-		list_del(&(page->lru_list));	
+		list_del(&(page->lru_link));	
 		switch(page->list_type)
 		{
 	        	case FREE_LIST: atomic_dec(&free_list.count); break;
@@ -119,10 +119,10 @@ static int pagelist_add(page_struct_t *page, page_list_t *list,int tail)
 {
 	if (tail)
 	{
-		list_add_tail(&page->lru_list, &(list->head)); 
+		list_add_tail(&page->lru_link, &(list->head)); 
 	}else
 	{
-		list_add(&page->lru_list, &(list->head)); 
+		list_add(&page->lru_link, &(list->head)); 
 	}	
 	page->list_type=list->list_type;
 	atomic_inc(&list->count);
@@ -138,7 +138,7 @@ static page_struct_t *pagelist_remove(page_list_t *list)
 	if (node == &list->head) return 0;
 
 	list_del(node); /* delete the node from free list */
-	page=list_entry(node, struct page, lru_list);	
+	page=list_entry(node, struct page, lru_link);	
 	page->list_type=0;
 	atomic_dec(&list->count);
 	DEBUG(" List DECREASE :%d: type:%d: \n",list->count.counter,list->list_type); 
@@ -149,7 +149,7 @@ int put_into_freelist(struct page *page)
 {
 	struct inode *inode;
 
-	if (page->lru_list.next!= 0 || page->lru_list.prev!= 0)
+	if (page->lru_link.next!= 0 || page->lru_link.prev!= 0)
 	{
 		pagelist_move(page,0); /* remove page from any list present */
 	}
@@ -316,7 +316,7 @@ int pc_insertPage(struct inode *inode,struct page *page)
 	int i=0;
 
 	if (page->offset > inode->length) return ret;
-	if (!(page->list.next==0 && page->list.prev==0 &&page->lru_list.next==0 && page->lru_list.prev==0 ))
+	if (!(page->list.next==0 && page->list.prev==0 &&page->lru_link.next==0 && page->lru_link.prev==0 ))
 	{
 		BUG();
 	}

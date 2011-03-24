@@ -141,7 +141,7 @@ void ar_faultHandler(void *p, unsigned int  int_no)
 extern void do_softirq();
 extern addr_t g_error_i,g_after_i,g_before_i;
 // This gets called from our ASM interrupt handler stub.
-void ar_irqHandler(unsigned int int_no)
+void ar_irqHandler(void *p,unsigned int int_no)
 {
 	if (g_error_i ==0) g_after_i=g_before_i;
 	// Send an EOI (end of interrupt) signal to the PICs.
@@ -157,7 +157,16 @@ void ar_irqHandler(unsigned int int_no)
 	if (g_interrupt_handlers[int_no].action != 0)
 	{
 		isr_t handler = g_interrupt_handlers[int_no].action;
-		handler();
+		if (int_no == 128)
+		{
+			struct fault_ctx ctx;
+
+			fill_fault_context(&ctx,p,int_no);
+			handler(&ctx);
+		}else
+		{
+			handler();
+		}
 		g_interrupt_handlers[int_no].stat.num_irqs++;
 	}else
 	{

@@ -123,6 +123,8 @@ vim commands:
     ESC V G =   for entire file
     ESC V % =  for a block
   V= visual mode
+
+find . | grep "[chS]$" | xargs grep -n TODO
 ------------------------------
 Constructing the image for grub2 (Not sucessfull):
 

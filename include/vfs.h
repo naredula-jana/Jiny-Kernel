@@ -9,6 +9,11 @@
 enum {
  O_CREATE=1
 };
+
+enum {
+POSIX_FADV_DONTNEED=1
+};
+
 enum {
 TYPE_SHORTLIVED=1,
 TYPE_LONGLIVED=2
@@ -32,7 +37,8 @@ struct inode {
 	unsigned long length; /* file length */
 	char filename[MAX_FILENAME];
 	struct list_head page_list;	
-	struct list_head inode_next;	
+	struct list_head vma_list;	
+	struct list_head inode_link;	
 };
 
 struct filesystem {

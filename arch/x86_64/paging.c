@@ -1,12 +1,13 @@
+//#define DEBUG_ENABLE 1
 #include "task.h"
 #include "mm.h"
 #include "paging.h"
 #include "isr.h"
 #include "interface.h"
+#include "common.h"
 
 // The kernel's page directory
 addr_t g_kernel_page_dir=0;
-
 // Defined in kheap.c
 extern addr_t end; 
 addr_t placement_address=(addr_t)&end;
@@ -148,19 +149,37 @@ void ar_pageFault(struct fault_ctx *ctx)
 
 	BUG();
 }
-static int debug_paging=1;
+
+int ar_pageTableCleanup(unsigned long addr, unsigned long len)
+{ /* TODO : under development */
+	struct mm_struct *mm;
+	struct vm_area_struct *vma;
+#if 0
+	mm=g_current_task->mm;
+	if (mm==0 || mm->pgd == 0) BUG();
+	
+	vma=vm_findVma(mm,(addr & PAGE_MASK),8); /* length changed to just 8 bytes at maximum , instead of entire page*/
+	if (vma == 0) BUG();
+
+	p4=(mm->pgd);
+	if (p4 == 0) return 0;
+	for (i4=0; i4<512;i4++)
+	{
+		
+	}
+#endif
+}
 static int handle_mm_fault(addr_t addr)
 {
 	struct mm_struct *mm;
 	struct vm_area_struct *vma;
-	addr_t *pl4,*pl3,*pl2,*pl1,*p,*v;	
+	addr_t *pl4,*pl3,*pl2,*pl1,*p; /* physical address */
+	addr_t *v;	/* virtual address */
 	unsigned int index;
 
 	mm=g_current_task->mm;
-	
 	if (mm==0 || mm->pgd == 0) BUG();
 	
-	//vma=vm_findVma(mm,(addr & PAGE_MASK),(4*1024)-1);
 	vma=vm_findVma(mm,(addr & PAGE_MASK),8); /* length changed to just 8 bytes at maximum , instead of entire page*/
 	if (vma == 0) BUG();
 
@@ -179,13 +198,12 @@ static int handle_mm_fault(addr_t addr)
 		p=(pl4+(L4_INDEX(addr))); /* insert into l4   */
 		v=__va(p);
 		*v=((addr_t) pl3 |((addr_t) 0x3));
-		if (debug_paging ==1) DEBUG(" Inserted into L4 :%x  p13:%x  pl4:%x addr:%x index:%x \n",p,pl3,pl4,addr,L4_INDEX(addr));
-		BUG();
+		 DEBUG(" Inserted into L4 :%x  p13:%x  pl4:%x addr:%x index:%x \n",p,pl3,pl4,addr,L4_INDEX(addr));
 	}
 	p=(pl3+(L3_INDEX(addr)));
 	v=__va(p);
 	pl2=(*v) & (~0xfff);
-	if (debug_paging ==1) DEBUG(" Pl3 :%x pl4 :%x p12:%x \n",pl3,pl4,pl2);	
+	DEBUG(" Pl3 :%x pl4 :%x p12:%x \n",pl3,pl4,pl2);	
 
 	if (pl2==0)
 	{
@@ -196,12 +214,12 @@ static int handle_mm_fault(addr_t addr)
 		p=(pl3+(L3_INDEX(addr)));
 		v=__va(p);
 		*v=((addr_t) pl2 |((addr_t) 0x3));
-		if (debug_paging ==1 )DEBUG(" INSERTED into L3 :%x  p12:%x  pl3:%x \n",p,pl2,pl3);
+		DEBUG(" INSERTED into L3 :%x  p12:%x  pl3:%x \n",p,pl2,pl3);
 	}
 	p=(pl2+(L2_INDEX(addr)));
 	v=__va(p);
 	pl1=(*v) & (~0xfff);
-	if (debug_paging == 1)DEBUG(" Pl2 :%x pl1 :%x\n",pl2,pl1);	
+	DEBUG(" Pl2 :%x pl1 :%x\n",pl2,pl1);	
 	
 	
 	if (pl1==0)
@@ -213,7 +231,7 @@ static int handle_mm_fault(addr_t addr)
 		p=(pl2+(L2_INDEX(addr)));
 		v=__va(p);
 		*v=((addr_t) pl1 |((addr_t) 0x3));
-		if (debug_paging == 1) DEBUG(" Inserted into L2 :%x :%x \n",p,pl1);
+		 DEBUG(" Inserted into L2 :%x :%x \n",p,pl1);
 	}
 	/* By Now we have pointer to all 4 tables , Now check th erequired page*/
 
@@ -225,18 +243,15 @@ static int handle_mm_fault(addr_t addr)
 	{
 		if ( vma->vm_inode != NULL)
 		{
-			DEBUG(" page fault of mmapped page \n");
 			asm volatile("sti");
-			v=(unsigned long *)pc_mapInodePage(vma,addr-vma->vm_start);
-			p=__pa(v);
+			p=(unsigned long *)pc_mapInodePage(vma,addr-vma->vm_start);
 			asm volatile("cli");
+			DEBUG(" page fault of mmapped page p:%x  \n",p);
+			
 		}else
 		{
-			DEBUG(" page fault of anonymous page \n");
 			p=vma->vm_private_data + (addr-vma->vm_start) ; 	
-		//	p=__pa(v);
 			DEBUG(" page fault of anonymous page p:%x  private_data:%x vm_start::x \n",p,vma->vm_private_data,vma->vm_start);
-		//	BUG();
 		}
 	}
 	if (p==0) BUG();
@@ -246,7 +261,6 @@ static int handle_mm_fault(addr_t addr)
 	asm volatile("movq %%cr4,%0" : "=r" (mmu_cr4_features));
 	__flush_tlb_global();  /* TODO : need not flush entire table, flush only spoecific tables*/
 
-	if (debug_paging == 1)
 	DEBUG("FINALLY Inserted and global fluished into pagetable :%x pte :%x \n",pl1,p);
 	return 1;	
 }

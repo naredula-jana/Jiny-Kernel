@@ -110,7 +110,8 @@ irq_entry_point:
 */
 2:
         SAVE_GPRS
-        movq %rax, %rdi  /* contains interrupts number */
+	movq %rsp, %rdi /* contains the context : first argument */
+        movq %rax, %rsi  /* contains interrupts number */
         callq ar_irqHandler
 	RESTORE_GPRS
 /*		

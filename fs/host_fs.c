@@ -318,6 +318,7 @@ static void init_filecache_header(fileCache_t *filecache)
 {
 	int i;
 
+	DEBUG("Initialized the shared memory  Header :%x\n",filecache);
 	filecache->magic_number=FS_MAGIC;
 	filecache->state=STATE_UPDATE_INPROGRESS;
 	filecache->version=FS_VERSION;
@@ -327,7 +328,6 @@ static void init_filecache_header(fileCache_t *filecache)
 	}
 	filecache->request_highindex=0;
 	filecache->state=STATE_VALID;
-	DEBUG("Initialized the shared memory  Header \n");
 }
 int init_hostFs()
 {

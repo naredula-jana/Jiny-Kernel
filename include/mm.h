@@ -35,7 +35,21 @@
 #define MAP_FIXED       0x10            /* Interpret addr exactly */
 #define MAP_ANONYMOUS   0x20            /* don't use a file */
 #define MAP_32BIT       0x40            /* only give out 32bit addresses */
+/***********************************
+  
+  page->inode<-vma->mm
+  when vma deleted :
+      1) ptes are cleaned
+      2) vma node is deleted from inode list
 
+  when page is deleted :
+	1) deleted from inode list
+	2) scan the vmas coreesponding to inode, for each  vma clear pte corresponding to inode
+	3) removde from lru list 
+
+ 
+
+************************************/
 struct vm_area_struct {
         struct mm_struct *vm_mm;       /* The address space we belong to. */
         unsigned long vm_start;         /* Our start address within vm_mm. */
@@ -53,6 +67,7 @@ struct vm_area_struct {
                                            units, *not* PAGE_CACHE_SIZE */
         struct inode *vm_inode;          /* File we map to (can be NULL). */
         void * vm_private_data;         /* was vm_pte (shared mem) */
+	struct list_head inode_vma_link; /* vmas connected to inode */
 };
 
 typedef struct page {
@@ -67,7 +82,7 @@ typedef struct page {
 
 	struct inode *inode;
 	unsigned long offset; /* offset in the inode */
-	struct list_head lru_list;          /* LRU list: the page can be in freelist,active or inactive in of the list   */
+	struct list_head lru_link;          /* LRU list: the page can be in freelist,active or inactive in of the list   */
 	unsigned char list_type ; /* LRU list # is stored */
 	struct list_head list;          /*TODO: currently used 1)  SLAB 2) pagecache:inodelist  */
 } page_struct_t;

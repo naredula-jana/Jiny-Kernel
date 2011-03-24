@@ -53,6 +53,8 @@ int fs_lseek(struct file *file ,unsigned long offset, int whence);
 int fs_write(struct file *file ,unsigned char *buff ,unsigned long len);
 int fs_read(struct file *file ,unsigned char *buff ,unsigned long len);
 int fs_close(struct file *file);
+int fs_fdatasync(struct file *file );
+int fs_advise(struct file *file,unsigned long offset, unsigned long len,int advise);
 struct page *fs_generic_read(struct inode *inode,unsigned long offset);
 unsigned long fs_loadElfLibrary(struct file  *file);
 

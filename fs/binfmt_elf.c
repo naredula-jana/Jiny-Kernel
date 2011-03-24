@@ -965,13 +965,17 @@ unsigned long fs_loadElfLibrary(struct file  *file)
 		if (eppnt->p_type != PT_LOAD ) continue;
 		DEBUG("%d: LOAD section: vaddr:%x filesz:%x offset:%x  \n",i,ELF_PAGESTART(eppnt->p_vaddr),eppnt->p_filesz,eppnt->p_offset);
 		/* Now use mmap to map the library into memory. */
-		error = vm_mmap(file,
-				0xa0000000+ELF_PAGESTART(eppnt->p_vaddr),
+		error=1;
+		if (eppnt->p_filesz > 0)
+		{	
+			error = vm_mmap(file,
+				ELF_PAGESTART(eppnt->p_vaddr),
 				eppnt->p_filesz+ELF_PAGEOFFSET(eppnt->p_vaddr) ,
 				PROT_READ | PROT_WRITE | PROT_EXEC,
 				0,
 				(eppnt->p_offset -
 				 ELF_PAGEOFFSET(eppnt->p_vaddr)));
+		}
 		//if (error != ELF_PAGESTART(eppnt->p_vaddr))
 		if (error != 1)
 		{
@@ -998,8 +1002,9 @@ out:
 	{
 		DEBUG(" ERROR in elf loader :%d\n",-error);
 	}
+	DEBUG(" Program start address : %x \n",elf_ex.e_entry);
 	if ( error == 0)
-	return 0xa04004ca; /* TODO : remove later , hardcoded address for main */
-	//return 0xa0000000+elf_ex.e_entry;
+	//return elf_ex.e_entry;
+	return 0x40017c; /* TODO : remove later , hardcoded address for main */
 	else return 0;
 }

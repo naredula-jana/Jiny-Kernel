@@ -29,6 +29,7 @@ static int sh_run(char *arg1,char *arg2);
 static int sh_alloc_mem(char *arg1,char *arg2);
 static int sh_free_mem(char *arg1,char *arg2);
 static int sh_sync(char *arg1,char *arg2);
+static int sh_del(char *arg1,char *arg2);
 void ar_printIrqStat(char *arg1,char *arg2);
 static int  test_hostshm(char *arg1,char *arg2);
 void ut_cls();
@@ -59,6 +60,7 @@ commands_t cmd_list[]=
 	{"amem <order>","mem allocate ","amem",sh_alloc_mem},
 	{"fmem <address>","mem allocate ","fmem",sh_free_mem},
 	{"cat <file>","Cat file       ","cat",sh_cat},
+	{"del <file>","flush file-remove from page cache       ","del",sh_del},
 	{"cp <f1> <f2>","copy f1 f2       ","cp",sh_cp},
 	{"sync <f1>","sync f1       ","sync",sh_sync},
 	{0,0,0,0}
@@ -212,9 +214,23 @@ static int sh_cp(char *arg1,char *arg2)
         }
         return 0;
 }
+static int sh_del(char *arg1,char *arg2)
+{
+        struct file *wfp;
+        int i,ret,wret;
+
+        wfp=fs_open(arg1,0);
+        if (wfp==0)
+        {
+                ut_printf(" Error opening file :%s: \n",arg1);
+                return 0;
+        }
+        fs_advise(wfp,0,0,POSIX_FADV_DONTNEED);
+        ut_printf("after del \n");
+        return 0;
+}
 static int sh_sync(char *arg1,char *arg2)
 {
-        //      unsigned char buf[1024];
         struct file *wfp;
         int i,ret,wret;
 
