@@ -9,7 +9,7 @@ main()
 	unsigned long ret;
 
 	fp=open("/home/njana/test",0);
-	wp=open("/home/njana/ooo",0);
+	wp=open("/home/njana/ooo",1);
 	ut_printf(" Read file :%x outfile: %x \n",fp,wp);
 	if (fp != 0)
 	{

@@ -46,8 +46,8 @@ __syscall_return(type,__res); \
 }
 _syscall1(int,printf,unsigned long,ptr)
 _syscall3(unsigned long,open,unsigned long,ptr,unsigned long , flag,unsigned long, flag2)
-_syscall2(int,write,unsigned long,ptr,unsigned long ,len)
-_syscall2(int,read,unsigned long,ptr,unsigned long ,len)
+_syscall3(int,write,unsigned long,ptr,unsigned long,buff,unsigned long ,len)
+_syscall3(int,read,unsigned long,ptr,unsigned long,buff,unsigned long ,len)
 _syscall2(int,fadvise,unsigned long,ptr,unsigned long ,len)
 _syscall1(int,close,unsigned long,ptr)
 _syscall1(int,fdatasync,unsigned long,ptr)

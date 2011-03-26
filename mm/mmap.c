@@ -205,41 +205,33 @@ out:
 	return addr;
 }
 
-int mm_freePgtables(struct mm_struct *mm, unsigned long start_addr,unsigned long end_addr)
-{
-	/*        start_index = pgd_index(first);
-		  end_index = pgd_index(last);
-		  if (end_index > start_index) {
-		  clear_page_tables(mm, start_index, end_index - start_index);
-		  flush_tlb_pgtables(mm, first & PGDIR_MASK, last & PGDIR_MASK);
-		  } */
-	return 1;
-}
-
-int vm_munmap(struct mm_struct *mm, unsigned long addr, int len)
+int vm_munmap(struct mm_struct *mm, unsigned long addr, unsigned long len)
 {
 	struct vm_area_struct *vma;
 	unsigned long start_addr,end_addr;
-	int ret;
+	int ret=0;
 
 	if ((len = PAGE_ALIGN(len)) == 0)
 		return -1;
 
-	vma = vm_findVma(mm, addr, len);
-	if (!vma)
-		return 0;
-	/* we have  addr < mpnt->vm_end  */
-	start_addr=vma->vm_start;
-	end_addr=vma->vm_end;
-
-	ret=vma_unlink(mm,vma);	
-	if (ret <=0) return ret;
-	/* Release the extra vma struct if it wasn't used */
-	if (vma)
-		kmem_cache_free(vm_area_cachep, vma);
-
-	mm_freePgtables(mm,start_addr,end_addr);
-
-	return 0;
+restart:
+	vma=mm->mmap;
+	if (vma ==0) return 0;
+	while (vma) {
+		DEBUG(" [ %x - %x ] - %x - %x\n",vma->vm_start,vma->vm_end,addr,(addr+len));
+		if ((addr<=vma->vm_start) && ((addr+len) >=  vma->vm_end))
+		{
+			start_addr=vma->vm_start;
+			end_addr=vma->vm_end;
+			ret=vma_unlink(mm,vma);	
+			kmem_cache_free(vm_area_cachep, vma);
+			ar_pageTableCleanup(mm,start_addr, end_addr-start_addr);
+			ret++;
+			goto restart;
+		}
+		vma = vma->vm_next;
+	}
+	ar_pageTableCleanup(mm,addr, len);
+	return ret;
 }
 

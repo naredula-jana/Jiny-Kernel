@@ -25,6 +25,7 @@ static int print_help(char *arg1,char *arg2);
 static int sh_cat(char *arg1,char *arg2);
 static int sh_cp(char *arg1,char *arg2);
 static int sh_load(char *arg1,char *arg2);
+static int sh_unload(char *arg1,char *arg2);
 static int sh_run(char *arg1,char *arg2);
 static int sh_alloc_mem(char *arg1,char *arg2);
 static int sh_free_mem(char *arg1,char *arg2);
@@ -52,6 +53,7 @@ commands_t cmd_list[]=
 	{"host      ","host shm test","host",test_hostshm},
 	{"ls        ","ls","ls",fs_printInodes},
 	{"load <file1>","load the file ","load",sh_load},
+	{"unload ","unload the last binary ","unload",sh_unload},
 	{"run","run previously loaded ","run",sh_run},
 	{"pc        ","page cache stats","pc",pc_stats},
 	{"scan        ","scan page cache ","scan",scan_pagecache},
@@ -144,106 +146,106 @@ static int sh_test3(char *arg1,char *arg2)
 static char buf[6024];
 static int sh_mmap(char *arg1,char *arg2)
 {
-        struct file *fp;
+	struct file *fp;
 	unsigned long addr;
 	unsigned char c,*p;	
-        int i,ret,wret;
-        fp=fs_open(arg1,0);
+	int i,ret,wret;
+	fp=fs_open(arg1,0);
 	addr=ut_atol(arg2);
 
 	ut_printf(" filename:%s: addr :%x: \n",arg1,addr);
-	
+
 	vm_mmap(fp,  addr, 0,0,0,0);
-p=addr;
+	p=addr;
 	p=p+10;
-c=*p;	
+	c=*p;	
 	return 0;
 }
 int (*start_func)()=0;
 static int sh_load(char *arg1,char *arg2)
 {
-        struct file *fp;
+	struct file *fp;
 	char *p,c;
-long x,*xp;
+	long x,*xp;
 
-        fp=fs_open("/home/njana/tinykernel/test/a.out",0);
+	fp=fs_open("/home/njana/tinykernel/test/a.out",0);
 	start_func=fs_loadElfLibrary(fp);
-//	p=0xa04003d0;
-//	xp=0xa04003d0;
-//	c=*p;
-//x=*xp;
 	ut_printf("  start_func:%x %x \n",start_func,x);
+}
+static int sh_unload(char *arg1,char *arg2)
+{
+	int ret;
+	ret=vm_munmap(g_current_task->mm,0,0x40000000);
+	start_func=0;
+	ut_printf(" Unmap total vmas unmapped: %d \n",ret);	
+	return 0;
 }
 static int sh_run(char *arg1,char *arg2)
 {
-//	unsigned long addr;
-//	addr=ut_atol(arg1);
-//	ut_printf("  addr :%x: \n",addr);
-//start_func=addr;
 	if (start_func != 0)
-	start_func();
+		start_func();
 }
 static int sh_cp(char *arg1,char *arg2)
 {
-        struct file *fp,*wfp;
-        int i,ret,wret;
-        fp=fs_open(arg1,0);
-        wfp=fs_open(arg2,1);
-        ut_printf("filename :%s: %s \n",arg1,arg2);
-        if (fp ==0 || wfp==0)
-        {
-                ut_printf(" Error opening file :%s: \n",arg1);
-                return 0;
-        }
-        buf[1000]=0;
-        ret=1;
-        i=1;
-        while (ret > 0)
-        {
-                ret=fs_read(fp,buf,5000);
-                buf[5001]='\0';
-                if (ret > 0)
-                {
-                	wret=fs_write(wfp,buf,ret);
-                        ut_printf("%d: DATA Read :%c: ret: %d wret:%d \n",i,buf[0],ret,wret);
-                }else
-                {
-                        ut_printf(" Return value of read :%i: \n",ret);
-                }
-                i++;
-        }
-        return 0;
+	struct file *fp,*wfp;
+	int i,ret,wret;
+	fp=fs_open(arg1,0);
+	wfp=fs_open(arg2,1);
+	ut_printf("filename :%s: %s \n",arg1,arg2);
+	if (fp ==0 || wfp==0)
+	{
+		ut_printf(" Error opening file :%s: \n",arg1);
+		return 0;
+	}
+	buf[1000]=0;
+	ret=1;
+	i=1;
+	while (ret > 0)
+	{
+		ret=fs_read(fp,buf,5000);
+		buf[5001]='\0';
+		if (ret > 0)
+		{
+			wret=fs_write(wfp,buf,ret);
+			ut_printf("%d: DATA Read :%c: ret: %d wret:%d \n",i,buf[0],ret,wret);
+		}else
+		{
+			ut_printf(" Return value of read :%i: \n",ret);
+		}
+		i++;
+	}
+	return 0;
 }
 static int sh_del(char *arg1,char *arg2)
 {
-        struct file *wfp;
-        int i,ret,wret;
+	struct file *wfp;
+	int i,ret,wret;
 
-        wfp=fs_open(arg1,0);
-        if (wfp==0)
-        {
-                ut_printf(" Error opening file :%s: \n",arg1);
-                return 0;
-        }
-        fs_advise(wfp,0,0,POSIX_FADV_DONTNEED);
-        ut_printf("after del \n");
-        return 0;
+	wfp=fs_open(arg1,0);
+	if (wfp==0)
+	{
+		ut_printf(" Error opening file :%s: \n",arg1);
+		return 0;
+	}
+	fs_advise(wfp,0,0,POSIX_FADV_DONTNEED);
+	ut_printf("after del \n");
+	return 0;
 }
 static int sh_sync(char *arg1,char *arg2)
 {
-        struct file *wfp;
-        int i,ret,wret;
+	struct file *wfp;
+	int i,ret,wret;
 
-        wfp=fs_open(arg1,0);
-        if (wfp==0)
-        {
-                ut_printf(" Error opening file :%s: \n",arg1);
-                return 0;
-        }
+	wfp=fs_open(arg1,0);
+	if (wfp==0)
+	{
+		ut_printf(" Error opening file :%s: \n",arg1);
+		return 0;
+	}
 	ut_printf("Before syncing \n");
-        fs_fdatasync(wfp);
-        ut_printf("after syncing \n");
-        return 0;
+	fs_fdatasync(wfp);
+	ut_printf("after syncing \n");
+	return 0;
 }
 static int sh_cat(char *arg1,char *arg2)
 {
@@ -279,10 +281,10 @@ static int sh_cat(char *arg1,char *arg2)
 static int sh_alloc_mem(char *arg1,char *arg2)
 {
 	unsigned long order;
- 	unsigned long addr;
-	
+	unsigned long addr;
+
 	order=ut_atol(arg1);
- 	addr=mm_getFreePages(0,order);
+	addr=mm_getFreePages(0,order);
 	ut_printf(" alloc order:%x addr:%x \n",order,addr);
 	return 1;	
 }
@@ -290,7 +292,7 @@ static int sh_free_mem(char *arg1,char *arg2)
 {
 	unsigned long addr;
 	unsigned long order;
-	
+
 	addr=ut_atol(arg1);
 	order=ut_atol(arg2);
 	mm_putFreePages(addr,order);
@@ -471,21 +473,21 @@ static int get_cmd(char *line)
 			cmd=CMD_UPARROW;
 			line[i]='\0';
 			break;
-		//	ut_printf(" Upp Arrow \n");
+			//	ut_printf(" Upp Arrow \n");
 		}
 		if (line[i]==2) /* upArrow */
 		{
 			cmd=CMD_DOWNARROW;
 			line[i]='\0';
 			break;
-		//	ut_printf(" DOWNArrow \n");
+			//	ut_printf(" DOWNArrow \n");
 		}
 		if (line[i]==3) /* leftArrow */
 		{
 			cmd=CMD_LEFTARROW;
 			line[i]='\0';
 			break;
-		//	ut_printf(" LeftArrow \n");
+			//	ut_printf(" LeftArrow \n");
 		}
 		if (line[i]=='\t')
 		{ 
@@ -511,7 +513,7 @@ int shell_main()
 
 	for (i=0; i<MAX_CMD_HISTORY;i++)
 		cmd_history[i][0]='\0';
-	
+
 	curr_line[0]='\0';
 	while(1)
 	{

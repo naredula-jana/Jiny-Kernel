@@ -30,7 +30,7 @@ int vm_printMmaps(char *arg1,char *arg2);
 struct vm_area_struct *vm_findVma(struct mm_struct *mm,unsigned long addr, unsigned long len);
 unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len,unsigned long prot, unsigned long flags, unsigned long pgoff);
 unsigned long vm_brk(unsigned long addr, unsigned long len);
-int vm_munmap(struct mm_struct *mm, unsigned long addr, int len);
+int vm_munmap(struct mm_struct *mm, unsigned long addr, unsigned long len);
 
 /* page cache */
 int pc_init(unsigned char *start_addr,unsigned long len);
@@ -74,4 +74,5 @@ unsigned int ut_atoi(char *p);
 /* architecture depended */
 void ar_registerInterrupt(uint8_t n, isr_t handler);
 unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,struct addr_list *addr_list);
+int ar_pageTableCleanup(struct mm_struct *mm,unsigned long addr, unsigned long length);
 #endif

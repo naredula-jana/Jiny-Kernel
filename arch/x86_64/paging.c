@@ -150,25 +150,88 @@ void ar_pageFault(struct fault_ctx *ctx)
 	BUG();
 }
 
-int ar_pageTableCleanup(unsigned long addr, unsigned long len)
-{ /* TODO : under development */
-	struct mm_struct *mm;
-	struct vm_area_struct *vma;
-#if 0
-	mm=g_current_task->mm;
-	if (mm==0 || mm->pgd == 0) BUG();
-	
-	vma=vm_findVma(mm,(addr & PAGE_MASK),8); /* length changed to just 8 bytes at maximum , instead of entire page*/
-	if (vma == 0) BUG();
+/*
+Return value : 1 - if entire table is cleared and deleted  else retuen 0
+*/
+static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long addr, unsigned long len,unsigned long start_addr)
+{ 
+	unsigned long max_entry,table_len;	
+	unsigned long p; /* physical address */
+	unsigned long *v; /* virtual address */
+	int i,max_i,cleared;
 
-	p4=(mm->pgd);
-	if (p4 == 0) return 0;
-	for (i4=0; i4<512;i4++)
+	DEBUG("  level:%x ptableaddr:%x addr:%x len:%x start_addr:%x \n",level,ptable_addr,addr,len,start_addr);	
+	p=ptable_addr;
+	if (p == 0) return 0;
+	switch (level)
 	{
+	case 4 : i=L4_INDEX(addr); max_entry=512*512*512*PAGE_SIZE; break;
+	case 3 : i=L3_INDEX(addr); max_entry=512*512*PAGE_SIZE;  break;
+	case 2 : i=L2_INDEX(addr); max_entry=512*PAGE_SIZE; break;
+	case 1 : i=L1_INDEX(addr); max_entry=PAGE_SIZE; break;
+	default : BUG();
+	}
+
+	if (addr < start_addr)
+	{
+		i=0;
+		table_len=len - (start_addr-addr);
+	}else
+	{
+		i=(addr-start_addr)/max_entry ;
+		table_len=(addr-start_addr) +len;
 		
 	}
-#endif
+	max_i=table_len/max_entry;
+	if (max_i>=512) max_i=511;
+
+	v=__va(p+i);
+	start_addr=start_addr+i*max_entry;
+	DEBUG(" i:%d max_i:%d \n",i,max_i);
+	while( i<=max_i )
+	{
+		if (*v != 0 )
+		{
+			if (level > 1)
+			{
+				if (clear_pagetable(level-1,((*v)&(~0xfff)),addr,len,start_addr)==1) *v=0;
+			}
+			else
+			{
+				*v=0;
+			}
+		}
+		start_addr=start_addr+max_entry;
+		v++;
+		i++;		
+	}
+	cleared=0;/* how many entries are cleared */
+	v=__va(p);
+	for (i=0; i<512; i++)
+	{
+		if (*v ==0) cleared++;
+		v++;
+	}
+
+	if (level == 4) return 1;
+	else 
+	{
+		if (cleared==512)
+		{
+			v=v-512;
+			mm_putFreePages(v,0);				
+			DEBUG("Release page during clear page tables: level:%d tableaddr: %x \n",level,p);
+			return 1;
+		}
+	}
+	return 0;	
 }
+int ar_pageTableCleanup(struct mm_struct *mm,unsigned long addr, unsigned long length)
+{ 
+	if (mm==0 || mm->pgd == 0) BUG();
+	return clear_pagetable(4,mm->pgd,addr,length,0);	
+}
+
 static int handle_mm_fault(addr_t addr)
 {
 	struct mm_struct *mm;
@@ -179,13 +242,13 @@ static int handle_mm_fault(addr_t addr)
 
 	mm=g_current_task->mm;
 	if (mm==0 || mm->pgd == 0) BUG();
-	
+
 	vma=vm_findVma(mm,(addr & PAGE_MASK),8); /* length changed to just 8 bytes at maximum , instead of entire page*/
 	if (vma == 0) BUG();
 
 	pl4=(mm->pgd);
 	if (pl4 == 0) return 0;
- 		
+
 	p=(pl4+(L4_INDEX(addr))) ;
 	v=__va(p);
 	pl3=(*v) & (~0xfff);
@@ -198,7 +261,7 @@ static int handle_mm_fault(addr_t addr)
 		p=(pl4+(L4_INDEX(addr))); /* insert into l4   */
 		v=__va(p);
 		*v=((addr_t) pl3 |((addr_t) 0x3));
-		 DEBUG(" Inserted into L4 :%x  p13:%x  pl4:%x addr:%x index:%x \n",p,pl3,pl4,addr,L4_INDEX(addr));
+		DEBUG(" Inserted into L4 :%x  p13:%x  pl4:%x addr:%x index:%x \n",p,pl3,pl4,addr,L4_INDEX(addr));
 	}
 	p=(pl3+(L3_INDEX(addr)));
 	v=__va(p);
@@ -220,8 +283,8 @@ static int handle_mm_fault(addr_t addr)
 	v=__va(p);
 	pl1=(*v) & (~0xfff);
 	DEBUG(" Pl2 :%x pl1 :%x\n",pl2,pl1);	
-	
-	
+
+
 	if (pl1==0)
 	{
 		v=mm_getFreePages(0,0); /* get page of 4k size for page table */	
@@ -231,7 +294,7 @@ static int handle_mm_fault(addr_t addr)
 		p=(pl2+(L2_INDEX(addr)));
 		v=__va(p);
 		*v=((addr_t) pl1 |((addr_t) 0x3));
-		 DEBUG(" Inserted into L2 :%x :%x \n",p,pl1);
+		DEBUG(" Inserted into L2 :%x :%x \n",p,pl1);
 	}
 	/* By Now we have pointer to all 4 tables , Now check th erequired page*/
 
@@ -247,7 +310,7 @@ static int handle_mm_fault(addr_t addr)
 			p=(unsigned long *)pc_mapInodePage(vma,addr-vma->vm_start);
 			asm volatile("cli");
 			DEBUG(" page fault of mmapped page p:%x  \n",p);
-			
+
 		}else
 		{
 			p=vma->vm_private_data + (addr-vma->vm_start) ; 	

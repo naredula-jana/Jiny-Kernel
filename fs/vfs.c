@@ -80,26 +80,31 @@ struct file *fs_open(char *filename,int mode)
 int fs_fdatasync(struct file *file )
 {
 	if (vfs_fs == 0) return 0;
+	if (file == 0) return 0;
 	return vfs_fs->fdatasync(file);
 }
 int fs_lseek(struct file *file ,unsigned long offset, int whence)
 {
         if (vfs_fs == 0) return 0;
+	if (file == 0) return 0;
         return vfs_fs->lseek(file,offset,whence);
 }
 int fs_write(struct file *file ,unsigned char *buff ,unsigned long len)
 {
 	if (vfs_fs == 0) return 0;
+	if (file == 0) return 0;
 	return vfs_fs->write(file,buff,len);
 }
 int fs_read(struct file *file ,unsigned char *buff ,unsigned long len)
 {
 	if (vfs_fs == 0) return 0;
+	if (file == 0) return 0;
 	return vfs_fs->read(file,buff,len);
 }
 int fs_close(struct file *file)
 {
 	if (vfs_fs == 0) return 0;
+	if (file == 0) return 0;
 	return vfs_fs->close(file);
 }
 int fs_advise(struct file *file,unsigned long offset, unsigned long len,int advise)

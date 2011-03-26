@@ -278,7 +278,7 @@ static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 
 	ret=0;
 	if (filep ==0) return 0;
-	DEBUG("Read filename from hs  :%s: offset:%d inode:%x \n",filep->filename,filep->offset,filep->inode);
+	DEBUG("Read filename from hs  :%s: offset:%d inode:%x buff:%x len:%x \n",filep->filename,filep->offset,filep->inode,buff,len);
 	inode=filep->inode;
 	if (inode->length <= filep->offset) return 0;
 

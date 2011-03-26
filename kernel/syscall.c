@@ -59,6 +59,7 @@ unsigned long sys_open(unsigned long *args)
 
 unsigned long sys_read(unsigned long *args)
 {
+
 	return fs_read((struct file *)args[0],(unsigned char *)args[1],(unsigned long)args[2]);		
 }
 
