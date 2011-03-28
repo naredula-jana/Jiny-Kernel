@@ -12,6 +12,7 @@
 #include "interface.h"
 #define MAGIC_CHAR 0xab
 #define MAGIC_LONG 0xabababababababab
+
 struct task_struct *g_current_task,*g_init_task;
 struct mm_struct *g_kernel_mm=0;
 spinlock_t g_runqueue_lock  = SPIN_LOCK_UNLOCKED;
@@ -20,9 +21,8 @@ int g_pid=0;
 addr_t g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles per second  */
 addr_t g_nr_running = 0;
 addr_t g_nr_waiting=0;
-addr_t g_tasks[200];
-
 static addr_t g_task_dead=0;  /* TODO : remove me later */
+
 extern long *stack;
 
 void init_timer();
@@ -249,7 +249,6 @@ int sc_fork(unsigned long clone_flags, unsigned long usp, int (*fn)(void *))
 	p->state=TASK_RUNNING;
 	p->mm=g_kernel_mm;
 	atomic_inc(&g_kernel_mm->mm_count);
-	if (g_pid <200) g_tasks[g_pid]=p; /* TODO : remove this later */
 	g_pid++;
 
 	p->next_wait=p->prev_wait=NULL;
@@ -366,8 +365,6 @@ void init_tasking()
 	g_current_task->pid=g_pid;
 	g_current_task->mm=g_kernel_mm;
 	g_pid++;
-	for (i=0; i<200;i++)
-		g_tasks[0]=0;
 	init_timer();
 	init_waitqueue(&g_timerqueue);
 }

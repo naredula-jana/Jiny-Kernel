@@ -39,8 +39,9 @@ extern unsigned long g_hostShmPhyAddr;
 page_struct_t *pagecache_map;
 unsigned char *pc_startaddr;
 unsigned char *pc_endaddr;
-int pc_totalpages=0;
+static int pc_totalpages=0;
 static page_list_t free_list,active_list,dirty_list,inactive_list;
+
 /**
 page life:  page moves from free->active->inactive->free
 

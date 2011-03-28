@@ -21,6 +21,8 @@ typedef struct {
 } commands_t;
 #define MAX_COMMANDS 500
 static int sh_create(char *arg1,char *arg2);
+static int sh_exit(char *arg1,char *arg2);
+static int sh_debug(char *arg1,char *arg2);
 static int print_help(char *arg1,char *arg2);
 static int sh_cat(char *arg1,char *arg2);
 static int sh_cp(char *arg1,char *arg2);
@@ -43,7 +45,9 @@ int scan_pagecache(char *arg1 , char *arg2);
 commands_t cmd_list[]=
 {
 	{"help      ","Print Help Menu","help",print_help},
-	{"c <arg1>  ","Create arg1 number of threads","c",sh_create},
+	{"c   ","Create test thread","c",sh_create},
+	{"e   ","exit thread","e",sh_exit},
+	{"d   ","toggle debug","d",sh_debug},
 	{"i         ","Print IRQ stats","i",ar_printIrqStat},
 	{"cls       ","clear screen ","cls",ut_cls},
 	{"mp        ","Memory free areas","mp",mm_printFreeAreas},
@@ -168,7 +172,7 @@ static int sh_load(char *arg1,char *arg2)
 	char *p,c;
 	long x,*xp;
 
-	fp=fs_open("/home/njana/tinykernel/test/a.out",0);
+	fp=fs_open("/home/njana/jiny/test/a.out",0);
 	start_func=fs_loadElfLibrary(fp);
 	ut_printf("  start_func:%x %x \n",start_func,x);
 }
@@ -301,14 +305,30 @@ static int sh_free_mem(char *arg1,char *arg2)
 }
 static int sh_create(char *arg1,char *arg2)
 {
-	ut_printf(" arg1: %s arg2: %s: \n",arg1,arg2);
-	ut_printf("FORKING \n");  sc_createThread(test_proc);
+	ut_printf("FORKING \n"); 
+	 sc_createThread(test_proc);
+	return 1;
+}
+unsigned long g_debug_level=1;
+int g_test_exit=0;
+static int sh_exit(char *arg1,char *arg2)
+{
+	if (g_test_exit == 1) g_test_exit=0;
+	else g_test_exit=1;
+	ut_printf(" Textexit :%d\n",g_test_exit);
+	return 1;
+}
+static int sh_debug(char *arg1,char *arg2)
+{
+	if (g_debug_level == 1) g_debug_level=0;
+	else g_debug_level=1;
+	ut_printf(" debug level :%d\n",g_debug_level);
 	return 1;
 }
 static int print_help(char *arg1,char *arg2)
 {
 	int i;
-	ut_printf("Version 2.0 stacksize:%x  \n",STACK_SIZE);
+	ut_printf("Jiny 0.1 stacksize:%x  \n",STACK_SIZE);
 	for (i=0; i<MAX_COMMANDS; i++)
 	{
 		if (cmd_list[i].usage == 0) break;
@@ -319,8 +339,6 @@ static int print_help(char *arg1,char *arg2)
 }
 /**************************************** shell logic ***********************/
 
-unsigned long g_debug_level=1;
-int g_test_exit=0;
 #define MAX_LINE_LENGTH 200
 #define CMD_PROMPT "->"
 #define MAX_CMD_HISTORY 50

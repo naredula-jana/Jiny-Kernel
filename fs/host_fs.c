@@ -131,12 +131,12 @@ static struct file *hfOpen(char *filename,int mode)
 	}
 	filep->inode=inodep;
 	filep->offset=0;
-	inodep->count++;
 	return filep;
 error:
 	if (filep != NULL)  kmem_cache_free(g_slab_filep, filep);
 	if (inodep != NULL)
-	{ /* TODO */
+	{
+		fs_putInode(inodep);
 	}
 	return 0;
 }
@@ -305,10 +305,7 @@ static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 
 static int hfClose(struct file *filep)
 {
-	struct inode *tmp_inode;
-
-	tmp_inode=filep->inode;
-	if (tmp_inode != 0) tmp_inode->count--;
+	if (filep->inode != 0) fs_putInode(filep->inode);
 	filep->inode=0;
 	kmem_cache_free(g_slab_filep, filep);	
 	return 1;	

@@ -19,6 +19,7 @@ struct thread_struct {
 	void *sp;
 	void *ip;
 };
+
 struct mm_struct {
         struct vm_area_struct *mmap;           /* list of VMAs */
         unsigned char *pgd; 
@@ -27,7 +28,6 @@ struct mm_struct {
         int map_count;                          /* number of VMAs */
         spinlock_t page_table_lock;             /* Protects task page tables and mm->rss */
 
-
         unsigned long start_code, end_code, start_data, end_data;
         unsigned long start_brk, brk, start_stack;
         unsigned long arg_start, arg_end, env_start, env_end;
@@ -35,7 +35,6 @@ struct mm_struct {
         unsigned long def_flags;
         unsigned long cpu_vm_mask;
         unsigned long swap_address;
-
 };
 // This structure defines a 'task' - a process.
 /*

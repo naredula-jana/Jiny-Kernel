@@ -31,7 +31,7 @@ struct file {
 };
 
 struct inode {
-	int count; /* usage count */
+	atomic_t count; /* usage count */
 	int nrpages;	
 	int type; /* short leaved (MRU) or long leaved (LRU) */
 	unsigned long length; /* file length */

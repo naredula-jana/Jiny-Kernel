@@ -1,15 +1,15 @@
-Basic:
-1) Page cache Implemenatation & Host FS
+Short term :
 
-2) ELF interpretation and loading the program
+- main function return in elf loading : need to parse symbol table to get main function.
+- locks in page cache, vfs
+- making user code in sepreate thread with sepreate address space.
 
-3) User level code & system calls
-	
-4) code reorg:
+Long term :	
+- code reorg:
 
-5) init functions streamlining
+- init functions streamlining
 
-6) enhancing debugging,logging and shell features 	
+- enhancing debugging,logging and shell features 	
 
 ---------------------------------------------------------
 

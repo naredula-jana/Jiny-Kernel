@@ -47,6 +47,7 @@ page_struct_t *pc_getFreePage();
 /*vfs */
 int fs_registerFileSystem(struct filesystem *fs);
 struct inode *fs_getInode(char *filename);
+int fs_putInode(struct inode *inode);
 int fs_printInodes(char *arg1,char *arg2);
 struct file *fs_open(char *filename,int mode);
 int fs_lseek(struct file *file ,unsigned long offset, int whence);
