@@ -49,6 +49,7 @@ commands_t cmd_list[]=
 	{"e   ","exit thread","e",sh_exit},
 	{"d   ","toggle debug","d",sh_debug},
 	{"i         ","Print IRQ stats","i",ar_printIrqStat},
+	{"t         ","Print thread list","t",sc_threadlist},
 	{"cls       ","clear screen ","cls",ut_cls},
 	{"mp        ","Memory free areas","mp",mm_printFreeAreas},
 	{"test1     ","test1 ","test1",sh_test1},
@@ -328,7 +329,7 @@ static int sh_debug(char *arg1,char *arg2)
 static int print_help(char *arg1,char *arg2)
 {
 	int i;
-	ut_printf("Jiny 0.1 stacksize:%x  \n",STACK_SIZE);
+	ut_printf("JINY 0.1 stacksize:%x  \n",STACK_SIZE);
 	for (i=0; i<MAX_COMMANDS; i++)
 	{
 		if (cmd_list[i].usage == 0) break;

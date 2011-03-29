@@ -89,7 +89,7 @@ void cmain ()
 	}
 	init_kernel(max_addr);
 	sc_createThread(shell_main);
-	sc_schedule();
+//	sc_schedule();
 	while(1) 
 	{
 		if ( g_debug_level==1 ) 

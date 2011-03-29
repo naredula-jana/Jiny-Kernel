@@ -11,6 +11,7 @@ int sc_wait(struct wait_struct *waitqueue,int ticks);
 int sc_sleep(int ticks); /* each tick is 100HZ or 10ms */
 int sc_fork(unsigned long clone_flags, unsigned long usp, int (*fn)(void *));
 int sc_exit();
+int sc_threadlist( char *arg1,char *arg2);
 int sc_createThread(int (*fn)(void *));
 void sc_schedule();
 

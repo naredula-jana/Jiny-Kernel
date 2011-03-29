@@ -45,9 +45,11 @@ struct task_struct {
 	int pid;
 	int counter;
 	int sleep_ticks;
+	unsigned long ticks;	
 	struct thread_struct thread;
 	struct mm_struct *mm;
-	struct task_struct *next_run,  *prev_run;  /* run queue */
+	struct list_head run_link; /* run queue */
+	struct list_head task_link; /* task queue */
 	struct task_struct *next_wait,  *prev_wait;  /* wait queue */
 	unsigned long magic_numbers[4]; /* already stack is default fill with magic numbers */
 }; 
