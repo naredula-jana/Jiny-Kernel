@@ -130,10 +130,14 @@ void ar_pageFault(struct fault_ctx *ctx)
 	int us = ctx->errcode & 0x4;           // Processor was in user-mode?
 	int reserved = ctx->errcode & 0x8;     // Overwritten CPU-reserved bits of page entry?
 	int id = ctx->errcode & 0x10;          // Caused by an instruction fetch?
+	struct gpregs *gp=ctx->gprs;
 
 	// Output an error message.
 	DEBUG("new PAGE FAULT  ip:%x  addr: %x \n",ctx->istack_frame->rip,faulting_address);
-	DEBUG("PAGE FAULT  ip:%x  addr: %x ",ctx->istack_frame->rip,faulting_address);
+        DEBUG("rbp:%x rsi:%x rdi:%x rdx:%x rcx:%x rbx:%x \n",gp->rbp,gp->rsi,gp->rdi,gp->rdx,gp->rcx,gp->rbx);
+        DEBUG("r15:%x r14:%x r13:%x r12:%x r11:%x r10:%x \n",gp->r15,gp->r14,gp->r13,gp->r12,gp->r11,gp->r10);
+        DEBUG("r9:%x r8:%x rax:%x\n",gp->r9,gp->r8,gp->rax);	
+	ut_printf("PAGE FAULT ctx:%x  ip:%x  addr: %x ",ctx,ctx->istack_frame->rip,faulting_address);
 	if (present) {
 		ut_printf("page fault: Updating present \n");
 		//mm_debug=1;

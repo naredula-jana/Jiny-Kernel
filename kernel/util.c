@@ -1,21 +1,21 @@
 /*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-*   kernel/util.c
-*   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
-*
-*/
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ *   kernel/util.c
+ *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
+ *
+ */
 #include "common.h"
 #include "interface.h"
 extern unsigned long stack,placement_address;
 static void print_symbol(addr_t addr)
 {
 	int i;
-        for (i=0; i< g_total_symbols; i++)
-        {
+	for (i=0; i< g_total_symbols; i++)
+	{
 		if ((addr>=g_symbol_table[i].address) && (addr<g_symbol_table[i+1].address))
 		{
 			ut_printf("   :%s + %x\n",g_symbol_table[i].name,(addr-g_symbol_table[i].address));
@@ -30,6 +30,7 @@ void ut_showTrace(unsigned long *stack_top)
 	unsigned long addr;
 	unsigned long  sz,stack_end,code_end;
 	int i;
+
 
 	sz=(long)stack_top;
 	sz=sz/4;
@@ -55,79 +56,59 @@ void ut_showTrace(unsigned long *stack_top)
 }
 unsigned long ut_atol(char *p)
 {
-        unsigned long a;
-        int i,m,k;
-a=0;
-m=0;
-        for (i=0; p[i]!='\0'; i++)
-        {
-                if (p[i] == '0' && m==0) continue;
-                m++;
-                if (p[i]<='9' && p[i]>='0') k=p[i]-'0';
-                else k=p[i]-'a'+0xa;
-                if (m>1) a=a*0x10;
-                a=a+k;
-        }
-return a;
+	unsigned long a;
+	int i,m,k;
+	a=0;
+	m=0;
+	for (i=0; p[i]!='\0'; i++)
+	{
+		if (p[i] == '0' && m==0) continue;
+		m++;
+		if (p[i]<='9' && p[i]>='0') k=p[i]-'0';
+		else k=p[i]-'a'+0xa;
+		if (m>1) a=a*0x10;
+		a=a+k;
+	}
+	return a;
 }
 unsigned int ut_atoi(char *p)
 {         
-        unsigned int a;
-        int i,m,k;
-a=0;
-m=0;         
-        for (i=0; p[i]!='\0'; i++)
-        {
-                if (p[i] == '0' && m==0) continue;
-                m++;
-                if (p[i]<='9' && p[i]>='0') k=p[i]-'0';
-                else k=p[i]-'a'+0xa;
-                if (m>1) a=a*0x10;
-                a=a+k;                                                 
-        }
-return a;
+	unsigned int a;
+	int i,m,k;
+	a=0;
+	m=0;         
+	for (i=0; p[i]!='\0'; i++)
+	{
+		if (p[i] == '0' && m==0) continue;
+		m++;
+		if (p[i]<='9' && p[i]>='0') k=p[i]-'0';
+		else k=p[i]-'a'+0xa;
+		if (m>1) a=a*0x10;
+		a=a+k;                                                 
+	}
+	return a;
 }
 // Copy len bytes from src to dest.
-uint8_t *g_dest=0;
-unsigned long *g_src=0;
-//uint8_t *g_sp=0;
-unsigned long g_len=0;
-//unsigned long g_ddd=0x123;
 void ut_memcpy(uint8_t *dest, uint8_t *src, long len)
 {
 	uint8_t *sp = (const uint8_t *)src;
 	uint8_t *dp = (uint8_t *)dest;
 	long i=0;
 
-	g_dest=dp;
-	g_len=len;
-//	g_sp=&k;
-//g_ddd=0x123;
-ut_printf(" src:%x dest:%x len:%x \n",src,dest,len);
+	DEBUG(" src:%x dest:%x len:%x \n",src,dest,len);
 	for(i=len; i>0; i--) 
 	{
 		*dp = *sp;
-	//	g_ddd++;
 		dp++;
 		sp++;
 	}
-//g_ddd=0x123;
-	//ut_printf(" memcpy Len :%x k:%x \n",len,k);
 }
-uint8_t *tem1=0;
-uint8_t tem2=0;
-long tem3=0;
 // Write len copies of val into dest.
 void ut_memset(uint8_t *dest, uint8_t val, long len)
 {
 	uint8_t *temp = (uint8_t *)dest;
 	long i;
-#if 0
-tem1=&i; /* TODO : if the above two lines removed then the code hangs */
-tem2=val;
-tem3=len;
-#endif
-	ut_printf("memset NEW dest :%x val :%x LEN addr:%x len:%x temp:%x \n",dest,val,&len,len,&temp);/* TODO */
+	DEBUG("memset NEW dest :%x val :%x LEN addr:%x len:%x temp:%x \n",dest,val,&len,len,&temp);/* TODO */
 	for ( i=len; i != 0; i--) *temp++ = val;
 	return ;
 }
@@ -155,11 +136,11 @@ int ut_strcmp(char *str1, char *str2)
 }
 int ut_memcmp(unsigned char *m1, unsigned char *m2,int len)
 {
-        int i = 0;
-        while(i<len && m1[i] == m2[i])
-        {
-                i++;
-        }
+	int i = 0;
+	while(i<len && m1[i] == m2[i])
+	{
+		i++;
+	}
 	if (i == len) return 0;
 	return 1;
 }

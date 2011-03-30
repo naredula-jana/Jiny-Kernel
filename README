@@ -148,5 +148,11 @@ serial :
   -serial /dev/pt/1 
 
 where /dev/pts/1 is the pty for the console running qemu
+--------------------------------------
+Attaching to gdb: (add -S to qemu command line)
+ 
+target remote localhost:1234 
+set architecture i386:x86-64
+
 
 -------------------------------------
