@@ -22,7 +22,7 @@ struct thread_struct {
 
 struct mm_struct {
         struct vm_area_struct *mmap;           /* list of VMAs */
-        unsigned char *pgd; 
+        unsigned long pgd; 
         atomic_t mm_users;                      /* How many users with user space? */
         atomic_t mm_count;                      /* How many references to "struct mm_struct" (users count as 1) */
         int map_count;                          /* number of VMAs */

@@ -1,4 +1,4 @@
-
+#define DEBUG_ENABLE
 #define DLINFO_ITEMS 13
 
 #include <elf.h>
@@ -1002,9 +1002,8 @@ out:
 	{
 		DEBUG(" ERROR in elf loader :%d\n",-error);
 	}
-	DEBUG(" Program start address : %x \n",elf_ex.e_entry);
+	DEBUG(" Program start address(autod) : %x \n",elf_ex.e_entry);
 	if ( error == 0)
-	//return elf_ex.e_entry;
-	return 0x40017c; /* TODO : remove later , hardcoded address for main */
+		return elf_ex.e_entry;
 	else return 0;
 }

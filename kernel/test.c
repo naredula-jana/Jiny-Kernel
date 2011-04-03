@@ -13,7 +13,6 @@ void test_proc()
 	unsigned char d[1024];
 	addr_t b ;
 	int k,m;
-
 	for (k=0; k<1024; k++) d[k]=0xcc;
 	a=0xaaaaaaaaaaaaaaaa ;
 	b=0xbbbbbbbbbbbbbbbb ;

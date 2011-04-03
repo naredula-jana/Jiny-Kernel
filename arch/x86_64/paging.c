@@ -1,4 +1,4 @@
-//#define DEBUG_ENABLE 1
+#define DEBUG_ENABLE 1
 #include "task.h"
 #include "mm.h"
 #include "paging.h"
@@ -87,12 +87,11 @@ addr_t initialise_paging(addr_t end_addr)
 	ut_printf("Initializing PAGING  nframes:%x  FR:%x l2:%x i=%d \n",nframes,fr,level2_table,i);
 	p=0x00102000; /* TODO: the following two lines need to remove later */
 	*p=0; /* reset the L3 table first entry need only when the paging is enabled */
-	flush_tlb();
+	flush_tlb(0x101000);
 	return placement_address;
 }
-void flush_tlb()
+void flush_tlb(unsigned long dir)
 {
-	unsigned long dir=0x101000 ;
 	asm volatile("mov %0, %%cr3":: "r"(dir));
 }
 
@@ -117,7 +116,12 @@ unsigned long mmu_cr4_features;
                         : "memory");                                    \
         } while (0)
 
-
+int ar_flushTlbGlobal()
+{
+	asm volatile("movq %%cr4,%0" : "=r" (mmu_cr4_features));
+	__flush_tlb_global();
+	return 1;
+}
 void ar_pageFault(struct fault_ctx *ctx)
 {
 	// The faulting address is stored in the CR2 register.
@@ -154,6 +158,48 @@ void ar_pageFault(struct fault_ctx *ctx)
 	BUG();
 }
 
+static int copy_pagetable(int level,unsigned long src_ptable_addr,unsigned long dest_ptable_addr)
+{
+	int i;
+	unsigned long *src,*dest,*nv; /* virtual address */
+
+	src=src_ptable_addr;	
+	dest=dest_ptable_addr;
+	DEBUG("S level: %d src:%x  dest:%x \n",level,src,dest);	
+
+	for (i=0; i<512; i++)
+	{
+		if (((*src))!= 0)	
+		{
+			pde_t *pde;
+
+			pde=(pde_t *)src;		
+			nv=0;
+			if ((level==2 && pde->ps==1) || level==1) /* 2nd level page with large pages or 1st level page table */
+			{
+				if (level ==2)
+				{
+				}else
+				{
+				}
+				*dest=*src;
+
+			}else
+			{
+				nv=mm_getFreePages(MEM_CLEAR,0);	
+				if (nv == 0) BUG();
+				DEBUG(" calling i:%d level:%d src:%x  child src:%x physrc:%x \n",i,level,src_ptable_addr,__va(*src),*src);
+				copy_pagetable(level-1,__va((*src)&(~0xfff)),nv);
+				*dest=__pa(nv)|0x7;
+			}
+			DEBUG("updated  level: %d i:%d *src:%x  dest:%x *dest:%x %x nv:%x  \n",level,i,*src,dest,*dest,__pa(nv),nv);	
+		}
+		src++;	
+		dest++;	
+	}
+	DEBUG("E level: %d src:%x  dest:%x \n",level,src,dest);	
+	return 1;
+}
 /*
 Return value : 1 - if entire table is cleared and deleted  else retuen 0
 */
@@ -163,7 +209,6 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 	unsigned long p; /* physical address */
 	unsigned long *v; /* virtual address */
 	int i,max_i,cleared;
-
 	DEBUG("  level:%x ptableaddr:%x addr:%x len:%x start_addr:%x \n",level,ptable_addr,addr,len,start_addr);	
 	p=ptable_addr;
 	if (p == 0) return 0;
@@ -234,6 +279,19 @@ int ar_pageTableCleanup(struct mm_struct *mm,unsigned long addr, unsigned long l
 { 
 	if (mm==0 || mm->pgd == 0) BUG();
 	return clear_pagetable(4,mm->pgd,addr,length,0);	
+}
+
+int ar_pageTableCopy(struct mm_struct *src_mm,struct mm_struct *dest_mm)
+{
+	unsigned char *v;
+
+	if (src_mm->pgd == 0) return 0;
+	if (dest_mm->pgd != 0) BUG();
+	v=mm_getFreePages(MEM_CLEAR,0);	
+	if (v == 0) BUG();
+	dest_mm->pgd=__pa(v);
+	copy_pagetable(4,__va(src_mm->pgd),v);	
+	return 1;
 }
 
 static int handle_mm_fault(addr_t addr)
@@ -391,8 +449,7 @@ unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,stru
 	}
 	if (addr_list->total > 0)
 	{
-		asm volatile("movq %%cr4,%0" : "=r" (mmu_cr4_features));
-		__flush_tlb_global();  /* TODO : need not flush entire table, flush only spoecific tables*/
+		ar_flushTlbGlobal(); /* TODO : need not flush entire table, flush only spoecific tables*/
 	}
 	return addr;
 }

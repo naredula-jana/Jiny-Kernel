@@ -76,5 +76,7 @@ unsigned int ut_atoi(char *p);
 /* architecture depended */
 void ar_registerInterrupt(uint8_t n, isr_t handler);
 unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,struct addr_list *addr_list);
+int ar_pageTableCopy(struct mm_struct *src_mm,struct mm_struct *dest_mm);
 int ar_pageTableCleanup(struct mm_struct *mm,unsigned long addr, unsigned long length);
+int ar_flushTlbGlobal();
 #endif

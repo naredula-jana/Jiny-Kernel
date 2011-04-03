@@ -8,6 +8,7 @@
  *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
  *
  */
+#define DEBUG_ENABLE 1
 #include "common.h"
 #include "interface.h"
 extern unsigned long stack,placement_address;

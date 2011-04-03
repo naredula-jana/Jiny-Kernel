@@ -244,29 +244,61 @@ int sc_threadlist( char *arg1,char *arg2)
 	struct task_struct *task;
 
 	spin_lock_irqsave(&runqueue_lock, flags);
+	ut_printf("pid ticks mm pgd \n");
 	list_for_each(pos, &task_queue.head) {
 		task=list_entry(pos, struct task_struct, task_link);
-		ut_printf(" pid:%d ticks:%x \n",task->pid,task->ticks);
+		ut_printf("%d %x %x %x\n",task->pid,task->ticks,task->mm,task->mm->pgd);
 	}
 	spin_unlock_irqrestore(&runqueue_lock, flags);
+}
+int sys_execve()
+{
+
+}
+int ret_from_fork(unsigned long clone_flags, unsigned long usp, int (*fn)(void *)) 
+{
+	return 0;
 }
 int sc_fork(unsigned long clone_flags, unsigned long usp, int (*fn)(void *))
 {
 	int nr;
 	struct task_struct *p;
+	struct mm_struct *mm;
 	unsigned long flags;
 
 	p = alloc_task_struct();
-	ut_memset(p,MAGIC_CHAR,STACK_SIZE);
-	p->thread.ip=(void *)fn;
-	p->thread.sp=(addr_t)p+(addr_t)STACK_SIZE;
-	p->pid=g_pid;
-	p->state=TASK_RUNNING;
-	p->mm=g_kernel_mm;
-	p->ticks=0;
-	atomic_inc(&g_kernel_mm->mm_count);
-	g_pid++;
+	if ( p == 0) BUG();
 
+	if (fn != 0)
+	{
+		ut_memset((unsigned char *)p,MAGIC_CHAR,STACK_SIZE);
+		p->thread.ip=(void *)fn;
+		p->thread.sp=(addr_t)p+(addr_t)STACK_SIZE;
+		p->state=TASK_RUNNING;
+		mm=kmem_cache_alloc(mm_cachep, 0);
+		if (mm ==0 ) BUG();
+		mm->pgd=0;
+		mm->mmap=g_current_task->mm->mmap;
+		mm->start_brk=0xc0000000;
+		ar_pageTableCopy(g_current_task->mm,mm);	
+		p->mm=mm;
+		p->ticks=0;
+		atomic_inc(&g_kernel_mm->mm_count);
+	}else
+	{
+	/*	unsigned long curr_spb,curr_spe,new_sp;
+
+		ut_memcpy(p,g_current_task,STACK_SIZE);
+		p->thread.ip=(void *)ret_from_fork;
+		asm("movq %%rbp,%0" : "=m" (curr_spe));
+		curr_spb=g_current_task;
+		p->thread.sp=(unsigned long)p+(curr_spe-curr_spb);
+		ut_printf(" thread sp : %x  ip:%x old_bp:%x  \n",p->thread.sp,p->thread.ip,curr_spe);	*/
+	}
+
+
+	g_pid++;
+	p->pid=g_pid;
 	p->run_link.next=0;
 	p->run_link.prev=0;
 	p->task_link.next=0;
@@ -277,7 +309,7 @@ int sc_fork(unsigned long clone_flags, unsigned long usp, int (*fn)(void *))
 	list_add_tail(&p->task_link,&task_queue.head);
 	add_to_runqueue(p);
 	spin_unlock_irqrestore(&runqueue_lock, flags);
-	return 1;
+	return p->pid;
 }
 
 int sc_exit()
@@ -445,6 +477,11 @@ void sc_schedule()
 
 	if (prev==next) return;
 	next->counter=5; /* 50 ms time slice */
+	if (prev->mm->pgd != next->mm->pgd) /* TODO : need to make generic */
+	{
+		flush_tlb(next->mm->pgd);
+		ar_flushTlbGlobal();
+	}	
 	switch_to(prev,next,prev);
 }
 

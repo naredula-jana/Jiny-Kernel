@@ -125,7 +125,7 @@ static int sh_test2(char *arg1,char *arg2)
 	val=0x281;
 	ut_printf("Before writing table \n");
 	*p=val;
-	flush_tlb();
+	flush_tlb(0x101000);
 	ut_printf("After writing table \n");
 }
 static int sh_test3(char *arg1,char *arg2)
@@ -304,10 +304,33 @@ static int sh_free_mem(char *arg1,char *arg2)
 	ut_printf(" free addr  %s :%x  order:%x\n",arg1,addr,order);
 	return 1;	
 }
+static int load_test(char *arg1,char *arg2)
+{
+        struct file *fp;
+        char *p,c;
+        long x,*xp;
+
+	int (*main_func)()=0;
+        fp=fs_open("/home/njana/jiny/test/test1",0);
+	if (fp == 0) 
+	{
+		ut_printf(" Failed to open the file \n");
+		return 0;
+	}
+        main_func=fs_loadElfLibrary(fp);
+	if (main_func != 0) main_func();
+	else
+        	ut_printf(" ERROR main_func:s zero \n");
+	sc_exit();
+	return 1;
+}
 static int sh_create(char *arg1,char *arg2)
 {
-	ut_printf("FORKING \n"); 
-	 sc_createThread(test_proc);
+	int ret;
+
+	ut_printf("test FORKING \n"); 
+	ret=sc_createThread(load_test);
+	ut_printf(" Parent process : pid: %d  \n",ret);
 	return 1;
 }
 unsigned long g_debug_level=1;

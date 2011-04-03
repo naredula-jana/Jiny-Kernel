@@ -24,6 +24,8 @@
 #define VM_EXEC         0x00000004
 #define VM_SHARED       0x00000008
 
+#define MEM_CLEAR 0x1 
+
 #define PROT_READ       0x1             /* page can be read */
 #define PROT_WRITE      0x2             /* page can be written */
 #define PROT_EXEC       0x4             /* page can be executed */

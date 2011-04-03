@@ -27,13 +27,11 @@ __asm__ __volatile__("pushl %0 ; popfl": /* no output */ :"g" (x):"memory")
 #define sti() __sti()
 #define save_flags(x) __save_flags(x)
 #define restore_flags(x) __restore_flags(x)
-extern void schedule();
 
+//#define DEBUG_ENABLE 1
 #ifdef DEBUG_ENABLE 
 #define DEBUG(x...) do { \
-	g_serial_output=1; \
 	ut_printf(x); \
-	g_serial_output=0; \
 } while (0) 
 #else
 #define DEBUG(x...) do { \

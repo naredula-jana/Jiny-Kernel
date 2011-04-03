@@ -8,6 +8,7 @@
 *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
 *
 */
+#define DEBUG_ENABLE 1
 #include "mm.h"
 #include "interface.h"
 
@@ -126,7 +127,8 @@ static inline void free_pages_ok(unsigned long map_nr, unsigned long order)
 					g_nr_free_pages -= 1 << order; \
 					EXPAND(ret, map_nr, order, new_order, area); \
 					spin_unlock_irqrestore(&free_area_lock, flags); \
-					DEBUG(" page alloc return address: %x \n",ADDRESS(map_nr)); \
+					DEBUG(" Page alloc return address: %x mask:%x \n",ADDRESS(map_nr),gfp_mask); \
+					if (gfp_mask & MEM_CLEAR) ut_memset(ADDRESS(map_nr),0,PAGE_SIZE<<order); \
 					return ADDRESS(map_nr); \
 				} \
 				prev = ret; \

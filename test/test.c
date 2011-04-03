@@ -10,7 +10,7 @@ main()
 
 	fp=open("/home/njana/test",0);
 	wp=open("/home/njana/ooo",1);
-	ut_printf(" Read file :%x outfile: %x \n",fp,wp);
+	ut_printf(" NEW Read file :%x outfile: %x \n",fp,wp);
 	if (fp != 0)
 	{
 		ret=read(fp,buf,1024);	
