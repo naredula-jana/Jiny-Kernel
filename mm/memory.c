@@ -127,7 +127,7 @@ static inline void free_pages_ok(unsigned long map_nr, unsigned long order)
 					g_nr_free_pages -= 1 << order; \
 					EXPAND(ret, map_nr, order, new_order, area); \
 					spin_unlock_irqrestore(&free_area_lock, flags); \
-					DEBUG(" Page alloc return address: %x mask:%x \n",ADDRESS(map_nr),gfp_mask); \
+					DEBUG(" Page alloc return address: %x mask:%x order:%d \n",ADDRESS(map_nr),gfp_mask,order); \
 					if (gfp_mask & MEM_CLEAR) ut_memset(ADDRESS(map_nr),0,PAGE_SIZE<<order); \
 					return ADDRESS(map_nr); \
 				} \
@@ -209,7 +209,7 @@ static unsigned long init_free_area(unsigned long start_mem, unsigned long end_m
 	}
 	return start_mem;
 }
-
+static int init_done=0;
 static void init_mem(unsigned long start_mem, unsigned long end_mem)
 {
 	int reservedpages = 0;
@@ -235,6 +235,7 @@ static void init_mem(unsigned long start_mem, unsigned long end_mem)
 		mm_putFreePages(tmp,0);
 
 	}
+	init_done=1;
 	ut_printf(" Release to FREEMEM : %x \n",(end_mem - 0x2000));
 	return;
 }
@@ -256,11 +257,11 @@ int mm_printFreeAreas(char *arg1,char *arg2)
                 for (tmp = free_mem_area[order].next ; tmp != memory_head(free_mem_area+order) ; tmp = tmp->next) {
                         nr ++;
                 }
-                total += nr * ((PAGE_SIZE>>10) << order);
-                ut_printf("%d: count:%d  static count:%d\n", order,nr,free_mem_area[order].stat_count);
+                total += nr << order;
+                ut_printf("%d: count:%d  static count:%d total:%d\n", order,nr,free_mem_area[order].stat_count,total);
         }
         spin_unlock_irqrestore(&free_area_lock, flags);
-        ut_printf("total = %x\n", total);
+        ut_printf("total = %d\n", total);
 	return 1;
 }
 int mm_putFreePages(unsigned long addr, unsigned long order)
@@ -278,6 +279,10 @@ int mm_putFreePages(unsigned long addr, unsigned long order)
                                 ut_printf ("PANIC Freeing swap cache pages");
                         map->flags &= ~(1 << PG_referenced);
                         free_pages_ok(map_nr, order);
+			if (init_done == 1)
+			{
+			DEBUG(" Freeing memory addr:%x order:%d \n",addr,order);
+			}
                         return 1;
                 }
         }

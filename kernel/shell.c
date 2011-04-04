@@ -321,6 +321,8 @@ static int load_test(char *arg1,char *arg2)
 	if (main_func != 0) main_func();
 	else
         	ut_printf(" ERROR main_func:s zero \n");
+	ut_printf(" Before sc_exit\n");
+	sc_threadlist(0,0);
 	sc_exit();
 	return 1;
 }

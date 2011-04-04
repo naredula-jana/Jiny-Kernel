@@ -29,7 +29,7 @@ struct wait_struct g_timerqueue;
 int g_pid=0;
 unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles per second  */
 unsigned long  g_nr_waiting=0;
-static addr_t g_task_dead=0;  /* TODO : remove me later */
+static struct task_struct *g_task_dead=0;  /* TODO : remove me later */
 
 extern long *stack;
 
@@ -164,11 +164,6 @@ static inline int del_from_waitqueue(struct wait_struct *waitqueue,struct task_s
 	}
 	if (prev != NULL)
 	{
-		if (prev <0x100)   /* TODO : remove me later , for debugging purpose only */
-		{
-			DEBUG(" prev:%x p:%x waitqueue:%x \n",prev,p,waitqueue);
-			BUG();
-		}
 		prev->next_wait = next;
 	}
 
@@ -244,10 +239,10 @@ int sc_threadlist( char *arg1,char *arg2)
 	struct task_struct *task;
 
 	spin_lock_irqsave(&runqueue_lock, flags);
-	ut_printf("pid ticks mm pgd \n");
+	ut_printf("pid ticks mm pgd mm_count \n");
 	list_for_each(pos, &task_queue.head) {
 		task=list_entry(pos, struct task_struct, task_link);
-		ut_printf("%d %x %x %x\n",task->pid,task->ticks,task->mm,task->mm->pgd);
+		ut_printf("%d %x %x %x %d\n",task->pid,task->ticks,task->mm,task->mm->pgd,task->mm->count.counter);
 	}
 	spin_unlock_irqrestore(&runqueue_lock, flags);
 }
@@ -258,6 +253,14 @@ int sys_execve()
 int ret_from_fork(unsigned long clone_flags, unsigned long usp, int (*fn)(void *)) 
 {
 	return 0;
+}
+static int free_mm(struct mm_struct *mm)
+{
+	atomic_dec(&mm->count);
+	if (mm->count.counter > 0) return 0;
+	ar_pageTableCleanup(mm,0,0);
+	kmem_cache_free(mm_cachep,mm);
+	return 1;
 }
 int sc_fork(unsigned long clone_flags, unsigned long usp, int (*fn)(void *))
 {
@@ -277,13 +280,13 @@ int sc_fork(unsigned long clone_flags, unsigned long usp, int (*fn)(void *))
 		p->state=TASK_RUNNING;
 		mm=kmem_cache_alloc(mm_cachep, 0);
 		if (mm ==0 ) BUG();
+		atomic_set(&mm->count,1);
 		mm->pgd=0;
 		mm->mmap=g_current_task->mm->mmap;
 		mm->start_brk=0xc0000000;
 		ar_pageTableCopy(g_current_task->mm,mm);	
 		p->mm=mm;
 		p->ticks=0;
-		atomic_inc(&g_kernel_mm->mm_count);
 	}else
 	{
 	/*	unsigned long curr_spb,curr_spe,new_sp;
@@ -410,7 +413,7 @@ void init_tasking()
 	run_queue.count.counter=0;
 	task_queue.count.counter=0;
 
-	atomic_set(&g_kernel_mm->mm_count,1);
+	atomic_set(&g_kernel_mm->count,1);
 	g_kernel_mm->start_brk=0xc0000000;
 	g_kernel_mm->mmap=0x0;
 	g_kernel_mm->pgd=(unsigned char *)g_kernel_page_dir;
@@ -465,6 +468,7 @@ void sc_schedule()
 	g_current_task = next;
 	if (g_task_dead) 
 	{
+		free_mm((struct task_struct *)g_task_dead->mm);
 		free_task_struct(g_task_dead);
 		g_task_dead=0;
 	}

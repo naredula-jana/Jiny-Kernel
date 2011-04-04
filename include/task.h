@@ -24,7 +24,7 @@ struct mm_struct {
         struct vm_area_struct *mmap;           /* list of VMAs */
         unsigned long pgd; 
         atomic_t mm_users;                      /* How many users with user space? */
-        atomic_t mm_count;                      /* How many references to "struct mm_struct" (users count as 1) */
+        atomic_t count;                      /* How many references to "struct mm_struct" (users count as 1) */
         int map_count;                          /* number of VMAs */
         spinlock_t page_table_lock;             /* Protects task page tables and mm->rss */
 

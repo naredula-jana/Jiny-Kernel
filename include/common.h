@@ -31,7 +31,7 @@ __asm__ __volatile__("pushl %0 ; popfl": /* no output */ :"g" (x):"memory")
 //#define DEBUG_ENABLE 1
 #ifdef DEBUG_ENABLE 
 #define DEBUG(x...) do { \
-	ut_printf(x); \
+if (g_serial_output==1)	ut_printf(x); \
 } while (0) 
 #else
 #define DEBUG(x...) do { \

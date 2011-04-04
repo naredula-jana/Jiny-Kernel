@@ -1,4 +1,4 @@
-#define DEBUG_ENABLE 1
+//#define DEBUG_ENABLE 1
 #include "task.h"
 #include "mm.h"
 #include "paging.h"
@@ -209,16 +209,16 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 	unsigned long p; /* physical address */
 	unsigned long *v; /* virtual address */
 	int i,max_i,cleared;
-	DEBUG("  level:%x ptableaddr:%x addr:%x len:%x start_addr:%x \n",level,ptable_addr,addr,len,start_addr);	
+	DEBUG("Clear Page tableLevel :%x ptableaddr:%x addr:%x len:%x start_addr:%x \n",level,ptable_addr,addr,len,start_addr);	
 	p=ptable_addr;
 	if (p == 0) return 0;
 	switch (level)
 	{
-	case 4 : i=L4_INDEX(addr); max_entry=512*512*512*PAGE_SIZE; break;
-	case 3 : i=L3_INDEX(addr); max_entry=512*512*PAGE_SIZE;  break;
-	case 2 : i=L2_INDEX(addr); max_entry=512*PAGE_SIZE; break;
-	case 1 : i=L1_INDEX(addr); max_entry=PAGE_SIZE; break;
-	default : BUG();
+		case 4 : i=L4_INDEX(addr); max_entry=512*512*512*PAGE_SIZE; break;
+		case 3 : i=L3_INDEX(addr); max_entry=512*512*PAGE_SIZE;  break;
+		case 2 : i=L2_INDEX(addr); max_entry=512*PAGE_SIZE; break;
+		case 1 : i=L1_INDEX(addr); max_entry=PAGE_SIZE; break;
+		default : BUG();
 	}
 
 	if (addr < start_addr)
@@ -229,10 +229,15 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 	{
 		i=(addr-start_addr)/max_entry ;
 		table_len=(addr-start_addr) +len;
-		
+
 	}
 	max_i=table_len/max_entry;
 	if (max_i>=512) max_i=511;
+	if (addr == 0 && len ==0) 
+	{
+		i=0;
+		max_i=511;
+	}
 
 	v=__va(p+i);
 	start_addr=start_addr+i*max_entry;
@@ -241,12 +246,17 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 	{
 		if (*v != 0 )
 		{
-			if (level > 1)
+			pde_t *pde;
+			pde=v;
+			if (level==2 && pde->ps==1)
+			{
+				*v=0;
+			}
+			else if (level > 1)
 			{
 				if (clear_pagetable(level-1,((*v)&(~0xfff)),addr,len,start_addr)==1) *v=0;
 			}
-			else
-			{
+			else {
 				*v=0;
 			}
 		}
@@ -262,23 +272,25 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 		v++;
 	}
 
-	if (level == 4) return 1;
-	else 
+	if (cleared==512)
 	{
-		if (cleared==512)
-		{
-			v=v-512;
-			mm_putFreePages(v,0);				
-			DEBUG("Release page during clear page tables: level:%d tableaddr: %x \n",level,p);
-			return 1;
-		}
+		v=v-512;
+		DEBUG("Release PAGE during clear page tables: level:%d tableaddr: %x \n",level,p);
+		mm_putFreePages(v,0);				
+		return 1;
 	}
+
 	return 0;	
 }
 int ar_pageTableCleanup(struct mm_struct *mm,unsigned long addr, unsigned long length)
 { 
 	if (mm==0 || mm->pgd == 0) BUG();
-	return clear_pagetable(4,mm->pgd,addr,length,0);	
+	if (clear_pagetable(4,mm->pgd,addr,length,0) == 1)
+	{
+		mm->pgd=0;
+		return 1;
+	}
+	return 0;
 }
 
 int ar_pageTableCopy(struct mm_struct *src_mm,struct mm_struct *dest_mm)
