@@ -57,15 +57,15 @@ int fs_read(struct file *file ,unsigned char *buff ,unsigned long len);
 int fs_close(struct file *file);
 int fs_fdatasync(struct file *file );
 int fs_advise(struct file *file,unsigned long offset, unsigned long len,int advise);
-struct page *fs_generic_read(struct inode *inode,unsigned long offset);
+struct page *fs_genericRead(struct inode *inode,unsigned long offset);
 unsigned long fs_loadElfLibrary(struct file  *file);
 
 /* Utilities */
 void ut_showTrace(unsigned long *stack_top);
 int ut_strcmp(char *str1, char *str2);
 void ut_printf (const char *format, ...);
-void ut_memcpy(uint8_t *dest, uint8_t *src, long len);
-void ut_memset(uint8_t *dest, uint8_t val, long len);
+void ut_memcpy(unsigned char *dest, unsigned char *src, long len);
+void ut_memset(unsigned char *dest, unsigned char val, long len);
 int ut_memcmp(unsigned char *m1, unsigned char *m2,int len);
 char *ut_strcpy(char *dest, const char *src);
 char *ut_strcat(char *dest, const char *src);

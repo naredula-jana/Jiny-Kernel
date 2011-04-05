@@ -30,7 +30,7 @@ m=0;
 	}
 return a;
 }
-tokenise(char *p,symb_table_t *t)
+static tokenise(char *p,symb_table_t *t)
 {
 	int i,k=0;
 	char *q;

@@ -16,7 +16,7 @@
 static struct filesystem *vfs_fs=0;
 static kmem_cache_t *slab_inodep;
 static LIST_HEAD(inode_list);
-static spinlock_t inode_lock  = SPIN_LOCK_UNLOCKED; /* protects inode_list */
+spinlock_t g_inode_lock  = SPIN_LOCK_UNLOCKED; /* protects inode_list */
 
 kmem_cache_t *g_slab_filep;
 
@@ -40,9 +40,9 @@ static int inode_init(struct inode *inode,char *filename)
 	INIT_LIST_HEAD(&(inode->inode_link));
 	DEBUG(" inode init filename:%s: :%x  :%x \n",filename,&inode->page_list,&(inode->page_list));
 
-	spin_lock_irqsave(&inode_lock, flags);
+	spin_lock_irqsave(&g_inode_lock, flags);
         list_add(&inode->inode_link,&inode_list);	
-	spin_unlock_irqrestore(&inode_lock, flags);
+	spin_unlock_irqrestore(&g_inode_lock, flags);
 
 	return 1;
 }
@@ -69,17 +69,17 @@ struct inode *fs_getInode(char *filename)
 
 	ret_inode=0;
 
-	spin_lock_irqsave(&inode_lock, flags);
+	spin_lock_irqsave(&g_inode_lock, flags);
 	list_for_each(p, &inode_list) {
 		ret_inode=list_entry(p, struct inode, inode_link);
 		if (ut_strcmp(filename,ret_inode->filename) == 0)
 		{
 			atomic_inc(&ret_inode->count);	
-			spin_unlock_irqrestore(&inode_lock, flags);
+			spin_unlock_irqrestore(&g_inode_lock, flags);
 			goto last;
 		}
 	}
-	spin_unlock_irqrestore(&inode_lock, flags);
+	spin_unlock_irqrestore(&g_inode_lock, flags);
 
 	ret_inode=kmem_cache_alloc(slab_inodep, 0);	
 	inode_init(ret_inode,filename);
@@ -93,13 +93,13 @@ int fs_putInode(struct inode *inode)
 	unsigned long  flags;
 	int ret=0;
 
-	spin_lock_irqsave(&inode_lock, flags);
+	spin_lock_irqsave(&g_inode_lock, flags);
 	if (inode!= 0 && inode->nrpages==0 && inode->count.counter==0)
 	{
 		list_del(&inode->inode_link);
 		ret=1;
 	}
-	spin_unlock_irqrestore(&inode_lock, flags);
+	spin_unlock_irqrestore(&g_inode_lock, flags);
 
 	if ( ret==1 )	kmem_cache_free(slab_inodep,inode);	
 
@@ -160,6 +160,7 @@ int fs_advise(struct file *file,unsigned long offset, unsigned long len,int advi
 		}
 
 	}
+	return 0;
 }
 int fs_registerFileSystem( struct filesystem *fs)
 {
@@ -171,4 +172,5 @@ void init_vfs()
 	g_slab_filep=kmem_cache_create("file_struct",sizeof(struct file), 0,0, NULL, NULL);
 	slab_inodep=kmem_cache_create("inode_struct",sizeof(struct inode), 0,0, NULL, NULL);
 	init_hostFs();
+	return;
 }

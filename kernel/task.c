@@ -250,15 +250,13 @@ int sys_execve()
 {
 
 }
-int ret_from_fork(unsigned long clone_flags, unsigned long usp, int (*fn)(void *)) 
-{
-	return 0;
-}
 static int free_mm(struct mm_struct *mm)
 {
 	atomic_dec(&mm->count);
 	if (mm->count.counter > 0) return 0;
+
 	ar_pageTableCleanup(mm,0,0);
+/* TODO : vmaps ned to cleanup */
 	kmem_cache_free(mm_cachep,mm);
 	return 1;
 }

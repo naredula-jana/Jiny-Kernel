@@ -68,7 +68,7 @@ struct vm_area_struct {
         unsigned long vm_pgoff;         /* Offset (within vm_file) in PAGE_SIZE
                                            units, *not* PAGE_CACHE_SIZE */
         struct inode *vm_inode;          /* File we map to (can be NULL). */
-        void * vm_private_data;         /* was vm_pte (shared mem) */
+        unsigned long vm_private_data;         /* was vm_pte (shared mem) */
 	struct list_head inode_vma_link; /* vmas connected to inode */
 };
 

@@ -1,7 +1,7 @@
 Short term :
 
-- main function return in elf loading : need to parse symbol table to get main function.
-- locks in page cache, vfs
+- implementing useful system calls 
+- rewriting wait in kernel/task
 - making user code in sepreate thread with sepreate address space.
 
 Long term :	

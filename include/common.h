@@ -68,6 +68,7 @@ typedef struct registers
 // first parameter.
 typedef void (*isr_t)();
 extern int g_serial_output;
+extern spinlock_t g_inode_lock;
 #define printk ut_printf
 unsigned char kb_getchar();
 void register_interrupt_handler(uint8_t n, isr_t handler);

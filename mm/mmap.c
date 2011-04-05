@@ -84,17 +84,13 @@ static int vma_link(struct mm_struct *mm,struct vm_area_struct *vma)
 
 /************************** API function *****************/
 
-int make_pages_present(unsigned long start, unsigned long end)
-{
-	return 0;
-}
 int vm_printMmaps(char *arg1,char *arg2)
 {
         struct mm_struct *mm;
         struct vm_area_struct *vma;
 
         mm=g_current_task->mm;
-        if (mm == 0) return;
+        if (mm == 0) return 0;
         vma=mm->mmap;
 
 	while (vma) {
@@ -201,7 +197,6 @@ unsigned long vm_brk(unsigned long addr, unsigned long len)
 
 out:
 	mm->total_vm += len >> PAGE_SHIFT;
-	make_pages_present(addr, addr + len);
 	return addr;
 }
 

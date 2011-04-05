@@ -1,4 +1,4 @@
-//#define DEBUG_ENABLE 1
+#define DEBUG_ENABLE 1
 #include "task.h"
 #include "mm.h"
 #include "paging.h"
@@ -117,7 +117,7 @@ unsigned long mmu_cr4_features;
         } while (0)
 
 int ar_flushTlbGlobal()
-{
+{ 
 	asm volatile("movq %%cr4,%0" : "=r" (mmu_cr4_features));
 	__flush_tlb_global();
 	return 1;
@@ -407,7 +407,7 @@ unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,stru
 {
 	struct mm_struct *mm;
 	struct vm_area_struct *vma;
-	addr_t *pl4,*pl3,*pl2,*pl1,*p;	
+	addr_t *pl4,*pl3,*pl2,*pl1,*v;	
 	unsigned int index;
 	pte_t *pte;
 	unsigned long addr;
@@ -423,27 +423,27 @@ unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,stru
 		pl4=mm->pgd;
 		if (pl4 == 0) return 0;
 
-		p=(pl4+(L4_INDEX(addr))) ;
-		pl3=(*p) & (~0xfff);
+		v=__va(pl4+(L4_INDEX(addr))) ;
+		pl3=(*v) & (~0xfff);
 		if (pl3==0)
 		{
 			return 0;
 		}
 
-		p=(pl3+(L3_INDEX(addr)));
-		pl2=(*p) & (~0xfff);
+		v=__va(pl3+(L3_INDEX(addr)));
+		pl2=(*v) & (~0xfff);
 		if (pl2==0)
 		{
 			return 0;
 		}
 
-		p=(pl2+(L2_INDEX(addr)));
-		pl1=(*p) & (~0xfff);
+		v=__va(pl2+(L2_INDEX(addr)));
+		pl1=(*v) & (~0xfff);
 		if (pl1==0)
 		{
 			return 0;
 		}
-		pte=(pl1+(L1_INDEX(addr)));
+		pte=__va(pl1+(L1_INDEX(addr)));
 		if (pte->accessed == 1) 
 		{
 			pte->accessed=0;

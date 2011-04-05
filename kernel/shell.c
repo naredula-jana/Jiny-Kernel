@@ -322,6 +322,7 @@ static int load_test(char *arg1,char *arg2)
 	else
         	ut_printf(" ERROR main_func:s zero \n");
 	ut_printf(" Before sc_exit\n");
+	vm_printMmaps(0,0);
 	sc_threadlist(0,0);
 	sc_exit();
 	return 1;
@@ -354,7 +355,7 @@ static int sh_debug(char *arg1,char *arg2)
 static int print_help(char *arg1,char *arg2)
 {
 	int i;
-	ut_printf("JINY 0.1 stacksize:%x  \n",STACK_SIZE);
+	ut_printf("JINY 0.1 Stacksize:%x  \n",STACK_SIZE);
 	for (i=0; i<MAX_COMMANDS; i++)
 	{
 		if (cmd_list[i].usage == 0) break;
@@ -380,7 +381,7 @@ enum{
 	CMD_LEFTARROW
 };
 
-void tokenise( char *p,char *tokens[])
+static void tokenise( char *p,char *tokens[])
 {
 	int i,k,j;
 

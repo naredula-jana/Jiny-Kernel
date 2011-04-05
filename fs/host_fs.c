@@ -227,7 +227,7 @@ error:
 	return tmp_len;
 }
 
-struct page *fs_generic_read(struct inode *inode,unsigned long offset)
+struct page *fs_genericRead(struct inode *inode,unsigned long offset)
 {
 	struct page *page;
 	int tret;
@@ -282,7 +282,7 @@ static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 	inode=filep->inode;
 	if (inode->length <= filep->offset) return 0;
 
-	page=fs_generic_read(filep->inode,filep->offset);
+	page=fs_genericRead(filep->inode,filep->offset);
 	if (page == 0) return 0;
 
 	ret=PC_PAGESIZE;

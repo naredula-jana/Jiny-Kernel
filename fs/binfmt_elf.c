@@ -944,8 +944,8 @@ unsigned long fs_loadElfLibrary(struct file  *file)
 
 	eppnt = elf_phdata;
 	DEBUG("start address : %x offset :%x \n",ELF_PAGESTART(eppnt->p_vaddr),eppnt->p_offset);
-	fs_lseek(file,elf_ex.e_phoff,0);
-	retval = fs_read(file, (char *)eppnt, j);
+	fs_lseek(file,(unsigned long)elf_ex.e_phoff,0);
+	retval = fs_read(file, (unsigned char *)eppnt, j);
 	if (retval != j)
 	{
 		error = -5;
