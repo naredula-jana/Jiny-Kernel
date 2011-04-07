@@ -79,4 +79,5 @@ unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,stru
 int ar_pageTableCopy(struct mm_struct *src_mm,struct mm_struct *dest_mm);
 int ar_pageTableCleanup(struct mm_struct *mm,unsigned long addr, unsigned long length);
 int ar_flushTlbGlobal();
+int ar_updateCpuState(int cpuid);
 #endif

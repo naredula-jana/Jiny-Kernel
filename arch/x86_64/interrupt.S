@@ -39,29 +39,6 @@
 #define NUM_GPR_SAVED 14
 #define SAVED_GPR_SIZE (NUM_GPR_SAVED * 8)
 
-#define SAVE_AND_LOAD_SEGMENT_REGISTERS         \
-   mov %ds, %gs:CPU_SCHED_STAT_USER_DS_OFFT;            \
-   mov %es, %gs:CPU_SCHED_STAT_USER_ES_OFFT;            \
-   mov %fs, %gs:CPU_SCHED_STAT_USER_FS_OFFT;            \
-   mov %gs, %gs:CPU_SCHED_STAT_USER_GS_OFFT;            \
-   mov %gs:(CPU_SCHED_STAT_KERN_DS_OFFT),%ds;
-
-#define RESTORE_USER_SEGMENT_REGISTERS        \
-   mov %gs:(CPU_SCHED_STAT_USER_DS_OFFT),%ds;  \
-   mov %gs:(CPU_SCHED_STAT_USER_ES_OFFT),%es; \
-   mov %gs:(CPU_SCHED_STAT_USER_FS_OFFT),%fs; \
-   pushq %rax;     \
-   pushq %rcx;     \
-   pushq %rdx;     \
-   mov %gs:(CPU_SCHED_STAT_USER_PTD_OFFT),%rax; \
-   movq $0xC0000100, %rcx; \
-   movq %rax,%rdx; \
-   shr $32,%rdx;\
-   wrmsr; \
-   popq %rdx; \
-   popq %rcx; \
-   popq %rax;
-   
 .macro GEN_INTRS_TABLE idx, items, entry_point
 .set cnt, \idx
 .rept \items - \idx

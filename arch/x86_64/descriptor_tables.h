@@ -1,6 +1,23 @@
 #ifndef __DESCRIPTOR_TABLES_H__
 #define __DESCRIPTOR_TABLES_H__
 
+#define CPU_STATE_KERNEL_STACK_OFFSET 0x0  /* see the struct definition at the end of file */
+#define CPU_STATE_KERNEL_DS_OFFSET 0x8
+#define CPU_STATE_USER_STACK_OFFSET 0x10
+#define CPU_STATE_USER_DS_OFFSET 0x18
+#define CPU_STATE_USER_ES_OFFSET 0x20
+#define CPU_STATE_USER_FS_OFFSET 0x28
+#define CPU_STATE_USER_GS_OFFSET 0x30
+#define CPU_STATE_USER_PTD_OFFSET 0x38
+
+#define IRET_OFFSET_RIP 0x0
+#define IRET_OFFSET_CS 0x8
+#define IRET_OFFSET_RFLAGS 0x10
+#define IRET_OFFSET_RSP 0x18
+#define IRET_OFFSET_SS 0x20
+
+#define IRET_OFFSET_SIZE 0x28
+
 
 #define GDT_SEL(desc) ((desc) << 3)
 #define NULL_DESCR    0
@@ -38,22 +55,15 @@
 #define SEG_TYPE_TRAP  (SEG_ATTR_A | SEG_ATTR_R | SEG_ATTR_C | SEG_ATTR_CODE)
 #define SEG_TYPE_INTR  (SEG_ATTR_R | SEG_ATTR_C | SEG_ATTR_CODE)
 
-/* For low-level field accesses. */
-#define CPU_SCHED_STAT_CPU_OFFT 0
-#define CPU_SCHED_STAT_CURRENT_OFFT 0x8
-#define CPU_SCHED_STAT_KSTACK_OFFT 0x10
-#define CPU_SCHED_STAT_FLAGS_OFFT 0x18
-#define CPU_SCHED_STAT_IRQCNT_OFFT 0x20
-#define CPU_SCHED_STAT_PREEMPT_OFFT 0x28
-#define CPU_SCHED_STAT_IRQLOCK_OFFT 0x30
-#define CPU_SCHED_STAT_KERN_DS_OFFT 0x38
-#define CPU_SCHED_STAT_USER_DS_OFFT 0x40
-#define CPU_SCHED_STAT_USTACK_OFFT 0x48
-#define CPU_SCHED_STAT_USER_ES_OFFT 0x50
-#define CPU_SCHED_STAT_USER_FS_OFFT 0x58
-#define CPU_SCHED_STAT_USER_GS_OFFT 0x60
-#define CPU_SCHED_STAT_USER_WORKS_OFFT 0x68  /* It's a pointer ! */
-#define CPU_SCHED_STAT_USER_PTD_OFFT  0x70
+
+/*struct cpu_state {
+        unsigned long kernel_stack;
+        unsigned long kernel_ds;
+        unsigned long user_stack;
+        unsigned long user_ds,user_es,user_fs,user_gs;
+};
+extern struct cpu_state g_cpu_state[];
+*/
 
 /* Offsets to parts of CPU exception stack frames. */
 #define INT_STACK_FRAME_CS_OFFT 8
@@ -63,18 +73,6 @@
 #include "common.h"
 // Initialisation function is publicly accessible.
 void init_descriptor_tables();
-// This structure contains the value of one GDT entry.
-// We use the attribute 'packed' to tell GCC not to change
-// any of the alignment in the structure.
-/*struct gdt_entry_struct
-{
-    u16int limit_low;           // The lower 16 bits of the limit.
-    u16int base_low;            // The lower 16 bits of the base.
-    u8int  base_middle;         // The next 8 bits of the base.
-    u8int  access;              // Access flags, determine what ring this segment can be used in.
-    u8int  granularity;
-    u8int  base_high;           // The last 8 bits of the base.
-} __attribute__((packed));*/
 
 typedef struct gdt_entry_struct {
   unsigned seg_limit_low     :16;
@@ -114,6 +112,15 @@ struct idt_ptr_struct
 } __attribute__((packed));
 
 typedef struct idt_ptr_struct idt_ptr_t;
+
+struct cpu_state { /* NOTE: do not alter the attributes, there location matter */
+        unsigned long kernel_stack;
+        unsigned long kernel_ds;
+        unsigned long user_stack;
+        unsigned long user_ds,user_es,user_fs,user_gs;
+};
+extern struct cpu_state g_cpu_state[];
+
 #endif
 #endif
 

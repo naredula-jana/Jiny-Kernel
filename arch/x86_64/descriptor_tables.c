@@ -1,4 +1,5 @@
-
+#include "common.h"
+#include "task.h"
 
 #include "descriptor_tables.h"
 // Lets us access our ASM functions from our C code.
@@ -17,8 +18,15 @@ gdt_entry_t gdt_entries[CONFIG_NRCPUS][6];
 gdt_ptr_t   gdt_ptr;
 idt_ptr_t   idt_ptr;
 idt_entry_t idt_entries[256];
+struct cpu_state g_cpu_state[1];
 
-
+int ar_updateCpuState(int cpuid)
+{
+	unsigned long p=g_current_task;
+	
+	g_cpu_state[cpuid].kernel_stack=p+STACK_SIZE;
+	return 1;
+}
 // Initialisation routine - zeroes all the interrupt service routines,
 // initialises the GDT and IDT.
 void init_descriptor_tables()

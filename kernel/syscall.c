@@ -16,6 +16,7 @@ typedef struct {
 } syscalltable_t;
 syscalltable_t syscalltable[]=
 {
+	{syscallnull} ,
 	{sys_printf}, /* 1  */
 	{sys_open},
 	{sys_write}, 
@@ -43,16 +44,23 @@ void syscall_handler(struct fault_ctx *ctx)
 
 unsigned long sys_printf(unsigned long *args)
 {
-	unsigned char *p;
-
-	p=(unsigned char *)args[0];
-	if (p != 0)
-	ut_printf("%s\n",p);
+ut_printf("INSIDE THE new SYSCALLin printf \n");
+	ut_printf("%s\n",args);
 	return 1;
+}
+unsigned long old_sys_printf(unsigned long *args)
+{
+        unsigned char *p;
+ut_printf("INSIDE THE SYSCALLin printf \n");
+        p=(unsigned char *)args[0];
+        if (p != 0)
+        ut_printf("%s\n",p);
+        return 1;
 }
 unsigned long sys_open(unsigned long *args)
 {
 	struct file *fp;
+ut_printf("INSIDE THE SYSCALLn open \n");
 	fp=fs_open((unsigned char *)args[0],(int)args[1]);
 	return (unsigned long )fp;
 }

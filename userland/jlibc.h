@@ -44,7 +44,18 @@ __asm__ volatile ("int $0x80" \
                   "d" ((long)(arg3))); \
 __syscall_return(type,__res); \
 }
-_syscall1(int,printf,unsigned long,ptr)
+
+#define _new_syscall1(type,name,type1,arg1) \
+type name(type1 arg1) \
+{ \
+long __res; \
+__asm__ volatile ("syscall" \
+        : "=a" (__res) \
+        : "0" (SYS_##name),"D" ((long)(arg1))); \
+__syscall_return(type,__res); \
+}
+
+_new_syscall1(int,printf,unsigned long,ptr)
 _syscall3(unsigned long,open,unsigned long,ptr,unsigned long , flag,unsigned long, flag2)
 _syscall3(int,write,unsigned long,ptr,unsigned long,buff,unsigned long ,len)
 _syscall3(int,read,unsigned long,ptr,unsigned long,buff,unsigned long ,len)

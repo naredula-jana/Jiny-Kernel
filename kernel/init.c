@@ -40,6 +40,7 @@ int init_kernel(unsigned long end_addr)
 	vm_area_cachep = kmem_cache_create("vm_area_struct",sizeof(struct vm_area_struct), 0,0, NULL, NULL);
 	mm_cachep = kmem_cache_create("mm_struct",sizeof(struct mm_struct), 0,0,NULL,NULL);
 
+	init_syscall();
 	init_tasking();
 	init_pci();
 	init_vfs();

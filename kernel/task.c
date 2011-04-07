@@ -484,6 +484,7 @@ void sc_schedule()
 		flush_tlb(next->mm->pgd);
 		ar_flushTlbGlobal();
 	}	
+	ar_updateCpuState(0);
 	switch_to(prev,next,prev);
 }
 

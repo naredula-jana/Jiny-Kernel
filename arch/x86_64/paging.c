@@ -12,11 +12,14 @@ addr_t g_kernel_page_dir=0;
 extern addr_t end; 
 addr_t placement_address=(addr_t)&end;
 static int handle_mm_fault(addr_t addr);
-static void mk_pte(pte_t *pte, addr_t fr,int global)
+static void mk_pte(pte_t *pte, addr_t fr,int global,int user)
 {
         pte->present=1;
         pte->rw=1;
-        pte->user=0;
+	if (user == 1) 
+		pte->user=1;
+	else
+        	pte->user=0;
         pte->pwt=0;
         pte->pcd=0;
         pte->accessed=0;
@@ -33,11 +36,14 @@ static void mk_pte(pte_t *pte, addr_t fr,int global)
         pte->nx=0;
         pte->frame = fr;
 }
-static void mk_pde(pde_t *pde, addr_t fr,int page_size,int global)  
+static void mk_pde(pde_t *pde, addr_t fr,int page_size,int global,int user)  
 {
 	pde->present=1;
 	pde->rw=1;
-	pde->user=0;
+	if (user == 1)
+		 pde->user=1;
+	else
+		pde->user=0;
 	pde->pwt=0;
 	pde->pcd=0;
 	pde->accessed=0;
@@ -79,7 +85,7 @@ addr_t initialise_paging(addr_t end_addr)
 		if (fr > nframes) {
 			break;
 		}
-		mk_pde(__va(level2_table),fr,1,1);
+		mk_pde(__va(level2_table),fr,1,1,0);
 		level2_table++;
 		fr=fr+512; /* 2M = 512*4K frames */	
 	}
@@ -393,7 +399,10 @@ static int handle_mm_fault(addr_t addr)
 	}
 	if (p==0) BUG();
 	pl1=(pl1+(L1_INDEX(addr)));
-	mk_pte(__va(pl1),((addr_t)p>>12),0);
+	if (addr > PAGE_OFFSET ) /* then it is kernel address */
+		mk_pte(__va(pl1),((addr_t)p>>12),0,0);
+	else	
+		mk_pte(__va(pl1),((addr_t)p>>12),0,1);
 
 	asm volatile("movq %%cr4,%0" : "=r" (mmu_cr4_features));
 	__flush_tlb_global();  /* TODO : need not flush entire table, flush only spoecific tables*/

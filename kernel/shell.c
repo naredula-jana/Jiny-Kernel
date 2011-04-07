@@ -311,7 +311,7 @@ static int load_test(char *arg1,char *arg2)
         long x,*xp;
 
 	int (*main_func)()=0;
-        fp=fs_open("/home/njana/jiny/test/test1",0);
+        fp=fs_open("/home/njana/jiny/test/test2",0);
 	if (fp == 0) 
 	{
 		ut_printf(" Failed to open the file \n");
