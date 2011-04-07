@@ -70,6 +70,7 @@ syscall_entry:
 /* enter using syscall but exit using iret, so we need to setup the stack accordingly */
 	subq $IRET_OFFSET_SIZE,%rsp
         movq %rcx,IRET_OFFSET_RIP(%rsp)
+        movq %r11,IRET_OFFSET_RFLAGS(%rsp)
         /*movq $(GDT_SEL(UCODE_DESCR) | SEG_DPL_USER),IRET_OFFSET_CS(%rsp)
         movq $(GDT_SEL(UDATA_DESCR) | SEG_DPL_USER),IRET_OFFSET_SS(%rsp)*/
         movq $(GDT_SEL(KCODE_DESCR) | SEG_DPL_KERNEL),IRET_OFFSET_CS(%rsp)
@@ -99,14 +100,14 @@ syscall_done:
 	RESTORE_GPRS
 
           /* Now restore user %gs */
-          cli
-          addq $8,%rsp /* Simulate our extra 'push %rax' */
-          RESTORE_USER_SEGMENT_REGISTERS
-      pushq %rax
-          movl %gs:(CPU_STATE_USER_GS_OFFSET), %eax
-          swapgs
-          movl %eax, %gs
-      popq %rax
-      orq $(1 << 9),HW_INTERRUPT_CTX_RFLAGS_OFFT(%rsp)
-      iretq
+	cli
+	addq $8,%rsp /* Simulate our extra 'push %rax' */
+	RESTORE_USER_SEGMENT_REGISTERS
+	pushq %rax
+	movl %gs:(CPU_STATE_USER_GS_OFFSET), %eax
+	swapgs
+	movl %eax, %gs
+	popq %rax
+	orq $(1 << 9),IRET_OFFSET_RFLAGS(%rsp)
+	iretq
 

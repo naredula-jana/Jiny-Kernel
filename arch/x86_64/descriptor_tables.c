@@ -24,7 +24,7 @@ int ar_updateCpuState(int cpuid)
 {
 	unsigned long p=g_current_task;
 	
-	g_cpu_state[cpuid].kernel_stack=p+STACK_SIZE;
+	g_cpu_state[cpuid].kernel_stack=p+STACK_SIZE/2; /* TODO need to remove /2 later */
 	return 1;
 }
 // Initialisation routine - zeroes all the interrupt service routines,
