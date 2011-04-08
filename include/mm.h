@@ -15,6 +15,9 @@
 #define __va(x)                 ((void *)((unsigned long)(x)+PAGE_OFFSET))
 #define MAP_NR(addr)            (__pa(addr) >> PAGE_SHIFT)
 
+#define USERSTACK_ADDR 0x800000
+#define USERSTACK_LEN  0x100000
+
 #define virt_to_page(kaddr)	(g_mem_map + (__pa(kaddr) >> PAGE_SHIFT))
 /*
  * vm_flags..

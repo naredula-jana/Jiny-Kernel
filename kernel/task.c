@@ -10,6 +10,7 @@
  */
 #include "task.h"
 #include "interface.h"
+#include "descriptor_tables.h"
 #define MAGIC_CHAR 0xab
 #define MAGIC_LONG 0xabababababababab
 
@@ -246,8 +247,57 @@ int sc_threadlist( char *arg1,char *arg2)
 	}
 	spin_unlock_irqrestore(&runqueue_lock, flags);
 }
-int sys_execve()
+struct user_regs {
+	struct gpregs gpres;
+	struct intr_stack_frame isf;
+};
+#define DEFAULT_RFLAGS_VALUE (0x10202)
+extern void enter_userspace();
+int sc_execve(unsigned char *file)
 {
+	struct file *fp;
+	unsigned long main_func;
+	struct user_regs *p;
+	unsigned long *tmp;
+
+	fp=fs_open(file,0);
+	if (fp == 0)
+	{
+		ut_printf("Error :execve Failed to open the file :%s\n",file);
+		return 0;
+	}
+	main_func=fs_loadElfLibrary(fp);
+	vm_printMmaps(0,0);
+	ar_updateCpuState(0);
+
+	tmp=USERSTACK_ADDR+USERSTACK_LEN-20;
+	*tmp=0x5234;
+
+/* From here onwards do call any function that consumes stack */
+	asm("cli");
+	asm("movq %%rsp,%0" : "=m" (p));
+	p=p-1;
+	asm("subq $0xa0,%rsp");
+	p->gpres.rbp=p->gpres.rsi=0;
+	p->gpres.rdi=p->gpres.rdx=0;
+	p->gpres.rbx=p->gpres.rcx=0;
+	p->gpres.rax=p->gpres.r10=0;
+	p->gpres.r11=p->gpres.r12=0;
+	p->gpres.r13=p->gpres.r14=0;
+	p->gpres.r15=p->gpres.r9=0;
+	p->gpres.r8=0;
+	p->isf.rip=main_func;
+	p->isf.rflags=DEFAULT_RFLAGS_VALUE;
+	p->isf.rsp=USERSTACK_ADDR+USERSTACK_LEN-20 ;
+/*	p->isf.cs=GDT_SEL(UCODE_DESCR) | SEG_DPL_USER;
+	p->isf.ss=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
+	p->isf.cs=GDT_SEL(UCODE_DESCR) | SEG_DPL_KERNEL;
+	p->isf.ss=GDT_SEL(UDATA_DESCR) | SEG_DPL_KERNEL; */
+	
+	p->isf.cs=GDT_SEL(KCODE_DESCR) | SEG_DPL_KERNEL; /*TODO need to moce UCODE and UDATA */
+	p->isf.ss=GDT_SEL(KDATA_DESCR) | SEG_DPL_KERNEL; 
+
+	enter_userspace();	
 
 }
 static int free_mm(struct mm_struct *mm)
@@ -256,7 +306,7 @@ static int free_mm(struct mm_struct *mm)
 	if (mm->count.counter > 0) return 0;
 
 	ar_pageTableCleanup(mm,0,0);
-/* TODO : vmaps ned to cleanup */
+	/* TODO : vmaps ned to cleanup */
 	kmem_cache_free(mm_cachep,mm);
 	return 1;
 }
@@ -287,14 +337,14 @@ int sc_fork(unsigned long clone_flags, unsigned long usp, int (*fn)(void *))
 		p->ticks=0;
 	}else
 	{
-	/*	unsigned long curr_spb,curr_spe,new_sp;
+		/*	unsigned long curr_spb,curr_spe,new_sp;
 
-		ut_memcpy(p,g_current_task,STACK_SIZE);
-		p->thread.ip=(void *)ret_from_fork;
-		asm("movq %%rbp,%0" : "=m" (curr_spe));
-		curr_spb=g_current_task;
-		p->thread.sp=(unsigned long)p+(curr_spe-curr_spb);
-		ut_printf(" thread sp : %x  ip:%x old_bp:%x  \n",p->thread.sp,p->thread.ip,curr_spe);	*/
+			ut_memcpy(p,g_current_task,STACK_SIZE);
+			p->thread.ip=(void *)ret_from_fork;
+			asm("movq %%rbp,%0" : "=m" (curr_spe));
+			curr_spb=g_current_task;
+			p->thread.sp=(unsigned long)p+(curr_spe-curr_spb);
+			ut_printf(" thread sp : %x  ip:%x old_bp:%x  \n",p->thread.sp,p->thread.ip,curr_spe);	*/
 	}
 
 

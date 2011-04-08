@@ -1,6 +1,7 @@
 #include "descriptor_tables.h"
 
 .global syscall_entry
+.global enter_userspace
 
 #define SAVE_AND_LOAD_SEGMENT_REGISTERS         \
    mov %ds, %gs:CPU_STATE_USER_DS_OFFSET;            \
@@ -57,8 +58,35 @@
     popq %r9;                                   \
     popq %r8;                                   \
 
-#define TOTAL_SYSCALLS  7
+#define TOTAL_SYSCALLS  9
 
+
+enter_userspace:
+	addq $0x8,%rsp
+/*        RESTORE_GPRS */
+
+	addq $0x70,%rsp
+	popq %rax
+
+
+          /* Now restore user %gs */
+        cli
+        RESTORE_USER_SEGMENT_REGISTERS 
+        pushq %rax
+        movl %gs:(CPU_STATE_USER_GS_OFFSET), %eax
+        swapgs
+        movl %eax, %gs
+        popq %rax 
+
+/*        mov $0x10 ,%eax
+        cmp $0x10,%eax
+1:
+        je 1b */
+
+        orq $(1 << 9),IRET_OFFSET_RFLAGS(%rsp)
+        iretq
+
+	
 syscall_entry:
         /* Local interrupts are disabled upon entering the entrypoint.
          */
@@ -71,10 +99,12 @@ syscall_entry:
 	subq $IRET_OFFSET_SIZE,%rsp
         movq %rcx,IRET_OFFSET_RIP(%rsp)
         movq %r11,IRET_OFFSET_RFLAGS(%rsp)
-        /*movq $(GDT_SEL(UCODE_DESCR) | SEG_DPL_USER),IRET_OFFSET_CS(%rsp)
-        movq $(GDT_SEL(UDATA_DESCR) | SEG_DPL_USER),IRET_OFFSET_SS(%rsp)*/
+/*        movq $(GDT_SEL(UCODE_DESCR) | SEG_DPL_USER),IRET_OFFSET_CS(%rsp)
+        movq $(GDT_SEL(UDATA_DESCR) | SEG_DPL_USER),IRET_OFFSET_SS(%rsp)
+*/ 
         movq $(GDT_SEL(KCODE_DESCR) | SEG_DPL_KERNEL),IRET_OFFSET_CS(%rsp)
-        movq $(GDT_SEL(KDATA_DESCR) | SEG_DPL_KERNEL),IRET_OFFSET_SS(%rsp)
+        movq $(GDT_SEL(KDATA_DESCR) | SEG_DPL_KERNEL),IRET_OFFSET_SS(%rsp) 
+
         movq %gs:CPU_STATE_USER_STACK_OFFSET,%rcx
         movq %rcx,IRET_OFFSET_RSP(%rsp)
 

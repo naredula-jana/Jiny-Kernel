@@ -38,7 +38,7 @@ static inline void msr_write(uint32_t msr, uint64_t val)
 static void init_fs_and_gs(int cpuid)
 {
 
-	//msr_write(MSR_GS_BASE, 0);
+	/*msr_write(MSR_GS_BASE, 0); */
 	msr_write(MSR_GS_BASE, &g_cpu_state[cpuid]);
 	msr_write(MSR_KERN_GS_BASE,
 			&g_cpu_state[cpuid]);

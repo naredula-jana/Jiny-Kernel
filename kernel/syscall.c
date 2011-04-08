@@ -9,6 +9,7 @@ unsigned long sys_write(unsigned long *args);
 unsigned long sys_close(unsigned long *args);
 unsigned long sys_fadvise(unsigned long *args);
 unsigned long sys_fdatasync(unsigned long *args);
+unsigned long sys_exit(unsigned long args);
 unsigned long syscallnull(unsigned long *args);
 
 typedef struct {
@@ -24,6 +25,7 @@ syscalltable_t syscalltable[]=
 	{sys_close}, /* 5  */
 	{sys_fadvise}, 
 	{sys_fdatasync}, 
+	{sys_exit}, 
 	{syscallnull} 
 };
 void syscall_handler(struct fault_ctx *ctx)
@@ -48,6 +50,13 @@ ut_printf("INSIDE THE new SYSCALLin printf \n");
 	ut_printf("%s\n",args);
 	return 1;
 }
+unsigned long sys_exit(unsigned long args)
+{
+ut_printf("INSIDE sysexit \n");
+        sc_exit();
+        return 1;
+}
+
 unsigned long old_sys_printf(unsigned long *args)
 {
         unsigned char *p;

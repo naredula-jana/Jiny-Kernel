@@ -1001,6 +1001,9 @@ out:
 	if (error != 0)
 	{
 		DEBUG(" ERROR in elf loader :%d\n",-error);
+	}else
+	{
+		vm_mmap(0,USERSTACK_ADDR,USERSTACK_LEN,PROT_READ | PROT_WRITE ,0,0);	
 	}
 	DEBUG(" Program start address(autod) : %x \n",elf_ex.e_entry);
 	if ( error == 0)

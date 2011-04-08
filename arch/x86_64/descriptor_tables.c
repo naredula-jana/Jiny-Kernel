@@ -23,8 +23,15 @@ struct cpu_state g_cpu_state[1];
 int ar_updateCpuState(int cpuid)
 {
 	unsigned long p=g_current_task;
-	
-	g_cpu_state[cpuid].kernel_stack=p+STACK_SIZE/2; /* TODO need to remove /2 later */
+	if (g_cpu_state[cpuid].user_stack==0) 
+	{
+		g_cpu_state[cpuid].user_stack=USERSTACK_ADDR+USERSTACK_LEN;	
+		g_cpu_state[cpuid].user_ds=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
+		g_cpu_state[cpuid].user_es=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
+		g_cpu_state[cpuid].user_fs=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
+		g_cpu_state[cpuid].user_gs=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
+	}
+	g_cpu_state[cpuid].kernel_stack=p+STACK_SIZE; 
 	return 1;
 }
 // Initialisation routine - zeroes all the interrupt service routines,

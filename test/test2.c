@@ -11,8 +11,10 @@ main()
 	i=1;
  	while (i<5)
 	{
+		ut_printf(" NEW SYSCALL  loop count: %x stackaddr:%x \n",i,&ret);
 		i++;
-		ut_printf(" using SYSCALL  loop countfrom test prog : %x \n",i);
 	}
-	ut_printf("Exiting from test code \n");
+	ut_printf("before Exiting from test code \n");
+	exit(1);
+	ut_printf("after Exiting from test code \n");
 }

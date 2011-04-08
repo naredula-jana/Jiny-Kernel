@@ -2,6 +2,28 @@
 
 .code64
 .text
+#define SAVE_AND_LOAD_SEGMENT_REGISTERS         \
+   mov %ds, %gs:CPU_STATE_USER_DS_OFFSET;            \
+   mov %es, %gs:CPU_STATE_USER_ES_OFFSET;            \
+   mov %fs, %gs:CPU_STATE_USER_FS_OFFSET;            \
+   mov %gs, %gs:CPU_STATE_USER_GS_OFFSET;            \
+   mov %gs:(CPU_STATE_KERNEL_DS_OFFSET),%ds;
+
+#define RESTORE_USER_SEGMENT_REGISTERS        \
+   mov %gs:(CPU_STATE_USER_DS_OFFSET),%ds;  \
+   mov %gs:(CPU_STATE_USER_ES_OFFSET),%es; \
+   mov %gs:(CPU_STATE_USER_FS_OFFSET),%fs; \
+   pushq %rax;     \
+   pushq %rcx;     \
+   pushq %rdx;     \
+   mov %gs:(CPU_STATE_USER_PTD_OFFSET),%rax; \
+   movq $0xC0000100, %rcx; \
+   movq %rax,%rdx; \
+   shr $32,%rdx;\
+   wrmsr; \
+   popq %rdx; \
+   popq %rcx; \
+   popq %rax;
 
 /* Save all general purpose registers  */
 #define SAVE_GPRS                               \
@@ -64,12 +86,25 @@ fault_entry_point:
         movq $0, 16(%rsp)
         movq %rbx, 8(%rsp)
         popq %rbx
+
+
 1:
+        cmpq $GDT_SEL(KCODE_DESCR), 16 + INT_STACK_FRAME_CS_OFFT(%rsp)
+        je 2f
+        swapgs
+2:
         SAVE_GPRS
 	movq %rsp, %rdi /* contains the context : first argument */
         movq %rax, %rsi /* fault number : second argument */
         callq ar_faultHandler
 	RESTORE_GPRS
+
+	cmpq $GDT_SEL(KCODE_DESCR), 16 + INT_STACK_FRAME_CS_OFFT(%rsp)
+        je 4f
+
+        RESTORE_USER_SEGMENT_REGISTERS
+        swapgs
+4:
         popq %rax
 	addq $8, %rsp  /*  error code on th stack */
 		  /* Make sure IF is set after returning from interrupt context.  */
@@ -79,29 +114,37 @@ fault_entry_point:
 
 irq_entry_point:
 
-/*        cmpq $GDT_SEL(KCODE_DESCR), 8 + INT_STACK_FRAME_CS_OFFT(%rsp)
-        je 2f
+        cmpq $GDT_SEL(KCODE_DESCR), 8 + INT_STACK_FRAME_CS_OFFT(%rsp)
+        je 1f
 
         swapgs
         SAVE_AND_LOAD_SEGMENT_REGISTERS
-*/
-2:
+
+1:
         SAVE_GPRS
 	movq %rsp, %rdi /* contains the context : first argument */
         movq %rax, %rsi  /* contains interrupts number */
         callq ar_irqHandler
 	RESTORE_GPRS
-/*		
+		
 	cmpq $GDT_SEL(KCODE_DESCR), 8 + INT_STACK_FRAME_CS_OFFT(%rsp)
-        je 1f
+        je 2f
 
         RESTORE_USER_SEGMENT_REGISTERS
         cli
-        movl %gs:(CPU_SCHED_STAT_USER_GS_OFFT), %eax
+        movl %gs:(CPU_STATE_USER_GS_OFFSET), %eax
         swapgs
         movl %eax, %gs
-1:	*/	
+2:		
         popq %rax
+
+
+        /*mov $0x10 ,%eax
+        cmp $0x10,%eax
+3:
+        je 3b*/
+
+
 		  /* Make sure IF is set after returning from interrupt context. */
         orq $(1 << 9),HW_INTERRUPT_CTX_RFLAGS_OFFT(%rsp) 
 	sti
