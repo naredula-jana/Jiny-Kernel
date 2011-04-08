@@ -2,14 +2,11 @@
 #include "interface.h"
 #include "isr.h"
 
-unsigned long sys_printf(unsigned long *args);
-unsigned long sys_open(unsigned long *args);
-unsigned long sys_read(unsigned long *args);
-unsigned long sys_write(unsigned long *args);
-unsigned long sys_close(unsigned long *args);
-unsigned long sys_fadvise(unsigned long *args);
-unsigned long sys_fdatasync(unsigned long *args);
-unsigned long sys_exit(unsigned long args);
+unsigned long SYS_printf(unsigned long *args);
+unsigned long SYS_exit(unsigned long args);
+unsigned long SYS_fork();
+
+long SYS_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags,unsigned long fd, unsigned long off);
 unsigned long syscallnull(unsigned long *args);
 
 typedef struct {
@@ -18,90 +15,35 @@ typedef struct {
 syscalltable_t syscalltable[]=
 {
 	{syscallnull} ,
-	{sys_printf}, /* 1  */
-	{sys_open},
-	{sys_write}, 
-	{sys_read}, 
-	{sys_close}, /* 5  */
-	{sys_fadvise}, 
-	{sys_fdatasync}, 
-	{sys_exit}, 
+	{SYS_printf}, /* 1  */
+	{SYS_fs_open},
+	{SYS_fs_write}, 
+	{SYS_fs_read}, 
+	{SYS_fs_close}, /* 5  */
+	{SYS_fs_fadvise}, 
+	{SYS_fs_fdatasync}, 
+	{SYS_fs_lseek}, 
+	{SYS_sc_exit}, 
+	{SYS_sc_execve},/* 10 */
+	{SYS_sc_fork},
+	{SYS_mmap}, 
 	{syscallnull} 
 };
-void syscall_handler(struct fault_ctx *ctx)
-{
-	unsigned long syscall_id;
-	unsigned long args[5];
 
-	syscall_id=ctx->gprs->rax;
-	if (syscall_id > 7 || syscall_id < 1) 
-	{
-	}
-	args[0]=ctx->gprs->rbx;
-	args[1]=ctx->gprs->rcx;
-	args[2]=ctx->gprs->rdx;
-	DEBUG(" syscall id :%d args1:%x arg2:%x arg3:%x  \n",syscall_id,args[0],args[1],args[2]);
-	ctx->gprs->rax=syscalltable[syscall_id-1].func(args);	
-}
-
-unsigned long sys_printf(unsigned long *args)
+unsigned long SYS_printf(unsigned long *args)
 {
-ut_printf("INSIDE THE new SYSCALLin printf \n");
+	DEBUG("INSIDE THE new SYSCALLin printf \n");
 	ut_printf("%s\n",args);
 	return 1;
 }
-unsigned long sys_exit(unsigned long args)
-{
-ut_printf("INSIDE sysexit \n");
-        sc_exit();
-        return 1;
-}
 
-unsigned long old_sys_printf(unsigned long *args)
-{
-        unsigned char *p;
-ut_printf("INSIDE THE SYSCALLin printf \n");
-        p=(unsigned char *)args[0];
-        if (p != 0)
-        ut_printf("%s\n",p);
-        return 1;
-}
-unsigned long sys_open(unsigned long *args)
-{
-	struct file *fp;
-ut_printf("INSIDE THE SYSCALLn open \n");
-	fp=fs_open((unsigned char *)args[0],(int)args[1]);
-	return (unsigned long )fp;
-}
 
-unsigned long sys_read(unsigned long *args)
+long SYS_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags,unsigned long fd, unsigned long off)
 {
 
-	return fs_read((struct file *)args[0],(unsigned char *)args[1],(unsigned long)args[2]);		
-}
-
-unsigned long sys_write(unsigned long *args)
-{
-		
-	return fs_write((struct file *)args[0],(unsigned char *)args[1],(unsigned long)args[2]);		
-}
-
-unsigned long sys_close(unsigned long *args)
-{
-	return fs_close((struct file *)args[0]);
-}
-
-unsigned long sys_fadvise(unsigned long *args)
-{
-	
-	return 1;
-}
-unsigned long sys_fdatasync(unsigned long *args)
-{
-	return fs_fdatasync((struct file *)args[0]);
 }
 unsigned long syscallnull(unsigned long *args)
 {
-	ut_printf("SYSCALL null as hit \n");	
+	DEBUG("SYSCALL null as hit \n");	
 	return 11;
 }

@@ -253,14 +253,14 @@ struct user_regs {
 };
 #define DEFAULT_RFLAGS_VALUE (0x10202)
 extern void enter_userspace();
-int sc_execve(unsigned char *file)
+unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned char *env)
 {
 	struct file *fp;
 	unsigned long main_func;
 	struct user_regs *p;
 	unsigned long *tmp;
 
-	fp=fs_open(file,0);
+	fp=SYS_fs_open(file,0,0);
 	if (fp == 0)
 	{
 		ut_printf("Error :execve Failed to open the file :%s\n",file);
@@ -271,7 +271,7 @@ int sc_execve(unsigned char *file)
 	ar_updateCpuState(0);
 
 	tmp=USERSTACK_ADDR+USERSTACK_LEN-20;
-	*tmp=0x5234;
+	*tmp=0x1234; /* this is just to create physical page, other wise the main function is unabled to called : TODO: need to fix */
 
 /* From here onwards do call any function that consumes stack */
 	asm("cli");
@@ -362,8 +362,11 @@ int sc_fork(unsigned long clone_flags, unsigned long usp, int (*fn)(void *))
 	spin_unlock_irqrestore(&runqueue_lock, flags);
 	return p->pid;
 }
+unsigned long SYS_sc_fork()
+{
 
-int sc_exit()
+}
+int SYS_sc_exit(int status)
 {
 	list_del(&g_current_task->task_link);
 	g_current_task->state=TASK_DEAD;

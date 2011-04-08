@@ -37,7 +37,7 @@ if (g_serial_output==1)	ut_printf(x); \
 #define DEBUG(x...) do { \
 } while (0) 
 #endif
-
+#define fd_to_file (struct file*)
 
 
 #define MAX_SYMBOLLEN 40

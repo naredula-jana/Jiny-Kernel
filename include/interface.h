@@ -9,10 +9,12 @@
 int sc_wakeUp(struct wait_struct *waitqueue,struct task_struct * p);
 int sc_wait(struct wait_struct *waitqueue,int ticks);
 int sc_sleep(int ticks); /* each tick is 100HZ or 10ms */
+unsigned long SYS_sc_fork();
 int sc_fork(unsigned long clone_flags, unsigned long usp, int (*fn)(void *));
-int sc_exit();
+int SYS_sc_exit(int status);
 int sc_threadlist( char *arg1,char *arg2);
 int sc_createThread(int (*fn)(void *));
+unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned char *env);
 void sc_schedule();
 
 /* mm */
@@ -29,7 +31,7 @@ void mm_free (const void *objp);
 /* vm */
 int vm_printMmaps(char *arg1,char *arg2);
 struct vm_area_struct *vm_findVma(struct mm_struct *mm,unsigned long addr, unsigned long len);
-unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len,unsigned long prot, unsigned long flags, unsigned long pgoff);
+unsigned long vm_mmap(unsigned long fd, unsigned long addr, unsigned long len,unsigned long prot, unsigned long flags, unsigned long pgoff);
 unsigned long vm_brk(unsigned long addr, unsigned long len);
 int vm_munmap(struct mm_struct *mm, unsigned long addr, unsigned long len);
 
@@ -46,17 +48,17 @@ int pc_putFreePage(struct page *page);
 page_struct_t *pc_getFreePage();
 
 /*vfs */
-int fs_registerFileSystem(struct filesystem *fs);
+unsigned long SYS_fs_registerFileSystem(struct filesystem *fs);
 struct inode *fs_getInode(char *filename);
-int fs_putInode(struct inode *inode);
-int fs_printInodes(char *arg1,char *arg2);
-struct file *fs_open(char *filename,int mode);
-int fs_lseek(struct file *file ,unsigned long offset, int whence);
-int fs_write(struct file *file ,unsigned char *buff ,unsigned long len);
-int fs_read(struct file *file ,unsigned char *buff ,unsigned long len);
-int fs_close(struct file *file);
-int fs_fdatasync(struct file *file );
-int fs_advise(struct file *file,unsigned long offset, unsigned long len,int advise);
+unsigned long fs_putInode(struct inode *inode);
+unsigned long fs_printInodes(char *arg1,char *arg2);
+unsigned long SYS_fs_open(char *filename,int mode,int flags);
+unsigned long SYS_fs_lseek(unsigned long fd ,unsigned long offset, int whence);
+unsigned long SYS_fs_write(unsigned long fd ,unsigned char *buff ,unsigned long len);
+unsigned long SYS_fs_read(unsigned long fd ,unsigned char *buff ,unsigned long len);
+unsigned long SYS_fs_close(unsigned long fd);
+unsigned long SYS_fs_fdatasync(unsigned long fd );
+unsigned long SYS_fs_fadvise(unsigned long fd,unsigned long offset, unsigned long len,int advise);
 struct page *fs_genericRead(struct inode *inode,unsigned long offset);
 unsigned long fs_loadElfLibrary(struct file  *file);
 

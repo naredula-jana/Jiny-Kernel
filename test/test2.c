@@ -11,7 +11,7 @@ main()
 	i=1;
  	while (i<5)
 	{
-		ut_printf(" NEW SYSCALL  loop count: %x stackaddr:%x \n",i,&ret);
+		ut_printf("  LATEST SYSCALLs loop count: %x stackaddr:%x \n",i,&ret);
 		i++;
 	}
 	ut_printf("before Exiting from test code \n");

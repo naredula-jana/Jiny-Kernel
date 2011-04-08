@@ -49,7 +49,7 @@ static int inode_init(struct inode *inode,char *filename)
 
 /*************************** API functions ************************/
 
-int fs_printInodes(char *arg1,char *arg2)
+unsigned long fs_printInodes(char *arg1,char *arg2)
 {
         struct inode *tmp_inode;
         struct list_head *p;
@@ -88,7 +88,7 @@ last:
 	return ret_inode;	
 }
 
-int fs_putInode(struct inode *inode)
+unsigned long fs_putInode(struct inode *inode)
 {
 	unsigned long  flags;
 	int ret=0;
@@ -105,46 +105,64 @@ int fs_putInode(struct inode *inode)
 
 	return 0;
 }
-struct file *fs_open(char *filename,int mode)
+unsigned long SYS_fs_open(char *filename,int mode,int flags)
 {
 	if (vfs_fs == 0) return 0;
 	return vfs_fs->open(filename,mode);
 }
-int fs_fdatasync(struct file *file )
+unsigned long SYS_fs_fdatasync(unsigned long fd)
 {
+	struct file *file;
+
+	file=fd_to_file(fd);
 	if (vfs_fs == 0) return 0;
 	if (file == 0) return 0;
 	return vfs_fs->fdatasync(file);
 }
-int fs_lseek(struct file *file ,unsigned long offset, int whence)
+unsigned long SYS_fs_lseek(unsigned long fd,unsigned long offset, int whence)
 {
+	struct file *file;
+
+	file=fd_to_file(fd);
         if (vfs_fs == 0) return 0;
 	if (file == 0) return 0;
         return vfs_fs->lseek(file,offset,whence);
 }
-int fs_write(struct file *file ,unsigned char *buff ,unsigned long len)
+unsigned long SYS_fs_write(unsigned long fd,unsigned char *buff ,unsigned long len)
 {
+	struct file *file;
+
+	file=fd_to_file(fd);
 	if (vfs_fs == 0) return 0;
 	if (file == 0) return 0;
 	return vfs_fs->write(file,buff,len);
 }
-int fs_read(struct file *file ,unsigned char *buff ,unsigned long len)
+unsigned long SYS_fs_read(unsigned long fd ,unsigned char *buff ,unsigned long len)
 {
+	struct file *file;
+
+	file=fd_to_file(fd);
 	if (vfs_fs == 0) return 0;
 	if (file == 0) return 0;
 	return vfs_fs->read(file,buff,len);
 }
-int fs_close(struct file *file)
+unsigned long SYS_fs_close(unsigned long fd)
 {
+	struct file *file;
+
+	file=fd_to_file(fd);
 	if (vfs_fs == 0) return 0;
 	if (file == 0) return 0;
 	return vfs_fs->close(file);
 }
-int fs_advise(struct file *file,unsigned long offset, unsigned long len,int advise)
+unsigned long SYS_fs_fadvise(unsigned long fd,unsigned long offset, unsigned long len,int advise)
 {
 	struct page *page;
 	struct inode *inode;
         struct list_head *p;
+	struct file *file;
+
+	file=fd_to_file(fd);
 
 	if (file == 0 || file->inode ==0) return 0;
 	inode=file->inode;
@@ -162,7 +180,7 @@ int fs_advise(struct file *file,unsigned long offset, unsigned long len,int advi
 	}
 	return 0;
 }
-int fs_registerFileSystem( struct filesystem *fs)
+unsigned long fs_registerFileSystem( struct filesystem *fs)
 {
 	vfs_fs=fs;
 	return 1;

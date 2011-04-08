@@ -155,7 +155,7 @@ static int sh_mmap(char *arg1,char *arg2)
 	unsigned long addr;
 	unsigned char c,*p;	
 	int i,ret,wret;
-	fp=fs_open(arg1,0);
+	fp=SYS_fs_open(arg1,0,0);
 	addr=ut_atol(arg2);
 
 	ut_printf(" filename:%s: addr :%x: \n",arg1,addr);
@@ -173,7 +173,7 @@ static int sh_load(char *arg1,char *arg2)
 	char *p,c;
 	long x,*xp;
 
-	fp=fs_open("/home/njana/jiny/test/a.out",0);
+	fp=SYS_fs_open("/home/njana/jiny/test/a.out",0,0);
 	start_func=fs_loadElfLibrary(fp);
 	ut_printf("  start_func:%x %x \n",start_func,x);
 }
@@ -194,8 +194,8 @@ static int sh_cp(char *arg1,char *arg2)
 {
 	struct file *fp,*wfp;
 	int i,ret,wret;
-	fp=fs_open(arg1,0);
-	wfp=fs_open(arg2,1);
+	fp=SYS_fs_open(arg1,0,0);
+	wfp=SYS_fs_open(arg2,1,0);
 	ut_printf("filename :%s: %s \n",arg1,arg2);
 	if (fp ==0 || wfp==0)
 	{
@@ -207,11 +207,11 @@ static int sh_cp(char *arg1,char *arg2)
 	i=1;
 	while (ret > 0)
 	{
-		ret=fs_read(fp,buf,5000);
+		ret=SYS_fs_read(fp,buf,5000);
 		buf[5001]='\0';
 		if (ret > 0)
 		{
-			wret=fs_write(wfp,buf,ret);
+			wret=SYS_fs_write(wfp,buf,ret);
 			ut_printf("%d: DATA Read :%c: ret: %d wret:%d \n",i,buf[0],ret,wret);
 		}else
 		{
@@ -226,13 +226,13 @@ static int sh_del(char *arg1,char *arg2)
 	struct file *wfp;
 	int i,ret,wret;
 
-	wfp=fs_open(arg1,0);
+	wfp=SYS_fs_open(arg1,0,0);
 	if (wfp==0)
 	{
 		ut_printf(" Error opening file :%s: \n",arg1);
 		return 0;
 	}
-	fs_advise(wfp,0,0,POSIX_FADV_DONTNEED);
+	SYS_fs_fadvise(wfp,0,0,POSIX_FADV_DONTNEED);
 	ut_printf("after del \n");
 	return 0;
 }
@@ -241,14 +241,14 @@ static int sh_sync(char *arg1,char *arg2)
 	struct file *wfp;
 	int i,ret,wret;
 
-	wfp=fs_open(arg1,0);
+	wfp=SYS_fs_open(arg1,0,0);
 	if (wfp==0)
 	{
 		ut_printf(" Error opening file :%s: \n",arg1);
 		return 0;
 	}
 	ut_printf("Before syncing \n");
-	fs_fdatasync(wfp);
+	SYS_fs_fdatasync(wfp);
 	ut_printf("after syncing \n");
 	return 0;
 }
@@ -257,7 +257,7 @@ static int sh_cat(char *arg1,char *arg2)
 	//	unsigned char buf[1024];
 	struct file *fp;
 	int i,ret;
-	fp=fs_open(arg1,0);
+	fp=SYS_fs_open(arg1,0,0);
 	ut_printf("filename :%s: \n",arg1);
 	if (fp ==0)
 	{
@@ -269,7 +269,7 @@ static int sh_cat(char *arg1,char *arg2)
 	i=1;
 	while (ret > 0)
 	{	
-		ret=fs_read(fp,buf,5000);
+		ret=SYS_fs_read(fp,buf,5000);
 		buf[5001]='\0';
 		if (ret > 0)
 		{
@@ -312,11 +312,8 @@ static int load_test(char *arg1,char *arg2)
 
 	int (*main_func)()=0;
 	
-        fp=sc_execve("/home/njana/jiny/test/test2");
-	ut_printf(" Before sc_exit\n");
-	vm_printMmaps(0,0);
-	sc_threadlist(0,0);
-	sc_exit();
+        fp=SYS_sc_execve("/home/njana/jiny/test/test2",0,0);
+	ut_printf(" ERROR: COntrol Never Reaches\n");
 	return 1;
 }
 static int sh_create(char *arg1,char *arg2)

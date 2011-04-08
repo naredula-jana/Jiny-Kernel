@@ -120,11 +120,14 @@ struct vm_area_struct *vm_findVma(struct mm_struct *mm,unsigned long addr, unsig
 	}
 	return 0;
 }
-unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len,
+unsigned long vm_mmap(unsigned long fd, unsigned long addr, unsigned long len,
 		unsigned long prot, unsigned long flags, unsigned long pgoff)
 {
 	struct mm_struct *mm = g_current_task->mm;
 	struct vm_area_struct *vma;
+	struct file *file;
+
+	file=fd_to_file(fd);
 
 	DEBUG(" mmap : addr:%x len:%x pgoff:%x \n",addr,len,pgoff);
 	vma=vm_findVma(mm,addr,len);

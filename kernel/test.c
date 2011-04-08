@@ -40,7 +40,7 @@ void test_proc()
 		if (g_test_exit==1)
 		{
 			ut_printf(" EXITING app :%d \n",g_current_task->pid);
-			sc_exit();
+			SYS_sc_exit(0);
 		}
 
 		if (g_debug_level ==1)

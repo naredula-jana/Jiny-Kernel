@@ -23,7 +23,6 @@ extern void init_serial();
 kmem_cache_t *vm_area_cachep;
 /* SLAB cache for mm_struct structures (tsk->mm) */
 kmem_cache_t *mm_cachep;
-extern void syscall_handler(struct fault_ctx *ctx);
 int init_kernel(unsigned long end_addr)
 {
 	ut_printf("Initalising ISR & descriptors \n");
@@ -44,7 +43,7 @@ int init_kernel(unsigned long end_addr)
 	init_tasking();
 	init_pci();
 	init_vfs();
-	ar_registerInterrupt(128,syscall_handler);
+//	ar_registerInterrupt(128,syscall_handler);
 	ut_printf("Initialization completed \n");
 	return 1 ;
 }
