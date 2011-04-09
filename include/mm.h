@@ -9,12 +9,10 @@
 #define PAGE_SIZE       (1UL << PAGE_SHIFT)
 #define PAGE_MASK       (~(PAGE_SIZE-1))
 #define PAGE_ALIGN(addr)	(((addr)+PAGE_SIZE-1)&PAGE_MASK)
-#define __PAGE_OFFSET           (0x40000000) 
-#define PAGE_OFFSET             ((unsigned long)__PAGE_OFFSET)
-#define __pa(x)                 ((unsigned long)(x)-PAGE_OFFSET)
-#define __va(x)                 ((void *)((unsigned long)(x)+PAGE_OFFSET))
+#define KERNEL_ADDR_START (0x40000000) /* Note This should be multiples 1GB , otherwise page tables copying will break */
+#define __pa(x)                 ((unsigned long)(x)-KERNEL_ADDR_START)
+#define __va(x)                 ((void *)((unsigned long)(x)+KERNEL_ADDR_START))
 #define MAP_NR(addr)            (__pa(addr) >> PAGE_SHIFT)
-
 #define USERSTACK_ADDR 0x800000
 #define USERSTACK_LEN  0x100000
 
@@ -107,7 +105,10 @@ extern kmem_cache_t *vm_area_cachep;
 extern kmem_cache_t *mm_cachep;
 extern page_struct_t *pagecache_map;
 extern unsigned char *pc_startaddr;
+extern unsigned char *pc_endaddr;
+extern unsigned long pc_phy_startaddr,pc_phy_endaddr;
 
+#define is_pc_paddr(addr) (addr>pc_phy_startaddr && addr<=pc_phy_endaddr)
 /* Page flag bit values */
 #define PG_locked                0
 #define PG_error                 1

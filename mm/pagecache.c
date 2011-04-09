@@ -283,7 +283,7 @@ int pc_pagecleaned(struct page *page)
 	PageClearDirty(page);
 	return 1;
 }
-unsigned long pc_mapInodePage(struct vm_area_struct *vma,unsigned long offset)
+unsigned long pc_getVmaPage(struct vm_area_struct *vma,unsigned long offset)
 {
 	struct page *page;
 	struct inode *inode;
@@ -292,9 +292,10 @@ unsigned long pc_mapInodePage(struct vm_area_struct *vma,unsigned long offset)
 	inode=vma->vm_inode;
 	page=fs_genericRead(inode,offset);
 	if (page == NULL) return 0;
+
 	ret=to_ptr(page)-pc_startaddr + g_hostShmPhyAddr;
 	DEBUG(" mapInodepage phy addr :%x  hostphyaddr:%x offset:%x diff:%x \n",ret,g_hostShmPhyAddr,offset,(to_ptr(page)-pc_startaddr));
-	return ret;
+	return ret; /* return physical address */
 }
 struct page *pc_getInodePage(struct inode *inode,unsigned long offset)
 {

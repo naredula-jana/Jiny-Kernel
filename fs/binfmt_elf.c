@@ -968,7 +968,7 @@ unsigned long fs_loadElfLibrary(struct file  *file)
 		error=1;
 		if (eppnt->p_filesz > 0)
 		{	
-			error = vm_mmap(file,
+			error = SYS_vm_mmap(file,
 				ELF_PAGESTART(eppnt->p_vaddr),
 				eppnt->p_filesz+ELF_PAGEOFFSET(eppnt->p_vaddr) ,
 				PROT_READ | PROT_WRITE | PROT_EXEC,
@@ -1003,7 +1003,7 @@ out:
 		DEBUG(" ERROR in elf loader :%d\n",-error);
 	}else
 	{
-		vm_mmap(0,USERSTACK_ADDR,USERSTACK_LEN,PROT_READ | PROT_WRITE ,0,0);	
+		SYS_vm_mmap(0,USERSTACK_ADDR,USERSTACK_LEN,PROT_READ | PROT_WRITE ,MAP_ANONYMOUS,0);	
 	}
 	DEBUG(" Program start address(autod) : %x \n",elf_ex.e_entry);
 	if ( error == 0)

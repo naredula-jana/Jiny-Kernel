@@ -160,7 +160,7 @@ static int sh_mmap(char *arg1,char *arg2)
 
 	ut_printf(" filename:%s: addr :%x: \n",arg1,addr);
 
-	vm_mmap(fp,  addr, 0,0,0,0);
+	SYS_vm_mmap(fp,  addr, 0,0,0,0);
 	p=addr;
 	p=p+10;
 	c=*p;	

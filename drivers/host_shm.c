@@ -7,6 +7,8 @@ pci_dev_header_t host_shm_pci_hdr;
 pci_bar_t host_shm_pci_bar[4];
 unsigned long g_hostShmLen=0;
 unsigned long g_hostShmPhyAddr=0;
+
+unsigned long pc_phy_startaddr,pc_phy_endaddr;
 extern struct wait_struct g_hfs_waitqueue;
 static void host_shm_interrupt(registers_t regs)
 {
@@ -20,6 +22,7 @@ static void host_shm_interrupt(registers_t regs)
 int init_host_shm(pci_dev_header_t *pci_hdr,pci_bar_t bars[], uint32_t len)
 {
 	uint32_t  i,*p;
+	long ret;
 	host_shm_pci_hdr=*pci_hdr;
 
 	ut_printf(" Initialising HOST SHM .. \n");
@@ -30,9 +33,9 @@ int init_host_shm(pci_dev_header_t *pci_hdr,pci_bar_t bars[], uint32_t len)
 	}	
         if (bars[0].addr !=0)
         {
-                if (vm_mmap(0,HOST_SHM_CTL_ADDR ,0x1000,PROT_WRITE,MAP_FIXED,bars[0].addr)==0)
+                if ((ret=SYS_vm_mmap(0,HOST_SHM_CTL_ADDR ,0x1000,PROT_WRITE,MAP_FIXED,bars[0].addr)) < 0)
                 {
-                        ut_printf("ERROR : mmap fails for Host_ctl addr :%x len:%x \n",bars[0].addr,bars[0].len);
+                        ut_printf("ERROR : mmap fails for Host_ctl addr :%x len:%x ret:%x \n",bars[0].addr,bars[0].len,ret);
                         return 0;
                 }else
                 {
@@ -43,9 +46,11 @@ int init_host_shm(pci_dev_header_t *pci_hdr,pci_bar_t bars[], uint32_t len)
         }
 	if (bars[2].addr !=0)
 	{
-		if (vm_mmap(0,HOST_SHM_ADDR ,bars[2].len,PROT_WRITE,MAP_FIXED,bars[2].addr)==0)
+		pc_phy_startaddr=bars[2].addr;
+		pc_phy_endaddr=pc_phy_startaddr+bars[2].len;
+		if ((ret=SYS_vm_mmap(0,HOST_SHM_ADDR ,bars[2].len,PROT_WRITE,MAP_FIXED,bars[2].addr))<0)
 		{
-			ut_printf("ERROR : mmap fails for Host_shm addr :%x len:%x \n",bars[2].addr,bars[2].len);
+			ut_printf("ERROR : mmap fails for Host_shm addr :%x len:%x ret:%x \n",bars[2].addr,bars[2].len,ret);
 			return 0;
 		}else
 		{

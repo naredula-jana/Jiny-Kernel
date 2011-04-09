@@ -111,7 +111,7 @@ static inline void free_pages_ok(unsigned long map_nr, unsigned long order)
 #define MARK_USED(index, order, area) \
 	change_bit((index) >> (1+(order)), (area)->map)
 #define CAN_DMA(x) (PageDMA(x))
-#define ADDRESS(x) (PAGE_OFFSET + ((x) << PAGE_SHIFT))
+#define ADDRESS(x) (KERNEL_ADDR_START + ((x) << PAGE_SHIFT))
 
 #define RMQUEUE(order, gfp_mask) \
 	do { struct free_mem_area_struct * area = free_mem_area+order; \
@@ -175,7 +175,7 @@ static unsigned long init_free_area(unsigned long start_mem, unsigned long end_m
 	 * analysis.
 	 */
 	ut_printf("init_free_area start_mem: %x endmem:%x   \n",start_mem,end_mem);
-	i = (end_mem - PAGE_OFFSET) >> (PAGE_SHIFT+7);
+	i = (end_mem - KERNEL_ADDR_START) >> (PAGE_SHIFT+7);
 	if (i < 10)
 		i = 10;
 	if (i > 256)
@@ -199,7 +199,7 @@ static unsigned long init_free_area(unsigned long start_mem, unsigned long end_m
 		init_mem_queue(free_mem_area+i);
 		mask += mask;
 		end_mem = (end_mem + ~mask) & mask;
-		bitmap_size = (end_mem - PAGE_OFFSET) >> (PAGE_SHIFT + i);
+		bitmap_size = (end_mem - KERNEL_ADDR_START) >> (PAGE_SHIFT + i);
 		bitmap_size = (bitmap_size + 7) >> 3;
 		bitmap_size = LONG_ALIGN(bitmap_size);
 		free_mem_area[i].map = (unsigned int *) start_mem;
@@ -224,7 +224,7 @@ static void init_mem(unsigned long start_mem, unsigned long end_mem)
 		clear_bit(PG_reserved, &g_mem_map[MAP_NR(start_mem)].flags);
 		start_mem += PAGE_SIZE;
 	}
-	for (tmp = PAGE_OFFSET ; tmp < (end_mem - 0x2000) ; tmp += PAGE_SIZE) {
+	for (tmp = KERNEL_ADDR_START ; tmp < (end_mem - 0x2000) ; tmp += PAGE_SIZE) {
 		/*if (tmp >= MAX_DMA_ADDRESS)
 		  clear_bit(PG_DMA, &g_mem_map[MAP_NR(tmp)].flags);*/
 		if (PageReserved(g_mem_map+MAP_NR(tmp))) {

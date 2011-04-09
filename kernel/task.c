@@ -260,6 +260,9 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 	struct user_regs *p;
 	unsigned long *tmp;
 
+	/* clear all user space pages */
+	ar_pageTableCleanup(g_current_task->mm,0,KERNEL_ADDR_START-1);
+
 	fp=SYS_fs_open(file,0,0);
 	if (fp == 0)
 	{
@@ -482,11 +485,11 @@ void init_tasking()
 	init_timer();
 	init_waitqueue(&g_timerqueue);
 }
-
+static unsigned long flags;
 void sc_schedule()
 {
 	struct task_struct *prev, *next;
-	unsigned long flags;
+//	unsigned long flags;
 
 	if (!g_current_task)
 	{
@@ -523,22 +526,26 @@ void sc_schedule()
 		free_task_struct(g_task_dead);
 		g_task_dead=0;
 	}
-	spin_unlock_irqrestore(&runqueue_lock, flags);
+	//spin_unlock_irqrestore(&runqueue_lock, flags);
 
 	if (prev->state == TASK_DEAD)
 	{
 		g_task_dead=prev;
 	}
 
-	if (prev==next) return;
+	if (prev==next)
+	{
+		spin_unlock_irqrestore(&runqueue_lock, flags);
+		 return;
+	}
 	next->counter=5; /* 50 ms time slice */
 	if (prev->mm->pgd != next->mm->pgd) /* TODO : need to make generic */
 	{
 		flush_tlb(next->mm->pgd);
-		ar_flushTlbGlobal();
 	}	
 	ar_updateCpuState(0);
 	switch_to(prev,next,prev);
+	spin_unlock_irqrestore(&runqueue_lock, flags);
 }
 
 void do_softirq()

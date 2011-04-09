@@ -31,7 +31,7 @@ void mm_free (const void *objp);
 /* vm */
 int vm_printMmaps(char *arg1,char *arg2);
 struct vm_area_struct *vm_findVma(struct mm_struct *mm,unsigned long addr, unsigned long len);
-unsigned long vm_mmap(unsigned long fd, unsigned long addr, unsigned long len,unsigned long prot, unsigned long flags, unsigned long pgoff);
+long SYS_vm_mmap(unsigned long fd, unsigned long addr, unsigned long len,unsigned long prot, unsigned long flags, unsigned long pgoff);
 unsigned long vm_brk(unsigned long addr, unsigned long len);
 int vm_munmap(struct mm_struct *mm, unsigned long addr, unsigned long len);
 
@@ -41,7 +41,7 @@ int pc_stats(char *arg1,char *arg2);
 int pc_pageDirted(struct page *p);
 int pc_pagecleaned(struct page *page);
 struct page *pc_getInodePage(struct inode *inode,unsigned long offset);
-unsigned long pc_mapInodePage(struct vm_area_struct *vma,unsigned long offset);
+unsigned long pc_getVmaPage(struct vm_area_struct *vma,unsigned long offset);
 int pc_insertPage(struct inode *inode,struct page *page);
 int pc_removePage(struct page *page);
 int pc_putFreePage(struct page *page);

@@ -12,5 +12,6 @@ Long term :
 - enhancing debugging,logging and shell features 	
 
 ---------------------------------------------------------
-
+fixes:
+ 1) when system call number more then max limit, raising pagefault
 

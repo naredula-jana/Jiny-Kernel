@@ -101,31 +101,29 @@ void flush_tlb(unsigned long dir)
 	asm volatile("mov %0, %%cr3":: "r"(dir));
 }
 
-unsigned long mmu_cr4_features;
 #define X86_CR4_PGE		0x0080	/* enable global pages */
 /*
  * Global pages have to be flushed a bit differently. Not a real
  * performance problem because this does not happen often.
  */
-#define __flush_tlb_global()                                            \
-        do {                                                            \
-                unsigned long tmpreg;                                   \
-                                                                        \
-                __asm__ __volatile__(                                   \
-                        "movq %1, %%cr4;  # turn off PGE     \n"        \
-                        "movq %%cr3, %0;  # flush TLB        \n"        \
-                        "movq %0, %%cr3;                     \n"        \
-                        "movq %2, %%cr4;  # turn PGE back on \n"        \
-                        : "=&r" (tmpreg)                                \
-                        : "r" (mmu_cr4_features & ~(unsigned long )X86_CR4_PGE),   \
-                          "r" (mmu_cr4_features)                        \
-                        : "memory");                                    \
-        } while (0)
-
 int ar_flushTlbGlobal()
 { 
+	unsigned long mmu_cr4_features;
+        unsigned long tmpreg;    
+
 	asm volatile("movq %%cr4,%0" : "=r" (mmu_cr4_features));
-	__flush_tlb_global();
+
+	mmu_cr4_features=mmu_cr4_features | X86_CR4_PGE;	
+
+	 __asm__ __volatile__(                                   
+                        "movq %1, %%cr4;  # turn off PGE     \n"        
+                        "movq %%cr3, %0;  # flush TLB        \n"        
+                        "movq %0, %%cr3;                     \n"        
+                        "movq %2, %%cr4;  # turn PGE back on \n"        
+                        : "=&r" (tmpreg)                                
+                        : "r" (mmu_cr4_features & ~(unsigned long )X86_CR4_PGE),   
+                          "r" (mmu_cr4_features)                        
+                        : "memory");       
 	return 1;
 }
 void ar_pageFault(struct fault_ctx *ctx)
@@ -164,6 +162,8 @@ void ar_pageFault(struct fault_ctx *ctx)
 	BUG();
 }
 
+static int kernel_pages_level=3;
+static int kernel_pages_entry=(KERNEL_ADDR_START/0x40000000);
 static int copy_pagetable(int level,unsigned long src_ptable_addr,unsigned long dest_ptable_addr)
 {
 	int i;
@@ -192,11 +192,17 @@ static int copy_pagetable(int level,unsigned long src_ptable_addr,unsigned long 
 
 			}else
 			{
+				if ((level == kernel_pages_level) && (i>=kernel_pages_entry)) /* for kernel pages , directly link the page table itself instead of copy recursively */
+				{
+					*dest=*src;
+				}else
+				{
 				nv=mm_getFreePages(MEM_CLEAR,0);	
 				if (nv == 0) BUG();
 				DEBUG(" calling i:%d level:%d src:%x  child src:%x physrc:%x \n",i,level,src_ptable_addr,__va(*src),*src);
 				copy_pagetable(level-1,__va((*src)&(~0xfff)),nv);
 				*dest=__pa(nv)|0x7;
+				}
 			}
 			DEBUG("updated  level: %d i:%d *src:%x  dest:%x *dest:%x %x nv:%x  \n",level,i,*src,dest,*dest,__pa(nv),nv);	
 		}
@@ -253,17 +259,34 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 		if (*v != 0 )
 		{
 			pde_t *pde;
+			unsigned long page;
 			pde=v;
-			if (level==2 && pde->ps==1)
+			if ((level == kernel_pages_level) && (i>=kernel_pages_entry)) /* these are kernel pages , do not cleanup recuresvely */
 			{
 				*v=0;
 			}
-			else if (level > 1)
+			else if ((level==2 && pde->ps==1) || level ==1) /* Leaf level entries */
+			{
+#if 1 
+				page=(*v & (~0xfff));
+				DEBUG(" Freeing leaf entry from page table vaddr:%x paddr:%x pc_start:%x %x \n",page,*v,pc_phy_startaddr,pc_phy_endaddr);
+				if (is_pc_paddr(page))
+				{ /* TODO : page cache*/
+
+				}else
+				{
+					if (level ==1) /* Freeing the Anonymous page */
+						mm_putFreePages(__va(page),0);				
+					else
+					{ /* TODO */
+					}
+				}
+#endif
+				*v=0;
+			}
+			else /* Non leaf level entries */
 			{
 				if (clear_pagetable(level-1,((*v)&(~0xfff)),addr,len,start_addr)==1) *v=0;
-			}
-			else {
-				*v=0;
 			}
 		}
 		start_addr=start_addr+max_entry;
@@ -278,7 +301,7 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 		v++;
 	}
 
-	if (cleared==512)
+	if (cleared==512) /* All entries are cleared then remove the table */
 	{
 		v=v-512;
 		DEBUG("Release PAGE during clear page tables: level:%d tableaddr: %x \n",level,p);
@@ -325,7 +348,6 @@ static int handle_mm_fault(addr_t addr)
 
 	vma=vm_findVma(mm,(addr & PAGE_MASK),8); /* length changed to just 8 bytes at maximum , instead of entire page*/
 	if (vma == 0) BUG();
-
 	pl4=(mm->pgd);
 	if (pl4 == 0) return 0;
 
@@ -364,7 +386,6 @@ static int handle_mm_fault(addr_t addr)
 	pl1=(*v) & (~0xfff);
 	DEBUG(" Pl2 :%x pl1 :%x\n",pl2,pl1);	
 
-
 	if (pl1==0)
 	{
 		v=mm_getFreePages(0,0); /* get page of 4k size for page table */	
@@ -376,36 +397,38 @@ static int handle_mm_fault(addr_t addr)
 		*v=((addr_t) pl1 |((addr_t) 0x3));
 		DEBUG(" Inserted into L2 :%x :%x \n",p,pl1);
 	}
-	/* By Now we have pointer to all 4 tables , Now check th erequired page*/
+
+
+	/* By Now we have pointer to all 4 tables , Now check the required page*/
 
 	if (vma->vm_flags & MAP_ANONYMOUS)
 	{
 		v=mm_getFreePages(0,0); /* get page of 4k size for actual page */	
 		p=__pa(v);
+		DEBUG(" Adding to LEAF: Anonymous page paddr: %x vaddr: %x \n",p,addr);
 	}else if (vma->vm_flags & MAP_FIXED)
 	{
 		if ( vma->vm_inode != NULL)
 		{
 			asm volatile("sti");
-			p=(unsigned long *)pc_mapInodePage(vma,addr-vma->vm_start);
+			p=(unsigned long *)pc_getVmaPage(vma,vma->vm_private_data+(addr-vma->vm_start));
 			asm volatile("cli");
-			DEBUG(" page fault of mmapped page p:%x  \n",p);
-
+			DEBUG(" Adding to LEAF: pagecache  paddr: %x vaddr: %x\n",p,addr);
 		}else
 		{
 			p=vma->vm_private_data + (addr-vma->vm_start) ; 	
+			DEBUG(" Adding to LEAF: private page paddr: %x vaddr: %x \n",p,addr);
 			DEBUG(" page fault of anonymous page p:%x  private_data:%x vm_start::x \n",p,vma->vm_private_data,vma->vm_start);
 		}
 	}
 	if (p==0) BUG();
 	pl1=(pl1+(L1_INDEX(addr)));
-	if (addr > PAGE_OFFSET ) /* then it is kernel address */
-		mk_pte(__va(pl1),((addr_t)p>>12),0,0);
+	if (addr > KERNEL_ADDR_START ) /* then it is kernel address */
+		mk_pte(__va(pl1),((addr_t)p>>12),1,0);/* global=on, user=off */
 	else	
-		mk_pte(__va(pl1),((addr_t)p>>12),0,1);
+		mk_pte(__va(pl1),((addr_t)p>>12),0,1); /* global=off, user=on */
 
-	asm volatile("movq %%cr4,%0" : "=r" (mmu_cr4_features));
-	__flush_tlb_global();  /* TODO : need not flush entire table, flush only spoecific tables*/
+	ar_flushTlbGlobal();
 
 	DEBUG("FINALLY Inserted and global fluished into pagetable :%x pte :%x \n",pl1,p);
 	return 1;	
