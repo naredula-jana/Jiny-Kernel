@@ -247,6 +247,10 @@ int sc_threadlist( char *arg1,char *arg2)
 	}
 	spin_unlock_irqrestore(&runqueue_lock, flags);
 }
+int setup_stack(unsigned char **argv,unsigned char *env)
+{
+
+}
 struct user_regs {
 	struct gpregs gpres;
 	struct intr_stack_frame isf;
@@ -260,8 +264,9 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 	struct user_regs *p;
 	unsigned long *tmp;
 
-	/* clear all user space pages */
-	ar_pageTableCleanup(g_current_task->mm,0,KERNEL_ADDR_START-1);
+	setup_stack(argv,env);
+//	ar_pageTableCleanup(g_current_task->mm,0,KERNEL_ADDR_START-1);
+	vm_munmap(g_current_task->mm,0,KERNEL_ADDR_START-1);
 
 	fp=SYS_fs_open(file,0,0);
 	if (fp == 0)
@@ -281,8 +286,10 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 	asm("movq %%rsp,%0" : "=m" (p));
 	p=p-1;
 	asm("subq $0xa0,%rsp");
-	p->gpres.rbp=p->gpres.rsi=0;
-	p->gpres.rdi=p->gpres.rdx=0;
+	p->gpres.rbp=0;
+	p->gpres.rsi=0x2222; /* second argument to main i.e argv */
+	p->gpres.rdi=0x111; /* first argument argc */
+	p->gpres.rdx=0;
 	p->gpres.rbx=p->gpres.rcx=0;
 	p->gpres.rax=p->gpres.r10=0;
 	p->gpres.r11=p->gpres.r12=0;
@@ -308,8 +315,7 @@ static int free_mm(struct mm_struct *mm)
 	atomic_dec(&mm->count);
 	if (mm->count.counter > 0) return 0;
 
-	ar_pageTableCleanup(mm,0,0);
-	/* TODO : vmaps ned to cleanup */
+	vm_munmap(g_current_task->mm,0,0xffffffff);
 	kmem_cache_free(mm_cachep,mm);
 	return 1;
 }

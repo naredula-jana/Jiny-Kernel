@@ -236,11 +236,13 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 	if (addr < start_addr)
 	{
 		i=0;
-		table_len=len - (start_addr-addr);
+		if ( len > 0)
+		table_len=len - (start_addr-addr)-1;
+		else table_len=0;
 	}else
 	{
 		i=(addr-start_addr)/max_entry ;
-		table_len=(addr-start_addr) +len;
+		table_len=(addr-start_addr) +len-1;
 
 	}
 	max_i=table_len/max_entry;
@@ -314,6 +316,11 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 int ar_pageTableCleanup(struct mm_struct *mm,unsigned long addr, unsigned long length)
 { 
 	if (mm==0 || mm->pgd == 0) BUG();
+	if (mm->pgd == g_kernel_page_dir) 
+	{
+		ut_printf(" ERROR : trying to free kernel page table \n");
+		return 0;
+	}
 	if (clear_pagetable(4,mm->pgd,addr,length,0) == 1)
 	{
 		mm->pgd=0;

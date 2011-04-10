@@ -26,7 +26,7 @@ syscalltable_t syscalltable[]=
 	{SYS_sc_exit}, 
 	{SYS_sc_execve},/* 10 */
 	{SYS_sc_fork},
-	{SYS_mmap}, 
+	{SYS_vm_mmap}, 
 	{syscallnull} 
 };
 
@@ -38,10 +38,6 @@ unsigned long SYS_printf(unsigned long *args)
 }
 
 
-long SYS_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags,unsigned long fd, unsigned long off)
-{
-
-}
 unsigned long syscallnull(unsigned long *args)
 {
 	DEBUG("SYSCALL null as hit \n");	

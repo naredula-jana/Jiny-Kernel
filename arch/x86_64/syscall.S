@@ -63,9 +63,9 @@
 
 enter_userspace:
 	addq $0x8,%rsp
-/*        RESTORE_GPRS */
+        RESTORE_GPRS 
 
-	addq $0x70,%rsp
+/*	addq $0x70,%rsp */
 	popq %rax
 
 

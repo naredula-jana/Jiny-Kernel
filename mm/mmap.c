@@ -8,6 +8,7 @@
 *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
 *
 */
+#define DEBUG_ENABLE
 #include "common.h"
 #include "mm.h"
 #include "task.h"
@@ -182,7 +183,7 @@ restart:
 	vma=mm->mmap;
 	if (vma ==0) return 0;
 	while (vma) {
-		DEBUG(" [ %x - %x ] - %x - %x\n",vma->vm_start,vma->vm_end,addr,(addr+len));
+		DEBUG("VMA Unlink [ %x - %x ] - %x - %x\n",vma->vm_start,vma->vm_end,addr,(addr+len));
 		if ((addr<=vma->vm_start) && ((addr+len) >=  vma->vm_end))
 		{
 			start_addr=vma->vm_start;

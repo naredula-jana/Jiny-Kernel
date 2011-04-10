@@ -2,7 +2,8 @@ Short term :
 
 - implementing useful system calls 
 - rewriting wait in kernel/task
-- making user code in sepreate thread with sepreate address space.
+- making user code run at ring-3
+- implementing argc argv and env fir he user level code
 
 Long term :	
 - code reorg:
@@ -14,4 +15,4 @@ Long term :
 ---------------------------------------------------------
 fixes:
  1) when system call number more then max limit, raising pagefault
-
+ 2) Freeing memory when the task exits.
