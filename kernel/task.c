@@ -8,6 +8,7 @@
  *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
  *
  */
+#define DEBUG_ENABLE 1
 #include "task.h"
 #include "interface.h"
 #include "descriptor_tables.h"
@@ -264,9 +265,12 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 	struct user_regs *p;
 	unsigned long *tmp;
 
+	DEBUG("Execve starting \n");
+	vm_printMmaps(0,0);
 	setup_stack(argv,env);
-//	ar_pageTableCleanup(g_current_task->mm,0,KERNEL_ADDR_START-1);
-	vm_munmap(g_current_task->mm,0,KERNEL_ADDR_START-1);
+	DEBUG("Execve :unmapping :%x\n",KERNEL_ADDR_START-1);
+	vm_munmap(g_current_task->mm,0,(KERNEL_ADDR_START-1));
+	DEBUG("Execve: cleared address space  \n");
 
 	fp=SYS_fs_open(file,0,0);
 	if (fp == 0)
@@ -313,9 +317,11 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 static int free_mm(struct mm_struct *mm)
 {
 	atomic_dec(&mm->count);
+	DEBUG("freeing the mm :%x counter:%x \n",mm,mm->count.counter);
 	if (mm->count.counter > 0) return 0;
 
-	vm_munmap(g_current_task->mm,0,0xffffffff);
+	vm_munmap(mm,0,0xffffffff);
+	ar_pageTableCleanup(mm,0, 0xfffffffff);
 	kmem_cache_free(mm_cachep,mm);
 	return 1;
 }

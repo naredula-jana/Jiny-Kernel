@@ -221,9 +221,10 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 	unsigned long p; /* physical address */
 	unsigned long *v; /* virtual address */
 	int i,max_i,cleared;
+
 	DEBUG("Clear Page tableLevel :%x ptableaddr:%x addr:%x len:%x start_addr:%x \n",level,ptable_addr,addr,len,start_addr);	
 	p=ptable_addr;
-	if (p == 0) return 0;
+	if (p == 0 || len==0) return 0;
 	switch (level)
 	{
 		case 4 : i=L4_INDEX(addr); max_entry=512*512*512*PAGE_SIZE; break;
@@ -236,13 +237,11 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 	if (addr < start_addr)
 	{
 		i=0;
-		if ( len > 0)
-		table_len=len - (start_addr-addr)-1;
-		else table_len=0;
+		table_len=len - (start_addr-addr);
 	}else
 	{
 		i=(addr-start_addr)/max_entry ;
-		table_len=(addr-start_addr) +len-1;
+		table_len=(addr-start_addr) +len;
 
 	}
 	max_i=table_len/max_entry;
@@ -253,11 +252,15 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 		max_i=511;
 	}
 
-	v=__va(p+i);
+	v=__va(p+i*8);
 	start_addr=start_addr+i*max_entry;
 	DEBUG(" i:%d max_i:%d \n",i,max_i);
 	while( i<=max_i )
 	{
+		unsigned long entry_end,entry_start;
+		entry_start=start_addr;
+		entry_end=start_addr+max_entry;
+	//	DEBUG(" lev:%d i:%d entry:[%x-%x] addr+len:%x v:%x:%x\n",level,i,entry_start,entry_end,(addr+len),v,*v);
 		if (*v != 0 )
 		{
 			pde_t *pde;
@@ -265,7 +268,15 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 			pde=v;
 			if ((level == kernel_pages_level) && (i>=kernel_pages_entry)) /* these are kernel pages , do not cleanup recuresvely */
 			{
-				*v=0;
+				if ((addr+len) < entry_end)
+				{
+					DEBUG(" Not Clearing kernel entry %d:%d  entry end:%x addr+len:%x\n",level,i,entry_end,(addr+len));
+					
+				}else
+				{
+					DEBUG(" Clearing kernel entry %d:%d  entry end:%x addr+len:%x\n",level,i,entry_end,(addr+len));
+					*v=0;
+				}
 			}
 			else if ((level==2 && pde->ps==1) || level ==1) /* Leaf level entries */
 			{
@@ -288,6 +299,7 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 			}
 			else /* Non leaf level entries */
 			{
+			//	DEBUG(" Call clear table : addr :%x len:%x start_addr:%x \n",addr,len,start_addr);
 				if (clear_pagetable(level-1,((*v)&(~0xfff)),addr,len,start_addr)==1) *v=0;
 			}
 		}
@@ -309,6 +321,9 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 		DEBUG("Release PAGE during clear page tables: level:%d tableaddr: %x \n",level,p);
 		mm_putFreePages(v,0);				
 		return 1;
+	}else
+	{
+		DEBUG("Unable to clear all entries: %d level:%d \n",cleared,level);
 	}
 
 	return 0;	
@@ -437,7 +452,7 @@ static int handle_mm_fault(addr_t addr)
 
 	ar_flushTlbGlobal();
 
-	DEBUG("FINALLY Inserted and global fluished into pagetable :%x pte :%x \n",pl1,p);
+	DEBUG("Finally Inserted  Pl4: %x pl3:%x  p12:%x pl1:%x p:%x \n",pl4,pl3,pl2,pl1,p);	
 	return 1;	
 }
 

@@ -178,7 +178,7 @@ int vm_munmap(struct mm_struct *mm, unsigned long addr, unsigned long len)
 
 	if ((len = PAGE_ALIGN(len)) == 0)
 		return -1;
-
+	DEBUG("VMA unlinking addr:%x len:%x \n",addr,len);
 restart:
 	vma=mm->mmap;
 	if (vma ==0) return 0;
@@ -192,10 +192,12 @@ restart:
 			kmem_cache_free(vm_area_cachep, vma);
 			ar_pageTableCleanup(mm,start_addr, end_addr-start_addr);
 			ret++;
+			DEBUG("VMA unlink : clearing the tables :start:%x leb:%x \n",start_addr,end_addr-start_addr);
 			goto restart;
 		}
 		vma = vma->vm_next;
 	}
+	DEBUG("VMA unlink : clearing the tables \n");
 	ar_pageTableCleanup(mm,addr, len);
 	return ret;
 }
