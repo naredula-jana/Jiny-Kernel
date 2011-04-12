@@ -60,7 +60,7 @@ unsigned long SYS_fs_close(unsigned long fd);
 unsigned long SYS_fs_fdatasync(unsigned long fd );
 unsigned long SYS_fs_fadvise(unsigned long fd,unsigned long offset, unsigned long len,int advise);
 struct page *fs_genericRead(struct inode *inode,unsigned long offset);
-unsigned long fs_loadElfLibrary(struct file  *file);
+unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsigned long stack_len);
 
 /* Utilities */
 void ut_showTrace(unsigned long *stack_top);
@@ -81,5 +81,7 @@ unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,stru
 int ar_pageTableCopy(struct mm_struct *src_mm,struct mm_struct *dest_mm);
 int ar_pageTableCleanup(struct mm_struct *mm,unsigned long addr, unsigned long length);
 int ar_flushTlbGlobal();
+void flush_tlb(unsigned long dir);
 int ar_updateCpuState(int cpuid);
+void ar_setupTssStack(unsigned long stack);
 #endif

@@ -141,6 +141,7 @@ long SYS_vm_mmap(unsigned long fd, unsigned long addr, unsigned long len,
 	vma->vm_start=addr;
 	vma->vm_end=addr+len;
 	vma->vm_prot=prot;
+	vma->vm_inode=0;
 	vma->vm_private_data = pgoff ;
 	if (file != 0)
 	{

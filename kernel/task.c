@@ -242,17 +242,72 @@ int sc_threadlist( char *arg1,char *arg2)
 	struct task_struct *task;
 
 	spin_lock_irqsave(&runqueue_lock, flags);
-	ut_printf("pid ticks mm pgd mm_count \n");
+	ut_printf("pid task ticks mm pgd mm_count \n");
 	list_for_each(pos, &task_queue.head) {
 		task=list_entry(pos, struct task_struct, task_link);
-		ut_printf("%d %x %x %x %d\n",task->pid,task->ticks,task->mm,task->mm->pgd,task->mm->count.counter);
+		ut_printf("%d %x %x %x %x %d\n",task->pid,task,task->ticks,task->mm,task->mm->pgd,task->mm->count.counter);
 	}
 	spin_unlock_irqrestore(&runqueue_lock, flags);
 }
-int setup_stack(unsigned char **argv,unsigned char *env)
-{
 
+unsigned long setup_stack(unsigned char **argv,unsigned char *env,unsigned long *stack_len,unsigned long *t_argc,unsigned long *t_argv)
+{
+	int i,len,total_args=0;
+	unsigned char *p,*stack;
+	unsigned long real_stack,addr;
+	unsigned char *target_argv[12];
+
+	if (argv==0 && env==0) return 0;
+	stack=mm_getFreePages(0,0);
+	p=stack+PAGE_SIZE;
+	len=0;	
+	real_stack=USERSTACK_ADDR+USERSTACK_LEN;
+	for (i=0; argv[i]!=0&& i<10; i++)
+	{
+		total_args++;
+		len=ut_strlen(argv[i]);	
+		if ((p-len-1)>stack)
+		{
+			p=p-len-1;
+			real_stack=real_stack-len-1;
+			DEBUG(" argument :%d address:%x \n",i,real_stack);
+			ut_strcpy(p,argv[i]);
+			target_argv[i]=real_stack;
+		}else
+		{
+			goto error;
+		}
+	}
+	target_argv[i]=0;
+	addr=p-8;
+	addr=(addr*8)/8;
+	p=addr;
+	real_stack=USERSTACK_ADDR+USERSTACK_LEN+(p-stack)-PAGE_SIZE;
+	len=total_args*8;
+	if ((p-len-1) > stack)
+	{
+		unsigned long *t;
+
+		p=p-len;
+		real_stack=real_stack-len;
+		ut_memcpy(p,target_argv,len);
+		p=p-8;
+		t=p;
+		*t=total_args; /* store argc at the top of stack */
+	}else
+	{
+		goto error;
+	}
+	*stack_len=PAGE_SIZE-(p-stack);
+	*t_argc=total_args;
+	*t_argv=real_stack;
+	return stack;
+
+error:
+	mm_putFreePages(stack,0);
+	return 0;	
 }
+
 struct user_regs {
 	struct gpregs gpres;
 	struct intr_stack_frame isf;
@@ -265,11 +320,14 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 	unsigned long main_func;
 	struct user_regs *p;
 	unsigned long *tmp;
+	unsigned long t_argc,t_argv,stack_len,tmp_stack;
 
 	DEBUG("Execve starting \n");
+	t_argc=0;
+	t_argv=0;
 	vm_printMmaps(0,0);
-	setup_stack(argv,env);
-	DEBUG("Execve :unmapping :%x\n",KERNEL_ADDR_START-1);
+	tmp_stack=setup_stack(argv,env,&stack_len,&t_argc,&t_argv);
+	DEBUG("Execve :unmapping :%x  t_argv:%x stack_len:%d\n",KERNEL_ADDR_START-1,t_argv,stack_len);
 	vm_munmap(g_current_task->mm,0,(KERNEL_ADDR_START-1));
 	DEBUG("Execve: cleared address space  \n");
 
@@ -279,12 +337,12 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 		ut_printf("Error :execve Failed to open the file :%s\n",file);
 		return 0;
 	}
-	main_func=fs_loadElfLibrary(fp);
+	main_func=fs_loadElfLibrary(fp,tmp_stack+(PAGE_SIZE-stack_len),stack_len);
+	mm_putFreePages(tmp_stack,0);
 	vm_printMmaps(0,0);
 	ar_updateCpuState(0);
-
-	tmp=USERSTACK_ADDR+USERSTACK_LEN-20;
-	*tmp=0x1234; /* this is just to create physical page, other wise the main function is unabled to called : TODO: need to fix */
+//	tmp=USERSTACK_ADDR+USERSTACK_LEN-20;
+//	*tmp=0x1234; /* this is just to create physical page, other wise the main function is unabled to called : TODO: need to fix */
 
 /* From here onwards do call any function that consumes stack */
 	asm("cli");
@@ -292,8 +350,8 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 	p=p-1;
 	asm("subq $0xa0,%rsp");
 	p->gpres.rbp=0;
-	p->gpres.rsi=0x2222; /* second argument to main i.e argv */
-	p->gpres.rdi=0x111; /* first argument argc */
+	p->gpres.rsi=t_argv; /* second argument to main i.e argv */
+	p->gpres.rdi=t_argc; /* first argument argc */
 	p->gpres.rdx=0;
 	p->gpres.rbx=p->gpres.rcx=0;
 	p->gpres.rax=p->gpres.r10=0;
@@ -303,24 +361,17 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 	p->gpres.r8=0;
 	p->isf.rip=main_func;
 	p->isf.rflags=DEFAULT_RFLAGS_VALUE;
-	p->isf.rsp=USERSTACK_ADDR+USERSTACK_LEN-20 ;
+	p->isf.rsp=t_argv-8 ;
 	p->isf.cs=GDT_SEL(UCODE_DESCR) | SEG_DPL_USER;
 	p->isf.ss=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
-/*	p->isf.cs=GDT_SEL(UCODE_DESCR) | SEG_DPL_KERNEL;
-	p->isf.ss=GDT_SEL(UDATA_DESCR) | SEG_DPL_KERNEL; */
-#if 0	
-	p->isf.cs=GDT_SEL(KCODE_DESCR) | SEG_DPL_KERNEL; /*TODO need to moce UCODE and UDATA */
-	p->isf.ss=GDT_SEL(KDATA_DESCR) | SEG_DPL_KERNEL; 
-#endif
 	enter_userspace();	
-
 }
 static int free_mm(struct mm_struct *mm)
 {
 	atomic_dec(&mm->count);
 	DEBUG("freeing the mm :%x counter:%x \n",mm,mm->count.counter);
 	if (mm->count.counter > 0) return 0;
-
+	
 	vm_munmap(mm,0,0xffffffff);
 	ar_pageTableCleanup(mm,0, 0xfffffffff);
 	kmem_cache_free(mm_cachep,mm);
@@ -328,7 +379,6 @@ static int free_mm(struct mm_struct *mm)
 }
 int sc_fork(unsigned long clone_flags, unsigned long usp, int (*fn)(void *))
 {
-	int nr;
 	struct task_struct *p;
 	struct mm_struct *mm;
 	unsigned long flags;
@@ -346,7 +396,7 @@ int sc_fork(unsigned long clone_flags, unsigned long usp, int (*fn)(void *))
 		if (mm ==0 ) BUG();
 		atomic_set(&mm->count,1);
 		mm->pgd=0;
-		mm->mmap=g_current_task->mm->mmap;
+		mm->mmap=0;
 		mm->start_brk=0xc0000000;
 		ar_pageTableCopy(g_current_task->mm,mm);	
 		p->mm=mm;
@@ -471,7 +521,6 @@ __POP(rdi) __POP(rsi)
 
 void init_tasking()
 {
-	int i;
 	g_kernel_mm=kmem_cache_alloc(mm_cachep, 0);
 	if (g_kernel_mm ==0) return ;
 
@@ -502,7 +551,6 @@ static unsigned long flags;
 void sc_schedule()
 {
 	struct task_struct *prev, *next;
-//	unsigned long flags;
 
 	if (!g_current_task)
 	{
@@ -557,8 +605,10 @@ void sc_schedule()
 		flush_tlb(next->mm->pgd);
 	}	
 	ar_updateCpuState(0);
-	switch_to(prev,next,prev);
+//ut_printf(" before switching : prev:%x  next:%x  :%x\n",prev,next,((unsigned long)next+TASK_SIZE));
 	ar_setupTssStack((unsigned long)next+TASK_SIZE);
+	switch_to(prev,next,prev);
+//ut_printf("After switching\n");
 	spin_unlock_irqrestore(&runqueue_lock, flags);
 }
 

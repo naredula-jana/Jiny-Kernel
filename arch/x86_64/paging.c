@@ -1,4 +1,4 @@
-#define DEBUG_ENABLE 1
+//#define DEBUG_ENABLE 1
 #include "task.h"
 #include "mm.h"
 #include "paging.h"
@@ -365,7 +365,13 @@ static int handle_mm_fault(addr_t addr)
 	addr_t *v;	/* virtual address */
 	unsigned int index;
 
-	mm=g_current_task->mm;
+	if (addr > KERNEL_ADDR_START ) /* then it is kernel address */
+	{
+		mm=g_kernel_mm;
+	}else
+	{
+		mm=g_current_task->mm;
+	}
 	if (mm==0 || mm->pgd == 0) BUG();
 
 	vma=vm_findVma(mm,(addr & PAGE_MASK),8); /* length changed to just 8 bytes at maximum , instead of entire page*/

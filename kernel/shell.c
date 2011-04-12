@@ -174,7 +174,7 @@ static int sh_load(char *arg1,char *arg2)
 	long x,*xp;
 
 	fp=SYS_fs_open("/home/njana/jiny/test/a.out",0,0);
-	start_func=fs_loadElfLibrary(fp);
+//	start_func=fs_loadElfLibrary(fp);
 	ut_printf("  start_func:%x %x \n",start_func,x);
 }
 static int sh_unload(char *arg1,char *arg2)
@@ -306,13 +306,9 @@ static int sh_free_mem(char *arg1,char *arg2)
 }
 static int load_test(char *arg1,char *arg2)
 {
-        struct file *fp;
-        char *p,c;
-        long x,*xp;
+	char *argv[]={"First argument","second argument",0};
 
-	int (*main_func)()=0;
-	
-        fp=SYS_sc_execve("/home/njana/jiny/test/test2",0,0);
+        SYS_sc_execve("/home/njana/jiny/test/test2",argv,0);
 	ut_printf(" ERROR: COntrol Never Reaches\n");
 	return 1;
 }

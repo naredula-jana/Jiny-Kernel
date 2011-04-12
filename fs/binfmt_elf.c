@@ -30,7 +30,7 @@
 #define ELF_PAGEOFFSET(_v) ((_v) & (ELF_MIN_ALIGN-1))
 #define ELF_PAGEALIGN(_v) (((_v) + ELF_MIN_ALIGN - 1) & ~(ELF_MIN_ALIGN - 1))
 
-unsigned long fs_loadElfLibrary(struct file  *file)
+unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsigned long stack_len)
 {
 	struct elf_phdr *elf_phdata;
 	struct elf_phdr *eppnt;
@@ -137,6 +137,10 @@ out:
 	}else
 	{
 		SYS_vm_mmap(0,USERSTACK_ADDR,USERSTACK_LEN,PROT_READ | PROT_WRITE ,MAP_ANONYMOUS,0);	
+		if (stack_len > 0)
+		{
+			ut_memcpy(USERSTACK_ADDR+USERSTACK_LEN-stack_len,tmp_stack,stack_len);
+		}
 	}
 	DEBUG(" Program start address(autod) : %x \n",elf_ex.e_entry);
 	if ( error == 0)
