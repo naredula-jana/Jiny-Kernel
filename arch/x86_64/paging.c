@@ -384,7 +384,7 @@ static int handle_mm_fault(addr_t addr)
 		pl3=__pa(v);
 		p=(pl4+(L4_INDEX(addr))); /* insert into l4   */
 		v=__va(p);
-		*v=((addr_t) pl3 |((addr_t) 0x3));
+		*v=((addr_t) pl3 |((addr_t) 0x7));
 		DEBUG(" Inserted into L4 :%x  p13:%x  pl4:%x addr:%x index:%x \n",p,pl3,pl4,addr,L4_INDEX(addr));
 	}
 	p=(pl3+(L3_INDEX(addr)));
@@ -400,7 +400,7 @@ static int handle_mm_fault(addr_t addr)
 		pl2=__pa(v);
 		p=(pl3+(L3_INDEX(addr)));
 		v=__va(p);
-		*v=((addr_t) pl2 |((addr_t) 0x3));
+		*v=((addr_t) pl2 |((addr_t) 0x7));
 		DEBUG(" INSERTED into L3 :%x  p12:%x  pl3:%x \n",p,pl2,pl3);
 	}
 	p=(pl2+(L2_INDEX(addr)));
@@ -416,7 +416,7 @@ static int handle_mm_fault(addr_t addr)
 		pl1=__pa(v);
 		p=(pl2+(L2_INDEX(addr)));
 		v=__va(p);
-		*v=((addr_t) pl1 |((addr_t) 0x3));
+		*v=((addr_t) pl1 |((addr_t) 0x7));
 		DEBUG(" Inserted into L2 :%x :%x \n",p,pl1);
 	}
 

@@ -344,7 +344,7 @@ static int sh_debug(char *arg1,char *arg2)
 static int print_help(char *arg1,char *arg2)
 {
 	int i;
-	ut_printf("JINY 0.1 Stacksize:%x  \n",STACK_SIZE);
+	ut_printf("JINY 0.2 Stacksize:%x  \n",STACK_SIZE);
 	for (i=0; i<MAX_COMMANDS; i++)
 	{
 		if (cmd_list[i].usage == 0) break;

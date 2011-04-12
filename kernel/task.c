@@ -36,6 +36,7 @@ static struct task_struct *g_task_dead=0;  /* TODO : remove me later */
 extern long *stack;
 
 void init_timer();
+#define TASK_SIZE 4*PAGE_SIZE
 static struct task_struct *alloc_task_struct(void)
 {
 	return (struct task_struct *) mm_getFreePages(0,2); /* 4*4k=16k page size */
@@ -303,14 +304,14 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 	p->isf.rip=main_func;
 	p->isf.rflags=DEFAULT_RFLAGS_VALUE;
 	p->isf.rsp=USERSTACK_ADDR+USERSTACK_LEN-20 ;
-/*	p->isf.cs=GDT_SEL(UCODE_DESCR) | SEG_DPL_USER;
+	p->isf.cs=GDT_SEL(UCODE_DESCR) | SEG_DPL_USER;
 	p->isf.ss=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
-	p->isf.cs=GDT_SEL(UCODE_DESCR) | SEG_DPL_KERNEL;
+/*	p->isf.cs=GDT_SEL(UCODE_DESCR) | SEG_DPL_KERNEL;
 	p->isf.ss=GDT_SEL(UDATA_DESCR) | SEG_DPL_KERNEL; */
-	
+#if 0	
 	p->isf.cs=GDT_SEL(KCODE_DESCR) | SEG_DPL_KERNEL; /*TODO need to moce UCODE and UDATA */
 	p->isf.ss=GDT_SEL(KDATA_DESCR) | SEG_DPL_KERNEL; 
-
+#endif
 	enter_userspace();	
 
 }
@@ -557,6 +558,7 @@ void sc_schedule()
 	}	
 	ar_updateCpuState(0);
 	switch_to(prev,next,prev);
+	ar_setupTssStack((unsigned long)next+TASK_SIZE);
 	spin_unlock_irqrestore(&runqueue_lock, flags);
 }
 

@@ -56,14 +56,6 @@
 #define SEG_TYPE_INTR  (SEG_ATTR_R | SEG_ATTR_C | SEG_ATTR_CODE)
 
 
-/*struct cpu_state {
-        unsigned long kernel_stack;
-        unsigned long kernel_ds;
-        unsigned long user_stack;
-        unsigned long user_ds,user_es,user_fs,user_gs;
-};
-extern struct cpu_state g_cpu_state[];
-*/
 
 /* Offsets to parts of CPU exception stack frames. */
 #define INT_STACK_FRAME_CS_OFFT 8
@@ -112,6 +104,33 @@ struct idt_ptr_struct
 } __attribute__((packed));
 
 typedef struct idt_ptr_struct idt_ptr_t;
+
+#define TSS_USED_ISTS     1
+#define TSS_BASIC_SIZE    104
+#define TSS_DEFAULT_LIMIT (TSS_BASIC_SIZE - 1)
+#define TSS_NUM_ISTS      7
+typedef struct tss {
+  uint32_t ignored0;
+  uint64_t rsp0;
+  uint64_t rsp1;
+  uint64_t rsp2;
+  uint64_t ignored1;
+  uint64_t ists[TSS_NUM_ISTS];
+  uint64_t ignored2;
+  uint16_t ignored3;
+  uint16_t iomap_base;
+  uint8_t  iomap[];
+} __attribute__ ((packed)) tss_t;
+
+struct tss_descr {
+  //struct segment_descr seg_low;
+  struct gdt_entry_struct seg_low;
+  struct {
+    uint32_t base_rest;
+    uint32_t ignored;
+  } seg_high __attribute__ ((packed));
+} __attribute__ ((packed));
+typedef struct tss_descr tss_descr_t;
 
 struct cpu_state { /* NOTE: do not alter the attributes, there location matter */
         unsigned long kernel_stack;
