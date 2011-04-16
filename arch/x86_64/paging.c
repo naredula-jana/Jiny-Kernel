@@ -330,7 +330,7 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 }
 int ar_pageTableCleanup(struct mm_struct *mm,unsigned long addr, unsigned long length)
 { 
-	if (mm==0 || mm->pgd == 0) BUG();
+	if (mm==0 || mm->pgd == 0) return 0;
 	if (mm->pgd == g_kernel_page_dir) 
 	{
 		ut_printf(" ERROR : trying to free kernel page table \n");

@@ -5,8 +5,6 @@
 #include "paging.h"
 #include "bitops.h"
 #include "../util/host_fs/filecache_schema.h"
-#define PAGE_SHIFT      12
-#define PAGE_SIZE       (1UL << PAGE_SHIFT)
 #define PAGE_MASK       (~(PAGE_SIZE-1))
 #define PAGE_ALIGN(addr)	(((addr)+PAGE_SIZE-1)&PAGE_MASK)
 #define KERNEL_ADDR_START (0x40000000) /* Note This should be multiples 1GB , otherwise page tables copying will break */

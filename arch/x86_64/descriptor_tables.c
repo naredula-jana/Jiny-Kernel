@@ -32,7 +32,7 @@ int ar_updateCpuState(int cpuid)
 		g_cpu_state[cpuid].user_fs=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
 		g_cpu_state[cpuid].user_gs=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
 	}
-	g_cpu_state[cpuid].kernel_stack=p+STACK_SIZE; 
+	g_cpu_state[cpuid].kernel_stack=p+TASK_SIZE; 
 	return 1;
 }
 // Initialisation routine - zeroes all the interrupt service routines,

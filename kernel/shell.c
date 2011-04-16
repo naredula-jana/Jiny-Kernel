@@ -26,9 +26,6 @@ static int sh_debug(char *arg1,char *arg2);
 static int print_help(char *arg1,char *arg2);
 static int sh_cat(char *arg1,char *arg2);
 static int sh_cp(char *arg1,char *arg2);
-static int sh_load(char *arg1,char *arg2);
-static int sh_unload(char *arg1,char *arg2);
-static int sh_run(char *arg1,char *arg2);
 static int sh_alloc_mem(char *arg1,char *arg2);
 static int sh_free_mem(char *arg1,char *arg2);
 static int sh_sync(char *arg1,char *arg2);
@@ -57,9 +54,6 @@ commands_t cmd_list[]=
 	{"maps      ","Memory map areas","maps",vm_printMmaps},
 	{"host      ","host shm test","host",test_hostshm},
 	{"ls        ","ls","ls",fs_printInodes},
-	{"load <file1>","load the file ","load",sh_load},
-	{"unload ","unload the last binary ","unload",sh_unload},
-	{"run","run previously loaded ","run",sh_run},
 	{"pc        ","page cache stats","pc",pc_stats},
 	{"scan        ","scan page cache ","scan",scan_pagecache},
 	{"mem        ","memstat","mem",mm_printFreeAreas},
@@ -165,30 +159,6 @@ static int sh_mmap(char *arg1,char *arg2)
 	p=p+10;
 	c=*p;	
 	return 0;
-}
-int (*start_func)()=0;
-static int sh_load(char *arg1,char *arg2)
-{
-	struct file *fp;
-	char *p,c;
-	long x,*xp;
-
-	fp=SYS_fs_open("/home/njana/jiny/test/a.out",0,0);
-//	start_func=fs_loadElfLibrary(fp);
-	ut_printf("  start_func:%x %x \n",start_func,x);
-}
-static int sh_unload(char *arg1,char *arg2)
-{
-	int ret;
-	ret=vm_munmap(g_current_task->mm,0,0x40000000);
-	start_func=0;
-	ut_printf(" Unmap total vmas unmapped: %d \n",ret);	
-	return 0;
-}
-static int sh_run(char *arg1,char *arg2)
-{
-	if (start_func != 0)
-		start_func();
 }
 static int sh_cp(char *arg1,char *arg2)
 {
@@ -317,7 +287,7 @@ static int sh_create(char *arg1,char *arg2)
 	int ret;
 
 	ut_printf("test FORKING \n"); 
-	ret=sc_createThread(load_test);
+	ret=sc_createKernelThread(load_test);
 	ut_printf(" Parent process : pid: %d  \n",ret);
 	return 1;
 }
@@ -340,7 +310,7 @@ static int sh_debug(char *arg1,char *arg2)
 static int print_help(char *arg1,char *arg2)
 {
 	int i;
-	ut_printf("JINY 0.2 Stacksize:%x  \n",STACK_SIZE);
+	ut_printf("JINY 0.3 Stacksize:%x  \n",TASK_SIZE);
 	for (i=0; i<MAX_COMMANDS; i++)
 	{
 		if (cmd_list[i].usage == 0) break;

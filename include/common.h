@@ -6,6 +6,7 @@
 #include "isr.h"
 #include "types.h"
 #include "multiboot.h"
+#define TASK_SIZE 4*PAGE_SIZE
 #define NULL ((void *) 0)
 #define POW2(n) (1 << (n))
 

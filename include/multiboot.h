@@ -13,9 +13,11 @@
 
 /* The magic number passed by a Multiboot-compliant boot loader.  */
 #define MULTIBOOT_BOOTLOADER_MAGIC	0x2BADB002
-
+#define PAGE_SHIFT      12
+#define PAGE_SIZE       (1UL << PAGE_SHIFT)
 /* The size of our stack (16KB).  */
-#define STACK_SIZE			0x4000
+/*#define TASK_SIZE 4*PAGE_SIZE */
+#define TASK_SIZE 4*(0x1000)
 
 /* C symbol format. HAVE_ASM_USCORE is defined by configure.  */
 #ifdef HAVE_ASM_USCORE

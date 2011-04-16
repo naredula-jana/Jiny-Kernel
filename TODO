@@ -1,8 +1,10 @@
 Short term :
 
 - rewriting wait in kernel/task
-DONE :- making user code run at ring-3 
-DONE - implementing argc argv and env for the user level code
+- cleaning defines 
+- implementing proper fork
+- including header files in .S files
+
 
 Long term :	
 - implementing useful system calls 

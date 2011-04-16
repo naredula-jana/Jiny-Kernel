@@ -36,10 +36,10 @@ static struct task_struct *g_task_dead=0;  /* TODO : remove me later */
 extern long *stack;
 
 void init_timer();
-#define TASK_SIZE 4*PAGE_SIZE
+static int free_mm(struct mm_struct *mm);
 static struct task_struct *alloc_task_struct(void)
 {
-	return (struct task_struct *) mm_getFreePages(0,2); /* 4*4k=16k page size */
+	return (struct task_struct *) mm_getFreePages(0,2); /*WARNING: do not change the size it is related TASK_SIZE, 4*4k=16k page size */
 }
 
 static void free_task_struct(struct task_struct *p)
@@ -317,20 +317,29 @@ extern void enter_userspace();
 unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned char *env)
 {
 	struct file *fp;
+	struct mm_struct *mm;
 	unsigned long main_func;
 	struct user_regs *p;
 	unsigned long *tmp;
 	unsigned long t_argc,t_argv,stack_len,tmp_stack;
 
-	DEBUG("Execve starting \n");
+	DEBUG("EXCEVE starting \n");
+
+/* create the argc and env in a temporray stack before we destory the old stack */
 	t_argc=0;
 	t_argv=0;
-	vm_printMmaps(0,0);
 	tmp_stack=setup_stack(argv,env,&stack_len,&t_argc,&t_argv);
-	DEBUG("Execve :unmapping :%x  t_argv:%x stack_len:%d\n",KERNEL_ADDR_START-1,t_argv,stack_len);
-	vm_munmap(g_current_task->mm,0,(KERNEL_ADDR_START-1));
-	DEBUG("Execve: cleared address space  \n");
 
+/* delete old vm and create a new one */
+	free_mm(g_current_task->mm);
+        mm=kmem_cache_alloc(mm_cachep, 0);
+        if (mm ==0 ) BUG();
+        atomic_set(&mm->count,1);
+        mm->pgd=0;
+        mm->mmap=0;
+	ar_pageTableCopy(g_kernel_mm,mm);	 /* every process page table should have soft links to kernel page table */
+	g_current_task->mm=mm;
+/* populate vm with vmaps */
 	fp=SYS_fs_open(file,0,0);
 	if (fp == 0)
 	{
@@ -341,10 +350,8 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 	mm_putFreePages(tmp_stack,0);
 	vm_printMmaps(0,0);
 	ar_updateCpuState(0);
-//	tmp=USERSTACK_ADDR+USERSTACK_LEN-20;
-//	*tmp=0x1234; /* this is just to create physical page, other wise the main function is unabled to called : TODO: need to fix */
 
-/* From here onwards do call any function that consumes stack */
+/* From here onwards DO NOT  call any function that consumes stack */
 	asm("cli");
 	asm("movq %%rsp,%0" : "=m" (p));
 	p=p-1;
@@ -371,66 +378,66 @@ static int free_mm(struct mm_struct *mm)
 	atomic_dec(&mm->count);
 	DEBUG("freeing the mm :%x counter:%x \n",mm,mm->count.counter);
 	if (mm->count.counter > 0) return 0;
-	
+
 	vm_munmap(mm,0,0xffffffff);
 	ar_pageTableCleanup(mm,0, 0xfffffffff);
 	kmem_cache_free(mm_cachep,mm);
 	return 1;
 }
-int sc_fork(unsigned long clone_flags, unsigned long usp, int (*fn)(void *))
+#define CLONE_VM 1
+int sc_createKernelThread(int (*fn)(void *))
+{
+	SYS_sc_clone(fn,0,CLONE_VM,0);
+}
+int SYS_sc_clone(int (*fn)(void *), void *child_stack,int clone_flags,void *args)
 {
 	struct task_struct *p;
 	struct mm_struct *mm;
 	unsigned long flags;
 
+/* Initialize the stack  */
 	p = alloc_task_struct();
 	if ( p == 0) BUG();
-
-	if (fn != 0)
+	ut_memset((unsigned char *)p,MAGIC_CHAR,TASK_SIZE);
+/* Initialize mm */
+	if (clone_flags | CLONE_VM) /* parent and child run in the same vm */
 	{
-		ut_memset((unsigned char *)p,MAGIC_CHAR,STACK_SIZE);
-		p->thread.ip=(void *)fn;
-		p->thread.sp=(addr_t)p+(addr_t)STACK_SIZE;
-		p->state=TASK_RUNNING;
-		mm=kmem_cache_alloc(mm_cachep, 0);
-		if (mm ==0 ) BUG();
-		atomic_set(&mm->count,1);
-		mm->pgd=0;
-		mm->mmap=0;
-		mm->start_brk=0xc0000000;
-		ar_pageTableCopy(g_current_task->mm,mm);	
-		p->mm=mm;
-		p->ticks=0;
+		mm=g_current_task->mm;
+		atomic_inc(&mm->count);	
 	}else
 	{
-		/*	unsigned long curr_spb,curr_spe,new_sp;
-
-			ut_memcpy(p,g_current_task,STACK_SIZE);
-			p->thread.ip=(void *)ret_from_fork;
-			asm("movq %%rbp,%0" : "=m" (curr_spe));
-			curr_spb=g_current_task;
-			p->thread.sp=(unsigned long)p+(curr_spe-curr_spb);
-			ut_printf(" thread sp : %x  ip:%x old_bp:%x  \n",p->thread.sp,p->thread.ip,curr_spe);	*/
+	        mm=kmem_cache_alloc(mm_cachep, 0);
+                if (mm ==0 ) BUG();
+                atomic_set(&mm->count,1);
+                mm->pgd=0;
+		ar_pageTableCopy(g_current_task->mm,mm);	
+                mm->mmap=0;
 	}
+/* initialize task struct */
+	p->mm=mm;
+	p->ticks=0;
+	p->thread.ip=(void *)fn;
+	p->thread.sp=(addr_t)p+(addr_t)TASK_SIZE;
+	p->state=TASK_RUNNING;
 
+/* link to queue */
+        g_pid++;
+        p->pid=g_pid;
+        p->run_link.next=0;
+        p->run_link.prev=0;
+        p->task_link.next=0;
+        p->task_link.prev=0;
+        p->next_wait=p->prev_wait=NULL;
 
-	g_pid++;
-	p->pid=g_pid;
-	p->run_link.next=0;
-	p->run_link.prev=0;
-	p->task_link.next=0;
-	p->task_link.prev=0;
-	p->next_wait=p->prev_wait=NULL;
-
-	spin_lock_irqsave(&runqueue_lock, flags);
-	list_add_tail(&p->task_link,&task_queue.head);
-	add_to_runqueue(p);
-	spin_unlock_irqrestore(&runqueue_lock, flags);
-	return p->pid;
+        spin_lock_irqsave(&runqueue_lock, flags);
+        list_add_tail(&p->task_link,&task_queue.head);
+        add_to_runqueue(p);
+        spin_unlock_irqrestore(&runqueue_lock, flags);
+        return p->pid;
 }
-unsigned long SYS_sc_fork()
+int SYS_sc_fork()
 {
-
+	return SYS_sc_clone(0,0,0,0);
 }
 int SYS_sc_exit(int status)
 {
@@ -438,11 +445,6 @@ int SYS_sc_exit(int status)
 	g_current_task->state=TASK_DEAD;
 	sc_schedule();
 	return 0;
-}
-
-int sc_createThread(int (*fn)(void *))
-{
-	return sc_fork(0, 0, fn);
 }
 
 /******************* schedule related functions **************************/

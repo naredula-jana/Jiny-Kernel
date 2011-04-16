@@ -38,10 +38,10 @@ void ut_showTrace(unsigned long *stack_top)
 	sz=sz*4;
 	stack_top=(unsigned char *)sz;
 	i = 0;
-	sz=(STACK_SIZE-1);
+	sz=(TASK_SIZE-1);
 	sz=~sz;
 	stack_end = (unsigned long)stack_top & (sz);
-	stack_end = stack_end+STACK_SIZE-10;
+	stack_end = stack_end+TASK_SIZE-10;
 	code_end = &placement_address;
 	ut_printf("\nCALL Trace: %x  code_end:%x  %x :%x  \n",stack,code_end,stack_top,stack_end);
 	if (stack_end) {
