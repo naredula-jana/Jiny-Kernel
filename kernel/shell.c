@@ -278,7 +278,7 @@ static int load_test(char *arg1,char *arg2)
 {
 	char *argv[]={"First argument","second argument",0};
 
-        SYS_sc_execve("/home/njana/jiny/test/test2",argv,0);
+        SYS_sc_execve("/home/njana/jiny/test/test3",argv,0);
 	ut_printf(" ERROR: COntrol Never Reaches\n");
 	return 1;
 }

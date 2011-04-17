@@ -9,12 +9,13 @@
 int sc_wakeUp(struct wait_struct *waitqueue,struct task_struct * p);
 int sc_wait(struct wait_struct *waitqueue,int ticks);
 int sc_sleep(int ticks); /* each tick is 100HZ or 10ms */
-int SYS_sc_fork();
-int SYS_sc_clone(int (*fn)(void *), void *child_stack,int flags,void *args);
+unsigned long SYS_sc_fork();
+unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int flags,void *args);
 int SYS_sc_exit(int status);
+int SYS_sc_kill(unsigned long pid,unsigned long signal);
 unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned char *env);
 int sc_threadlist( char *arg1,char *arg2);
-int sc_createKernelThread(int (*fn)(void *));
+unsigned long sc_createKernelThread(int (*fn)(void *));
 void sc_schedule();
 
 /* mm */

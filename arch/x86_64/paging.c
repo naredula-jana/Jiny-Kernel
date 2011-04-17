@@ -34,6 +34,11 @@ static void mk_pte(pte_t *pte, addr_t fr,int global,int user)
 
         pte->count=0;
         pte->nx=0;
+	if (pte->frame != 0)
+	{
+		ut_printf("ERROR : non zero value pte:%x value:%x \n",pte,pte->frame);
+		BUG();
+	}
         pte->frame = fr;
 }
 static void mk_pde(pde_t *pde, addr_t fr,int page_size,int global,int user)  
@@ -95,6 +100,11 @@ addr_t initialise_paging(addr_t end_addr)
 	*p=0; /* reset the L3 table first entry need only when the paging is enabled */
 	flush_tlb(0x101000);
 	return placement_address;
+}
+static inline void flush_tlb_entry(unsigned long  vaddr)
+{
+  __asm__ volatile("invlpg (%0)"
+                   :: "r" (vaddr));
 }
 void flush_tlb(unsigned long dir)
 {
@@ -457,8 +467,8 @@ static int handle_mm_fault(addr_t addr)
 		mk_pte(__va(pl1),((addr_t)p>>12),0,1); /* global=off, user=on */
 
 	ar_flushTlbGlobal();
-
-	DEBUG("Finally Inserted  Pl4: %x pl3:%x  p12:%x pl1:%x p:%x \n",pl4,pl3,pl2,pl1,p);	
+	flush_tlb_entry(addr);
+	DEBUG("Finally Inserted addr:%x  Pl4: %x pl3:%x  p12:%x pl1:%x p:%x \n",addr,pl4,pl3,pl2,pl1,p);	
 	return 1;	
 }
 

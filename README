@@ -60,59 +60,6 @@ Interface functions:
 ------------------------------------------	
 Host based File System (HFS):
 
-------------------------------------------
-Design :
-mm : memory management
-pc : page cache 
-vfs : virtual filesystem
-kernel : cpu scheduling
---------------------------------------------
-
-Code Organization:
-  Entire code is splitted into the following modules:
-
-1) scheduling (sc)
-	sc_fork
-	sc_createThread
-	sc_exit
-	sc_schedule
-	
-2) memory management ( vm,mm)
-	vm_brk
-	vm_mmap
-	vm_munmap
-	vm_findVma
-	vm_printMmaps
-
-	mm_getFreePages	
-	mm_putFreePages	
-	mm_malloc
-	mm_free
-	mm_kmem_*
-	
-3) VFS 
-    pagecache:
-	pc_getInodePage : get particular page of offset from inode
-	pc_insertPage : insert a page in to inode or pagecache
-	pc_putFreePage : put a page into free list
-	pc_getFreePage : get a free page from free list
-	pc_init : initialize the subsystem	
-
-	fs_getInode : from filename get the appropriate inode
-	fs_registerFileSystem :
-	fs_open,fs_read,fs_write,fs_close  : file operations
-	
-4) isr  (AR)
-5) Drivers (DR)
-6) utilities (UT)
-	ut_putchar
-	ut_printf
-	ut_memcpy
-	ut_memset
-	ut_strcmp
-	ut_strcpy
-	ut_strlen
-
 _____________________________
  Running :
   -> multiboot (hd0)/kernel
@@ -155,5 +102,6 @@ Attaching to gdb: (add -S to qemu command line)
 target remote localhost:1234 
 set architecture i386:x86-64
 
-
+-----------------------------------
+git push may give error, in that case changes the url in .git/config as : url = git@github.com:naredula-jana/Jiny-Kernel.git
 -------------------------------------

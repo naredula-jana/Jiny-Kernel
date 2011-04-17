@@ -8,7 +8,7 @@
  *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
  *
  */
-#define DEBUG_ENABLE 1
+//#define DEBUG_ENABLE 1
 #include "task.h"
 #include "interface.h"
 #include "descriptor_tables.h"
@@ -24,19 +24,20 @@ typedef struct queue{
 }queue_t;
 static queue_t run_queue;
 static queue_t task_queue;
-static spinlock_t runqueue_lock  = SPIN_LOCK_UNLOCKED;
-static spinlock_t taskqueue_lock  = SPIN_LOCK_UNLOCKED;
+static spinlock_t sched_lock  = SPIN_LOCK_UNLOCKED;
 
 struct wait_struct g_timerqueue;
-int g_pid=0;
+unsigned long g_pid=0;
 unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles per second  */
 unsigned long  g_nr_waiting=0;
 static struct task_struct *g_task_dead=0;  /* TODO : remove me later */
-
 extern long *stack;
 
 void init_timer();
+
 static int free_mm(struct mm_struct *mm);
+static unsigned long push_to_userland();
+
 static struct task_struct *alloc_task_struct(void)
 {
 	return (struct task_struct *) mm_getFreePages(0,2); /*WARNING: do not change the size it is related TASK_SIZE, 4*4k=16k page size */
@@ -195,7 +196,7 @@ int sc_wakeUp(struct wait_struct *waitqueue,struct task_struct * p)
 		while (waitqueue->queue != NULL)
 		{
 			p=waitqueue->queue;
-			spin_lock_irqsave(&runqueue_lock, flags);
+			spin_lock_irqsave(&sched_lock, flags);
 			if (del_from_waitqueue(waitqueue,p) == 1)
 			{
 				p->state = TASK_RUNNING;
@@ -203,11 +204,11 @@ int sc_wakeUp(struct wait_struct *waitqueue,struct task_struct * p)
 					add_to_runqueue(p);
 				ret++;
 			}
-			spin_unlock_irqrestore(&runqueue_lock, flags);
+			spin_unlock_irqrestore(&sched_lock, flags);
 		}	
 	}else
 	{
-		spin_lock_irqsave(&runqueue_lock, flags);
+		spin_lock_irqsave(&sched_lock, flags);
 		if (del_from_waitqueue(waitqueue,p) == 1)
 		{
 			p->state = TASK_RUNNING;
@@ -215,7 +216,7 @@ int sc_wakeUp(struct wait_struct *waitqueue,struct task_struct * p)
 				add_to_runqueue(p);
 			ret++;
 		}
-		spin_unlock_irqrestore(&runqueue_lock, flags);
+		spin_unlock_irqrestore(&sched_lock, flags);
 	}
 	return ret;
 }
@@ -241,13 +242,13 @@ int sc_threadlist( char *arg1,char *arg2)
 	struct list_head *pos;
 	struct task_struct *task;
 
-	spin_lock_irqsave(&runqueue_lock, flags);
+	spin_lock_irqsave(&sched_lock, flags);
 	ut_printf("pid task ticks mm pgd mm_count \n");
 	list_for_each(pos, &task_queue.head) {
 		task=list_entry(pos, struct task_struct, task_link);
 		ut_printf("%d %x %x %x %x %d\n",task->pid,task,task->ticks,task->mm,task->mm->pgd,task->mm->count.counter);
 	}
-	spin_unlock_irqrestore(&runqueue_lock, flags);
+	spin_unlock_irqrestore(&sched_lock, flags);
 }
 
 unsigned long setup_stack(unsigned char **argv,unsigned char *env,unsigned long *stack_len,unsigned long *t_argc,unsigned long *t_argv)
@@ -291,6 +292,7 @@ unsigned long setup_stack(unsigned char **argv,unsigned char *env,unsigned long 
 		p=p-len;
 		real_stack=real_stack-len;
 		ut_memcpy(p,target_argv,len);
+		DEBUG(" arg0:%x arg1:%x arg2:%x len:%d \n",target_argv[0],target_argv[1],target_argv[2],len);
 		p=p-8;
 		t=p;
 		*t=total_args; /* store argc at the top of stack */
@@ -307,13 +309,6 @@ error:
 	mm_putFreePages(stack,0);
 	return 0;	
 }
-
-struct user_regs {
-	struct gpregs gpres;
-	struct intr_stack_frame isf;
-};
-#define DEFAULT_RFLAGS_VALUE (0x10202)
-extern void enter_userspace();
 unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned char *env)
 {
 	struct file *fp;
@@ -324,22 +319,23 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 	unsigned long t_argc,t_argv,stack_len,tmp_stack;
 
 	DEBUG("EXCEVE starting \n");
-
-/* create the argc and env in a temporray stack before we destory the old stack */
+	/* create the argc and env in a temporray stack before we destory the old stack */
 	t_argc=0;
 	t_argv=0;
 	tmp_stack=setup_stack(argv,env,&stack_len,&t_argc,&t_argv);
 
-/* delete old vm and create a new one */
+	/* delete old vm and create a new one */
 	free_mm(g_current_task->mm);
-        mm=kmem_cache_alloc(mm_cachep, 0);
-        if (mm ==0 ) BUG();
-        atomic_set(&mm->count,1);
-        mm->pgd=0;
-        mm->mmap=0;
+	mm=kmem_cache_alloc(mm_cachep, 0);
+	if (mm ==0 ) BUG();
+	atomic_set(&mm->count,1);
+	mm->pgd=0;
+	mm->mmap=0;
 	ar_pageTableCopy(g_kernel_mm,mm);	 /* every process page table should have soft links to kernel page table */
 	g_current_task->mm=mm;
-/* populate vm with vmaps */
+	flush_tlb(mm->pgd);
+
+	/* populate vm with vmaps */
 	fp=SYS_fs_open(file,0,0);
 	if (fp == 0)
 	{
@@ -350,15 +346,31 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 	mm_putFreePages(tmp_stack,0);
 	vm_printMmaps(0,0);
 	ar_updateCpuState(0);
+	g_current_task->thread.userland.ip=main_func;
+	g_current_task->thread.userland.sp=t_argv;
+	g_current_task->thread.userland.argc=t_argc;
+	g_current_task->thread.userland.argv=t_argv;
+	push_to_userland();
+}
 
-/* From here onwards DO NOT  call any function that consumes stack */
+struct user_regs {
+	struct gpregs gpres;
+	struct intr_stack_frame isf;
+};
+#define DEFAULT_RFLAGS_VALUE (0x10202)
+extern void enter_userspace();
+static unsigned long push_to_userland()
+{
+	struct user_regs *p;
+	DEBUG(" from PUSH_TO_USERLAND \n");
+	/* From here onwards DO NOT  call any function that consumes stack */
 	asm("cli");
 	asm("movq %%rsp,%0" : "=m" (p));
 	p=p-1;
 	asm("subq $0xa0,%rsp");
 	p->gpres.rbp=0;
-	p->gpres.rsi=t_argv; /* second argument to main i.e argv */
-	p->gpres.rdi=t_argc; /* first argument argc */
+	p->gpres.rsi=g_current_task->thread.userland.sp; /* second argument to main i.e argv */
+	p->gpres.rdi=g_current_task->thread.userland.argc; /* first argument argc */
 	p->gpres.rdx=0;
 	p->gpres.rbx=p->gpres.rcx=0;
 	p->gpres.rax=p->gpres.r10=0;
@@ -366,9 +378,9 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 	p->gpres.r13=p->gpres.r14=0;
 	p->gpres.r15=p->gpres.r9=0;
 	p->gpres.r8=0;
-	p->isf.rip=main_func;
+	p->isf.rip=g_current_task->thread.userland.ip;
 	p->isf.rflags=DEFAULT_RFLAGS_VALUE;
-	p->isf.rsp=t_argv-8 ;
+	p->isf.rsp=g_current_task->thread.userland.sp;
 	p->isf.cs=GDT_SEL(UCODE_DESCR) | SEG_DPL_USER;
 	p->isf.ss=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
 	enter_userspace();	
@@ -385,59 +397,72 @@ static int free_mm(struct mm_struct *mm)
 	return 1;
 }
 #define CLONE_VM 1
-int sc_createKernelThread(int (*fn)(void *))
+unsigned long sc_createKernelThread(int (*fn)(void *))
 {
-	SYS_sc_clone(fn,0,CLONE_VM,0);
+	return SYS_sc_clone(fn,0,CLONE_VM,0);
 }
-int SYS_sc_clone(int (*fn)(void *), void *child_stack,int clone_flags,void *args)
+unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int clone_flags,void *args)
 {
 	struct task_struct *p;
 	struct mm_struct *mm;
 	unsigned long flags;
 
-/* Initialize the stack  */
+	/* Initialize the stack  */
 	p = alloc_task_struct();
 	if ( p == 0) BUG();
 	ut_memset((unsigned char *)p,MAGIC_CHAR,TASK_SIZE);
-/* Initialize mm */
+	/* Initialize mm */
 	if (clone_flags | CLONE_VM) /* parent and child run in the same vm */
 	{
 		mm=g_current_task->mm;
 		atomic_inc(&mm->count);	
+		DEBUG("clone  CLONE_VM the mm :%x counter:%x \n",mm,mm->count.counter);
 	}else
 	{
-	        mm=kmem_cache_alloc(mm_cachep, 0);
-                if (mm ==0 ) BUG();
-                atomic_set(&mm->count,1);
-                mm->pgd=0;
+		mm=kmem_cache_alloc(mm_cachep, 0);
+		if (mm ==0 ) BUG();
+		atomic_set(&mm->count,1);
+		DEBUG("clone  the mm :%x counter:%x \n",mm,mm->count.counter);
+		mm->pgd=0;
 		ar_pageTableCopy(g_current_task->mm,mm);	
-                mm->mmap=0;
+		mm->mmap=0;
 	}
-/* initialize task struct */
+	/* initialize task struct */
 	p->mm=mm;
 	p->ticks=0;
-	p->thread.ip=(void *)fn;
+	p->pending_signal=0;
+	if (g_current_task->mm != g_kernel_mm)
+	{ /* user level thread */
+		p->thread.userland.ip=fn;
+		p->thread.userland.sp=child_stack;
+		p->thread.userland.argc=0;/* TODO */
+		p->thread.userland.argv=0; /* TODO */
+		p->thread.ip=(void *)push_to_userland;
+	}else
+	{ /* kernel level thread */
+		p->thread.ip=(void *)fn;
+	}
 	p->thread.sp=(addr_t)p+(addr_t)TASK_SIZE;
 	p->state=TASK_RUNNING;
 
-/* link to queue */
-        g_pid++;
-        p->pid=g_pid;
-        p->run_link.next=0;
-        p->run_link.prev=0;
-        p->task_link.next=0;
-        p->task_link.prev=0;
-        p->next_wait=p->prev_wait=NULL;
+	/* link to queue */
+	g_pid++;
+	p->pid=g_pid;
+	p->run_link.next=0;
+	p->run_link.prev=0;
+	p->task_link.next=0;
+	p->task_link.prev=0;
+	p->next_wait=p->prev_wait=NULL;
 
-        spin_lock_irqsave(&runqueue_lock, flags);
-        list_add_tail(&p->task_link,&task_queue.head);
-        add_to_runqueue(p);
-        spin_unlock_irqrestore(&runqueue_lock, flags);
-        return p->pid;
+	spin_lock_irqsave(&sched_lock, flags);
+	list_add_tail(&p->task_link,&task_queue.head);
+	add_to_runqueue(p);
+	spin_unlock_irqrestore(&sched_lock, flags);
+	return p->pid;
 }
-int SYS_sc_fork()
+unsigned long  SYS_sc_fork()
 {
-	return SYS_sc_clone(0,0,0,0);
+	return SYS_sc_clone(0,0,CLONE_VM,0);
 }
 int SYS_sc_exit(int status)
 {
@@ -446,7 +471,24 @@ int SYS_sc_exit(int status)
 	sc_schedule();
 	return 0;
 }
+int SYS_sc_kill(unsigned long pid,unsigned long signal)
+{
+	unsigned long flags;
+	struct list_head *pos;
+	struct task_struct *task;
 
+	spin_lock_irqsave(&sched_lock, flags);
+	DEBUG("Sending Signal to pid :%d signal:%d \n",pid,signal);
+	list_for_each(pos, &task_queue.head) {
+		task=list_entry(pos, struct task_struct, task_link);
+		if (task->pid ==pid) 
+		{
+			task->pending_signal=1;
+			break;
+		}
+	}
+	spin_unlock_irqrestore(&sched_lock, flags);
+}
 /******************* schedule related functions **************************/
 
 
@@ -532,7 +574,6 @@ void init_tasking()
 	task_queue.count.counter=0;
 
 	atomic_set(&g_kernel_mm->count,1);
-	g_kernel_mm->start_brk=0xc0000000;
 	g_kernel_mm->mmap=0x0;
 	g_kernel_mm->pgd=(unsigned char *)g_kernel_page_dir;
 
@@ -566,7 +607,7 @@ void sc_schedule()
 		BUG();
 	}
 	g_current_task->ticks++;
-	spin_lock_irqsave(&runqueue_lock, flags);
+	spin_lock_irqsave(&sched_lock, flags);
 	prev=g_current_task;
 	if (prev!= g_idle_task) 
 	{
@@ -589,17 +630,16 @@ void sc_schedule()
 		free_task_struct(g_task_dead);
 		g_task_dead=0;
 	}
-	//spin_unlock_irqrestore(&runqueue_lock, flags);
 
-	if (prev->state == TASK_DEAD)
+	if (prev->state == TASK_DEAD || prev->pending_signal != 0)
 	{
 		g_task_dead=prev;
 	}
 
 	if (prev==next)
 	{
-		spin_unlock_irqrestore(&runqueue_lock, flags);
-		 return;
+		spin_unlock_irqrestore(&sched_lock, flags);
+		return;
 	}
 	next->counter=5; /* 50 ms time slice */
 	if (prev->mm->pgd != next->mm->pgd) /* TODO : need to make generic */
@@ -607,11 +647,11 @@ void sc_schedule()
 		flush_tlb(next->mm->pgd);
 	}	
 	ar_updateCpuState(0);
-//ut_printf(" before switching : prev:%x  next:%x  :%x\n",prev,next,((unsigned long)next+TASK_SIZE));
+	//ut_printf(" before switching : prev:%x  next:%x  :%x\n",prev,next,((unsigned long)next+TASK_SIZE));
 	ar_setupTssStack((unsigned long)next+TASK_SIZE);
 	switch_to(prev,next,prev);
-//ut_printf("After switching\n");
-	spin_unlock_irqrestore(&runqueue_lock, flags);
+	//ut_printf("After switching\n");
+	spin_unlock_irqrestore(&sched_lock, flags);
 }
 
 void do_softirq()

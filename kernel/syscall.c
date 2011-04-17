@@ -26,6 +26,8 @@ syscalltable_t syscalltable[]=
 	{SYS_sc_exit}, 
 	{SYS_sc_execve},/* 10 */
 	{SYS_sc_fork},
+	{SYS_sc_kill},
+	{SYS_sc_clone},
 	{SYS_vm_mmap}, 
 	{syscallnull} 
 };

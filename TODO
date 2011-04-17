@@ -2,20 +2,16 @@ Short term :
 
 - rewriting wait in kernel/task
 - cleaning defines 
-- implementing proper fork
 - including header files in .S files
 
 
 Long term :	
 - implementing useful system calls 
-
 - code reorg:
-
 - init functions streamlining
-
 - enhancing debugging,logging and shell features 	
 
 ---------------------------------------------------------
 fixes:
  1) when system call number more then max limit, raising pagefault
- 2) Freeing memory when the task exits.
+ 2) in elf interpretation the first function is interpreted as first function

@@ -9,7 +9,9 @@
 #define SYS_exit 9
 #define SYS_execve 10
 #define SYS_fork 11
-#define SYS_mmap 12
+#define SYS_kill 12
+#define SYS_clone 13
+#define SYS_mmap 14
 
 #define __syscall_return(type, res) \
 do { \
@@ -61,6 +63,13 @@ long __res; \
 __res=__syscall(arg1,arg2, arg3, 0, 0, 0, (SYS_##name));\
 __syscall_return(type,__res); \
 }
+#define _syscall4(type,name,type1,arg1,type2,arg2,type3,arg3,type4,arg4) \
+type name(type1 arg1,type2 arg2,type3 arg3,type4 arg4) \
+{ \
+long __res; \
+__res=__syscall(arg1,arg2, arg3, arg4, 0, 0, (SYS_##name));\
+__syscall_return(type,__res); \
+}
 #define _syscall6(type,name,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5,type6,arg6) \
 type name(type1 arg1,type2 arg2,type3 arg3,type4 arg4,type5 arg5 ,type6 arg6) \
 { \
@@ -79,5 +88,7 @@ _syscall1(int,close,unsigned long,ptr)
 _syscall1(int,fdatasync,unsigned long,ptr)
 _syscall3(int,execve,unsigned long,name,unsigned long,argv,unsigned long ,env)
 _syscall0(int,fork)
+_syscall2(int,kill,unsigned long,pid,unsigned long ,signal)
+_syscall4(int,clone,unsigned long,func_ptr,unsigned long ,stack,int ,clone_flags,unsigned long ,args)
 _syscall6(int,mmap,unsigned long,addr,unsigned long,length,unsigned long ,proto,unsigned long, flag,unsigned long, fd,unsigned long ,offset)
 

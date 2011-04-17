@@ -14,27 +14,28 @@ struct wait_struct {
 	struct task_struct *queue;	
 	spinlock_t lock;
 };
-
+struct user_thread {
+	unsigned long ip,sp;
+	unsigned long argc,argv;
+};
 struct thread_struct {
-	void *sp;
-	void *ip;
+	void *sp; /* kernel stack pointer when scheduling start */
+	void *ip; /* kernel ip when scheduling start */
+	struct user_thread userland;
 };
 
 struct mm_struct {
         struct vm_area_struct *mmap;           /* list of VMAs */
         unsigned long pgd; 
-        atomic_t mm_users;                      /* How many users with user space? */
         atomic_t count;                      /* How many references to "struct mm_struct" (users count as 1) */
-        int map_count;                          /* number of VMAs */
-        spinlock_t page_table_lock;             /* Protects task page tables and mm->rss */
 
-        unsigned long start_code, end_code, start_data, end_data;
+/*        unsigned long start_code, end_code, start_data, end_data;
         unsigned long start_brk, brk, start_stack;
         unsigned long arg_start, arg_end, env_start, env_end;
         unsigned long rss, total_vm, locked_vm;
         unsigned long def_flags;
         unsigned long cpu_vm_mask;
-        unsigned long swap_address;
+        unsigned long swap_address; */
 };
 // This structure defines a 'task' - a process.
 /*
@@ -42,7 +43,8 @@ struct mm_struct {
 struct task_struct {
 	volatile long state;    /* -1 unrunnable, 0 runnable, >0 stopped */
 	unsigned long flags;    /* per process flags, defined below */
-	int pid;
+	unsigned long pending_signal;	
+	unsigned long pid;
 	int counter;
 	int sleep_ticks;
 	unsigned long ticks;	
