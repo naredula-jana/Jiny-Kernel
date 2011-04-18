@@ -38,6 +38,8 @@ struct mm_struct {
         unsigned long swap_address; */
 };
 // This structure defines a 'task' - a process.
+
+#define MAX_TASK_NAME 40
 /*
  - task can be on run queue or in wait queues */
 struct task_struct {
@@ -45,6 +47,7 @@ struct task_struct {
 	unsigned long flags;    /* per process flags, defined below */
 	unsigned long pending_signal;	
 	unsigned long pid;
+	unsigned char name[MAX_TASK_NAME+1];
 	int counter;
 	int sleep_ticks;
 	unsigned long ticks;	

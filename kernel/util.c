@@ -158,7 +158,18 @@ char *ut_strcpy(char *dest, const char *src)
 	*dest=0;
 	return dest;
 }
-
+char *ut_strncpy(char *dest, const char *src,int n)
+{
+	int len=0;
+        do
+        {
+                *dest++ = *src++;
+		len++;
+        }
+        while (*src != 0 && len<n);
+        *dest=0;
+        return dest;
+}
 // Concatenate the NULL-terminated string src onto
 // the end of dest, and return dest.
 char *ut_strcat(char *dest, const char *src)

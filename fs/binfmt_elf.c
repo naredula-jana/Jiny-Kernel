@@ -87,7 +87,6 @@ unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsi
 
 	for (j = 0, i = 0; i<elf_ex.e_phnum; i++)
 		if ((eppnt + i)->p_type == PT_LOAD) j++;
-	//if (j != 1)
 	if (j == 0)
 	{
 		error = -6;

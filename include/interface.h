@@ -71,6 +71,7 @@ void ut_memcpy(unsigned char *dest, unsigned char *src, long len);
 void ut_memset(unsigned char *dest, unsigned char val, long len);
 int ut_memcmp(unsigned char *m1, unsigned char *m2,int len);
 char *ut_strcpy(char *dest, const char *src);
+char *ut_strncpy(char *dest, const char *src,int n);
 char *ut_strcat(char *dest, const char *src);
 int ut_strlen(const char * s);
 unsigned long ut_atol(char *p);

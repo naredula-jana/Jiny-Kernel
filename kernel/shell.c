@@ -26,6 +26,7 @@ static int sh_debug(char *arg1,char *arg2);
 static int print_help(char *arg1,char *arg2);
 static int sh_cat(char *arg1,char *arg2);
 static int sh_cp(char *arg1,char *arg2);
+static int sh_kill(char *arg1,char *arg2);
 static int sh_alloc_mem(char *arg1,char *arg2);
 static int sh_free_mem(char *arg1,char *arg2);
 static int sh_sync(char *arg1,char *arg2);
@@ -47,6 +48,7 @@ commands_t cmd_list[]=
 	{"d   ","toggle debug","d",sh_debug},
 	{"i         ","Print IRQ stats","i",ar_printIrqStat},
 	{"t         ","Print thread list","t",sc_threadlist},
+	{"kill <pid> ","kill process","kill",sh_kill},
 	{"cls       ","clear screen ","cls",ut_cls},
 	{"mp        ","Memory free areas","mp",mm_printFreeAreas},
 	{"test1     ","test1 ","test1",sh_test1},
@@ -252,6 +254,13 @@ static int sh_cat(char *arg1,char *arg2)
 		i++;
 	}
 	return 0;
+}
+static int sh_kill(char *arg1,char *arg2)
+{
+	unsigned long pid;
+	pid=ut_atol(arg1);
+	ut_printf(" about to kill the process:%d \n",pid);
+	SYS_sc_kill(pid,9);
 }
 static int sh_alloc_mem(char *arg1,char *arg2)
 {
@@ -511,6 +520,7 @@ int shell_main()
 {
 	int i,cmd_type;
 
+	ut_strncpy(g_current_task->name,"shell",MAX_TASK_NAME);
 	for (i=0; i<MAX_CMD_HISTORY;i++)
 		cmd_history[i][0]='\0';
 

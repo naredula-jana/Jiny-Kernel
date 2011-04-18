@@ -8,7 +8,7 @@
  *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
  *
  */
-//#define DEBUG_ENABLE 1
+#define DEBUG_ENABLE 1
 #include "task.h"
 #include "interface.h"
 #include "descriptor_tables.h"
@@ -25,16 +25,16 @@ typedef struct queue{
 static queue_t run_queue;
 static queue_t task_queue;
 static spinlock_t sched_lock  = SPIN_LOCK_UNLOCKED;
-
 struct wait_struct g_timerqueue;
 unsigned long g_pid=0;
 unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles per second  */
 unsigned long  g_nr_waiting=0;
 static struct task_struct *g_task_dead=0;  /* TODO : remove me later */
+
+#define is_kernelThread(task) (task->mm == g_kernel_mm)
+
 extern long *stack;
-
 void init_timer();
-
 static int free_mm(struct mm_struct *mm);
 static unsigned long push_to_userland();
 
@@ -246,7 +246,12 @@ int sc_threadlist( char *arg1,char *arg2)
 	ut_printf("pid task ticks mm pgd mm_count \n");
 	list_for_each(pos, &task_queue.head) {
 		task=list_entry(pos, struct task_struct, task_link);
-		ut_printf("%d %x %x %x %x %d\n",task->pid,task,task->ticks,task->mm,task->mm->pgd,task->mm->count.counter);
+		if (is_kernelThread(task))
+			ut_printf("[%d]",task->pid);
+		else
+			ut_printf("%d",task->pid);
+		
+		ut_printf(" %x %x %x %x %d %s\n",task,task->ticks,task->mm,task->mm->pgd,task->mm->count.counter,task->name);
 	}
 	spin_unlock_irqrestore(&sched_lock, flags);
 }
@@ -343,7 +348,13 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 		return 0;
 	}
 	main_func=fs_loadElfLibrary(fp,tmp_stack+(PAGE_SIZE-stack_len),stack_len);
+	if (main_func ==0) 
+	{
+		mm_putFreePages(tmp_stack,0);
+		return 0;
+	}
 	mm_putFreePages(tmp_stack,0);
+	ut_strncpy(g_current_task->name,file,MAX_TASK_NAME);
 	vm_printMmaps(0,0);
 	ar_updateCpuState(0);
 	g_current_task->thread.userland.ip=main_func;
@@ -444,6 +455,7 @@ unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int clone_flags,
 	}
 	p->thread.sp=(addr_t)p+(addr_t)TASK_SIZE;
 	p->state=TASK_RUNNING;
+	ut_strncpy(p->name,g_current_task->name,MAX_TASK_NAME);
 
 	/* link to queue */
 	g_pid++;
@@ -585,7 +597,7 @@ void init_tasking()
 	g_current_task->pid=g_pid;
 	g_current_task->mm=g_kernel_mm;
 	list_add_tail(&g_current_task->task_link,&task_queue.head);
-
+	ut_strncpy(g_current_task->name,"idle",MAX_TASK_NAME);
 	g_pid++;
 	init_timer();
 	init_waitqueue(&g_timerqueue);
@@ -609,6 +621,19 @@ void sc_schedule()
 	g_current_task->ticks++;
 	spin_lock_irqsave(&sched_lock, flags);
 	prev=g_current_task;
+/* Handle any pending signal */
+	if (prev->pending_signal != 0)
+	{
+		if (is_kernelThread(prev))
+		{
+			ut_printf(" WARNING: kernel thread cannot be killed \n");
+		}else
+		{
+	        	list_del(&prev->task_link);
+       			prev->state=TASK_DEAD;
+		}
+		prev->pending_signal=0;
+	}
 	if (prev!= g_idle_task) 
 	{
 		move_last_runqueue(prev);
@@ -631,7 +656,7 @@ void sc_schedule()
 		g_task_dead=0;
 	}
 
-	if (prev->state == TASK_DEAD || prev->pending_signal != 0)
+	if (prev->state == TASK_DEAD )
 	{
 		g_task_dead=prev;
 	}

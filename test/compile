@@ -1,1 +1,4 @@
-gcc -g -nostdlib  test.c  ../userland/jlibc.o
+gcc -g -nostdlib -e main  test.c  ../userland/jlibc.o ../userland/sys.o -o test
+gcc -g -nostdlib -e main  test1.c  ../userland/jlibc.o ../userland/sys.o  -o test1
+gcc -g -nostdlib -e main test2.c  ../userland/jlibc.o ../userland/sys.o -o test2
+gcc -g -nostdlib -e main  test3.c  ../userland/jlibc.o ../userland/sys.o -o test3
