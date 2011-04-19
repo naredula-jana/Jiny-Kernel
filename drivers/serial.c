@@ -14,38 +14,49 @@
 #define MODEM_STAT_REG(n) ((n) + 6)
 #define SCRATCH_REG(n) ((n) + 7)
 #define SERIAL_PORT 0x3F8
+
+static void serial_input_handler(registers_t regs)
+{
+	unsigned char c;
+	c=inb(DATA_REG(SERIAL_PORT));
+	ar_addInputKey(c);
+//	ut_printf(" Received the char from serial %x %c \n",c,c);
+	outb(INT_ENABLE_REG(SERIAL_PORT), 0x01);             // Issue an interrupt when input buffer is full.
+}
 void init_serial()
 {
-  int portno = SERIAL_PORT ;
-  int reg;
+	int portno = SERIAL_PORT ;
+	int reg;
 
 
-  outb(INT_ENABLE_REG(portno), 0x00);              // Disable all interrupts
-  outb(LINE_CTRL_REG(portno), 0x80);              // Enable DLAB (set baud rate divisor)
+	outb(INT_ENABLE_REG(portno), 0x00);              // Disable all interrupts
+	outb(LINE_CTRL_REG(portno), 0x80);              // Enable DLAB (set baud rate divisor)
 
-  outb(DIVISOR_LO_REG(portno), 1 & 0xff);    // Set divisor to (lo byte)
-  outb(DIVISOR_HI_REG(portno), 1 >> 8);      //                (hi byte)
+	outb(DIVISOR_LO_REG(portno), 1 & 0xff);    // Set divisor to (lo byte)
+	outb(DIVISOR_HI_REG(portno), 1 >> 8);      //                (hi byte)
 
-  // calculate line control register
-  reg =
-    (DATA_BITS_8 & 3) |
-    (STOP_BITS_1 ? 4 : 0) |
-    (0 ? 8 : 0) |
-    (0 ? 16 : 0) |
-    (0 ? 32 : 0) |
-    (0 ? 64 : 0);
+	// calculate line control register
+	reg =
+		(DATA_BITS_8 & 3) |
+		(STOP_BITS_1 ? 4 : 0) |
+		(0 ? 8 : 0) |
+		(0 ? 16 : 0) |
+		(0 ? 32 : 0) |
+		(0 ? 64 : 0);
 
-  outb(LINE_CTRL_REG(portno), reg);
+	outb(LINE_CTRL_REG(portno), reg);
 
-  outb(FIFO_CTRL_REG(portno), 0x47);             // Enable FIFO, clear them, with 4-byte threshold 
-  outb(MODEM_CTRL_REG(portno), 0x0B);             // No modem support
-  outb(INT_ENABLE_REG(portno), 0x01);             // Issue an interrupt when input buffer is full.
+	outb(FIFO_CTRL_REG(portno), 0x47);             // Enable FIFO, clear them, with 4-byte threshold 
+	outb(MODEM_CTRL_REG(portno), 0x0B);             // No modem support
+	outb(INT_ENABLE_REG(portno), 0x01);             // Issue an interrupt when input buffer is full.
+	ar_registerInterrupt(36,serial_input_handler);
+
 }
 static spinlock_t serial_lock  = SPIN_LOCK_UNLOCKED;
 int dr_serialWrite( char *buf , int len)
 {
 	int i;
-        unsigned long  flags;
+	unsigned long  flags;
 
 	spin_lock_irqsave(&serial_lock, flags);
 	for (i=0; i<len; i++)

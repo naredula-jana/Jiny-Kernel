@@ -78,10 +78,6 @@ enter_userspace:
         movl %eax, %gs
         popq %rax 
 
-/*        mov $0x10 ,%eax
-        cmp $0x10,%eax
-1:
-        je 1b */
 
         orq $(1 << 9),IRET_OFFSET_RFLAGS(%rsp)
         iretq

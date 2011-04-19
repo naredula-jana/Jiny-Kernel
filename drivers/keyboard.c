@@ -98,26 +98,35 @@ unsigned char dr_kbGetchar()
 	} 
 	return 0;
 }
-
+int ar_addInputKey(unsigned char c)
+{
+	if (current_pos < MAX_BUF)
+	{
+		kb_buffer[current_pos]=c;
+		current_pos++;
+	}
+	dr_keyBoardBH();
+	return 1;
+}
 static void keyboard_handler(registers_t regs)
 {
-	unsigned char control_kbd,LastKey;
+	unsigned char c,control_kbd,LastKey;
 	int ret;
 
 	LastKey = inb(0x60);
 //	printf(" Key pressed : %x curr_pos:%x read:%x\n",LastKey,current_pos,read_pos);
 	if (current_pos < MAX_BUF && LastKey<128)
 	{
-		ret=en_scan_to_ascii(&kb_buffer[current_pos],LastKey,0,0);
+		ret=en_scan_to_ascii(&c,LastKey,0,0);
 		//     printf(" character :%c: ret:%d \n",kb_buffer[current_pos],ret);
-		if (ret == 1) current_pos++;
+		if (ret == 1) ar_addInputKey(c);
 	}
 	/* Tell the keyboard hat the key is processed */
 	control_kbd = inb(0x61);
 	outb(0x61, control_kbd | 0x80);  /* set the "enable kbd" bit */
 	outb(0x61, control_kbd);  /* write back the original control value */
 	keyboard_int=1;
-	dr_keyBoardBH();
+	//dr_keyBoardBH();
 
 }
 int init_driver_keyboard()

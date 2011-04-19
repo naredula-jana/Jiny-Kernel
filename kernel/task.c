@@ -478,8 +478,13 @@ unsigned long  SYS_sc_fork()
 }
 int SYS_sc_exit(int status)
 {
+	unsigned long flags;
+
+	spin_lock_irqsave(&sched_lock, flags);
 	list_del(&g_current_task->task_link);
 	g_current_task->state=TASK_DEAD;
+	spin_unlock_irqrestore(&sched_lock, flags);
+
 	sc_schedule();
 	return 0;
 }
@@ -602,7 +607,7 @@ void init_tasking()
 	init_timer();
 	init_waitqueue(&g_timerqueue);
 }
-static unsigned long flags;
+static unsigned long intr_flags;
 void sc_schedule()
 {
 	struct task_struct *prev, *next;
@@ -618,9 +623,11 @@ void sc_schedule()
 		DEBUG(" Task Stack got CORRUPTED task:%x :%x :%x \n",g_current_task,g_current_task->magic_numbers[0],g_current_task->magic_numbers[1]);
 		BUG();
 	}
+
 	g_current_task->ticks++;
-	spin_lock_irqsave(&sched_lock, flags);
+	spin_lock_irqsave(&sched_lock, intr_flags);
 	prev=g_current_task;
+
 /* Handle any pending signal */
 	if (prev->pending_signal != 0)
 	{
@@ -634,6 +641,7 @@ void sc_schedule()
 		}
 		prev->pending_signal=0;
 	}
+/* remove from runqueue based on state and get  the next task */
 	if (prev!= g_idle_task) 
 	{
 		move_last_runqueue(prev);
@@ -649,39 +657,42 @@ void sc_schedule()
 	next=get_from_runqueue(0);
 	if (next == 0) next=g_idle_task;
 	g_current_task = next;
+
+/* handle the  dead task */
 	if (g_task_dead) 
 	{
 		free_mm((struct task_struct *)g_task_dead->mm);
 		free_task_struct(g_task_dead);
 		g_task_dead=0;
 	}
-
 	if (prev->state == TASK_DEAD )
 	{
 		g_task_dead=prev;
 	}
 
+/* if prev and next are same then return */
 	if (prev==next)
 	{
-		spin_unlock_irqrestore(&sched_lock, flags);
+		spin_unlock_irqrestore(&sched_lock, intr_flags);
 		return;
 	}
+/* if  prev and next are having same address space , then avoid tlb flush */
 	next->counter=5; /* 50 ms time slice */
 	if (prev->mm->pgd != next->mm->pgd) /* TODO : need to make generic */
 	{
 		flush_tlb(next->mm->pgd);
 	}	
+/* update the cpu state  and tss state for system calls */
 	ar_updateCpuState(0);
-	//ut_printf(" before switching : prev:%x  next:%x  :%x\n",prev,next,((unsigned long)next+TASK_SIZE));
 	ar_setupTssStack((unsigned long)next+TASK_SIZE);
+/* finally switch the task */
 	switch_to(prev,next,prev);
-	//ut_printf("After switching\n");
-	spin_unlock_irqrestore(&sched_lock, flags);
+	spin_unlock_irqrestore(&sched_lock, intr_flags);
 }
 
 void do_softirq()
 {
-	asm volatile("sti");
+//	asm volatile("sti");
 	if (g_current_task->counter <= 0)
 	{
 		sc_schedule();

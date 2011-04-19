@@ -86,4 +86,5 @@ int ar_flushTlbGlobal();
 void flush_tlb(unsigned long dir);
 int ar_updateCpuState(int cpuid);
 void ar_setupTssStack(unsigned long stack);
+int ar_addInputKey(unsigned char c);
 #endif

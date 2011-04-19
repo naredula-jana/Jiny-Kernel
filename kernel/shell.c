@@ -319,7 +319,7 @@ static int sh_debug(char *arg1,char *arg2)
 static int print_help(char *arg1,char *arg2)
 {
 	int i;
-	ut_printf("JINY 0.3 Stacksize:%x  \n",TASK_SIZE);
+	ut_printf("JINY 0.5 Stacksize:%x  \n",TASK_SIZE);
 	for (i=0; i<MAX_COMMANDS; i++)
 	{
 		if (cmd_list[i].usage == 0) break;
@@ -336,7 +336,7 @@ static int print_help(char *arg1,char *arg2)
 static char cmd_history[MAX_CMD_HISTORY][MAX_LINE_LENGTH];
 static int curr_line_no=0;
 static int his_line_no=0;
-char curr_line[MAX_LINE_LENGTH];
+unsigned char curr_line[MAX_LINE_LENGTH];
 enum{
 	CMD_GETVAR=1,
 	CMD_FILLVAR,
@@ -461,7 +461,7 @@ static int process_symbol(int cmd,char *p)
 		ut_printf("Not found :%s: \n",p);
 	return 0;
 }
-static int get_cmd(char *line)
+static int get_cmd(unsigned char *line)
 {
 	int i;
 	int cmd;
@@ -503,7 +503,7 @@ static int get_cmd(char *line)
 			line[i]='\0';
 			break;
 		}
-		if (line[i]=='\n' )
+		if (line[i]=='\n' || line[i]=='\r' )
 		{
 			cmd=CMD_GETVAR;
 			ut_putchar((int)'\n');
