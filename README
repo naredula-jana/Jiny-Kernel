@@ -62,7 +62,7 @@ Host based File System (HFS):
 
 _____________________________
  Running :
-  -> multiboot (hd0)/kernel
+  -> multiboot (hd1)/kernel
   -> boot
 
 vim commands:
