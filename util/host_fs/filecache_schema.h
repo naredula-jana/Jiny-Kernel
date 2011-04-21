@@ -38,6 +38,8 @@ typedef struct {
 
 	unsigned char response;	
 	unsigned long response_len;
+	unsigned long mtime_sec;
+	unsigned long mtime_nsec;
 }Request_t;
 	
 typedef struct {

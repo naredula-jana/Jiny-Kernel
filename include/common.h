@@ -60,6 +60,12 @@ typedef struct registers
     addr_t eip, cs, eflags, useresp, ss; // Pushed by the processor automatically.
 } registers_t;
 
+
+typedef struct {
+unsigned long tv_sec;
+unsigned long tv_nsec;
+}time_t;
+
 #define BUG() do { unsigned long stack_var; ut_printf(" Kernel BUG  file : %s : line :%d \n",__FILE__,__LINE__);  \
 		cli(); ut_showTrace(&stack_var);while(1) ; } while(0)
 #define BUG_ON(condition) do { if (unlikely((condition)!=0)) BUG(); } while(0)

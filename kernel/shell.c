@@ -258,9 +258,11 @@ static int sh_cat(char *arg1,char *arg2)
 static int sh_kill(char *arg1,char *arg2)
 {
 	unsigned long pid;
+	if (arg1 == 0) return 0;
 	pid=ut_atol(arg1);
 	ut_printf(" about to kill the process:%d \n",pid);
 	SYS_sc_kill(pid,9);
+	return 1;
 }
 static int sh_alloc_mem(char *arg1,char *arg2)
 {

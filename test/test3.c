@@ -7,11 +7,10 @@ unsigned long *g;
 child_main()
 {
         int k;
-          ut_printf(" CHILD STARTED  \n");
-	while(1);
+          ut_printf(" CHILD new version  STARTED  \n");
         for(k=0; k<5; k++)
         {
-                ut_printf(" CHILD loop:%d \n",k);
+                ut_printf(" CHILD New version loop:%d \n",k);
         }
         ut_printf("before  CHILD Exiting from test code \n");
         exit(1);
@@ -31,16 +30,21 @@ main(int argc ,char *argv[])
 	stack_addr=&stack[0];
 	stack_addr=stack_addr+7000;
 clone(child_main,stack_addr,1,0);
- 	while (i<5)
+ 	while (i<2)
 	{
 		clone(child_main,stack_addr,1,0);
 		ut_printf("NEW   SYSCALLs loop count: %x stackaddr:%x \n",i,&ret);
 		i++;
 	}
-	while(1) ;
-/*	g=0x40115f00;
-	ret=*g; */
+//	while(1) ;
+	ut_printf("Before CRASH\n");
+	g=0x40115f00;
+	ret=*g; 
 	ut_printf("before Exiting from test code \n");
 	exit(1);
 	ut_printf("after Exiting from test code \n");
 }
+/*__attribute__((destructor)) static void mydestructor(void) {
+        ut_printf("destructor\n");
+} */
+

@@ -34,6 +34,7 @@ struct inode {
 	atomic_t count; /* usage count */
 	int nrpages;	
 	int type; /* short leaved (MRU) or long leaved (LRU) */
+	time_t mtime; /* last modified time */
 	unsigned long length; /* file length */
 	char filename[MAX_FILENAME];
 	struct list_head page_list;	

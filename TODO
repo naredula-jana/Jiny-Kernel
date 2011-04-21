@@ -2,7 +2,7 @@ Short term :
 - rewriting wait in kernel/task
 - cleaning defines 
 - including header files in .S files
-- locking in task.c
+- locking @ inode level  
 
 Long term :	
 - implementing useful system calls 

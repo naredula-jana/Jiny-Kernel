@@ -186,7 +186,11 @@ int open_file(int c)
 	{
 		ret=fstat(fd,&stat);
 		if (ret ==0)
+		{
 			filecache->requests[c].response_len=stat.st_size;
+			filecache->requests[c].mtime_sec=stat.st_mtim.tv_sec;
+			filecache->requests[c].mtime_nsec=stat.st_mtim.tv_nsec;
+		}
 		else
 			filecache->requests[c].response_len=0;
 
@@ -277,7 +281,8 @@ main()
 		}		
 		if (requests == 0)
 		{
-			system("sleep 1");
+			usleep(20000);
+		//	system("sleep 1");
 		}
 	}
 }

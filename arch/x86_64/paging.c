@@ -168,7 +168,11 @@ void ar_pageFault(struct fault_ctx *ctx)
 		}
 	if (us) {DEBUG("user-mode \n");}
 	if (reserved) {DEBUG("reserved \n");}
-
+	if (g_current_task->mm != g_kernel_mm) /* user level thread */
+	{
+		SYS_sc_exit(1);
+		return;
+	}
 	BUG();
 }
 
@@ -374,6 +378,7 @@ static int handle_mm_fault(addr_t addr)
 	addr_t *pl4,*pl3,*pl2,*pl1,*p; /* physical address */
 	addr_t *v;	/* virtual address */
 	unsigned int index;
+	unsigned char user=0;
 
 	if (addr > KERNEL_ADDR_START ) /* then it is kernel address */
 	{
@@ -381,11 +386,20 @@ static int handle_mm_fault(addr_t addr)
 	}else
 	{
 		mm=g_current_task->mm;
+		user=1;
 	}
 	if (mm==0 || mm->pgd == 0) BUG();
 
 	vma=vm_findVma(mm,(addr & PAGE_MASK),8); /* length changed to just 8 bytes at maximum , instead of entire page*/
-	if (vma == 0) BUG();
+	if (vma == 0) 
+	{
+		if ( user ==1)
+		{
+			SYS_sc_exit(1);
+			return 1;
+		}
+		BUG();
+	}
 	pl4=(mm->pgd);
 	if (pl4 == 0) return 0;
 

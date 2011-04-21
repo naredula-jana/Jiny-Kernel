@@ -16,6 +16,7 @@
 #include "interface.h"
 
 #define OFFSET_ALIGN(x) ((x/PC_PAGESIZE)*PC_PAGESIZE)
+#define MAX_SERVER_WAIT_SEC 8 /* in units of seconds */
 struct filesystem host_fs;
 static fileCache_t *shm_headerp=0;
 struct wait_struct g_hfs_waitqueue;
@@ -33,6 +34,7 @@ int request_hostserver(unsigned char type,struct inode *inode, struct page *page
 {
 	int i,j,ret,tlen;
 	int wait_time=10;
+	unsigned long start_time;
 
 	j=-1;
 	ret=0;
@@ -83,10 +85,16 @@ int request_hostserver(unsigned char type,struct inode *inode, struct page *page
 	shm_headerp->requests[j].state=STATE_VALID;
 	shm_headerp->generate_interrupt=1;
 
+	start_time=g_jiffies;
 	while(shm_headerp->requests[j].response==RESPONSE_NONE)
 	{
 		sc_wait(&g_hfs_waitqueue,wait_time);
 		if (wait_time < 1000) wait_time=wait_time*2;	
+		if (((g_jiffies-start_time)/100) > MAX_SERVER_WAIT_SEC)
+		{
+			ret=-10;
+			goto error;
+		}
 		DEBUG(" After Wait : %d :\n",g_jiffies);
 	}
 
@@ -97,7 +105,12 @@ int request_hostserver(unsigned char type,struct inode *inode, struct page *page
 		ret=-9;
 		goto error;
 	}
-
+	if (inode->mtime.tv_sec != shm_headerp->requests[j].mtime_sec)
+	{
+		inode->mtime.tv_sec=shm_headerp->requests[j].mtime_sec;
+		inode->mtime.tv_nsec=shm_headerp->requests[j].mtime_nsec;
+		fs_fadvise(inode,0,0,POSIX_FADV_DONTNEED); /* clear all pages from the cache , since the file looks modified outside */
+	}
 	ret=shm_headerp->requests[j].response_len;
 	DEBUG(" Sucess in reading the file :%i %x \n",tlen,page);
 	shm_headerp->requests[j].state=STATE_INVALID;
@@ -123,7 +136,7 @@ static struct file *hfOpen(char *filename,int mode)
 
 	inodep = fs_getInode(filep->filename);
 	if (inodep == 0) goto error;
-	if (inodep->length == -1 ) /* need to get info from host */
+	if (1) /* need to get info from host  irrespective the file present, REQUEST_OPEN checks the file modification and invalidated the pages*/
 	{
 		ret=request_hostserver(REQUEST_OPEN,inodep,0,0,mode);
 		if (ret < 0) goto error;

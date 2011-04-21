@@ -155,17 +155,11 @@ unsigned long SYS_fs_close(unsigned long fd)
 	if (file == 0) return 0;
 	return vfs_fs->close(file);
 }
-unsigned long SYS_fs_fadvise(unsigned long fd,unsigned long offset, unsigned long len,int advise)
+unsigned long fs_fadvise(struct inode *inode,unsigned long offset, unsigned long len,int advise)
 {
 	struct page *page;
-	struct inode *inode;
         struct list_head *p;
-	struct file *file;
 
-	file=fd_to_file(fd);
-
-	if (file == 0 || file->inode ==0) return 0;
-	inode=file->inode;
 	if (advise == POSIX_FADV_DONTNEED && len==0)
 	{
 		while(1) /* delete all the pages in the inode */
@@ -176,9 +170,18 @@ unsigned long SYS_fs_fadvise(unsigned long fd,unsigned long offset, unsigned lon
 			/* TODO:  check the things like lock for page to delete */
 			pc_removePage(page);
 		}
-
 	}
 	return 0;
+}
+unsigned long SYS_fs_fadvise(unsigned long fd,unsigned long offset, unsigned long len,int advise)
+{
+	struct file *file;
+	struct inode *inode;
+
+	file=fd_to_file(fd);
+	if (file == 0 || file->inode ==0) return 0;
+	inode=file->inode;
+	return fs_fadvise(inode,offset,len,advise);
 }
 unsigned long fs_registerFileSystem( struct filesystem *fs)
 {
