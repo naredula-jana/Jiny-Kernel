@@ -19,7 +19,16 @@ static LIST_HEAD(inode_list);
 spinlock_t g_inode_lock  = SPIN_LOCK_UNLOCKED; /* protects inode_list */
 
 kmem_cache_t *g_slab_filep;
-
+unsigned long fd_to_file(int fd)
+{
+        int total;
+        total=g_current_task->mm->fs.total;
+        if (fd>2 && total>=fd)
+        {
+                return g_current_task->mm->fs.filep[fd];
+        }else
+                return 0;
+}
 static int inode_init(struct inode *inode,char *filename)
 {
 	unsigned long  flags;
@@ -107,22 +116,54 @@ unsigned long fs_putInode(struct inode *inode)
 }
 unsigned long SYS_fs_open(char *filename,int mode,int flags)
 {
-	if (vfs_fs == 0) return 0;
-	return vfs_fs->open(filename,mode);
+	struct file *filep;
+	int total;
+
+	SYS_DEBUG("open : filename :%s: mode:%x flags:%x \n",filename,mode,flags); 
+	filep=fs_open(filename,mode,flags);
+	total=g_current_task->mm->fs.total;
+	if (filep!=0 && total <MAX_FDS)
+	{
+		g_current_task->mm->fs.filep[total]=filep;
+		g_current_task->mm->fs.total++;
+		return total;
+	}else
+	{
+		if (filep != 0)
+			fs_close(filep);	
+	}
+	return -1;
+}
+unsigned long fs_open(char *filename,int mode,int flags)
+{
+        if (vfs_fs == 0) return 0;
+        return vfs_fs->open(filename,mode);
 }
 unsigned long SYS_fs_fdatasync(unsigned long fd)
 {
 	struct file *file;
 
+	SYS_DEBUG("fdatasync fd:%d \n",fd);	
 	file=fd_to_file(fd);
-	if (vfs_fs == 0) return 0;
-	if (file == 0) return 0;
-	return vfs_fs->fdatasync(file);
+	return fs_fdatasync(file);
+}
+unsigned long fs_fdatasync(struct file *file)
+{
+        if (vfs_fs == 0) return 0;
+        if (file == 0) return 0;
+        return vfs_fs->fdatasync(file);
+}
+unsigned long fs_lseek(struct file *file,unsigned long offset, int whence)
+{
+        if (vfs_fs == 0) return 0;
+        if (file == 0) return 0;
+        return vfs_fs->lseek(file,offset,whence);
 }
 unsigned long SYS_fs_lseek(unsigned long fd,unsigned long offset, int whence)
 {
 	struct file *file;
 
+	SYS_DEBUG("lseek fd:%d offset:%x whence:%x \n",fd,offset,whence);	
 	file=fd_to_file(fd);
         if (vfs_fs == 0) return 0;
 	if (file == 0) return 0;
@@ -131,29 +172,52 @@ unsigned long SYS_fs_lseek(unsigned long fd,unsigned long offset, int whence)
 unsigned long SYS_fs_write(unsigned long fd,unsigned char *buff ,unsigned long len)
 {
 	struct file *file;
+	
+	SYS_DEBUG("write fd:%d buff:%x len:%x \n",fd,buff,len);	
+	if (fd==1)
+	{
+		ut_printf("%s",buff);/* TODO need to terminate the buf with \0  */
+		return 1;
+	}
 
 	file=fd_to_file(fd);
+	return fs_write(file,buff,len);
+}
+unsigned long fs_write(struct file *file,unsigned char *buff ,unsigned long len)
+{
 	if (vfs_fs == 0) return 0;
 	if (file == 0) return 0;
 	return vfs_fs->write(file,buff,len);
+}
+unsigned long fs_read(struct file *file ,unsigned char *buff ,unsigned long len)
+{
+        if (vfs_fs == 0) return 0;
+        if (file == 0) return 0;
+        return vfs_fs->read(file,buff,len);
 }
 unsigned long SYS_fs_read(unsigned long fd ,unsigned char *buff ,unsigned long len)
 {
 	struct file *file;
 
+	SYS_DEBUG("read fd:%d buff:%x len:%x \n",fd,buff,len);	
 	file=fd_to_file(fd);
 	if (vfs_fs == 0) return 0;
 	if (file == 0) return 0;
 	return vfs_fs->read(file,buff,len);
 }
+int fs_close(struct file *file)
+{
+	if (vfs_fs == 0) return 0;
+	return vfs_fs->close(file);
+}
 unsigned long SYS_fs_close(unsigned long fd)
 {
 	struct file *file;
 
+	SYS_DEBUG("close fd:%d \n",fd);	
 	file=fd_to_file(fd);
-	if (vfs_fs == 0) return 0;
 	if (file == 0) return 0;
-	return vfs_fs->close(file);
+	return fs_close(file);
 }
 unsigned long fs_fadvise(struct inode *inode,unsigned long offset, unsigned long len,int advise)
 {
@@ -178,6 +242,7 @@ unsigned long SYS_fs_fadvise(unsigned long fd,unsigned long offset, unsigned lon
 	struct file *file;
 	struct inode *inode;
 
+	SYS_DEBUG("fadvise fd:%d offset:%d len:%d advise:%x \n",fd,offset,len,advise);	
 	file=fd_to_file(fd);
 	if (file == 0 || file->inode ==0) return 0;
 	inode=file->inode;

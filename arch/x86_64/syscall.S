@@ -58,7 +58,7 @@
     popq %r9;                                   \
     popq %r8;                                   \
 
-#define TOTAL_SYSCALLS  15
+#define TOTAL_SYSCALLS  135
 
 
 enter_userspace:

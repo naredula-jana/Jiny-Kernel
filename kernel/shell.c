@@ -22,6 +22,7 @@ typedef struct {
 #define MAX_COMMANDS 500
 static int sh_create(char *arg1,char *arg2);
 static int sh_exit(char *arg1,char *arg2);
+static int sh_syscalldebug(char *arg1,char *arg2);
 static int sh_debug(char *arg1,char *arg2);
 static int print_help(char *arg1,char *arg2);
 static int sh_cat(char *arg1,char *arg2);
@@ -43,9 +44,10 @@ int scan_pagecache(char *arg1 , char *arg2);
 commands_t cmd_list[]=
 {
 	{"help      ","Print Help Menu","help",print_help},
-	{"c   ","Create test thread","c",sh_create},
+	{"c <prog>  ","Create test thread","c",sh_create},
 	{"e   ","exit thread","e",sh_exit},
 	{"d   ","toggle debug","d",sh_debug},
+	{"s   ","toggle SYSCALL debug","s",sh_syscalldebug},
 	{"i         ","Print IRQ stats","i",ar_printIrqStat},
 	{"t         ","Print thread list","t",sc_threadlist},
 	{"kill <pid> ","kill process","kill",sh_kill},
@@ -151,12 +153,12 @@ static int sh_mmap(char *arg1,char *arg2)
 	unsigned long addr;
 	unsigned char c,*p;	
 	int i,ret,wret;
-	fp=SYS_fs_open(arg1,0,0);
+	fp=fs_open(arg1,0,0);
 	addr=ut_atol(arg2);
 
 	ut_printf(" filename:%s: addr :%x: \n",arg1,addr);
 
-	SYS_vm_mmap(fp,  addr, 0,0,0,0);
+	vm_mmap(fp,  addr, 0,0,0,0);
 	p=addr;
 	p=p+10;
 	c=*p;	
@@ -166,8 +168,8 @@ static int sh_cp(char *arg1,char *arg2)
 {
 	struct file *fp,*wfp;
 	int i,ret,wret;
-	fp=SYS_fs_open(arg1,0,0);
-	wfp=SYS_fs_open(arg2,1,0);
+	fp=fs_open(arg1,0,0);
+	wfp=fs_open(arg2,1,0);
 	ut_printf("filename :%s: %s \n",arg1,arg2);
 	if (fp ==0 || wfp==0)
 	{
@@ -179,11 +181,11 @@ static int sh_cp(char *arg1,char *arg2)
 	i=1;
 	while (ret > 0)
 	{
-		ret=SYS_fs_read(fp,buf,5000);
+		ret=fs_read(fp,buf,5000);
 		buf[5001]='\0';
 		if (ret > 0)
 		{
-			wret=SYS_fs_write(wfp,buf,ret);
+			wret=fs_write(wfp,buf,ret);
 			ut_printf("%d: DATA Read :%c: ret: %d wret:%d \n",i,buf[0],ret,wret);
 		}else
 		{
@@ -198,13 +200,13 @@ static int sh_del(char *arg1,char *arg2)
 	struct file *wfp;
 	int i,ret,wret;
 
-	wfp=SYS_fs_open(arg1,0,0);
+	wfp=fs_open(arg1,0,0);
 	if (wfp==0)
 	{
 		ut_printf(" Error opening file :%s: \n",arg1);
 		return 0;
 	}
-	SYS_fs_fadvise(wfp,0,0,POSIX_FADV_DONTNEED);
+	fs_fadvise(wfp,0,0,POSIX_FADV_DONTNEED);
 	ut_printf("after del \n");
 	return 0;
 }
@@ -213,14 +215,14 @@ static int sh_sync(char *arg1,char *arg2)
 	struct file *wfp;
 	int i,ret,wret;
 
-	wfp=SYS_fs_open(arg1,0,0);
+	wfp=fs_open(arg1,0,0);
 	if (wfp==0)
 	{
 		ut_printf(" Error opening file :%s: \n",arg1);
 		return 0;
 	}
 	ut_printf("Before syncing \n");
-	SYS_fs_fdatasync(wfp);
+	fs_fdatasync(wfp);
 	ut_printf("after syncing \n");
 	return 0;
 }
@@ -229,7 +231,7 @@ static int sh_cat(char *arg1,char *arg2)
 	//	unsigned char buf[1024];
 	struct file *fp;
 	int i,ret;
-	fp=SYS_fs_open(arg1,0,0);
+	fp=fs_open(arg1,0,0);
 	ut_printf("filename :%s: \n",arg1);
 	if (fp ==0)
 	{
@@ -241,7 +243,7 @@ static int sh_cat(char *arg1,char *arg2)
 	i=1;
 	while (ret > 0)
 	{	
-		ret=SYS_fs_read(fp,buf,5000);
+		ret=fs_read(fp,buf,5000);
 		buf[5001]='\0';
 		if (ret > 0)
 		{
@@ -287,9 +289,16 @@ static int sh_free_mem(char *arg1,char *arg2)
 }
 static int load_test(char *arg1,char *arg2)
 {
-	char *argv[]={"First argument","second argument",0};
-
-        SYS_sc_execve("/home/njana/jiny/test/test3",argv,0);
+//	char *argv[]={"First argument","second argument",0};
+	char *argv[]={0};
+	if (g_current_task->thread.argv==0)
+	{
+        	SYS_sc_execve("/home/njana/jiny/test/test3",argv,0);
+        //	SYS_sc_execve("/home/njana/jiny/test/std_test",argv,0);
+	}else
+	{
+        	SYS_sc_execve(g_current_task->thread.argv,argv,0);
+	}
 	ut_printf(" ERROR: COntrol Never Reaches\n");
 	return 1;
 }
@@ -298,7 +307,7 @@ static int sh_create(char *arg1,char *arg2)
 	int ret;
 
 	ut_printf("test FORKING \n"); 
-	ret=sc_createKernelThread(load_test);
+	ret=sc_createKernelThread(load_test,arg1);
 	ut_printf(" Parent process : pid: %d  \n",ret);
 	return 1;
 }
@@ -316,6 +325,13 @@ static int sh_debug(char *arg1,char *arg2)
 	if (g_debug_level == 1) g_debug_level=0;
 	else g_debug_level=1;
 	ut_printf(" debug level :%d\n",g_debug_level);
+	return 1;
+}
+static int sh_syscalldebug(char *arg1,char *arg2)
+{
+	if (g_syscall_debug == 1) g_syscall_debug=0;
+	else g_syscall_debug=1;
+	ut_printf(" debug level :%d\n",g_syscall_debug);
 	return 1;
 }
 static int print_help(char *arg1,char *arg2)

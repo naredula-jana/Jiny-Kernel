@@ -1,18 +1,26 @@
 
 
-unsigned long ut_printf (const char *format, ...);
+unsigned long printf (const char *format, ...);
 unsigned char buf[2048];
 
 main()
 {
-	void *fp,*wp;
-	int i;
-	unsigned long ret=0;
-	i=1;
- 	while (i<12)
+	int fp,wp;
+	unsigned long ret;
+
+	fp=open("/home/njana/test",0);
+	wp=open("/home/njana/ooo",1);
+	printf(" NEW Read file :%x outfile: %x \n",fp,wp);
+	if (fp != 0)
 	{
-		i++;
-		ut_printf("  loop countfrom test prog : %x \n",i);
-	}
-	ut_printf("Exiting from test code \n");
+		ret=read(fp,buf,1024);	
+		printf(" Bytes read from file : %d ",ret);
+		if (ret > 0)
+		{
+			write(wp,buf,ret);
+		}
+	}		
+	close(fp);
+	fdatasync(wp);
+	close(wp);
 }

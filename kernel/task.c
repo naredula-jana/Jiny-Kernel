@@ -263,8 +263,12 @@ unsigned long setup_stack(unsigned char **argv,unsigned char *env,unsigned long 
 	unsigned long real_stack,addr;
 	unsigned char *target_argv[12];
 
-	if (argv==0 && env==0) return 0;
-	stack=mm_getFreePages(0,0);
+	if (argv==0 && env==0)
+	{
+		ut_printf(" ERROR  argv:0\n");	
+		 return 0;
+	}
+	stack=mm_getFreePages(MEM_CLEAR,0);
 	p=stack+PAGE_SIZE;
 	len=0;	
 	real_stack=USERSTACK_ADDR+USERSTACK_LEN;
@@ -285,11 +289,13 @@ unsigned long setup_stack(unsigned char **argv,unsigned char *env,unsigned long 
 		}
 	}
 	target_argv[i]=0;
+	target_argv[i+1]=0;
+	target_argv[i+2]=0;
 	addr=p-8;
 	addr=(addr*8)/8;
 	p=addr;
 	real_stack=USERSTACK_ADDR+USERSTACK_LEN+(p-stack)-PAGE_SIZE;
-	len=total_args*8;
+	len=(total_args+3)*8;
 	if ((p-len-1) > stack)
 	{
 		unsigned long *t;
@@ -323,12 +329,15 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 	unsigned long *tmp;
 	unsigned long t_argc,t_argv,stack_len,tmp_stack;
 
-	DEBUG("EXCEVE starting \n");
+	SYS_DEBUG("execve file:%s argv:%x env:%x \n",file,argv,env);
 	/* create the argc and env in a temporray stack before we destory the old stack */
 	t_argc=0;
 	t_argv=0;
 	tmp_stack=setup_stack(argv,env,&stack_len,&t_argc,&t_argv);
-
+	if (tmp_stack ==0) 
+	{
+		return 0;
+	}
 	/* delete old vm and create a new one */
 	free_mm(g_current_task->mm);
 	mm=kmem_cache_alloc(mm_cachep, 0);
@@ -336,12 +345,13 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 	atomic_set(&mm->count,1);
 	mm->pgd=0;
 	mm->mmap=0;
+	mm->fs.total=3;
 	ar_pageTableCopy(g_kernel_mm,mm);	 /* every process page table should have soft links to kernel page table */
 	g_current_task->mm=mm;
 	flush_tlb(mm->pgd);
 
 	/* populate vm with vmaps */
-	fp=SYS_fs_open(file,0,0);
+	fp=fs_open(file,0,0);
 	if (fp == 0)
 	{
 		ut_printf("Error :execve Failed to open the file :%s\n",file);
@@ -398,19 +408,29 @@ static unsigned long push_to_userland()
 }
 static int free_mm(struct mm_struct *mm)
 {
-	atomic_dec(&mm->count);
+	int i,total_fds;
+
 	DEBUG("freeing the mm :%x counter:%x \n",mm,mm->count.counter);
+
+	if (mm->count.counter==0) BUG();
+	atomic_dec(&mm->count);
 	if (mm->count.counter > 0) return 0;
 
 	vm_munmap(mm,0,0xffffffff);
 	ar_pageTableCleanup(mm,0, 0xfffffffff);
+	for (i=3; i<mm->fs.total;i++)
+	{
+		DEBUG("FREEing the files :%d \n",i);
+		fs_close(mm->fs.filep[i]);		
+	}
+	mm->fs.total=0;
 	kmem_cache_free(mm_cachep,mm);
 	return 1;
 }
 #define CLONE_VM 1
-unsigned long sc_createKernelThread(int (*fn)(void *))
+unsigned long sc_createKernelThread(int (*fn)(void *),unsigned char  *args)
 {
-	return SYS_sc_clone(fn,0,CLONE_VM,0);
+	return SYS_sc_clone(fn,0,CLONE_VM,args);
 }
 unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int clone_flags,void *args)
 {
@@ -418,6 +438,7 @@ unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int clone_flags,
 	struct mm_struct *mm;
 	unsigned long flags;
 
+	SYS_DEBUG("clone fn:%x child_stack:%x flags:%x args:%x \n",fn,child_stack,clone_flags,args);
 	/* Initialize the stack  */
 	p = alloc_task_struct();
 	if ( p == 0) BUG();
@@ -435,6 +456,7 @@ unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int clone_flags,
 		atomic_set(&mm->count,1);
 		DEBUG("clone  the mm :%x counter:%x \n",mm,mm->count.counter);
 		mm->pgd=0;
+		mm->fs.total=3;
 		ar_pageTableCopy(g_current_task->mm,mm);	
 		mm->mmap=0;
 	}
@@ -452,6 +474,7 @@ unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int clone_flags,
 	}else
 	{ /* kernel level thread */
 		p->thread.ip=(void *)fn;
+		p->thread.argv=args;
 	}
 	p->thread.sp=(addr_t)p+(addr_t)TASK_SIZE;
 	p->state=TASK_RUNNING;
@@ -474,11 +497,13 @@ unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int clone_flags,
 }
 unsigned long  SYS_sc_fork()
 {
+	SYS_DEBUG("fork \n");
 	return SYS_sc_clone(0,0,CLONE_VM,0);
 }
 int SYS_sc_exit(int status)
 {
 	unsigned long flags;
+	SYS_DEBUG("exit : status:%d \n",status);
 
 	spin_lock_irqsave(&sched_lock, flags);
 	list_del(&g_current_task->task_link);
@@ -494,8 +519,8 @@ int SYS_sc_kill(unsigned long pid,unsigned long signal)
 	struct list_head *pos;
 	struct task_struct *task;
 
+	SYS_DEBUG("kill pid:%d signal:%d \n",pid,signal);
 	spin_lock_irqsave(&sched_lock, flags);
-	DEBUG("Sending Signal to pid :%d signal:%d \n",pid,signal);
 	list_for_each(pos, &task_queue.head) {
 		task=list_entry(pos, struct task_struct, task_link);
 		if (task->pid ==pid) 
@@ -593,6 +618,7 @@ void init_tasking()
 	atomic_set(&g_kernel_mm->count,1);
 	g_kernel_mm->mmap=0x0;
 	g_kernel_mm->pgd=(unsigned char *)g_kernel_page_dir;
+	g_kernel_mm->fs.total=3;
 
 	g_current_task =(struct task_struct *) &stack;
 	g_idle_task =(struct task_struct *) &stack;

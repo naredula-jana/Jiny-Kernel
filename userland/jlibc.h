@@ -1,17 +1,25 @@
-#define SYS_printf 1
-#define SYS_open 2
-#define SYS_write 3
-#define SYS_read 4
-#define SYS_close 5
-#define SYS_fadvise 6 
-#define SYS_fdatasync 7 
-#define SYS_lseek 8 
-#define SYS_exit 9
-#define SYS_execve 10
-#define SYS_fork 11
-#define SYS_kill 12
-#define SYS_clone 13
-#define SYS_mmap 14
+#define SYS_read                               0
+#define SYS_write                              1
+#define SYS_open                               2
+#define SYS_close                              3
+#define SYS_stat                               4
+#define SYS_fstat                              5
+#define SYS_lstat                              6
+#define SYS_poll                               7
+#define SYS_lseek                              8
+#define SYS_mmap                               9
+#define SYS_mprotect                           10
+#define SYS_munmap                             11
+#define SYS_brk                                12
+
+#define SYS_clone 56
+#define SYS_fork 57
+#define SYS_execve  59
+#define SYS_exit    60
+#define SYS_kill  62
+#define SYS_uname  63
+#define SYS_fdatasync  75
+#define SYS_fadvise  221
 
 #define __syscall_return(type, res) \
 do { \
@@ -78,7 +86,6 @@ __res=__syscall(arg1,arg2, arg3, arg4,arg5,arg6, (SYS_##name));\
 __syscall_return(type,__res); \
 }
 
-_syscall1(int,printf,unsigned long,ptr)
 _syscall1(int,exit,unsigned long,status)
 _syscall3(unsigned long,open,unsigned long,ptr,unsigned long , flag,unsigned long, flag2)
 _syscall3(int,write,unsigned long,ptr,unsigned long,buff,unsigned long ,len)

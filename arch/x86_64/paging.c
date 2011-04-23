@@ -154,7 +154,7 @@ void ar_pageFault(struct fault_ctx *ctx)
 	DEBUG("new PAGE FAULT  ip:%x  addr: %x \n",ctx->istack_frame->rip,faulting_address);
         DEBUG("rbp:%x rsi:%x rdi:%x rdx:%x rcx:%x rbx:%x \n",gp->rbp,gp->rsi,gp->rdi,gp->rdx,gp->rcx,gp->rbx);
         DEBUG("r15:%x r14:%x r13:%x r12:%x r11:%x r10:%x \n",gp->r15,gp->r14,gp->r13,gp->r12,gp->r11,gp->r10);
-        DEBUG("r9:%x r8:%x rax:%x\n",gp->r9,gp->r8,gp->rax);	
+        DEBUG("r9:%x r8:%x rax:%x rsp:%x\n",gp->r9,gp->r8,gp->rax,ctx->istack_frame->rsp);	
 	ut_printf("PAGE FAULT ctx:%x  ip:%x  addr: %x ",ctx,ctx->istack_frame->rip,faulting_address);
 	if (present) {
 		ut_printf("page fault: Updating present \n");
@@ -296,7 +296,7 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 			{
 #if 1 
 				page=(*v & (~0xfff));
-				DEBUG(" Freeing leaf entry from page table vaddr:%x paddr:%x pc_start:%x %x \n",page,*v,pc_phy_startaddr,pc_phy_endaddr);
+				DEBUG(" Freeing leaf entry from page table level:%d  vaddr:%x paddr:%x pc_start:%x %x \n",level,page,*v,pc_phy_startaddr,pc_phy_endaddr);
 				if (is_pc_paddr(page))
 				{ /* TODO : page cache*/
 
@@ -313,7 +313,7 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 			}
 			else /* Non leaf level entries */
 			{
-			//	DEBUG(" Call clear table : addr :%x len:%x start_addr:%x \n",addr,len,start_addr);
+				DEBUG("i=%d Call clear table : addr :%x len:%x start_addr:%x \n",i,addr,len,start_addr);
 				if (clear_pagetable(level-1,((*v)&(~0xfff)),addr,len,start_addr)==1) *v=0;
 			}
 		}
@@ -455,9 +455,9 @@ static int handle_mm_fault(addr_t addr)
 
 	if (vma->vm_flags & MAP_ANONYMOUS)
 	{
-		v=mm_getFreePages(0,0); /* get page of 4k size for actual page */	
+		v=mm_getFreePages(MEM_CLEAR,0); /* get page of 4k size for actual page */	
 		p=__pa(v);
-		DEBUG(" Adding to LEAF: Anonymous page paddr: %x vaddr: %x \n",p,addr);
+		DEBUG(" Adding to LEAF: clean Anonymous page paddr: %x vaddr: %x \n",p,addr);
 	}else if (vma->vm_flags & MAP_FIXED)
 	{
 		if ( vma->vm_inode != NULL)
@@ -472,6 +472,10 @@ static int handle_mm_fault(addr_t addr)
 			DEBUG(" Adding to LEAF: private page paddr: %x vaddr: %x \n",p,addr);
 			DEBUG(" page fault of anonymous page p:%x  private_data:%x vm_start::x \n",p,vma->vm_private_data,vma->vm_start);
 		}
+	}else
+	{
+		ut_printf("ERROR: unknown vm_flag: %x \n",vma->vm_flags);
+		BUG();
 	}
 	if (p==0) BUG();
 	pl1=(pl1+(L1_INDEX(addr)));

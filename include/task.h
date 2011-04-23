@@ -21,24 +21,23 @@ struct user_thread {
 struct thread_struct {
 	void *sp; /* kernel stack pointer when scheduling start */
 	void *ip; /* kernel ip when scheduling start */
+	unsigned long argv;
 	struct user_thread userland;
+};
+#define MAX_FDS 100
+struct fs_struct {
+	unsigned long filep[MAX_FDS];
+	int total;
 };
 
 struct mm_struct {
         struct vm_area_struct *mmap;           /* list of VMAs */
         unsigned long pgd; 
         atomic_t count;                      /* How many references to "struct mm_struct" (users count as 1) */
-
-/*        unsigned long start_code, end_code, start_data, end_data;
-        unsigned long start_brk, brk, start_stack;
-        unsigned long arg_start, arg_end, env_start, env_end;
-        unsigned long rss, total_vm, locked_vm;
-        unsigned long def_flags;
-        unsigned long cpu_vm_mask;
-        unsigned long swap_address; */
+	struct fs_struct fs;
+	unsigned long brk_addr,brk_len;
 };
 // This structure defines a 'task' - a process.
-
 #define MAX_TASK_NAME 40
 /*
  - task can be on run queue or in wait queues */
@@ -60,5 +59,5 @@ struct task_struct {
 }; 
 
 extern struct task_struct *g_current_task;
-
+//extern unsigned long fd_to_file(int fd);
 #endif

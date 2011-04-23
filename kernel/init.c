@@ -47,3 +47,4 @@ int init_kernel(unsigned long end_addr)
 	ut_printf("Initialization completed \n");
 	return 1 ;
 }
+

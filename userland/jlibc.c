@@ -62,7 +62,15 @@ static void itoa (char *buf, int buf_len, int base, unsigned long d)
 		p2--;
 	}
 }
-unsigned long ut_printf (const char *format, ...)
+int strlen(const char * s)
+{
+        const char *sc;
+
+        for (sc = s; *sc != '\0'; ++sc)
+                /* nothing */;
+        return sc - s;
+}
+unsigned long printf (const char *format, ...)
 {
 	char **arg = (char **) &format;
 	int c;
@@ -124,7 +132,7 @@ string:
 		}
 	}
 
-	ret=printf(out_buf);
+	ret=write(1,out_buf,strlen(out_buf)+1);
 	va_end(vl);
 	return ret;
 }

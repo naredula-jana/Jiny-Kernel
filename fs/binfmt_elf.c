@@ -39,8 +39,8 @@ unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsi
 	struct elfhdr elf_ex;
 
 	error = 0;
-	SYS_fs_lseek(file,0,0);
-	retval = SYS_fs_read(file,  (unsigned char *) &elf_ex, sizeof(elf_ex));
+	fs_lseek(file,0,0);
+	retval = fs_read(file,  (unsigned char *) &elf_ex, sizeof(elf_ex));
 	if (retval != sizeof(elf_ex))
 	{
 		error= -1;
@@ -77,8 +77,8 @@ unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsi
 
 	eppnt = elf_phdata;
 	DEBUG("start address : %x offset :%x \n",ELF_PAGESTART(eppnt->p_vaddr),eppnt->p_offset);
-	SYS_fs_lseek(file,(unsigned long)elf_ex.e_phoff,0);
-	retval = SYS_fs_read(file, (unsigned char *)eppnt, j);
+	fs_lseek(file,(unsigned long)elf_ex.e_phoff,0);
+	retval = fs_read(file, (unsigned char *)eppnt, j);
 	if (retval != j)
 	{
 		error = -5;
@@ -100,7 +100,7 @@ unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsi
 		error=1;
 		if (eppnt->p_filesz > 0)
 		{	
-			error = SYS_vm_mmap(file,
+			error = vm_mmap(file,
 				ELF_PAGESTART(eppnt->p_vaddr),
 				eppnt->p_filesz+ELF_PAGEOFFSET(eppnt->p_vaddr) ,
 				PROT_READ | PROT_WRITE | PROT_EXEC,
@@ -135,7 +135,7 @@ out:
 		DEBUG(" ERROR in elf loader :%d\n",-error);
 	}else
 	{
-		SYS_vm_mmap(0,USERSTACK_ADDR,USERSTACK_LEN,PROT_READ | PROT_WRITE ,MAP_ANONYMOUS,0);	
+		vm_mmap(0,USERSTACK_ADDR,USERSTACK_LEN,PROT_READ | PROT_WRITE ,MAP_ANONYMOUS,0);	
 		if (stack_len > 0)
 		{
 			ut_memcpy(USERSTACK_ADDR+USERSTACK_LEN-stack_len,tmp_stack,stack_len);

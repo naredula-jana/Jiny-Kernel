@@ -1,4 +1,4 @@
-
+#include "task.h"
 #include "common.h"
 #include "isr.h"
 enum fault_idx {
@@ -52,6 +52,13 @@ static void gpFault(struct fault_ctx *ctx)
 	fault_error_g=ctx->errcode;
 	fault_num_g=ctx->fault_num;
 
+
+	ut_printf(" ERROR: Gp Fault fault ip:%x error code:%x sp:%x fault number:%x \n",fault_ip_g,fault_error_g,ctx->istack_frame->rsp,fault_num_g);
+        if (g_current_task->mm != g_kernel_mm) /* user level thread */
+        {
+                SYS_sc_exit(1);
+                return;
+        }
 	/*ut_printf("GP fault:  ip: %x  error:%x  fault:%x cs:%x ss:%x \n",ctx->istack_frame->rip,ctx->errcode,ctx->fault_num,ctx->istack_frame->cs,ctx->istack_frame->ss);
 	  ut_printf("GP fault:  ip: %x  error:%x  fault:%x cs:%x ss:%x \n",ctx->istack_frame->rip,ctx->errcode,ctx->fault_num,ctx->istack_frame->cs,ctx->istack_frame->ss);
 	  show_trace(&i); */

@@ -10,6 +10,10 @@ Long term :
 - init functions streamlining
 - enhancing debugging,logging and shell features 	
 
+Running Linux program:
+- syscalls proper implementation as linux and adding any syscall related fs
+- enable & disabling the prints by variable
+- chnaging filep to fd , and removing the ut_printf
 ---------------------------------------------------------
 fixes:
  1) when system call number more then max limit, raising pagefault

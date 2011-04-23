@@ -121,16 +121,25 @@ struct vm_area_struct *vm_findVma(struct mm_struct *mm,unsigned long addr, unsig
 	}
 	return 0;
 }
+
 long SYS_vm_mmap(unsigned long fd, unsigned long addr, unsigned long len,
+		unsigned long prot, unsigned long flags, unsigned long pgoff)
+{
+	struct file *file;
+
+	SYS_DEBUG("mmap fs:%d addr:%x len:%x prot:%x flags:%x pgpff:%x \n",fd,addr,len,prot,flags,pgoff);
+	file=fd_to_file(fd);
+	if (file ==0 ) return 0;
+	return vm_mmap(file,  addr, len, prot, flags, pgoff) ;
+}
+
+long vm_mmap(struct file *file, unsigned long addr, unsigned long len,
 		unsigned long prot, unsigned long flags, unsigned long pgoff)
 {
 	struct mm_struct *mm = g_current_task->mm;
 	struct vm_area_struct *vma;
-	struct file *file;
 
-	file=fd_to_file(fd);
-
-	DEBUG(" mmap : addr:%x len:%x pgoff:%x \n",addr,len,pgoff);
+	DEBUG(" mmap : addr:%x len:%x pgoff:%x flags \n",addr,len,pgoff,flags);
 	vma=vm_findVma(mm,addr,len);
 	if (vma) return -1;
 
@@ -157,6 +166,7 @@ long SYS_vm_mmap(unsigned long fd, unsigned long addr, unsigned long len,
 	vma_link(mm, vma);
 	return 1;
 }
+
 /*
  *  this is really a simplified "do_mmap".  it only handles
  *  anonymous maps.  eventually we may be able to do some
@@ -168,9 +178,33 @@ unsigned long vm_brk(unsigned long addr, unsigned long len)
 	if (!len)
 		return addr;
 
-	return SYS_vm_mmap(0,addr,len,PROT_READ | PROT_WRITE ,MAP_ANONYMOUS,0);
+	g_current_task->mm->brk_addr=addr;
+	g_current_task->mm->brk_len=len;
+	return vm_mmap(0,addr,len,PROT_READ | PROT_WRITE ,MAP_ANONYMOUS,0);
+}
+int SYS_vm_mprotect(const void *addr, int len, int prot)
+{ /* TODO */
+	SYS_DEBUG("protect TODO :%x \n",addr);
+}
+unsigned long SYS_vm_brk(unsigned long addr)
+{
+	struct vm_area_struct *vma;
+
+	SYS_DEBUG("brk:%x \n",addr);
+	if (addr ==0) return g_current_task->mm->brk_addr+g_current_task->mm->brk_len;
+	if (g_current_task->mm->brk_addr > (addr-g_current_task->mm->brk_len)) return 0;
+	vma=vm_findVma(g_current_task->mm,g_current_task->mm->brk_addr,g_current_task->mm->brk_len-1);
+	if (vma == 0) BUG();
+	vma->vm_end=addr;
+	vm_printMmaps(0,0);
+	return addr;	
 }
 
+int SYS_vm_munmap( unsigned long addr, unsigned long len)
+{
+	SYS_DEBUG("munmap:%x \n",addr);
+	return vm_munmap(g_current_task->mm, addr,len);
+}
 int vm_munmap(struct mm_struct *mm, unsigned long addr, unsigned long len)
 {
 	struct vm_area_struct *vma;
