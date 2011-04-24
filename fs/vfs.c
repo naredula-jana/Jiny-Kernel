@@ -126,6 +126,7 @@ unsigned long SYS_fs_open(char *filename,int mode,int flags)
 	{
 		g_current_task->mm->fs.filep[total]=filep;
 		g_current_task->mm->fs.total++;
+		SYS_DEBUG(" return value: %d \n",total);
 		return total;
 	}else
 	{
@@ -169,7 +170,49 @@ unsigned long SYS_fs_lseek(unsigned long fd,unsigned long offset, int whence)
 	if (file == 0) return 0;
         return vfs_fs->lseek(file,offset,whence);
 }
-unsigned long SYS_fs_write(unsigned long fd,unsigned char *buff ,unsigned long len)
+
+ssize_t SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt)
+{
+        int i;
+        ssize_t ret,tret;
+        struct file *file;
+
+        SYS_DEBUG("writev: fd:%d iovec:%x count:%d\n",fd,iov,iovcnt);
+	file=fd_to_file(fd);
+	ret=0;
+	for (i=0; i<iovcnt; i++)
+	{
+		tret=fs_write(file,iov[i].iov_base,iov[i].iov_len);
+		if (tret > 0) 
+			ret=ret+tret;
+		else
+			goto last;
+	}
+last:
+	return ret;
+}
+
+ssize_t SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt)
+{
+        int i;
+        ssize_t ret,tret;
+        struct file *file;
+
+        SYS_DEBUG("readv: fd:%d iovec:%x count:%d\n",fd,iov,iovcnt);
+	file=fd_to_file(fd);
+	        ret=0;
+        for (i=0; i<iovcnt; i++)
+        {
+                tret=fs_read(file,iov[i].iov_base,iov[i].iov_len);
+                if (tret > 0)
+                        ret=ret+tret;
+                else
+                        goto last;
+        }
+last:
+        return ret;
+}
+ssize_t SYS_fs_write(unsigned long fd,unsigned char *buff ,unsigned long len)
 {
 	struct file *file;
 	
@@ -183,19 +226,19 @@ unsigned long SYS_fs_write(unsigned long fd,unsigned char *buff ,unsigned long l
 	file=fd_to_file(fd);
 	return fs_write(file,buff,len);
 }
-unsigned long fs_write(struct file *file,unsigned char *buff ,unsigned long len)
+ssize_t fs_write(struct file *file,unsigned char *buff ,unsigned long len)
 {
 	if (vfs_fs == 0) return 0;
 	if (file == 0) return 0;
 	return vfs_fs->write(file,buff,len);
 }
-unsigned long fs_read(struct file *file ,unsigned char *buff ,unsigned long len)
+ssize_t fs_read(struct file *file ,unsigned char *buff ,unsigned long len)
 {
         if (vfs_fs == 0) return 0;
         if (file == 0) return 0;
         return vfs_fs->read(file,buff,len);
 }
-unsigned long SYS_fs_read(unsigned long fd ,unsigned char *buff ,unsigned long len)
+ssize_t SYS_fs_read(unsigned long fd ,unsigned char *buff ,unsigned long len)
 {
 	struct file *file;
 

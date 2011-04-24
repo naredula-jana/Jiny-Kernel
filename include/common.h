@@ -28,6 +28,7 @@
 #define save_flags(x) __save_flags(x)
 #define restore_flags(x) __restore_flags(x)
 extern int g_syscall_debug;
+extern unsigned long g_debug_level;
 #define SYS_DEBUG(x...) do { \
 	if (g_syscall_debug==1 && g_serial_output==1)	{ut_printf("SYSCALL "); ut_printf(x);} \
 } while (0) 
@@ -35,7 +36,7 @@ extern int g_syscall_debug;
 																		      //#define DEBUG_ENABLE 1
 #ifdef DEBUG_ENABLE 
 #define DEBUG(x...) do { \
-	if (g_serial_output==1)	ut_printf(x); \
+	if (g_serial_output==1 && g_debug_level==1)	ut_printf(x); \
 } while (0) 
 #else
 #define DEBUG(x...) do { \

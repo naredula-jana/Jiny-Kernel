@@ -45,8 +45,8 @@ struct inode {
 struct filesystem {
 	struct file *(*open)(char *filename,int mode);
 	int (*lseek)(struct file *file,  unsigned long offset,int whence);
-	int (*write)(struct file *file,  unsigned char *buff,unsigned long len);
-	int (*read)(struct file *file,  unsigned char *buff,unsigned long len);
+	ssize_t (*write)(struct file *file,  unsigned char *buff,unsigned long len);
+	ssize_t (*read)(struct file *file,  unsigned char *buff,unsigned long len);
 	int (*close)(struct file *file);
 	int (*fdatasync)(struct file *file);
 };

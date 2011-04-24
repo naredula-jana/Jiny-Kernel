@@ -35,8 +35,8 @@ syscalltable_t syscalltable[]=
 	{snull},
 	{snull},
 	{snull}, 
-	{snull}, 
-	{snull}, /* 20 */
+	{SYS_fs_readv}, 
+	{SYS_fs_writev}, /* 20 */
 	{snull},
 	{snull},
 	{snull}, 
@@ -187,7 +187,7 @@ static int init_utsname()
 	ut_strcpy(g_utsname.machine,"x86_64");	
 }
 static int init_uts_done=0;
-	
+
 unsigned long SYS_uname(unsigned long *args)
 {
 	SYS_DEBUG("uname args:%x \n",args);

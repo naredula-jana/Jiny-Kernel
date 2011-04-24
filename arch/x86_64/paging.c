@@ -11,7 +11,7 @@ addr_t g_kernel_page_dir=0;
 // Defined in kheap.c
 extern addr_t end; 
 addr_t placement_address=(addr_t)&end;
-static int handle_mm_fault(addr_t addr);
+static int handle_mm_fault(addr_t addr,unsigned long faulting_ip);
 static void mk_pte(pte_t *pte, addr_t fr,int global,int user)
 {
         pte->present=1;
@@ -159,7 +159,7 @@ void ar_pageFault(struct fault_ctx *ctx)
 	if (present) {
 		ut_printf("page fault: Updating present \n");
 		//mm_debug=1;
-		handle_mm_fault(faulting_address);         
+		handle_mm_fault(faulting_address,ctx->istack_frame->rip);         
 		return ;
 	}
 	if (rw) {
@@ -371,7 +371,7 @@ int ar_pageTableCopy(struct mm_struct *src_mm,struct mm_struct *dest_mm)
 	return 1;
 }
 
-static int handle_mm_fault(addr_t addr)
+static int handle_mm_fault(addr_t addr,unsigned long faulting_ip)
 {
 	struct mm_struct *mm;
 	struct vm_area_struct *vma;
@@ -380,9 +380,11 @@ static int handle_mm_fault(addr_t addr)
 	unsigned int index;
 	unsigned char user=0;
 
+
 	if (addr > KERNEL_ADDR_START ) /* then it is kernel address */
 	{
 		mm=g_kernel_mm;
+		if (g_current_task->mm != mm) user=1; /* this is case where user thread running in kernel */
 	}else
 	{
 		mm=g_current_task->mm;

@@ -85,6 +85,8 @@ t1:
         xorl    %eax, %eax
         btsl    $5, %eax
         btsl    $7, %eax
+	/* enable osfxsr  for 128 bit media instructions */
+        btsl    $9, %eax
         movl    %eax, %cr4
 
         /* Setup early boot stage 4 level pagetables */

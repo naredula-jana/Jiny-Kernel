@@ -24,7 +24,6 @@ void cmain ();
 void ut_cls (void);
 void init_memory(addr_t end_addr);
 extern int shell_main();
-extern int g_debug_level;
 
 unsigned long g_multiboot_info_ptr;
 unsigned long g_multiboot_magic ;

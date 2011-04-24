@@ -7,7 +7,8 @@ unsigned long *g;
 child_main()
 {
         int k;
-          printf(" CHILD new version  STARTED  \n");
+          printf(" CHILD new version  STARTED  before xor  \n");
+__asm__ __volatile__("pxor   %xmm2,%xmm2");
         for(k=0; k<5; k++)
         {
                 printf(" CHILD New version loop:%d \n",k);

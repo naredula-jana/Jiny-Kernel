@@ -1,6 +1,8 @@
 #ifndef __types_h
 #define __types_h
 
+typedef long  size_t;
+typedef long  ssize_t;
 typedef unsigned long  addr_t;
 typedef signed char int8_t;
 typedef signed short int16_t;

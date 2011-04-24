@@ -4,7 +4,10 @@
 #include "mm.h"
 #include "vfs.h"
 #include "task.h"
-
+struct iovec {
+     void  *iov_base;    /* Starting address */
+     size_t iov_len;     /* Number of bytes to transfer */
+};
 /* scheduling */
 int sc_wakeUp(struct wait_struct *waitqueue,struct task_struct * p);
 int sc_wait(struct wait_struct *waitqueue,int ticks);
@@ -59,17 +62,19 @@ unsigned long fs_putInode(struct inode *inode);
 unsigned long fs_printInodes(char *arg1,char *arg2);
 unsigned long fs_open(char *filename,int mode,int flags);
 struct page *fs_genericRead(struct inode *inode,unsigned long offset);
-unsigned long fs_read(struct file *fp ,unsigned char *buff ,unsigned long len);
+ssize_t fs_read(struct file *fp ,unsigned char *buff ,unsigned long len);
 unsigned long fs_fadvise(struct inode *inode,unsigned long offset, unsigned long len,int advise);
 unsigned long fs_lseek(struct file *fp ,unsigned long offset, int whence);
 unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsigned long stack_len);
-unsigned long fs_write(struct file *file,unsigned char *buff ,unsigned long len);
+ssize_t fs_write(struct file *file,unsigned char *buff ,unsigned long len);
 unsigned long fs_fdatasync(struct file *file);
 
+ssize_t SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt);
+ssize_t SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt);
 unsigned long SYS_fs_open(char *filename,int mode,int flags);
 unsigned long SYS_fs_lseek(unsigned long fd ,unsigned long offset, int whence);
-unsigned long SYS_fs_write(unsigned long fd ,unsigned char *buff ,unsigned long len);
-unsigned long SYS_fs_read(unsigned long fd ,unsigned char *buff ,unsigned long len);
+ssize_t SYS_fs_write(unsigned long fd ,unsigned char *buff ,unsigned long len);
+ssize_t SYS_fs_read(unsigned long fd ,unsigned char *buff ,unsigned long len);
 unsigned long SYS_fs_close(unsigned long fd);
 unsigned long SYS_fs_fdatasync(unsigned long fd );
 unsigned long SYS_fs_fadvise(unsigned long fd,unsigned long offset, unsigned long len,int advise);

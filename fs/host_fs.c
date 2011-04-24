@@ -195,7 +195,7 @@ static int hfFdatasync(struct file *filep)
 	}
 	return 0;
 }
-static int hfWrite(struct file *filep,unsigned char *buff, unsigned long len)
+static ssize_t hfWrite(struct file *filep,unsigned char *buff, unsigned long len)
 { 
 	int ret;
 	int tmp_len,size;
@@ -283,7 +283,7 @@ error:
 	return page;
 }
 
-static int hfRead(struct file *filep,unsigned char *buff, unsigned long len)
+static ssize_t hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 {
 	int ret;
 	struct page *page;

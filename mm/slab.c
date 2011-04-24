@@ -186,7 +186,6 @@ typedef struct cpucache_s {
  */
 
 #define CACHE_NAMELEN	20	/* max name length for a slab cache */
-typedef  long 	size_t;
 void * kmem_cache_alloc (kmem_cache_t *cachep, int flags);
 #if 1
 
