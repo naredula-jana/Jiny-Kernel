@@ -256,7 +256,7 @@ int sc_threadlist( char *arg1,char *arg2)
 	spin_unlock_irqrestore(&sched_lock, flags);
 }
 
-unsigned long setup_stack(unsigned char **argv,unsigned char *env,unsigned long *stack_len,unsigned long *t_argc,unsigned long *t_argv)
+unsigned long setup_userstack(unsigned char **argv,unsigned char *env,unsigned long *stack_len,unsigned long *t_argc,unsigned long *t_argv,unsigned long *p_aux)
 {
 	int i,len,total_args=0;
 	unsigned char *p,*stack;
@@ -288,14 +288,18 @@ unsigned long setup_stack(unsigned char **argv,unsigned char *env,unsigned long 
 			goto error;
 		}
 	}
+
 	target_argv[i]=0;
 	target_argv[i+1]=0;
-	target_argv[i+2]=0;
-	addr=p-8;
-	addr=(addr*8)/8;
+	addr=p;
+	addr=(addr/8)*8;
 	p=addr;
-	real_stack=USERSTACK_ADDR+USERSTACK_LEN+(p-stack)-PAGE_SIZE;
-	len=(total_args+3)*8;
+
+	p=p-(MAX_AUX_VEC_ENTRIES*16);
+	
+	real_stack=USERSTACK_ADDR+USERSTACK_LEN+p-(stack+PAGE_SIZE);
+	*p_aux=p;
+	len=(total_args+1)*8;
 	if ((p-len-1) > stack)
 	{
 		unsigned long *t;
@@ -327,13 +331,13 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 	unsigned long main_func;
 	struct user_regs *p;
 	unsigned long *tmp;
-	unsigned long t_argc,t_argv,stack_len,tmp_stack;
+	unsigned long t_argc,t_argv,stack_len,tmp_stack,tmp_aux;
 
 	SYS_DEBUG("execve file:%s argv:%x env:%x \n",file,argv,env);
 	/* create the argc and env in a temporray stack before we destory the old stack */
 	t_argc=0;
 	t_argv=0;
-	tmp_stack=setup_stack(argv,env,&stack_len,&t_argc,&t_argv);
+	tmp_stack=setup_userstack(argv,env,&stack_len,&t_argc,&t_argv,&tmp_aux);
 	if (tmp_stack ==0) 
 	{
 		return 0;
@@ -357,7 +361,7 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 		ut_printf("Error :execve Failed to open the file :%s\n",file);
 		return 0;
 	}
-	main_func=fs_loadElfLibrary(fp,tmp_stack+(PAGE_SIZE-stack_len),stack_len);
+	main_func=fs_loadElfLibrary(fp,tmp_stack+(PAGE_SIZE-stack_len),stack_len,tmp_aux);
 	if (main_func ==0) 
 	{
 		mm_putFreePages(tmp_stack,0);

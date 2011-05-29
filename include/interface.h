@@ -4,6 +4,9 @@
 #include "mm.h"
 #include "vfs.h"
 #include "task.h"
+
+#define MAX_AUX_VEC_ENTRIES 25 
+
 struct iovec {
      void  *iov_base;    /* Starting address */
      size_t iov_len;     /* Number of bytes to transfer */
@@ -65,7 +68,7 @@ struct page *fs_genericRead(struct inode *inode,unsigned long offset);
 ssize_t fs_read(struct file *fp ,unsigned char *buff ,unsigned long len);
 unsigned long fs_fadvise(struct inode *inode,unsigned long offset, unsigned long len,int advise);
 unsigned long fs_lseek(struct file *fp ,unsigned long offset, int whence);
-unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsigned long stack_len);
+unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsigned long stack_len,unsigned long aux_addr);
 ssize_t fs_write(struct file *file,unsigned char *buff ,unsigned long len);
 unsigned long fs_fdatasync(struct file *file);
 

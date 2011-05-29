@@ -29,14 +29,49 @@
 #define ELF_PAGESTART(_v) ((_v) & ~(unsigned long)(ELF_MIN_ALIGN-1))
 #define ELF_PAGEOFFSET(_v) ((_v) & (ELF_MIN_ALIGN-1))
 #define ELF_PAGEALIGN(_v) (((_v) + ELF_MIN_ALIGN - 1) & ~(ELF_MIN_ALIGN - 1))
+/* Symbolic values for the entries in the auxiliary table
+   put on the initial stack */
+#define AT_NULL   0     /* end of vector */
+#define AT_IGNORE 1     /* entry should be ignored */
+#define AT_EXECFD 2     /* file descriptor of program */
+#define AT_PHDR   3     /* program headers for program */
+#define AT_PHENT  4     /* size of program header entry */
+#define AT_PHNUM  5     /* number of program headers */
+#define AT_PAGESZ 6     /* system page size */
+#define AT_BASE   7     /* base address of interpreter */
+#define AT_FLAGS  8     /* flags */
+#define AT_ENTRY  9     /* entry point of program */
+#define AT_NOTELF 10    /* program is not ELF */
+#define AT_UID    11    /* real uid */
+#define AT_EUID   12    /* effective uid */
+#define AT_GID    13    /* real gid */
+#define AT_EGID   14    /* effective gid */
+#define AT_PLATFORM 15  /* string identifying CPU for optimizations */
+#define AT_HWCAP  16    /* arch dependent hints at CPU capabilities */
+#define AT_CLKTCK 17    /* frequency at which times() increments */
+/* AT_* values 18 through 22 are reserved */
+#define AT_SECURE 23   /* secure mode boolean */
+#define AT_BASE_PLATFORM 24     /* string identifying real platform, may
+                                 * differ from AT_PLATFORM. */
+#define AT_RANDOM 25    /* address of 16 random bytes */
 
-unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsigned long stack_len)
+#define AT_EXECFN  31   /* filename of program */
+
+#define AUX_ENT(id, val) \
+        do { \
+                aux_vec[aux_index++] = id; \
+                aux_vec[aux_index++] = val; \
+        } while (0)
+
+#define userstack_addr(kaddr)  (USERSTACK_ADDR+USERSTACK_LEN+kaddr-((kaddr/PAGE_SIZE)*PAGE_SIZE)-PAGE_SIZE)
+unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsigned long stack_len,unsigned long aux_addr)
 {
 	struct elf_phdr *elf_phdata;
 	struct elf_phdr *eppnt;
 	unsigned long elf_bss, bss, len;
 	int retval, error, i, j;
 	struct elfhdr elf_ex;
+	unsigned long *aux_vec,aux_index,load_addr;
 
 	error = 0;
 	fs_lseek(file,0,0);
@@ -92,6 +127,7 @@ unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsi
 		error = -6;
 		goto out_free_ph;
 	}
+	load_addr=ELF_PAGESTART(eppnt->p_vaddr);
 	for (i = 0; i<elf_ex.e_phnum; i++,eppnt++) /* mmap all loadable program headers */
 	{
 		if (eppnt->p_type != PT_LOAD ) continue;
@@ -138,7 +174,37 @@ out:
 		vm_mmap(0,USERSTACK_ADDR,USERSTACK_LEN,PROT_READ | PROT_WRITE ,MAP_ANONYMOUS,0);	
 		if (stack_len > 0)
 		{
+			aux_vec=aux_addr;
+			if (aux_vec != 0)
+			{
+				int aux_last;
+
+				aux_index=0;
+				aux_last=(MAX_AUX_VEC_ENTRIES-2)*2;
+
+				//AUX_ENT(AT_HWCAP, ELF_HWCAP);
+				AUX_ENT(AT_HWCAP, 0); /* TODO */
+        			AUX_ENT(AT_PAGESZ, PAGE_SIZE);
+        			AUX_ENT(AT_CLKTCK, 100);
+        			AUX_ENT(AT_PHDR, load_addr + elf_ex.e_phoff);
+        			AUX_ENT(AT_PHENT, sizeof(struct elf_phdr));
+        			AUX_ENT(AT_PHNUM, elf_ex.e_phnum);
+        			AUX_ENT(AT_BASE, 0);
+        			AUX_ENT(AT_FLAGS, 0);
+        			AUX_ENT(AT_ENTRY, elf_ex.e_entry);
+        			AUX_ENT(AT_UID, 0);
+        			AUX_ENT(AT_EUID, 0);
+        			AUX_ENT(AT_GID, 0);
+        			AUX_ENT(AT_EGID, 0);
+     //   AUX_ENT(AT_SECURE, security_bprm_secureexec(bprm));
+
+				aux_vec[aux_last]=  0x1234567887654321;
+				aux_vec[aux_last+1]=0x1122334455667788;
+        			AUX_ENT(AT_RANDOM, userstack_addr((unsigned long)&aux_vec[aux_last]));
+      //  AUX_ENT(AT_EXECFN, bprm->exec);	
+			}
 			ut_memcpy(USERSTACK_ADDR+USERSTACK_LEN-stack_len,tmp_stack,stack_len);
+			
 		}
 	}
 	DEBUG(" Program start address(autod) : %x \n",elf_ex.e_entry);
