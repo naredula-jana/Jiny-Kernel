@@ -9,6 +9,7 @@ int g_syscall_debug=1;
 long SYS_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags,unsigned long fd, unsigned long off);
 unsigned long snull(unsigned long *args);
 unsigned long SYS_uname(unsigned long *args);
+unsigned long SYS_arch_prctl(unsigned long code,unsigned long addr);
 
 typedef struct {
         unsigned long (*func)(unsigned long *args);
@@ -156,6 +157,31 @@ syscalltable_t syscalltable[]=
 	{snull},
 	{snull}, 
 	{snull}, 
+	{snull}, /* 140 */
+	{snull},
+	{snull},
+	{snull}, 
+	{snull}, 
+	{snull}, /* 145 */
+	{snull},
+	{snull},
+	{snull}, 
+	{snull}, 
+	{snull}, /* 150 */
+	{snull},
+	{snull},
+	{snull}, 
+	{snull}, 
+	{snull}, /* 155 */
+	{snull},
+	{snull},
+	{SYS_arch_prctl}, 
+	{snull}, 
+	{snull}, /* 160 */
+	{snull},
+	{snull},
+	{snull}, 
+	{snull}, 
 	{snull} 
 };
 
@@ -194,6 +220,16 @@ unsigned long SYS_uname(unsigned long *args)
 	if (init_uts_done==0) init_utsname();
 	ut_printf(" Inside uname : %s \n",g_utsname.sysname);
 	ut_memcpy(args,(unsigned char *)&g_utsname,sizeof(g_utsname));
+	return 0;
+}
+#define ARCH_SET_FS 0x1002
+unsigned long SYS_arch_prctl(unsigned long code,unsigned long addr)
+{
+	SYS_DEBUG("sys arc_prctl : code :%x addr:%x \n",code,addr);
+	if (code == ARCH_SET_FS)
+        	ar_archSetUserFS(addr);	
+	else
+		SYS_DEBUG(" ERROR arc_prctl code is invalid \n");
 	return 0;
 }
 unsigned long snull(unsigned long *args)

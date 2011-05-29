@@ -293,8 +293,11 @@ static int load_test(char *arg1,char *arg2)
 	char *argv[]={0};
 	if (g_current_task->thread.argv==0)
 	{
+		char *arg[5];
+		arg[0]="//home/njana/jiny/test/std_test";
+		arg[1]=0;
         //	SYS_sc_execve("/home/njana/jiny/test/test3",argv,0);
-        	SYS_sc_execve("/home/njana/jiny/test/std_test",argv,0);
+        	SYS_sc_execve("/home/njana/jiny/test/std_test",arg,0);
 	}else
 	{
         	SYS_sc_execve(g_current_task->thread.argv,argv,0);

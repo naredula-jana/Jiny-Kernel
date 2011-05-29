@@ -101,6 +101,7 @@ int ar_pageTableCleanup(struct mm_struct *mm,unsigned long addr, unsigned long l
 int ar_flushTlbGlobal();
 void flush_tlb(unsigned long dir);
 int ar_updateCpuState(int cpuid);
+unsigned long ar_archSetUserFS(unsigned long addr);
 void ar_setupTssStack(unsigned long stack);
 int ar_addInputKey(unsigned char c);
 #endif

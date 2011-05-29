@@ -14,7 +14,7 @@ static void idt_set_gate(int slot, uint8_t type, uint8_t dpl,
 		addr_t handler, int ist);
 
 #define CONFIG_NRCPUS 1
-gdt_entry_t gdt_entries[CONFIG_NRCPUS][8];
+gdt_entry_t gdt_entries[CONFIG_NRCPUS][9];
 gdt_ptr_t   gdt_ptr;
 idt_ptr_t   idt_ptr;
 idt_entry_t idt_entries[256];
@@ -27,10 +27,14 @@ int ar_updateCpuState(int cpuid)
 	if (g_cpu_state[cpuid].user_stack==0) 
 	{
 		g_cpu_state[cpuid].user_stack=USERSTACK_ADDR+USERSTACK_LEN;	
-		g_cpu_state[cpuid].user_ds=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
+		/*g_cpu_state[cpuid].user_ds=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
 		g_cpu_state[cpuid].user_es=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
 		g_cpu_state[cpuid].user_fs=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
-		g_cpu_state[cpuid].user_gs=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
+		g_cpu_state[cpuid].user_gs=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER; */
+		g_cpu_state[cpuid].user_ds=0;
+		g_cpu_state[cpuid].user_es=0;
+		g_cpu_state[cpuid].user_fs=0;
+		g_cpu_state[cpuid].user_gs=0;
 	}
 	g_cpu_state[cpuid].kernel_stack=p+TASK_SIZE; 
 	return 1;
@@ -144,6 +148,16 @@ void init_gdt(int cpu)
 
 	gdtr_load(&gdt_ptr);
 	tr_load(GDT_SEL(TSS_DESCR));
+}
+int ar_archSetUserFS(unsigned long addr) /* TODO need to reimplement using LDT */
+{
+	int cpu=0;
+
+	/* User fs data segment */
+	seg_descr_setup(&gdt_entries[cpu][UDATA_DESCR], SEG_TYPE_DATA, SEG_DPL_USER,addr, 0xfffff, SEG_FLG_PRESENT | SEG_FLG_64BIT | SEG_FLG_GRAN);
+	gdtr_load(&gdt_ptr);
+
+	g_cpu_state[cpu].user_fs=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
 }
 
 

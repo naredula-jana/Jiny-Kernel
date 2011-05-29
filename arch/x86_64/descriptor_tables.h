@@ -27,6 +27,7 @@
 #define UDATA_DESCR   4
 #define KCODE32_DESCR 5
 #define TSS_DESCR     6
+#define FS_UDATA_DESCR     7  /* TODO : this is for ARCH_SET_FS implementation , need to reimplement using LDT */
 #define LDT_DESCR     8
 
 #define SEG_DPL_SHIFT  5

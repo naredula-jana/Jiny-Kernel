@@ -313,7 +313,7 @@ unsigned long setup_stack(unsigned char **argv,unsigned char *env,unsigned long 
 	}
 	*stack_len=PAGE_SIZE-(p-stack);
 	*t_argc=total_args;
-	*t_argv=real_stack;
+	*t_argv=real_stack-8;
 	return stack;
 
 error:
