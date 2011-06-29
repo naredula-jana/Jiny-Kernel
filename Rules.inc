@@ -30,10 +30,10 @@ LINK_FLAG=
 INCLUDE=. -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURCE_ROOT)/include/$(ARCH_DIR)/ -I $(SOURCE_ROOT)/arch/$(ARCH_DIR)
 endif
 
-%o:%c
+%.o: %.c
 	@echo "$<"
 	$(AT)$(CC) -c $(CFLAGS) $< -o $@
-%o:%S
+%.o: %.S
 	@echo "$<"
 	$(AT)$(CC) -c $(CFLAGS_ASM) $< -o $@
 %o:%s

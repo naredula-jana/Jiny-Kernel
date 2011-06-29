@@ -150,7 +150,7 @@ extern addr_t g_error_i,g_after_i,g_before_i;
 // This gets called from our ASM interrupt handler stub.
 void ar_irqHandler(void *p,unsigned int int_no)
 {
-	if (g_error_i ==0) g_after_i=g_before_i;
+	//if (g_error_i ==0) g_after_i=g_before_i;
 	// Send an EOI (end of interrupt) signal to the PICs.
 	// If this interrupt involved the slave. 
 	if (int_no >= 40)
