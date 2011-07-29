@@ -30,9 +30,7 @@ int init_kernel(unsigned long end_addr)
 	init_driver_keyboard();
 	init_serial();
 	ut_printf("Initalising MEMORY physical memory highest addrss:%x \n",end_addr);
-	g_serial_output=1;
 	init_memory(end_addr);
-	g_serial_output=1;
 	kmem_cache_init();
 	kmem_cache_sizes_init();
 	/* SLAB cache for vm_area_struct structures */

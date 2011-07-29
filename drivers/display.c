@@ -14,7 +14,7 @@
 /* The attribute of an character.  */
 #define ATTRIBUTE		0x1f
 /* The video memory address.  */
-#define VIDEO			0xB8000
+unsigned long VIDEO=	0xB8000;
 
 /* Variables.  */
 /* Save the X position.  */
@@ -151,6 +151,7 @@ void ut_putchar (int c)
 		return ;
 	}
 	
+	video_g = (unsigned char *) VIDEO;
 	spin_lock_irqsave(&putchar_lock, flags);	
 	ptr=&(video_buffer_g[0][0]);	
 	if (c == '\n' || c == '\r')

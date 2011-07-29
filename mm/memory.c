@@ -305,16 +305,17 @@ unsigned long mm_getFreePages(int gfp_mask, unsigned long order)
 nopage:
         return 0;
 }
+extern unsigned long VIDEO;
 extern unsigned long g_multiboot_mod_addr;
 extern unsigned long g_multiboot_mod_len;
 void init_memory(unsigned long phy_end_addr)
 {
 	unsigned long virt_start_addr,virt_end_addr;
 
-	ut_printf(" Initializing memory phy_endaddr : %x \n",phy_end_addr);
+	ut_printf(" Initializing memory phy_endaddr : %x video:%x \n",phy_end_addr,VIDEO);
 	virt_start_addr=initialise_paging( phy_end_addr);
 	virt_end_addr=__va(phy_end_addr);
-	ut_printf(" After Paging initalized start_addr: %x endaddr: %x \n",virt_start_addr,virt_end_addr);
+	ut_printf(" After Paging initalized start_addr: %x endaddr: %x video:%x \n",virt_start_addr,virt_end_addr,VIDEO);
 
 	if (g_multiboot_mod_len > 0) /* symbol file  reside at the end of memory, it can acess only when page table is initialised */
 	{

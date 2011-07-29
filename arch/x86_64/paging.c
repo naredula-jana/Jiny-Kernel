@@ -68,7 +68,7 @@ static void mk_pde(pde_t *pde, addr_t fr,int page_size,int global,int user)
 	pde->nx=0;
 	pde->frame = fr;
 }
-
+extern unsigned long VIDEO ;
 
 addr_t initialise_paging(addr_t end_addr)
 {
@@ -82,7 +82,7 @@ addr_t initialise_paging(addr_t end_addr)
 	end_mem &= PAGE_MASK;
 	nframes  = (end_mem)>> PAGE_SHIFT;
 	g_kernel_page_dir=0x00101000;
-	ut_printf("Initializing Paging  %x: physical high addr:%x  \n",placement_address,end_addr);
+//	ut_printf("Initializing Paging  %x: physical high addr:%x  \n",placement_address,end_addr);
 	level2_table=(addr_t *)0x00103000+20; /* 20 entries(40M) already intialised */
 	fr=0+20*512; /*  2M= 512 4Kpages already initialised */
 	for (i=20; i<512; i++) /* 20 entres is already initialized, this loop covers for 1G */
@@ -95,9 +95,10 @@ addr_t initialise_paging(addr_t end_addr)
 		fr=fr+512; /* 2M = 512*4K frames */	
 	}
 
-	ut_printf("Initializing PAGING  nframes:%x  FR:%x l2:%x i=%d \n",nframes,fr,level2_table,i);
+//	ut_printf("Initializing PAGING  nframes:%x  FR:%x l2:%x i=%d \n",nframes,fr,level2_table,i);
 	p=0x00102000; /* TODO: the following two lines need to remove later */
 	*p=0; /* reset the L3 table first entry need only when the paging is enabled */
+	VIDEO=__va(VIDEO);
 	flush_tlb(0x101000);
 	return placement_address;
 }

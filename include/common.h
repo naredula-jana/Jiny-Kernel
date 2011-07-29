@@ -36,7 +36,7 @@ extern unsigned long g_debug_level;
 																		      //#define DEBUG_ENABLE 1
 #ifdef DEBUG_ENABLE 
 #define DEBUG(x...) do { \
-	if (g_serial_output==1 && g_debug_level==1)	ut_printf(x); \
+	if ( g_debug_level==1)	ut_printf(x); \
 } while (0) 
 #else
 #define DEBUG(x...) do { \
