@@ -40,6 +40,7 @@ void test_proc();
 static int sh_test1(char *arg1,char *arg2);
 static int sh_test2(char *arg1,char *arg2);
 static int sh_mmap(char *arg1,char *arg2);
+extern unsigned long xen_time(char *arg1,char *arg2);
 int scan_pagecache(char *arg1 , char *arg2);
 commands_t cmd_list[]=
 {
@@ -50,6 +51,7 @@ commands_t cmd_list[]=
 	{"s   ","toggle SYSCALL debug","s",sh_syscalldebug},
 	{"i         ","Print IRQ stats","i",ar_printIrqStat},
 	{"t         ","Print thread list","t",sc_threadlist},
+	{"x         ","Print time","x",xen_time},
 	{"kill <pid> ","kill process","kill",sh_kill},
 	{"cls       ","clear screen ","cls",ut_cls},
 	{"mp        ","Memory free areas","mp",mm_printFreeAreas},

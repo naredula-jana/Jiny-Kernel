@@ -770,7 +770,7 @@ void init_timer()
 {
 	addr_t frequency=100;
 	// Firstly, register our timer callback.
-	ar_registerInterrupt(32, &timer_callback);
+	ar_registerInterrupt(32, &timer_callback,"timer_callback");
 
 	// The value we send to the PIT is the value to divide it's input clock
 	// (1193180 Hz) by, to get our required frequency. Important to note is

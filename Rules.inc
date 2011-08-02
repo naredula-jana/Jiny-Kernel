@@ -10,6 +10,7 @@ C_SOURCES=$(wildcard *.c)
 ASM_SOURCES=$(wildcard *.s)
 GNUASM_SOURCES=$(wildcard *.S)
 SOURCES=$(C_SOURCES) $(ASM_SOURCES)
+XEN_INCLUDE=/data/xen/xen-4.1.1/dist/install/usr/include
 
 C_OBJECTS=$(patsubst %.c,%.o,$(C_SOURCES))
 GNUASM_OBJECTS=$(patsubst  %.S,%.o,$(GNUASM_SOURCES))
@@ -24,10 +25,10 @@ LINK_FLAG= -m32
 INCLUDE=. -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURCE_ROOT)/include/$(ARCH_DIR)/
 else
 ARCH_DIR=x86_64
-CFLAGS= -m64 -mno-red-zone  -nostdlib  -nodefaultlibs -Wimplicit -Wall   -I$(INCLUDE) -DARCH_X86_64
+CFLAGS= -m64 -mno-red-zone  -nostdlib  -nodefaultlibs -Wimplicit -Wall   -I$(INCLUDE) -I$(XEN_INCLUDE)  -DARCH_X86_64
 CFLAGS_ASM= -nostdlib -nostdinc -nodefaultlibs -D__ASM__   -I$(INCLUDE) -DARCH_X86_64
 LINK_FLAG= 
-INCLUDE=. -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURCE_ROOT)/include/$(ARCH_DIR)/ -I $(SOURCE_ROOT)/arch/$(ARCH_DIR)
+INCLUDE=. -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURCE_ROOT)/include/$(ARCH_DIR)/ -I $(SOURCE_ROOT)/arch/$(ARCH_DIR) 
 endif
 
 %.o: %.c

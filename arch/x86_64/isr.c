@@ -33,6 +33,7 @@ uint32_t faults_with_errcode =
    POW2(FLT_AC));
 struct irq_handler_t {
 	isr_t action;
+	unsigned char *name;
 	struct {
 		long num_irqs;
 		long num_error;
@@ -72,31 +73,34 @@ void init_handlers()
 	for (i=0; i<256;i++)
 	{
 		g_interrupt_handlers[i].action=0;
+		g_interrupt_handlers[i].name=0;
 		g_interrupt_handlers[i].stat.num_irqs=0;
 		g_interrupt_handlers[i].stat.num_error=0;
 	}
 	for (i=0; i<32;i++)
-		ar_registerInterrupt(i, gpFault);
+		ar_registerInterrupt(i, gpFault,"gpfault");
 
-	ar_registerInterrupt(14, ar_pageFault);
-	ar_registerInterrupt(13, gpFault);
+	ar_registerInterrupt(14, ar_pageFault,"pagefault");
+	ar_registerInterrupt(13, gpFault,"gpfault");
 }
 
 void ar_printIrqStat(char *arg1,char *arg2)
 {
 	int i;
 
+	ut_printf("irq_no : name : address: total_calls : errors\n");
 	for (i=0; i<256;i++)
 	{
 		if (g_interrupt_handlers[i].action==0 && g_interrupt_handlers[i].stat.num_error==0) continue;
 		if (i<32 && g_interrupt_handlers[i].stat.num_error==0 && g_interrupt_handlers[i].stat.num_irqs==0) continue;
-		ut_printf(" %d action:%x irs:%d errors:%d\n",i,g_interrupt_handlers[i].action,g_interrupt_handlers[i].stat.num_irqs,g_interrupt_handlers[i].stat.num_error);
+		ut_printf(" %d: %s  %x %d %d\n",i-32,g_interrupt_handlers[i].name,g_interrupt_handlers[i].action,g_interrupt_handlers[i].stat.num_irqs,g_interrupt_handlers[i].stat.num_error);
 	}
 }
 
-void ar_registerInterrupt(uint8_t n, isr_t handler)
+void ar_registerInterrupt(uint8_t n, isr_t handler,char *name)
 {
 	g_interrupt_handlers[n].action = handler;
+	g_interrupt_handlers[n].name=name;
 }
 void DisableTimer(void)
 {

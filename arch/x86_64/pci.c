@@ -175,6 +175,8 @@ static int get_bar(pci_addr_t *addr, int barno, uint32_t *start, uint32_t *len)
 	ut_printf("   barno:%d start :%i len:%i \n",barno,*start,*len);
 	return 0;
 }
+#define XEN_PLATFORM_VENDOR_ID 0x5853
+#define XEN_PLATFORM_DEVICE_ID 0x0001
 static int read_dev_conf(uint8_t bus , uint8_t dev,uint8_t func)
 {
 	pci_dev_header_t header;
@@ -210,6 +212,8 @@ static int read_dev_conf(uint8_t bus , uint8_t dev,uint8_t func)
 		}
 		if (header.vendor_id == 0x1af4 && header.device_id==0x1110)
 			init_host_shm(&header,bars,3);
+		if (header.vendor_id == XEN_PLATFORM_VENDOR_ID  && header.device_id == XEN_PLATFORM_DEVICE_ID)
+			init_xen_pci(&header,bars,3);
 	}
 	return 1;
 }

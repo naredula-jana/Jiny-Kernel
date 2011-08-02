@@ -62,7 +62,7 @@ int init_host_shm(pci_dev_header_t *pci_hdr,pci_bar_t bars[], uint32_t len)
 	if (pci_hdr->interrupt_line > 0)
 	{
 		ut_printf(" Interrupt number : %i \n",pci_hdr->interrupt_line);
-		ar_registerInterrupt(32+pci_hdr->interrupt_line, host_shm_interrupt);
+		ar_registerInterrupt(32+pci_hdr->interrupt_line, host_shm_interrupt,"host_shm");
 	}
 	return 1;
 }
