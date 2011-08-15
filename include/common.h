@@ -33,7 +33,7 @@ extern unsigned long g_debug_level;
 	if (g_syscall_debug==1 && g_serial_output==1)	{ut_printf("SYSCALL "); ut_printf(x);} \
 } while (0) 
 
-																		      //#define DEBUG_ENABLE 1
+ //#define DEBUG_ENABLE 1
 #ifdef DEBUG_ENABLE 
 #define DEBUG(x...) do { \
 	if ( g_debug_level==1)	ut_printf(x); \
@@ -69,6 +69,7 @@ typedef struct {
 	unsigned long tv_nsec;
 }time_t;
 
+#define unlikely(x)     (x) /* TODO */
 #define BUG() do { unsigned long stack_var; ut_printf(" Kernel BUG  file : %s : line :%d \n",__FILE__,__LINE__);  \
 	cli(); ut_showTrace(&stack_var);while(1) ; } while(0)
 #define BUG_ON(condition) do { if (unlikely((condition)!=0)) BUG(); } while(0)

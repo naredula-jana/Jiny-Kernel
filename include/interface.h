@@ -35,6 +35,9 @@ void *kmem_cache_alloc (kmem_cache_t *cachep, int flags);
 void *mm_malloc (long size, int flags);
 void mm_free (const void *objp);
 
+#define ut_free mm_free
+#define ut_malloc(x) mm_malloc(x,0)
+
 /* vm */
 int vm_printMmaps(char *arg1,char *arg2);
 struct vm_area_struct *vm_findVma(struct mm_struct *mm,unsigned long addr, unsigned long len);

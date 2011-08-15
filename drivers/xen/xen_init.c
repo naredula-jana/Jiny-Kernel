@@ -1,56 +1,12 @@
-#include "common.h"
-#include "pci.h"
-#include "mm.h"
-#include "vfs.h"
 
+#include "xen.h"
 
-#include <xen/features.h>
-#include <xen/evtchn.h>
-#include <xen/xen.h>
-#include <xen/memory.h>
-#include <xen/hvm/params.h>
-
-
-#define __STR(x) #x
-#define STR(x) __STR(x)
-char hypercall_page[PAGE_SIZE];
-
-#define _hypercall2(type, name, a1, a2)                         \
-({                                                              \
-        long __res, __ign1, __ign2;                             \
-        asm volatile (                                          \
-                "call hypercall_page + ("STR(__HYPERVISOR_##name)" * 32)"\
-                : "=a" (__res), "=D" (__ign1), "=S" (__ign2)    \
-                : "1" ((long)(a1)), "2" ((long)(a2))            \
-                : "memory" );                                   \
-        (type)__res;                                            \
-})
-
-#define wrmsr(msr,val1,val2) \
-      __asm__ __volatile__("wrmsr" \
-                           : /* no outputs */ \
-                           : "c" (msr), "a" (val1), "d" (val2))
-
-#define wrmsrl(msr,val) wrmsr(msr,(uint32_t)((uint64_t)(val)),((uint64_t)(val))>>32)
-
-
-static inline int
-HYPERVISOR_memory_op(
-        unsigned int cmd, void *arg)
-{
-        return _hypercall2(int, memory_op, cmd, arg);
-}
-HYPERVISOR_hvm_op(int op, void *arg)
-{
-       return _hypercall2(unsigned long, hvm_op, op, arg);
-}
-
-shared_info_t *shared_info_area;
+shared_info_t *g_sharedInfoArea;
 pci_dev_header_t xen_pci_hdr;
 
-static unsigned long pci_ioaddr,pci_iolen;
+static unsigned long pci_ioaddr, pci_iolen;
 static unsigned long platform_mmio;
-static unsigned long platform_mmio_alloc=0;
+static unsigned long platform_mmio_alloc = 0;
 static unsigned long platform_mmiolen;
 static unsigned long shared_info_frame;
 #define XEN_IOPORT_BASE 0x10
@@ -73,82 +29,79 @@ static unsigned long shared_info_frame;
 #define UNPLUG_AUX_IDE_DISKS 4
 #define UNPLUG_ALL 7
 
-static int check_platform_magic( long ioaddr, long iolen)
-{
-        short magic, unplug = 0;
-        char protocol, *p, *q, *err;
+static int check_platform_magic(long ioaddr, long iolen) {
+	short magic, unplug = 0;
+	char protocol, *p, *q, *err;
 
 #if 0
-        for (p = dev_unplug; p; p = q) {
-                q = strchr(dev_unplug, ',');
-                if (q)
-                        *q++ = '\0';
-                if (!strcmp(p, "all"))
-                        unplug |= UNPLUG_ALL;
-                else if (!strcmp(p, "ide-disks"))
-                        unplug |= UNPLUG_ALL_IDE_DISKS;
-                else if (!strcmp(p, "aux-ide-disks"))
-                        unplug |= UNPLUG_AUX_IDE_DISKS;
-                else if (!strcmp(p, "nics"))
-                        unplug |= UNPLUG_ALL_NICS;
-                else
-                        dev_warn(dev, "unrecognised option '%s' "
-                                 "in module parameter 'dev_unplug'\n", p);
-        }
+	for (p = dev_unplug; p; p = q) {
+		q = strchr(dev_unplug, ',');
+		if (q)
+		*q++ = '\0';
+		if (!strcmp(p, "all"))
+		unplug |= UNPLUG_ALL;
+		else if (!strcmp(p, "ide-disks"))
+		unplug |= UNPLUG_ALL_IDE_DISKS;
+		else if (!strcmp(p, "aux-ide-disks"))
+		unplug |= UNPLUG_AUX_IDE_DISKS;
+		else if (!strcmp(p, "nics"))
+		unplug |= UNPLUG_ALL_NICS;
+		else
+		dev_warn(dev, "unrecognised option '%s' "
+				"in module parameter 'dev_unplug'\n", p);
+	}
 #endif
-        if (iolen < 0x16) {
-                err = "backend too old";
-                goto no_dev;
-        }
+	if (iolen < 0x16) {
+		err = "backend too old";
+		goto no_dev;
+	}
 
-        magic = inw(XEN_IOPORT_MAGIC);
+	magic = inw(XEN_IOPORT_MAGIC);
 
-        if (magic != XEN_IOPORT_MAGIC_VAL) {
-                err = "unrecognised magic value";
-                goto no_dev;
-        }
+	if (magic != XEN_IOPORT_MAGIC_VAL) {
+		err = "unrecognised magic value";
+		goto no_dev;
+	}
 
-        protocol = inb(XEN_IOPORT_PROTOVER);
+	protocol = inb(XEN_IOPORT_PROTOVER);
 
-        ut_printf("Xen I/O protocol version %d\n", protocol);
+	ut_printf("Xen I/O protocol version %d\n", protocol);
 
-        switch (protocol) {
-        case 1:
-                outw(XEN_IOPORT_LINUX_PRODNUM, XEN_IOPORT_PRODNUM);
-                outl(XEN_IOPORT_LINUX_DRVVER, XEN_IOPORT_DRVVER);
-                if (inw(XEN_IOPORT_MAGIC) != XEN_IOPORT_MAGIC_VAL) {
-                        ut_printf("Xen Error : blacklisted by host\n");
-                        return -1;
-                }
-                /* Fall through */
-        case 0:
-                outw(unplug, XEN_IOPORT_UNPLUG);
-                break;
-        default:
-                err = "unknown I/O protocol version";
-                goto no_dev;
-        }
+	switch (protocol) {
+	case 1:
+		outw(XEN_IOPORT_LINUX_PRODNUM, XEN_IOPORT_PRODNUM);
+		outl(XEN_IOPORT_LINUX_DRVVER, XEN_IOPORT_DRVVER);
+		if (inw(XEN_IOPORT_MAGIC) != XEN_IOPORT_MAGIC_VAL) {
+			ut_printf("Xen Error : blacklisted by host\n");
+			return -1;
+		}
+		/* Fall through */
+	case 0:
+		outw(unplug, XEN_IOPORT_UNPLUG);
+		break;
+	default:
+		err = "unknown I/O protocol version";
+		goto no_dev;
+	}
 
-        return 0;
+	return 0;
 
- no_dev:
- 	 ut_printf("Xen Error failed backend handshake: %s\n", err);
-        if (!unplug)
-                return 0;
-        ut_printf("Xen Error failed to execute specified dev_unplug options!\n");
-        return -1;
+	no_dev: ut_printf("Xen Error failed backend handshake: %s\n", err);
+	if (!unplug)
+		return 0;
+	ut_printf("Xen Error failed to execute specified dev_unplug options!\n");
+	return -1;
 }
 
 static inline void native_cpuid(unsigned int *eax, unsigned int *ebx,
-                                unsigned int *ecx, unsigned int *edx)
-{
-        /* ecx is often an input as well as an output. */
-        asm volatile("cpuid"
-            : "=a" (*eax),
-              "=b" (*ebx),
-              "=c" (*ecx),
-              "=d" (*edx)
-            : "0" (*eax), "2" (*ecx));
+		unsigned int *ecx, unsigned int *edx) {
+	/* ecx is often an input as well as an output. */
+	asm volatile("cpuid"
+			: "=a" (*eax),
+			"=b" (*ebx),
+			"=c" (*ecx),
+			"=d" (*edx)
+			: "0" (*eax), "2" (*ecx));
 }
 
 /*
@@ -156,154 +109,166 @@ static inline void native_cpuid(unsigned int *eax, unsigned int *ebx,
  * clear %ecx since some cpus (Cyrix MII) do not set or clear %ecx
  * resulting in stale register contents being returned.
  */
-static inline void cpuid(unsigned int op,
-                         unsigned int *eax, unsigned int *ebx,
-                         unsigned int *ecx, unsigned int *edx)
-{
-        *eax = op;
-        *ecx = 0;
-        native_cpuid(eax, ebx, ecx, edx);
+static inline void cpuid(unsigned int op, unsigned int *eax, unsigned int *ebx,
+		unsigned int *ecx, unsigned int *edx) {
+	*eax = op;
+	*ecx = 0;
+	native_cpuid(eax, ebx, ecx, edx);
 }
 
-static int set_callback_via(uint64_t via)
-{
-        struct xen_hvm_param a;
+static int set_callback_via(uint64_t via) {
+	struct xen_hvm_param a;
 
-        a.domid = DOMID_SELF;
-        a.index = HVM_PARAM_CALLBACK_IRQ;
-        a.value = via;
-        return HYPERVISOR_hvm_op(HVMOP_set_param, &a);
+	a.domid = DOMID_SELF;
+	a.index = HVM_PARAM_CALLBACK_IRQ;
+	a.value = via;
+	return HYPERVISOR_hvm_op(HVMOP_set_param, &a);
 }
-unsigned long alloc_xen_mmio(unsigned long len)
-{
-        unsigned long addr;
 
-        addr = platform_mmio + platform_mmio_alloc;
-        platform_mmio_alloc += len;
-       // BUG_ON(platform_mmio_alloc > platform_mmiolen);
+unsigned long alloc_xen_mmio(unsigned long len) {
+	unsigned long addr;
 
-        return addr;
+	addr = platform_mmio + platform_mmio_alloc;
+	platform_mmio_alloc += len;
+	// BUG_ON(platform_mmio_alloc > platform_mmiolen);
+
+	return addr;
 }
-unsigned long xen_time(char *arg1,char *arg2)
-{
-	ut_printf(" xen time :%x \n",shared_info_area->wc_sec);
-	return shared_info_area->wc_sec;
+
+static unsigned char xen_data[1024];
+unsigned long xen_time(char *arg1, char *arg2) {
+	struct vcpu_time_info *src = &g_sharedInfoArea->vcpu_info[0].time;
+	unsigned long ns;
+	unsigned long e_pen, e_mask;
+	ns = src->system_time / 1000000000;
+	ut_printf(" new xen  system time:%x :%x %d \n", src->system_time,
+			src->tsc_timestamp, ns);
+
+	xen_data[0]='\0';
+	ut_printf("arg1 :%s: \n",arg1);
+	//xenbus_read_integer("/local/domain/0/backend/qdisk/2/768/dev");
+	xenbus_read(arg1,xen_data,1023);
+	ut_printf(" REQUEST  : %s -> %s \n",arg1,xen_data);
+
+	return g_sharedInfoArea->wc_sec;
 }
-static int  init_xen_info(void)
-{
-        struct xen_add_to_physmap xatp;
-        unsigned long phy_addr;
+static int init_xen_info(void) {
+	struct xen_add_to_physmap xatp;
+	unsigned long phy_addr;
 
-
-      //  setup_xen_features();
-        phy_addr = alloc_xen_mmio(PAGE_SIZE) ;
-        shared_info_frame = phy_addr  >> PAGE_SHIFT;
-        xatp.domid = DOMID_SELF;
-        xatp.idx = 0;
-        xatp.space = XENMAPSPACE_shared_info;
-        xatp.gpfn = shared_info_frame;
-        if (HYPERVISOR_memory_op(XENMEM_add_to_physmap, &xatp))
-                BUG();
+	//  setup_xen_features();
+	phy_addr = alloc_xen_mmio(PAGE_SIZE);
+	shared_info_frame = phy_addr >> PAGE_SHIFT;
+	xatp.domid = DOMID_SELF;
+	xatp.idx = 0;
+	xatp.space = XENMAPSPACE_shared_info;
+	xatp.gpfn = shared_info_frame;
+	if (HYPERVISOR_memory_op(XENMEM_add_to_physmap, &xatp))
+		BUG();
 #define HOST_XEN_SH_ADDR 0xe1000000
-        shared_info_area = HOST_XEN_SH_ADDR;
-        vm_mmap(0,shared_info_area ,PAGE_SIZE,PROT_WRITE,MAP_FIXED,phy_addr);
+	g_sharedInfoArea = HOST_XEN_SH_ADDR;
+	vm_mmap(0, g_sharedInfoArea, PAGE_SIZE, PROT_WRITE, MAP_FIXED, phy_addr);
 
-        ut_printf("shared info area sec  : %x\n",shared_info_area->wc_sec);
-  /*              ioremap(shared_info_frame << PAGE_SHIFT, PAGE_SIZE);
-        if (shared_info_area == NULL)
-                panic("can't map shared info\n");
-*/
-        return 0;
+	ut_printf("shared info area sec  : %x\n", g_sharedInfoArea->wc_sec);
+	init_events();
+	if (1) {
+		struct xen_hvm_param evntchn, a;
+
+		evntchn.domid = DOMID_SELF;
+		evntchn.index = HVM_PARAM_STORE_EVTCHN;
+		HYPERVISOR_hvm_op(HVMOP_get_param, &evntchn);
+		ut_printf("xen Event channel :%x:\n", evntchn.value);
+		a.domid = DOMID_SELF;
+		a.index = HVM_PARAM_STORE_PFN;
+		HYPERVISOR_hvm_op(HVMOP_get_param, &a);
+		init_xenbus(a.value << PAGE_SHIFT, evntchn.value);
+		ut_printf("xen Event channel pfn :%x:\n", a.value);
+	}
+	return 0;
 }
-
-
-
-
-static void xen_pci_interrupt(registers_t regs) {
-	uint32_t  *p, ret;
-
-	*p = 0; /* reset the irq by resetting the status  */
-	ut_printf(" GOT XEN PCI   INTERRUPT  :%x:  wakedup :%d \n", p, ret);
-}
-
-
-
-static uint32_t xen_cpuid_base(void)
+extern void do_hypervisor_callback(struct pt_regs *regs);
+static void xen_pci_interrupt(registers_t regs)
 {
-        uint32_t base, eax, ebx, ecx, edx;
-        char signature[13];
 
-        for (base = 0x40000000; base < 0x40010000; base += 0x100) {
-                cpuid(base, &eax, &ebx, &ecx, &edx);
-                *(uint32_t*)(signature + 0) = ebx;
-                *(uint32_t*)(signature + 4) = ecx;
-                *(uint32_t*)(signature + 8) = edx;
-                signature[12] = 0;
-                ut_printf("XEN signature :%s: \n ",signature);
-               // if (!strcmp("XenVMMXenVMM", signature) && ((eax - base) >= 2))
-                        return base;
-        }
+	//*p = 0; /* reset the irq by resetting the status  */
+	ut_printf("LATEST  XEN PCI-INTERRUPT:  \n");
 
-        return 0;
+	do_hypervisor_callback(0);
 }
-static int init_hypercall_stubs(pci_dev_header_t *pci_hdr)
-{
-		int ret;
-        uint32_t eax, ebx, ecx, edx, npages, msr, i, base;
-        unsigned long page;
 
-        base = xen_cpuid_base();
-        if (base == 0) {
-        	ut_printf(
-                       "Detected Xen platform device but not Xen VMM?\n");
-                return -1;
-        }
+static uint32_t xen_cpuid_base(void) {
+	uint32_t base, eax, ebx, ecx, edx;
+	char signature[13];
 
-        cpuid(base + 1, &eax, &ebx, &ecx, &edx);
+	for (base = 0x40000000; base < 0x40010000; base += 0x100) {
+		cpuid(base, &eax, &ebx, &ecx, &edx);
+		*(uint32_t*) (signature + 0) = ebx;
+		*(uint32_t*) (signature + 4) = ecx;
+		*(uint32_t*) (signature + 8) = edx;
+		signature[12] = 0;
+		ut_printf("XEN signature :%s: \n ", signature);
+		// if (!strcmp("XenVMMXenVMM", signature) && ((eax - base) >= 2))
+		return base;
+	}
 
-        ut_printf( "Xen version base:%x %d.%d.\n",base, eax >> 16, eax & 0xffff);
-        /*
-         * Find largest supported number of hypercall pages.
-         * We'll create as many as possible up to this number.
-         */
-        cpuid(base + 2, &npages, &msr, &ecx, &edx);
-        page = mm_getFreePages(0,2);
-        ut_printf("XEN pages:%d  vaddr :%x paddr:%x\n",npages,page,__pa(page));
-        wrmsrl(msr, __pa(page));
-        ut_memcpy(hypercall_page,page,PAGE_SIZE-1);
-        //hypercall_page=page;
-        ret = check_platform_magic( pci_ioaddr, pci_iolen);
-        if ((ret = init_xen_info()))
-        {
-        	ut_printf(" XEN : ERROR in init_xen_info \n");
-                  goto out;
-        }
+	return 0;
+}
+static int init_hypercall_stubs(pci_dev_header_t *pci_hdr) {
+	int ret;
+	uint32_t eax, ebx, ecx, edx, npages, msr, i, base;
+	unsigned long page;
 
-        if ((ret = set_callback_via(pci_hdr->interrupt_line)))
-          	  goto out;
-  out:
-        return 0;
+	base = xen_cpuid_base();
+	if (base == 0) {
+		ut_printf("Detected Xen platform device but not Xen VMM?\n");
+		return -1;
+	}
+
+	cpuid(base + 1, &eax, &ebx, &ecx, &edx);
+
+	ut_printf("Xen version base:%x %d.%d.  \n", base, eax >> 16, eax & 0xffff);
+	/*
+	 * Find largest supported number of hypercall pages.
+	 * We'll create as many as possible up to this number.
+	 */
+	cpuid(base + 2, &npages, &msr, &ecx, &edx);
+	page = mm_getFreePages(0, 2);
+	ut_printf("XEN pages:%d  vaddr :%x paddr:%x trap_instr:%s:\n", npages,
+			page, __pa(page), TRAP_INSTR);
+	wrmsrl(msr, __pa(page));
+	ut_memcpy(hypercall_page, page, PAGE_SIZE - 1);
+	//hypercall_page=page;
+	ret = check_platform_magic(pci_ioaddr, pci_iolen);
+	if ((ret = init_xen_info())) {
+		ut_printf(" XEN : ERROR in init_xen_info \n");
+		goto out;
+	}
+
+	if ((ret = set_callback_via(pci_hdr->interrupt_line)))
+		goto out;
+
+	out: return 0;
 }
 int init_xen_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len) {
-	uint32_t ret,i;
+	uint32_t ret, i;
 	xen_pci_hdr = *pci_hdr;
 
 	ut_printf(" Initialising XEN PCI \n");
 
 	if (bars[0].addr != 0 && bars[1].addr != 0) {
-		pci_ioaddr=bars[0].addr;
-		pci_iolen=bars[0].len;
-		platform_mmio=bars[1].addr;
-		platform_mmiolen=bars[1].len;
-	}else
-	{
+		pci_ioaddr = bars[0].addr;
+		pci_iolen = bars[0].len;
+		platform_mmio = bars[1].addr;
+		platform_mmiolen = bars[1].len;
+	} else {
 		ut_printf(" ERROR in initializing xen PCI driver \n");
 		return 0;
 	}
 
 	if (pci_hdr->interrupt_line > 0) {
 		ut_printf(" Interrupt number : %i \n", pci_hdr->interrupt_line);
-		ar_registerInterrupt(32 + pci_hdr->interrupt_line, xen_pci_interrupt,"xen_pci");
+		ar_registerInterrupt(32 + pci_hdr->interrupt_line, xen_pci_interrupt,
+				"xen_pci");
 	}
 
 	init_hypercall_stubs(pci_hdr);
