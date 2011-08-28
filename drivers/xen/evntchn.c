@@ -1,6 +1,7 @@
 
 #include "xen.h"
 
+
 #include <xen/io/xs_wire.h>
 
 #define NR_EVS 1024
@@ -18,6 +19,10 @@ static unsigned long bound_ports[NR_EVS / (8 * sizeof(unsigned long))];
 //void default_handler(evtchn_port_t port, struct pt_regs *regs, void *data);
 
 int in_callback;
+
+
+
+
 
 void do_hypervisor_callback(struct pt_regs *regs) {
 	unsigned long l1, l2, l1i, l2i;

@@ -6,6 +6,13 @@
 #include "task.h"
 #include "interface.h"
 
+#define __XEN_INTERFACE_VERSION__ 0x00030205
+#define TRAP_INSTR "syscall"
+
+#define mb()    __asm__ __volatile__ ("mfence":::"memory")
+
+#define HOST_XEN_SH_ADDR 0xe1000000
+
 #include <xen/features.h>
 #include <xen/evtchn.h>
 #include <xen/xen.h>
@@ -13,6 +20,7 @@
 #include <xen/hvm/params.h>
 #include <xen/event_channel.h>
 #include <xen/io/xs_wire.h>
+#include <xen/grant_table.h>
 
 #define __HYPERVISOR_dummycall 32
 
@@ -31,6 +39,19 @@ char hypercall_page[PAGE_SIZE];
                 : "memory" );                                   \
         (type)__res;                                            \
 })
+#define _hypercall3(type, name, a1, a2, a3)                     \
+({                                                              \
+        long __res, __ign1, __ign2, __ign3;                     \
+        asm volatile (                                          \
+                "call hypercall_page + ("STR(__HYPERVISOR_##name)" * 32)"\
+                : "=a" (__res), "=D" (__ign1), "=S" (__ign2),   \
+                "=d" (__ign3)                                   \
+                : "1" ((long)(a1)), "2" ((long)(a2)),           \
+                "3" ((long)(a3))                                \
+                : "memory" );                                   \
+        (type)__res;                                            \
+})
+
 
 #define wrmsr(msr,val1,val2) \
       __asm__ __volatile__("wrmsr" \
@@ -53,6 +74,12 @@ static inline int HYPERVISOR_event_channel_op(int cmd, void *op)
     return _hypercall2(int, dummycall, cmd, op);
 }
 
+
+static inline int HYPERVISOR_grant_table_op(
+        unsigned int cmd, void *uop, unsigned int count)
+{
+        return _hypercall3(int, grant_table_op, cmd, uop, count);
+}
 
 
 
@@ -154,3 +181,76 @@ static inline int notify_remote_via_evtchn(evtchn_port_t port)
     ut_printf("xen : new Notifying remote  :%d\n",port);
     return HYPERVISOR_event_channel_op(EVTCHNOP_send, &op);
 }
+/********************************************************************/
+struct __synch_xchg_dummy { unsigned long a[100]; };
+
+#define __synch_xg(x) ((struct __synch_xchg_dummy *)(x))
+
+
+
+static inline unsigned long __synch_cmpxchg(volatile void *ptr,
+        unsigned long old,
+        unsigned long new, int size)
+{
+    unsigned long prev;
+    switch (size) {
+        case 1:
+            __asm__ __volatile__("lock; cmpxchgb %b1,%2"
+                    : "=a"(prev)
+                    : "q"(new), "m"(*__synch_xg(ptr)),
+                    "0"(old)
+                    : "memory");
+            return prev;
+        case 2:
+            __asm__ __volatile__("lock; cmpxchgw %w1,%2"
+                    : "=a"(prev)
+                    : "r"(new), "m"(*__synch_xg(ptr)),
+                    "0"(old)
+                    : "memory");
+            return prev;
+#ifdef __x86_64__
+        case 4:
+            __asm__ __volatile__("lock; cmpxchgl %k1,%2"
+                    : "=a"(prev)
+                    : "r"(new), "m"(*__synch_xg(ptr)),
+                    "0"(old)
+                    : "memory");
+            return prev;
+        case 8:
+            __asm__ __volatile__("lock; cmpxchgq %1,%2"
+                    : "=a"(prev)
+                    : "r"(new), "m"(*__synch_xg(ptr)),
+                    "0"(old)
+                    : "memory");
+            return prev;
+#else
+        case 4:
+            __asm__ __volatile__("lock; cmpxchgl %1,%2"
+                    : "=a"(prev)
+                    : "r"(new), "m"(*__synch_xg(ptr)),
+                    "0"(old)
+                    : "memory");
+            return prev;
+#endif
+    }
+    return old;
+}
+#ifndef rmb
+#define rmb()  __asm__ __volatile__ ("lock; addl $0,0(%%esp)": : :"memory")
+#endif
+
+
+#define synch_cmpxchg(ptr, old, new) \
+((__typeof__(*(ptr)))__synch_cmpxchg((ptr),\
+                                     (unsigned long)(old), \
+                                     (unsigned long)(new), \
+                                     sizeof(*(ptr))))
+
+
+/****************************************/
+//#define ___DEFINE_XEN_GUEST_HANDLE(name, type) \
+    typedef struct { type *p; } __guest_handle_ ## name
+#define set_xen_guest_handle_raw(hnd, val)  do { (hnd).p = val; } while (0)
+
+#define set_xen_guest_handle(hnd, val) set_xen_guest_handle_raw(hnd, val)
+

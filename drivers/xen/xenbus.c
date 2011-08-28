@@ -73,7 +73,6 @@ void init_xenbus(unsigned long xenstore_phyaddr, uint32_t evtchannel) {
 }
 static void process_responses() {
 	struct xsd_sockmsg *resp;
-	unsigned char *data;
 	uint32_t req_id;
 	XENSTORE_RING_IDX prod,cons;
 	int processed_len=0;
@@ -117,11 +116,11 @@ static void process_responses() {
 }
 
 static void xb_write(int type, int req_id, xenbus_transaction_t trans_id,
-		const struct write_req req) {
+		const struct write_req *req,int nr_reqs) {
 	XENSTORE_RING_IDX prod;
 	int len = 0;
 	const struct write_req *cur_req;
-	int req_off;
+	int r,req_off;
 	int total_off;
 	int this_chunk;
 	int ret;
@@ -129,7 +128,9 @@ static void xb_write(int type, int req_id, xenbus_transaction_t trans_id,
 			{ .type = type, .req_id = req_id, .tx_id = trans_id };
 	struct write_req header_req = { &m, sizeof(m) };
 
-	len += req.len;
+    for (r = 0; r < nr_reqs; r++)
+        len += req[r].len;
+
 	m.len = len;
 	len += sizeof(m);
 
@@ -164,7 +165,7 @@ static void xb_write(int type, int req_id, xenbus_transaction_t trans_id,
 		if (req_off == cur_req->len) {
 			req_off = 0;
 			if (cur_req == &header_req)
-				cur_req = &req;
+				cur_req = req;
 			else
 				cur_req++;
 		}
@@ -230,7 +231,7 @@ static int allocate_xenbus_id(void) {
 }
 
 int xenbus_read(const char *path, char *reply, int reply_len) {
-	struct write_req req = { path, ut_strlen(path) + 1 };
+	struct write_req req[] = {{ path, ut_strlen(path) + 1 }};
 	struct xsd_sockmsg *rep;
 	char *res, *msg;
 	int id;
@@ -238,9 +239,9 @@ int xenbus_read(const char *path, char *reply, int reply_len) {
 
 	id = allocate_xenbus_id();
 	DEBUG(" BEFORE msg_repli id:%x Before  xb_write\n", id);
-	xb_write(XS_READ, id, XBT_NIL, req);
+	xb_write(XS_READ, id, XBT_NIL, req,1);
 	//sc_wait(&xb_waitq,100);
-	sc_sleep(100);
+	sc_sleep(100); /* TODO : need to replace with wait , currently wait is not working */
 	DEBUG("AFTER AFTER  wait xb_write \n");
 	process_responses();
 	if (req_info[id].resp_ready == 1 && req_info[id].res_msg.len > 0 )
@@ -257,4 +258,50 @@ int xenbus_read(const char *path, char *reply, int reply_len) {
 	return ret;
 }
 
+#define MAX_REPLY_LEN 100
+int xenbus_write(const char *path, char *val) {
+	struct write_req req[] = {{ path, ut_strlen(path) + 1 },{ val, ut_strlen(val) }};
+	struct xsd_sockmsg *rep;
+	char reply[MAX_REPLY_LEN];
+	int id;
+	int ret=0;
+    int reply_len=MAX_REPLY_LEN;
 
+	id = allocate_xenbus_id();
+	DEBUG(" BEFORE msg_repli id:%x Before  xb_write\n", id);
+	xb_write(XS_WRITE, id, XBT_NIL, req,2);
+	//sc_wait(&xb_waitq,100);
+	sc_sleep(100); /* TODO : need to replace with wait , currently wait is not working */
+	DEBUG("AFTER    wait xb_write \n");
+	process_responses();
+	if (req_info[id].resp_ready == 1 && req_info[id].res_msg.len > 0 )
+	{
+		ret=req_info[id].res_msg.len;
+		if (ret < reply_len )
+		     ut_memcpy(reply,req_info[id].data,req_info[id].res_msg.len);
+		reply[ret]='\0';
+		ut_printf(" reply data :%s: \n",reply);
+	}else
+	{
+	   ut_printf(" NO DATA \n");
+	}
+	release_xenbus_id(id);
+	return ret;
+}
+
+static unsigned char xen_readdata[1024];
+unsigned long xen_readcmd(char *arg1, char *arg2) {
+	xen_readdata[0]='\0';
+	ut_printf("arg1 :%s: \n",arg1);
+	xenbus_read(arg1,xen_readdata,1023);
+	ut_printf(" READ REQUEST  : %s -> %s \n",arg1,xen_readdata);
+	return 1;
+}
+
+unsigned long xen_writecmd(char *arg1, char *arg2) {
+	int ret;
+	ut_printf("arg1 :%s: arg2:%s:\n",arg1,arg2);
+	ret=xenbus_write(arg1,arg2);
+	ut_printf(" WRITE  REQUEST  :ret:%d \n",ret);
+	return 1;
+}

@@ -144,14 +144,10 @@ unsigned long xen_time(char *arg1, char *arg2) {
 	ut_printf(" new xen  system time:%x :%x %d \n", src->system_time,
 			src->tsc_timestamp, ns);
 
-	xen_data[0]='\0';
-	ut_printf("arg1 :%s: \n",arg1);
-	//xenbus_read_integer("/local/domain/0/backend/qdisk/2/768/dev");
-	xenbus_read(arg1,xen_data,1023);
-	ut_printf(" REQUEST  : %s -> %s \n",arg1,xen_data);
-
+	init_netfront();
 	return g_sharedInfoArea->wc_sec;
 }
+
 static int init_xen_info(void) {
 	struct xen_add_to_physmap xatp;
 	unsigned long phy_addr;
@@ -160,16 +156,16 @@ static int init_xen_info(void) {
 	phy_addr = alloc_xen_mmio(PAGE_SIZE);
 	shared_info_frame = phy_addr >> PAGE_SHIFT;
 	xatp.domid = DOMID_SELF;
-	xatp.idx = 0;
+	xatp.idx =0;
 	xatp.space = XENMAPSPACE_shared_info;
 	xatp.gpfn = shared_info_frame;
 	if (HYPERVISOR_memory_op(XENMEM_add_to_physmap, &xatp))
 		BUG();
-#define HOST_XEN_SH_ADDR 0xe1000000
+
 	g_sharedInfoArea = HOST_XEN_SH_ADDR;
 	vm_mmap(0, g_sharedInfoArea, PAGE_SIZE, PROT_WRITE, MAP_FIXED, phy_addr);
 
-	ut_printf("shared info area sec  : %x\n", g_sharedInfoArea->wc_sec);
+	ut_printf("NEW shared info area sec  : %x phyaddr:%x \n", g_sharedInfoArea->wc_sec,phy_addr);
 	init_events();
 	if (1) {
 		struct xen_hvm_param evntchn, a;
@@ -227,6 +223,7 @@ static int init_hypercall_stubs(pci_dev_header_t *pci_hdr) {
 	cpuid(base + 1, &eax, &ebx, &ecx, &edx);
 
 	ut_printf("Xen version base:%x %d.%d.  \n", base, eax >> 16, eax & 0xffff);
+
 	/*
 	 * Find largest supported number of hypercall pages.
 	 * We'll create as many as possible up to this number.
@@ -272,6 +269,7 @@ int init_xen_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len) {
 	}
 
 	init_hypercall_stubs(pci_hdr);
+	init_gnttab();
 
 	return 1;
 }

@@ -34,6 +34,8 @@ extern kmem_cache_t *kmem_cache_create(const char *, long,long, unsigned long,vo
 void *kmem_cache_alloc (kmem_cache_t *cachep, int flags);
 void *mm_malloc (long size, int flags);
 void mm_free (const void *objp);
+#define alloc_page() mm_getFreePages(0, 0)
+#define memset ut_memset
 
 #define ut_free mm_free
 #define ut_malloc(x) mm_malloc(x,0)
@@ -98,6 +100,8 @@ char *ut_strcat(char *dest, const char *src);
 int ut_strlen(const char * s);
 unsigned long ut_atol(char *p);
 unsigned int ut_atoi(char *p);
+int ut_sprintf(char * buf, const char *fmt, ...);
+int ut_snprintf(char * buf, size_t size, const char *fmt, ...);
 
 /* architecture depended */
 void ar_registerInterrupt(uint8_t n, isr_t handler,char *name);
