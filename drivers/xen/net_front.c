@@ -28,7 +28,7 @@ struct netfront_dev {
 	char *nodename;
 	char *backend;
 	char *mac;
-
+    int init_completed;
 	// xenbus_event_queue events;
 
 	void (*netif_rx)(unsigned char* data, int len);
@@ -38,30 +38,16 @@ __attribute__((weak)) void netif_rx(unsigned char* data,int len);
 
 static struct netfront_dev g_netfront_dev;
 static void netfront_evtchn_handler(evtchn_port_t port, struct pt_regs *regs,
-		void *ign) {
+		void *data) {
 	int ret;
+    struct netfront_dev *dev = data;
 
 	ut_printf(" Xenbus netfront handler :%d \n", ret);
+	if (dev->init_completed == 1)
+      network_rx(dev);
 }
-/* Unfortunate confusion of terminology: the port is unbound as far
- as Xen is concerned, but we automatically bind a handler to it
- from inside mini-os. */
 
-int evtchn_alloc_unbound(uint32_t pal, void *handler, void *data,
-		evtchn_port_t *port) {
-	int rc;
-	evtchn_alloc_unbound_t op;
-	op.dom = DOMID_SELF;
-	op.remote_dom = pal;
 
-	rc = HYPERVISOR_event_channel_op(EVTCHNOP_alloc_unbound, &op);
-	if (rc) {
-		printk("ERROR: alloc_unbound failed with rc=%d", rc);
-		return rc;
-	}
-	*port = bind_evtchn((uint32_t) op.port, handler, 0);
-	return rc;
-}
 static inline void add_id_to_freelist(unsigned int id, unsigned short* freelist) {
 	freelist[id + 1] = freelist[0];
 	freelist[0] = id;
@@ -107,12 +93,14 @@ int init_netfront() {
 
 	if (init_done==1)
 	{
-		network_rx( &g_netfront_dev);
+		network_rx( &g_netfront_dev);/* TODO temporarary */
 		return 1;
 	}
 
 	init_done=1;
 	dev = &g_netfront_dev;
+
+	dev->init_completed=0;
 	dev->dom = 0; /* TODO  : later remove the hard coded backend id , read xenstore */
 	ut_strcpy(nodename,"device/vif/0");
 
@@ -143,7 +131,7 @@ int init_netfront() {
 
 	init_rx_buffers(dev);
 
-	 evtchn_alloc_unbound(remote_domid, netfront_evtchn_handler,0, &dev->evtchn);
+	 evtchn_alloc_unbound(remote_domid, netfront_evtchn_handler,dev, &dev->evtchn);
 
 	ut_snprintf(path,256,"%s/tx-ring-ref",nodename);
 	ut_snprintf(value,256,"%d",dev->tx_ring_ref);
@@ -162,9 +150,10 @@ int init_netfront() {
 
 	unmask_evtchn(dev->evtchn);
 	ut_snprintf(path,256,"%s/state",nodename);
-	xen_writecmd(path,"4");
+	xen_writecmd(path,"4");/* TODO : need to check before updating state */
 
 	dev->netif_rx = netif_rx;
+	dev->init_completed=1;
 	ut_printf(" Net front driver initialization completed \n");
 
 	return 0;
@@ -172,7 +161,9 @@ int init_netfront() {
 /************************************************************/
 __attribute__((weak)) void netif_rx(unsigned char* data,int len)
 {
-    ut_printf("%d bytes incoming at %x\n",len,data);
+	static int stat_recv=0;
+	stat_recv++;
+    ut_printf("%d bytes incoming at %x  stat_recv:%d\n",len,data,stat_recv);
 }
 static inline int xennet_rxidx(RING_IDX idx)
 {

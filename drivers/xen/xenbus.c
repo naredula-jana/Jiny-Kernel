@@ -270,8 +270,8 @@ int xenbus_write(const char *path, char *val) {
 	id = allocate_xenbus_id();
 	DEBUG(" BEFORE msg_repli id:%x Before  xb_write\n", id);
 	xb_write(XS_WRITE, id, XBT_NIL, req,2);
-	//sc_wait(&xb_waitq,100);
-	sc_sleep(100); /* TODO : need to replace with wait , currently wait is not working */
+	sc_wait(&xb_waitq,100);
+	//sc_sleep(100); /* TODO : need to replace with wait , currently wait is not working */
 	DEBUG("AFTER    wait xb_write \n");
 	process_responses();
 	if (req_info[id].resp_ready == 1 && req_info[id].res_msg.len > 0 )

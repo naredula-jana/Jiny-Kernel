@@ -127,6 +127,7 @@ int do_event(evtchn_port_t port, struct pt_regs *regs) {
 
 }
 
+
 evtchn_port_t bind_evtchn(evtchn_port_t port, evtchn_handler_t handler,
 		void *data) {
 	if (ev_actions[port].handler != default_handler)
@@ -141,7 +142,21 @@ evtchn_port_t bind_evtchn(evtchn_port_t port, evtchn_handler_t handler,
 
 	return port;
 }
+int evtchn_alloc_unbound(uint32_t pal, void *handler, void *data,
+		evtchn_port_t *port) {
+	int rc;
+	evtchn_alloc_unbound_t op;
+	op.dom = DOMID_SELF;
+	op.remote_dom = pal;
 
+	rc = HYPERVISOR_event_channel_op(EVTCHNOP_alloc_unbound, &op);
+	if (rc) {
+		printk("ERROR: alloc_unbound failed with rc=%d", rc);
+		return rc;
+	}
+	*port = bind_evtchn((uint32_t) op.port, handler, data);
+	return rc;
+}
 void unbind_evtchn(evtchn_port_t port) {
 	struct evtchn_close close;
 	int rc;

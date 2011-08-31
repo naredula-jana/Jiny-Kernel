@@ -10,7 +10,7 @@ C_SOURCES=$(wildcard *.c)
 ASM_SOURCES=$(wildcard *.s)
 GNUASM_SOURCES=$(wildcard *.S)
 SOURCES=$(C_SOURCES) $(ASM_SOURCES)
-XEN_INCLUDE=/data/xen/xen-4.1.1/dist/install/usr/include
+XEN_INCLUDE=/data/xen/xen-4.1.1/dist/install/usr/include -I/data/lwip/src/include
 
 C_OBJECTS=$(patsubst %.c,%.o,$(C_SOURCES))
 GNUASM_OBJECTS=$(patsubst  %.S,%.o,$(GNUASM_SOURCES))
