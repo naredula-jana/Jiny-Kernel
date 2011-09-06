@@ -119,14 +119,14 @@ unsigned long SYS_fs_open(char *filename,int mode,int flags)
 	struct file *filep;
 	int total;
 
-	SYS_DEBUG("open : filename :%s: mode:%x flags:%x \n",filename,mode,flags); 
+	SYSCALL_DEBUG("open : filename :%s: mode:%x flags:%x \n",filename,mode,flags); 
 	filep=fs_open(filename,mode,flags);
 	total=g_current_task->mm->fs.total;
 	if (filep!=0 && total <MAX_FDS)
 	{
 		g_current_task->mm->fs.filep[total]=filep;
 		g_current_task->mm->fs.total++;
-		SYS_DEBUG(" return value: %d \n",total);
+		SYSCALL_DEBUG(" return value: %d \n",total);
 		return total;
 	}else
 	{
@@ -144,7 +144,7 @@ unsigned long SYS_fs_fdatasync(unsigned long fd)
 {
 	struct file *file;
 
-	SYS_DEBUG("fdatasync fd:%d \n",fd);	
+	SYSCALL_DEBUG("fdatasync fd:%d \n",fd);	
 	file=fd_to_file(fd);
 	return fs_fdatasync(file);
 }
@@ -164,7 +164,7 @@ unsigned long SYS_fs_lseek(unsigned long fd,unsigned long offset, int whence)
 {
 	struct file *file;
 
-	SYS_DEBUG("lseek fd:%d offset:%x whence:%x \n",fd,offset,whence);	
+	SYSCALL_DEBUG("lseek fd:%d offset:%x whence:%x \n",fd,offset,whence);	
 	file=fd_to_file(fd);
         if (vfs_fs == 0) return 0;
 	if (file == 0) return 0;
@@ -177,7 +177,7 @@ ssize_t SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt)
         ssize_t ret,tret;
         struct file *file;
 
-        SYS_DEBUG("writev: fd:%d iovec:%x count:%d\n",fd,iov,iovcnt);
+        SYSCALL_DEBUG("writev: fd:%d iovec:%x count:%d\n",fd,iov,iovcnt);
 	file=fd_to_file(fd);
 	ret=0;
 	for (i=0; i<iovcnt; i++)
@@ -198,7 +198,7 @@ ssize_t SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt)
         ssize_t ret,tret;
         struct file *file;
 
-        SYS_DEBUG("readv: fd:%d iovec:%x count:%d\n",fd,iov,iovcnt);
+        SYSCALL_DEBUG("readv: fd:%d iovec:%x count:%d\n",fd,iov,iovcnt);
 	file=fd_to_file(fd);
 	        ret=0;
         for (i=0; i<iovcnt; i++)
@@ -216,7 +216,7 @@ ssize_t SYS_fs_write(unsigned long fd,unsigned char *buff ,unsigned long len)
 {
 	struct file *file;
 	
-	SYS_DEBUG("write fd:%d buff:%x len:%x \n",fd,buff,len);	
+	SYSCALL_DEBUG("write fd:%d buff:%x len:%x \n",fd,buff,len);	
 	if (fd==1)
 	{
 		ut_printf("%s",buff);/* TODO need to terminate the buf with \0  */
@@ -242,7 +242,7 @@ ssize_t SYS_fs_read(unsigned long fd ,unsigned char *buff ,unsigned long len)
 {
 	struct file *file;
 
-	SYS_DEBUG("read fd:%d buff:%x len:%x \n",fd,buff,len);	
+	SYSCALL_DEBUG("read fd:%d buff:%x len:%x \n",fd,buff,len);	
 	file=fd_to_file(fd);
 	if (vfs_fs == 0) return 0;
 	if (file == 0) return 0;
@@ -257,7 +257,7 @@ unsigned long SYS_fs_close(unsigned long fd)
 {
 	struct file *file;
 
-	SYS_DEBUG("close fd:%d \n",fd);	
+	SYSCALL_DEBUG("close fd:%d \n",fd);	
 	file=fd_to_file(fd);
 	if (file == 0) return 0;
 	return fs_close(file);
@@ -285,7 +285,7 @@ unsigned long SYS_fs_fadvise(unsigned long fd,unsigned long offset, unsigned lon
 	struct file *file;
 	struct inode *inode;
 
-	SYS_DEBUG("fadvise fd:%d offset:%d len:%d advise:%x \n",fd,offset,len,advise);	
+	SYSCALL_DEBUG("fadvise fd:%d offset:%d len:%d advise:%x \n",fd,offset,len,advise);	
 	file=fd_to_file(fd);
 	if (file == 0 || file->inode ==0) return 0;
 	inode=file->inode;

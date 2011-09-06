@@ -4,6 +4,7 @@
 #include "mm.h"
 #include "vfs.h"
 #include "task.h"
+#include "ipc.h"
 
 #define MAX_AUX_VEC_ENTRIES 25 
 
@@ -11,7 +12,13 @@ struct iovec {
      void  *iov_base;    /* Starting address */
      size_t iov_len;     /* Number of bytes to transfer */
 };
+
+/* Naming : SYS : system call
+ *
+ */
 /* scheduling */
+int sc_register_waitqueue(struct wait_struct *waitqueue);
+int sc_unregister_waitqueue(struct wait_struct *waitqueue);
 int sc_wakeUp(struct wait_struct *waitqueue,struct task_struct * p);
 int sc_wait(struct wait_struct *waitqueue,int ticks);
 int sc_sleep(int ticks); /* each tick is 100HZ or 10ms */

@@ -5,15 +5,12 @@
  *
  * Tim Deegan <Tim.Deegan@eu.citrix.net>, July 2007
  */
-
 #ifndef __LWIP_ARCH_SYS_ARCH_H__
 #define __LWIP_ARCH_SYS_ARCH_H__
 
-//#include <mini-os/os.h>
-//#include <mini-os/xmalloc.h>
-//#include "semaphore.h"
+#define __types_h
 
-typedef struct semaphore *sys_sem_t;
+#include "/data/code/Jiny-Kernel/include/ipc.h"
 #define SYS_SEM_NULL ((sys_sem_t) NULL)
 
 struct mbox {

@@ -137,14 +137,18 @@ unsigned long alloc_xen_mmio(unsigned long len) {
 
 static unsigned char xen_data[1024];
 unsigned long xen_time(char *arg1, char *arg2) {
+	static int init=0;
 	struct vcpu_time_info *src = &g_sharedInfoArea->vcpu_info[0].time;
 	unsigned long ns;
 	unsigned long e_pen, e_mask;
 	ns = src->system_time / 1000000000;
 	ut_printf(" new xen  system time:%x :%x %d \n", src->system_time,
 			src->tsc_timestamp, ns);
-
-	init_netfront();
+if (init==0)
+	start_networking();
+else
+	init_netfront(0,0,0,0);
+	init=1;
 	return g_sharedInfoArea->wc_sec;
 }
 

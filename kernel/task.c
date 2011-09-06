@@ -5,7 +5,7 @@
  * (at your option) any later version.
  *
  *   kernel/task.c
- *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
+ *   Author: Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
  *
  */
 #define DEBUG_ENABLE 1
@@ -227,7 +227,9 @@ int sc_wait(struct wait_struct *waitqueue,int ticks)
 	g_current_task->state=TASK_INTERRUPTIBLE;
 	add_to_waitqueue(waitqueue,g_current_task,ticks);
 	sc_schedule();
-	return 1;
+	if (g_current_task->sleep_ticks <= 0 ) return 0;
+	else
+	  return g_current_task->sleep_ticks;
 }
 int sc_sleep(int ticks) /* each tick is 100HZ or 10ms */
 {
@@ -333,7 +335,7 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 	unsigned long *tmp;
 	unsigned long t_argc,t_argv,stack_len,tmp_stack,tmp_aux;
 
-	SYS_DEBUG("execve file:%s argv:%x env:%x \n",file,argv,env);
+	SYSCALL_DEBUG("execve file:%s argv:%x env:%x \n",file,argv,env);
 	/* create the argc and env in a temporray stack before we destory the old stack */
 	t_argc=0;
 	t_argv=0;
@@ -442,7 +444,7 @@ unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int clone_flags,
 	struct mm_struct *mm;
 	unsigned long flags;
 
-	SYS_DEBUG("clone fn:%x child_stack:%x flags:%x args:%x \n",fn,child_stack,clone_flags,args);
+	SYSCALL_DEBUG("clone fn:%x child_stack:%x flags:%x args:%x \n",fn,child_stack,clone_flags,args);
 	/* Initialize the stack  */
 	p = alloc_task_struct();
 	if ( p == 0) BUG();
@@ -501,13 +503,13 @@ unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int clone_flags,
 }
 unsigned long  SYS_sc_fork()
 {
-	SYS_DEBUG("fork \n");
+	SYSCALL_DEBUG("fork \n");
 	return SYS_sc_clone(0,0,CLONE_VM,0);
 }
 int SYS_sc_exit(int status)
 {
 	unsigned long flags;
-	SYS_DEBUG("exit : status:%d \n",status);
+	SYSCALL_DEBUG("exit : status:%d \n",status);
 
 	spin_lock_irqsave(&sched_lock, flags);
 	list_del(&g_current_task->task_link);
@@ -523,7 +525,7 @@ int SYS_sc_kill(unsigned long pid,unsigned long signal)
 	struct list_head *pos;
 	struct task_struct *task;
 
-	SYS_DEBUG("kill pid:%d signal:%d \n",pid,signal);
+	SYSCALL_DEBUG("kill pid:%d signal:%d \n",pid,signal);
 	spin_lock_irqsave(&sched_lock, flags);
 	list_for_each(pos, &task_queue.head) {
 		task=list_entry(pos, struct task_struct, task_link);
@@ -728,9 +730,40 @@ void do_softirq()
 		sc_schedule();
 	}
 }
-extern struct wait_struct g_hfs_waitqueue;
+
+
+#define MAX_WAIT_QUEUES 50
+static struct wait_struct *wait_queues[MAX_WAIT_QUEUES];
+int sc_register_waitqueue(struct wait_struct *waitqueue)
+{
+	int i;
+
+	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
+		if (wait_queues[i] == 0) {
+			waitqueue->queue=NULL;
+			waitqueue->lock=SPIN_LOCK_UNLOCKED;
+			wait_queues[i]=waitqueue;
+			return 0;
+		}
+	}
+	return -1;
+}
+int sc_unregister_waitqueue(struct wait_struct *waitqueue)
+{
+	int i;
+
+	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
+		if (wait_queues[i] == waitqueue) {
+			wait_queues[i]=0;
+			return 0;
+		}
+	}
+	return -1;
+}
 static void timer_callback(registers_t regs)
 {
+	int i;
+
 	g_jiffies++;
 	g_current_task->counter--;
 	if (g_timerqueue.queue != NULL)
@@ -747,20 +780,21 @@ static void timer_callback(registers_t regs)
 				add_to_runqueue(p);
 		}
 	}
-	if (g_hfs_waitqueue.queue != NULL)
-	{
-		g_hfs_waitqueue.queue->sleep_ticks--;
-		if (g_hfs_waitqueue.queue->sleep_ticks <= 0)
-		{
-			struct task_struct *p;
+	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
+		if (wait_queues[i] == 0) continue;
+		if (wait_queues[i]->queue != NULL) {
+			wait_queues[i]->queue->sleep_ticks--;
+			if (wait_queues[i]->queue->sleep_ticks <= 0) {
+				struct task_struct *p;
 
-			p=g_hfs_waitqueue.queue;
-			del_from_waitqueue(&g_hfs_waitqueue,p);
-			p->state = TASK_RUNNING;
-			if (p->run_link.next==0)
-				add_to_runqueue(p);
-			else
-				ut_printf(" BUG identified \n");
+				p = wait_queues[i]->queue;
+				del_from_waitqueue(wait_queues[i], p);
+				p->state = TASK_RUNNING;
+				if (p->run_link.next == 0)
+					add_to_runqueue(p);
+				else
+					ut_printf(" BUG identified \n");
+			}
 		}
 	}
 	do_softirq();

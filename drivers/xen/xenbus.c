@@ -5,6 +5,8 @@
 static struct xenstore_domain_interface *xenstore_buf;
 typedef unsigned long xenbus_transaction_t;
 static spinlock_t req_lock = SPIN_LOCK_UNLOCKED;
+static spinlock_t xenstore_lock = SPIN_LOCK_UNLOCKED;
+
 #define NR_REQS 32
 static int nr_live_reqs;
 
@@ -59,8 +61,7 @@ void init_xenbus(unsigned long xenstore_phyaddr, uint32_t evtchannel) {
 	int err;
 	DEBUG("Initialising xenbus\n");
 
-	xb_waitq.queue = NULL;
-	xb_waitq.lock = SPIN_LOCK_UNLOCKED;
+	sc_register_waitqueue(&xb_waitq);
 #define HOST_XEN_STORE_ADDR 0xe3000000
 	xenstore_buf = HOST_XEN_STORE_ADDR;
 	store_evtchannel = evtchannel;
@@ -69,6 +70,7 @@ void init_xenbus(unsigned long xenstore_phyaddr, uint32_t evtchannel) {
 	DEBUG("buf at %p.\n", xenstore_buf);
 	err = bind_evtchn(evtchannel, xenbus_evtchn_handler, NULL);
 	unmask_evtchn(evtchannel);
+
 	DEBUG("xenbus on irq %d\n", err);
 }
 static void process_responses() {
@@ -77,6 +79,7 @@ static void process_responses() {
 	XENSTORE_RING_IDX prod,cons;
 	int processed_len=0;
 
+	spin_lock(&xenstore_lock);
 	prod=MASK_XENSTORE_IDX(xenstore_buf->rsp_prod);
 	cons=MASK_XENSTORE_IDX(xenstore_buf->rsp_cons);
 
@@ -96,7 +99,7 @@ static void process_responses() {
 		if (req_id > NR_REQS || req_id < 0)
 		{
 			ut_printf("XEN ERROR in process responser sp:%x:%x:%x:%x \n",resp->type,resp->tx_id,resp->req_id,resp->len);
-			return ;
+			goto last ;
 		}
 		ut_printf("XEN  sp:%x:%x:%x:%x id:%d in_use:%d: \n",resp->type,resp->tx_id,resp->req_id,resp->len,req_id,req_info[req_id].in_use);
 		if (req_info[req_id].in_use == 1)
@@ -113,6 +116,11 @@ static void process_responses() {
 		processed_len=processed_len+resp->len;
 	}
 	xenstore_buf->rsp_cons=cons;
+
+
+last:
+	spin_unlock(&xenstore_lock);
+	return;
 }
 
 static void xb_write(int type, int req_id, xenbus_transaction_t trans_id,
@@ -234,16 +242,23 @@ int xenbus_read(const char *path, char *reply, int reply_len) {
 	struct write_req req[] = {{ path, ut_strlen(path) + 1 }};
 	struct xsd_sockmsg *rep;
 	char *res, *msg;
-	int id;
+	int id,iter;
 	int ret=0;
 
 	id = allocate_xenbus_id();
 	DEBUG(" BEFORE msg_repli id:%x Before  xb_write\n", id);
 	xb_write(XS_READ, id, XBT_NIL, req,1);
-	//sc_wait(&xb_waitq,100);
-	sc_sleep(100); /* TODO : need to replace with wait , currently wait is not working */
-	DEBUG("AFTER AFTER  wait xb_write \n");
-	process_responses();
+
+	iter=0;
+	while(iter<10 && req_info[id].resp_ready!=1)
+	{
+		process_responses();
+		sc_wait(&xb_waitq,100);
+		iter++;
+	}
+	DEBUG("AFTER NEW AFTER  wait xenbus read \n");
+
+
 	if (req_info[id].resp_ready == 1 && req_info[id].res_msg.len > 0 )
 	{
 		ret=req_info[id].res_msg.len;
@@ -263,45 +278,51 @@ int xenbus_write(const char *path, char *val) {
 	struct write_req req[] = {{ path, ut_strlen(path) + 1 },{ val, ut_strlen(val) }};
 	struct xsd_sockmsg *rep;
 	char reply[MAX_REPLY_LEN];
-	int id;
+	int id,iter;
 	int ret=0;
     int reply_len=MAX_REPLY_LEN;
 
 	id = allocate_xenbus_id();
 	DEBUG(" BEFORE msg_repli id:%x Before  xb_write\n", id);
 	xb_write(XS_WRITE, id, XBT_NIL, req,2);
-	sc_wait(&xb_waitq,100);
-	//sc_sleep(100); /* TODO : need to replace with wait , currently wait is not working */
-	DEBUG("AFTER    wait xb_write \n");
-	process_responses();
+	iter=0;
+	while(iter<10 && req_info[id].resp_ready!=1)
+	{
+		process_responses();
+		sc_wait(&xb_waitq,100);
+		iter++;
+	}
+	DEBUG("AFTER    NEW WAIT  xb_write \n");
+
 	if (req_info[id].resp_ready == 1 && req_info[id].res_msg.len > 0 )
 	{
 		ret=req_info[id].res_msg.len;
 		if (ret < reply_len )
 		     ut_memcpy(reply,req_info[id].data,req_info[id].res_msg.len);
 		reply[ret]='\0';
-		ut_printf(" reply data :%s: \n",reply);
+		DEBUG(" reply data :%s: \n",reply);
 	}else
 	{
-	   ut_printf(" NO DATA \n");
+		DEBUG(" NO DATA \n");
 	}
 	release_xenbus_id(id);
 	return ret;
 }
 
-static unsigned char xen_readdata[1024];
-unsigned long xen_readcmd(char *arg1, char *arg2) {
-	xen_readdata[0]='\0';
-	ut_printf("arg1 :%s: \n",arg1);
-	xenbus_read(arg1,xen_readdata,1023);
-	ut_printf(" READ REQUEST  : %s -> %s \n",arg1,xen_readdata);
+
+unsigned long xen_readcmd(char *arg1, char *data, int max_len) {
+	if (data == 0 ) return 0;
+	data[0]='\0';
+	DEBUG("arg1 :%s: \n",arg1);
+	xenbus_read(arg1,data,max_len);
+	DEBUG(" READ REQUEST  : %s -> %s \n",arg1,data);
 	return 1;
 }
 
 unsigned long xen_writecmd(char *arg1, char *arg2) {
 	int ret;
-	ut_printf("arg1 :%s: arg2:%s:\n",arg1,arg2);
+	DEBUG("arg1 :%s: arg2:%s:\n",arg1,arg2);
 	ret=xenbus_write(arg1,arg2);
-	ut_printf(" WRITE  REQUEST  :ret:%d \n",ret);
+	DEBUG(" WRITE  REQUEST  :ret:%d \n",ret);
 	return 1;
 }

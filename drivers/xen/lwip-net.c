@@ -40,7 +40,9 @@
  * Author: Adam Dunkels <adam@sics.se>
  *
  */
-#if 0
+#if 1
+#define __types_h
+
 #include "lwip/opt.h"
 #include "lwip/def.h"
 #include "lwip/mem.h"
@@ -60,8 +62,15 @@
 
 #include "netif/etharp.h"
 
-#include <netfront.h>
+#include <lwip/netif.h>
 
+
+
+//#include "interface.h"
+#include "common.h"
+//#include <netfront.h>
+
+#define down(x) sys_arch_sem_wait(x,100)
 /* Define those to better describe your network interface. */
 #define IFNAME0 'e'
 #define IFNAME1 'n'
@@ -179,7 +188,7 @@ netfront_input(struct netif *netif, unsigned char* data, int len)
     /* Read enough bytes to fill this pbuf in the chain. The
      * available data in the pbuf is given by the q->len
      * variable. */
-    memcpy(q->payload, data, len < q->len ? len : q->len);
+    ut_memcpy(q->payload, data, len < q->len ? len : q->len);
     data += q->len;
     len -= q->len;
   }
@@ -224,21 +233,15 @@ netfront_input(struct netif *netif, unsigned char* data, int len)
   }
 }
 
-
-/* 
- * netif_rx(): overrides the default netif_rx behaviour in the netfront driver.
- * 
- * Pull received packets into a pbuf queue for the low_level_input() 
- * function to pass up to lwIP.
- */
-
-void netif_rx(unsigned char* data, int len)
+void netif_rx(unsigned char* data,int len)
 {
-  if (the_interface != NULL) {
-    netfront_input(the_interface, data, len);
-    wake_up(&netfront_queue);
-  }
-  /* By returning, we ack the packet and relinquish the RX ring slot */
+	static int stat_recv=0;
+	stat_recv++;
+	  if (the_interface != NULL) {
+		  ut_printf("Sending packet to tcpip layer :%d\n",len);
+	    netfront_input(the_interface, data, len);
+	  }
+   ut_printf("%d bytes incoming at %x  stat_recv:%d\n",len,data,stat_recv);
 }
 
 /*
@@ -324,12 +327,14 @@ netif_netfront_init(struct netif *netif)
 /*
  * Thread run by netfront: bring up the IP address and fire lwIP timers.
  */
-static __DECLARE_SEMAPHORE_GENERIC(tcpip_is_up, 0);
+//static __DECLARE_SEMAPHORE_GENERIC(tcpip_is_up, 0); TODO : need to check correctness by initialising in start_networking
+static struct semaphore tcpip_is_up;
 static void tcpip_bringup_finished(void *p)
 {
-  tprintk("TCP/IP bringup ends.\n");
-  up(&tcpip_is_up);
+  ut_printf("TCP/IP bringup ends.\n");
+  sys_sem_signal(&tcpip_is_up);
 }
+
 
 /* 
  * Utility function to bring the whole lot up.  Call this from app_main() 
@@ -345,9 +350,10 @@ void start_networking(void)
   struct ip_addr gw = { 0 };
   char *ip = NULL;
 
-  tprintk("Waiting for network.\n");
-
-  dev = init_netfront(NULL, NULL, rawmac, &ip);
+  ut_printf("Waiting for network.\n");
+  sys_sem_init(&tcpip_is_up,0);
+  dev=init_netfront(NULL, NULL, rawmac, &ip);
+  //dev= &g_netfront_dev;
   
   if (ip) {
     ipaddr.addr = inet_addr(ip);
@@ -358,14 +364,14 @@ void start_networking(void)
     else if (IN_CLASSC(ntohl(ipaddr.addr)))
       netmask.addr = htonl(IN_CLASSC_NET);
     else
-      tprintk("Strange IP %s, leaving netmask to 0.\n", ip);
+      ut_printf("Strange IP %s, leaving netmask to 0.\n", ip);
   }
-  tprintk("IP %x netmask %x gateway %x.\n",
+  ut_printf("IP %x netmask %x gateway %x.\n",
           ntohl(ipaddr.addr), ntohl(netmask.addr), ntohl(gw.addr));
   
-  tprintk("TCP/IP bringup begins.\n");
+  ut_printf("TCP/IP bringup begins.\n");
   
-  netif = xmalloc(struct netif);
+  netif = mm_malloc(sizeof(struct netif),0);
   tcpip_init(tcpip_bringup_finished, netif);
     
   netif_add(netif, &ipaddr, &netmask, &gw, rawmac, 
@@ -375,7 +381,13 @@ void start_networking(void)
 
   down(&tcpip_is_up);
 
-  tprintk("Network is ready.\n");
+  if (1) {
+       struct ip_addr ipaddr = { htonl(0xc0a801c9) };
+       struct ip_addr netmask = { htonl(0xff000000) };
+       struct ip_addr gw = { htonl(0xc0a801c8) };
+       networking_set_addr(&ipaddr, &netmask, &gw);
+   }
+  ut_printf("Latest Network is ready with IP.\n");
 }
 
 /* Shut down the network */

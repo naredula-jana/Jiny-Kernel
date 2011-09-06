@@ -127,7 +127,7 @@ long SYS_vm_mmap(unsigned long fd, unsigned long addr, unsigned long len,
 {
 	struct file *file;
 
-	SYS_DEBUG("mmap fs:%d addr:%x len:%x prot:%x flags:%x pgpff:%x \n",fd,addr,len,prot,flags,pgoff);
+	SYSCALL_DEBUG("mmap fs:%d addr:%x len:%x prot:%x flags:%x pgpff:%x \n",fd,addr,len,prot,flags,pgoff);
 	file=fd_to_file(fd);
 	if (file ==0 ) return 0;
 	return vm_mmap(file,  addr, len, prot, flags, pgoff) ;
@@ -184,13 +184,13 @@ unsigned long vm_brk(unsigned long addr, unsigned long len)
 }
 int SYS_vm_mprotect(const void *addr, int len, int prot)
 { /* TODO */
-	SYS_DEBUG("protect TODO :%x \n",addr);
+	SYSCALL_DEBUG("protect TODO :%x \n",addr);
 }
 unsigned long SYS_vm_brk(unsigned long addr)
 {
 	struct vm_area_struct *vma;
 
-	SYS_DEBUG("brk:%x \n",addr);
+	SYSCALL_DEBUG("brk:%x \n",addr);
 	if (addr ==0) return g_current_task->mm->brk_addr+g_current_task->mm->brk_len;
 	if (g_current_task->mm->brk_addr > (addr-g_current_task->mm->brk_len)) return 0;
 	vma=vm_findVma(g_current_task->mm,g_current_task->mm->brk_addr,g_current_task->mm->brk_len-1);
@@ -202,7 +202,7 @@ unsigned long SYS_vm_brk(unsigned long addr)
 
 int SYS_vm_munmap( unsigned long addr, unsigned long len)
 {
-	SYS_DEBUG("munmap:%x \n",addr);
+	SYSCALL_DEBUG("munmap:%x \n",addr);
 	return vm_munmap(g_current_task->mm, addr,len);
 }
 int vm_munmap(struct mm_struct *mm, unsigned long addr, unsigned long len)

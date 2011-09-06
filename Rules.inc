@@ -1,3 +1,4 @@
+SOURCE_ROOT=/data/code/Jiny-Kernel/
 INCLUDE=. -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURCE_ROOT)/arch/x86_64/
 CC=gcc -g
 
@@ -10,26 +11,18 @@ C_SOURCES=$(wildcard *.c)
 ASM_SOURCES=$(wildcard *.s)
 GNUASM_SOURCES=$(wildcard *.S)
 SOURCES=$(C_SOURCES) $(ASM_SOURCES)
-XEN_INCLUDE=/data/xen/xen-4.1.1/dist/install/usr/include -I/data/lwip/src/include
+XEN_INCLUDE=/data/xen/xen-4.1.1/dist/install/usr/include -I/data/lwip/src/include -I/data/lwip/src/include/ipv4 -I$(SOURCE_ROOT)/drivers/xen/ -I$(SOURCE_ROOT)/drivers/xen/arch/
 
 C_OBJECTS=$(patsubst %.c,%.o,$(C_SOURCES))
 GNUASM_OBJECTS=$(patsubst  %.S,%.o,$(GNUASM_SOURCES))
 ASM_OBJECTS=$(patsubst %.s,%.o,$(ASM_SOURCES))
 OBJECTS=$(C_OBJECTS) $(ASM_OBJECTS) $(GNUASM_OBJECTS)
 
-ifeq "$(ARCH)" "32"
-ARCH_DIR=i386
-CFLAGS= -m32 -nostdlib -nostdinc -nodefaultlibs    -I$(INCLUDE)
-CFLAGS_ASM= -m32 -nostdlib -nostdinc -nodefaultlibs    -I$(INCLUDE)
-LINK_FLAG= -m32
-INCLUDE=. -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURCE_ROOT)/include/$(ARCH_DIR)/
-else
 ARCH_DIR=x86_64
 CFLAGS= -m64 -mno-red-zone  -nostdlib  -nodefaultlibs -Wimplicit -Wall   -I$(INCLUDE) -I$(XEN_INCLUDE)  -DARCH_X86_64
 CFLAGS_ASM= -nostdlib -nostdinc -nodefaultlibs -D__ASM__   -I$(INCLUDE) -DARCH_X86_64
 LINK_FLAG= 
-INCLUDE=. -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURCE_ROOT)/include/$(ARCH_DIR)/ -I $(SOURCE_ROOT)/arch/$(ARCH_DIR) 
-endif
+INCLUDE=. -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURCE_ROOT)/include/$(ARCH_DIR)/ -I $(SOURCE_ROOT)/arch/$(ARCH_DIR) -I $(XEN_INCLUDE)
 
 %.o: %.c
 	@echo "$<"

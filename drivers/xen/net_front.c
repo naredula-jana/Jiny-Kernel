@@ -9,7 +9,7 @@ struct net_buffer {
 
 #define NET_TX_RING_SIZE __CONST_RING_SIZE(netif_tx, PAGE_SIZE)
 #define NET_RX_RING_SIZE __CONST_RING_SIZE(netif_rx, PAGE_SIZE)
-
+#define MAX_MAC_ADDR 100
 struct netfront_dev {
 	domid_t dom;
 
@@ -27,9 +27,9 @@ struct netfront_dev {
 
 	char *nodename;
 	char *backend;
-	char *mac;
+	char mac[MAX_MAC_ADDR+1];
     int init_completed;
-	// xenbus_event_queue events;
+	// xenbus_event_queue events; TODO
 
 	void (*netif_rx)(unsigned char* data, int len);
 };
@@ -83,7 +83,7 @@ void init_rx_buffers(struct netfront_dev *dev) {
 static char nodename[256];
 static char path[256],value[256];
 void network_rx(struct netfront_dev *dev);
-int init_netfront() {
+void * init_netfront(char *_nodename, void (*thenetif_rx)(unsigned char* data, int len), unsigned char *rawmac, char **ip) {
 	static int init_done=0;
 	int i;
 	struct netif_tx_sring *txs;
@@ -148,26 +148,93 @@ int init_netfront() {
 	ut_snprintf(path,256,"%s/request-rx-copy",nodename);
 	xen_writecmd(path,"1");
 
+	ut_snprintf(path,256,"%s/mac",nodename);
+	xen_readcmd(path,dev->mac,MAX_MAC_ADDR);
+	ut_printf("mac Address :%s: \n",dev->mac);
+    if (rawmac)
+        sscanf(dev->mac,"%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+            &rawmac[0],
+            &rawmac[1],
+            &rawmac[2],
+            &rawmac[3],
+            &rawmac[4],
+            &rawmac[5]);
+
+
 	unmask_evtchn(dev->evtchn);
 	ut_snprintf(path,256,"%s/state",nodename);
 	xen_writecmd(path,"4");/* TODO : need to check before updating state */
 
 	dev->netif_rx = netif_rx;
 	dev->init_completed=1;
-	ut_printf(" Net front driver initialization completed \n");
+	ut_printf(" NET FRONT driver initialization completed  :%s\n",dev->mac);
 
-	return 0;
+	return dev;
 }
+
 /************************************************************/
-__attribute__((weak)) void netif_rx(unsigned char* data,int len)
-{
-	static int stat_recv=0;
-	stat_recv++;
-    ut_printf("%d bytes incoming at %x  stat_recv:%d\n",len,data,stat_recv);
-}
+
 static inline int xennet_rxidx(RING_IDX idx)
 {
     return idx & (NET_RX_RING_SIZE - 1);
+}
+static inline unsigned short get_id_from_freelist(unsigned short* freelist)
+{
+    unsigned int id = freelist[0];
+    freelist[0] = freelist[id + 1];
+    return id;
+}
+void netfront_xmit(struct netfront_dev *dev, unsigned char* data,int len) /* TODO */
+{
+   //ut_printf(" netfront_xmit :TODO ... \n");
+   int flags;
+   struct netif_tx_request *tx;
+   RING_IDX i;
+   int notify;
+   unsigned short id;
+   struct net_buffer* buf;
+   void* page;
+
+   if (len > PAGE_SIZE) BUG();
+
+   // TODO down(&dev->tx_sem);
+
+   //local_irq_save(flags);
+    id = get_id_from_freelist(dev->tx_freelist);
+   //local_irq_restore(flags);
+
+   buf = &dev->tx_buffers[id];
+   page = buf->page;
+   if (!page)
+	page = buf->page = (char*) alloc_page();
+
+   i = dev->tx.req_prod_pvt;
+   tx = RING_GET_REQUEST(&dev->tx, i);
+
+   ut_memcpy(page,data,len);
+
+   buf->gref =
+       tx->gref = gnttab_grant_access(dev->dom,__pa(page)>>PAGE_SHIFT,1);
+
+   tx->offset=0;
+   tx->size = len;
+   tx->flags=0;
+   tx->id = id;
+   dev->tx.req_prod_pvt = i + 1;
+
+   wmb();
+
+   RING_PUSH_REQUESTS_AND_CHECK_NOTIFY(&dev->tx, notify);
+
+   if(notify) notify_remote_via_evtchn(dev->evtchn);
+
+   //local_irq_save(flags);
+   //network_tx_buf_gc(dev); TODO
+   //local_irq_restore(flags);
+}
+void shutdown_netfront(struct netfront_dev *dev)/* TODO */
+{
+	   ut_printf(" shutdown_netfront :TODO ... \n");
 }
 void network_rx(struct netfront_dev *dev)
 {

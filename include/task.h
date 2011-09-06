@@ -10,10 +10,7 @@
 #define TASK_STOPPED            4
 #define TASK_DEAD               64
 
-struct wait_struct {
-	struct task_struct *queue;	
-	spinlock_t lock;
-};
+
 struct user_thread {
 	unsigned long ip,sp;
 	unsigned long argc,argv;

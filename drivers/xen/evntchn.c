@@ -16,12 +16,8 @@ typedef struct _ev_action_t {
 static ev_action_t ev_actions[NR_EVS];
 static unsigned long bound_ports[NR_EVS / (8 * sizeof(unsigned long))];
 
-//void default_handler(evtchn_port_t port, struct pt_regs *regs, void *data);
 
 int in_callback;
-
-
-
 
 
 void do_hypervisor_callback(struct pt_regs *regs) {

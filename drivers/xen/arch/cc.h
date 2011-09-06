@@ -29,9 +29,28 @@ typedef uint32_t u32_t;
 typedef int32_t  s32_t;
 typedef uint64_t u64_t;
 typedef int64_t  s64_t;
-//typedef uintptr_t mem_ptr_t;
+typedef unsigned long       uintptr_t;
+typedef uintptr_t mem_ptr_t;
 
 //typedef uint16_t u_short;
+#define memset ut_memset
+#define memcpy ut_memcpy
+typedef long suseconds_t;
+
+struct timespec {
+	 long tv_sec;
+    long tv_nsec;
+};
+
+struct timezone {
+};
+
+struct timeval {
+	long tv_sec;
+ suseconds_t tv_usec;
+};
+
+
 
 /*   Compiler hints for packing lwip's structures - */
 #define PACK_STRUCT_FIELD(_x)  _x

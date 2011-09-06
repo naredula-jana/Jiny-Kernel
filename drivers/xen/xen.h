@@ -248,8 +248,7 @@ static inline unsigned long __synch_cmpxchg(volatile void *ptr,
 
 
 /****************************************/
-//#define ___DEFINE_XEN_GUEST_HANDLE(name, type) \
-    typedef struct { type *p; } __guest_handle_ ## name
+
 #define set_xen_guest_handle_raw(hnd, val)  do { (hnd).p = val; } while (0)
 
 #define set_xen_guest_handle(hnd, val) set_xen_guest_handle_raw(hnd, val)

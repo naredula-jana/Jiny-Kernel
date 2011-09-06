@@ -341,8 +341,7 @@ static void init_filecache_header(fileCache_t *filecache)
 }
 int init_hostFs()
 {
-	g_hfs_waitqueue.queue=NULL;
-	g_hfs_waitqueue.lock=SPIN_LOCK_UNLOCKED;
+	sc_register_waitqueue(&g_hfs_waitqueue);
 
 	if (g_hostShmLen ==0)
 	{

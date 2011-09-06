@@ -4,9 +4,11 @@
 #include "atomic.h"
 #include "list.h"
 #include "isr.h"
-#include "types.h"
+//#include "types.h"
 #include "multiboot.h"
+#ifndef NULL
 #define NULL ((void *) 0)
+#endif
 #define POW2(n) (1 << (n))
 
 #define __sti() __asm__ __volatile__ ("sti": : :"memory")
@@ -29,7 +31,7 @@
 #define restore_flags(x) __restore_flags(x)
 extern int g_syscall_debug;
 extern unsigned long g_debug_level;
-#define SYS_DEBUG(x...) do { \
+#define SYSCALL_DEBUG(x...) do { \
 	if (g_syscall_debug==1 && g_serial_output==1)	{ut_printf("SYSCALL "); ut_printf(x);} \
 } while (0) 
 
@@ -73,6 +75,18 @@ typedef struct {
 #define BUG() do { unsigned long stack_var; ut_printf(" Kernel BUG  file : %s : line :%d \n",__FILE__,__LINE__);  \
 	cli(); ut_showTrace(&stack_var);while(1) ; } while(0)
 #define BUG_ON(condition) do { if (unlikely((condition)!=0)) BUG(); } while(0)
+
+#define ASSERT(x)                                              \
+do {                                                           \
+        if (!(x)) {                                                \
+                printk("ASSERTION FAILED: %s at %s:%d.\n",             \
+                           # x ,                                           \
+                           __FILE__,                                       \
+                           __LINE__);                                      \
+        BUG();                                                 \
+        }                                                          \
+} while(0)
+
 
 // Enables registration of callbacks for interrupts or IRQs.
 // For IRQs, to ease confusion, use the #defines above as the

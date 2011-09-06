@@ -4,94 +4,81 @@
  * Arch-specific semaphores and mailboxes for lwIP running on mini-os 
  *
  * Tim Deegan <Tim.Deegan@eu.citrix.net>, July 2007
+ *
  */
-#if 0
-#include <lwip/sys.h>
+
+
 #include <stdarg.h>
+#include "interface.h"
+#include "arch/sys_arch.h"
+
+/*************************** TODO below copied from lwip **************/
+typedef void (* sys_timeout_handler)(void *arg);
+
+struct sys_timeo {
+  struct sys_timeo *next;
+  unsigned int time;
+  sys_timeout_handler h;
+  void *arg;
+};
+
+struct sys_timeouts {
+  struct sys_timeo *next;
+};
+
+
+/******************************* below copied from sys *****************/
+#define SYS_ARCH_TIMEOUT 0xffffffffUL
+#define SYS_MBOX_EMPTY SYS_ARCH_TIMEOUT
+/* Definitions for error constants. */
+
+#define ERR_OK          0    /* No error, everything OK. */
+#define ERR_MEM        -1    /* Out of memory error.     */
+#define ERR_BUF        -2    /* Buffer error.            */
+#define ERR_TIMEOUT    -3    /* Timeout.                 */
+#define ERR_RTE        -4    /* Routing problem.         */
+#define ERR_INPROGRESS -5    /* Operation in progress    */
+#define ERR_VAL        -6    /* Illegal value.           */
+#define ERR_WOULDBLOCK -7    /* Operation would block.   */
+#define ERR_USE        -8    /* Address in use.          */
+#define ERR_ISCONN     -9    /* Already connected.       */
+
+#define ERR_IS_FATAL(e) ((e) < ERR_ISCONN)
+
+#define ERR_ABRT       -10   /* Connection aborted.      */
+#define ERR_RST        -11   /* Connection reset.        */
+#define ERR_CLSD       -12   /* Connection closed.       */
+#define ERR_CONN       -13   /* Not connected.           */
+
+#define ERR_ARG        -14   /* Illegal argument.        */
+
+#define ERR_IF         -15   /* Low-level netif error    */
+/************************************************************/
+
+sys_prot_t sys_arch_protect(void);
+void sys_arch_unprotect(sys_prot_t pval);
+#define up sys_sem_signal
 
 /* Is called to initialize the sys_arch layer */
 void sys_init(void)
 {
 }
 
-/* Creates and returns a new semaphore. The "count" argument specifies
- * the initial state of the semaphore. */
-sys_sem_t sys_sem_new(uint8_t count)
-{
-    struct semaphore *sem = xmalloc(struct semaphore);
-    sem->count = count;
-    init_waitqueue_head(&sem->wait);
-    return sem;
-}
 
-/* Deallocates a semaphore. */
-void sys_sem_free(sys_sem_t sem)
-{
-    xfree(sem);
-}
-
-/* Signals a semaphore. */
-void sys_sem_signal(sys_sem_t sem)
-{
-    up(sem);
-}
-
-/* Blocks the thread while waiting for the semaphore to be
- * signaled. If the "timeout" argument is non-zero, the thread should
- * only be blocked for the specified time (measured in
- * milliseconds).
- * 
- * If the timeout argument is non-zero, the return value is the number of
- * milliseconds spent waiting for the semaphore to be signaled. If the
- * semaphore wasn't signaled within the specified time, the return value is
- * SYS_ARCH_TIMEOUT. If the thread didn't have to wait for the semaphore
- * (i.e., it was already signaled), the function may return zero. */
-uint32_t sys_arch_sem_wait(sys_sem_t sem, uint32_t timeout)
-{
-    /* Slightly more complicated than the normal minios semaphore:
-     * need to wake on timeout *or* signal */
-    sys_prot_t prot;
-    int64_t then = NOW();
-    int64_t deadline;
-
-    if (timeout == 0)
-	deadline = 0;
-    else
-	deadline = then + MILLISECS(timeout);
-
-    while(1) {
-        wait_event_deadline(sem->wait, (sem->count > 0), deadline);
-
-        prot = sys_arch_protect();
-	/* Atomically check that we can proceed */
-	if (sem->count > 0 || (deadline && NOW() >= deadline))
-	    break;
-        sys_arch_unprotect(prot);
-    }
-
-    if (sem->count > 0) {
-        sem->count--;
-        sys_arch_unprotect(prot);
-        return NSEC_TO_MSEC(NOW() - then); 
-    }
-    
-    sys_arch_unprotect(prot);
-    return SYS_ARCH_TIMEOUT;
-}
 
 /* Creates an empty mailbox. */
 sys_mbox_t sys_mbox_new(int size)
 {
-    struct mbox *mbox = xmalloc(struct mbox);
+    struct mbox *mbox = mm_malloc(sizeof(struct mbox),0);
     if (!size)
         size = 32;
     else if (size == 1)
         size = 2;
     mbox->count = size;
-    mbox->messages = xmalloc_array(void*, size);
-    init_SEMAPHORE(&mbox->read_sem, 0);
+    mbox->messages = mm_malloc(sizeof(void*)*size,0);
+    sys_sem_init(&mbox->read_sem, 0);
     mbox->reader = 0;
-    init_SEMAPHORE(&mbox->write_sem, size);
+    sys_sem_init(&mbox->write_sem, size);
     mbox->writer = 0;
     return mbox;
 }
@@ -102,8 +89,8 @@ sys_mbox_t sys_mbox_new(int size)
 void sys_mbox_free(sys_mbox_t mbox)
 {
     ASSERT(mbox->reader == mbox->writer);
-    xfree(mbox->messages);
-    xfree(mbox);
+    mm_free(mbox->messages);
+    mm_free(mbox);
 }
 
 /* Posts the "msg" to the mailbox, internal version that actually does the
@@ -118,24 +105,30 @@ static void do_mbox_post(sys_mbox_t mbox, void *msg)
     mbox->writer = (mbox->writer + 1) % mbox->count;
     ASSERT(mbox->reader != mbox->writer);
     sys_arch_unprotect(prot);
-    up(&mbox->read_sem);
+    sys_sem_signal(&mbox->read_sem);
 }
 
 /* Posts the "msg" to the mailbox. */
 void sys_mbox_post(sys_mbox_t mbox, void *msg)
 {
+	uint32_t ret;
+
     if (mbox == SYS_MBOX_NULL)
         return;
-    down(&mbox->write_sem);
+    ret=IPC_TIMEOUT;
+    while (ret != IPC_TIMEOUT)
+    {
+    	ret=sys_arch_sem_wait(&mbox->write_sem,1000);
+    }
     do_mbox_post(mbox, msg);
 }
 
 /* Try to post the "msg" to the mailbox. */
-err_t sys_mbox_trypost(sys_mbox_t mbox, void *msg)
+int sys_mbox_trypost(sys_mbox_t mbox, void *msg)
 {
     if (mbox == SYS_MBOX_NULL)
         return ERR_BUF;
-    if (!trydown(&mbox->write_sem))
+    if (sys_arch_sem_wait(&mbox->write_sem,10)==IPC_TIMEOUT)
         return ERR_MEM;
     do_mbox_post(mbox, msg);
     return ERR_OK;
@@ -199,7 +192,7 @@ uint32_t sys_arch_mbox_tryfetch(sys_mbox_t mbox, void **msg) {
     if (mbox == SYS_MBOX_NULL)
         return SYS_ARCH_TIMEOUT;
 
-    if (!trydown(&mbox->read_sem))
+    if (!sys_arch_sem_wait(&mbox->read_sem,100))
 	return SYS_MBOX_EMPTY;
 
     do_mbox_fetch(mbox, msg);
@@ -216,11 +209,11 @@ uint32_t sys_arch_mbox_tryfetch(sys_mbox_t mbox, void **msg) {
  * In a single threadd sys_arch implementation, this function will
  * simply return a pointer to a global sys_timeouts variable stored in
  * the sys_arch module. */
-struct sys_timeouts *sys_arch_timeouts(void) 
+/*struct sys_timeouts *sys_arch_timeouts(void)
 {
     static struct sys_timeouts timeout;
     return &timeout;
-}
+}*/
 
 
 /* Starts a new thread with priority "prio" that will begin its execution in the
@@ -231,11 +224,15 @@ static struct thread *lwip_thread;
 sys_thread_t sys_thread_new(char *name, void (* thread)(void *arg), void *arg, int stacksize, int prio)
 {
     struct thread *t;
-    if (stacksize > STACK_SIZE) {
+    int ret;
+ /* TODO    if (stacksize > STACK_SIZE) {
 	printk("Can't start lwIP thread: stack size %d is too large for our %d\n", stacksize, STACK_SIZE);
 	do_exit();
     }
-    lwip_thread = t = create_thread(name, thread, arg);
+    lwip_thread = t = create_thread(name, thread, arg);*/
+
+    ret=sc_createKernelThread(thread,arg);
+    ut_printf(" Thread created for tcp/ip: %d:\n",ret);
     return t;
 }
 
@@ -272,7 +269,7 @@ void lwip_printk(char *fmt, ...)
     va_list args;
     va_start(args, fmt);
     printk("lwIP: ");
-    print(0, fmt, args);
+    ut_printf(0, fmt, args);
     va_end(args);
 }
 
@@ -282,9 +279,40 @@ void lwip_die(char *fmt, ...)
     va_list args;
     va_start(args, fmt);
     printk("lwIP assertion failed: ");
-    print(0, fmt, args);
+    ut_printf(0, fmt, args);
     va_end(args);
     printk("\n");
     BUG();
 }
-#endif
+
+/* Returns a pointer to the per-thread sys_timeouts structure. In lwIP,
+ * each thread has a list of timeouts which is repressented as a linked
+ * list of sys_timeout structures. The sys_timeouts structure holds a
+ * pointer to a linked list of timeouts. This function is called by
+ * the lwIP timeout scheduler and must not return a NULL value.
+ *
+ * In a single threadd sys_arch implementation, this function will
+ * simply return a pointer to a global sys_timeouts variable stored in
+ * the sys_arch module. */
+struct sys_timeouts *sys_arch_timeouts(void)
+{
+    static struct sys_timeouts timeout;
+    return &timeout;
+}
+
+int sio_open (int i, int j)
+{
+	ut_printf("ERROR .... sio_send called , not supposed to be called , this is a fix to compilation \n");
+	return 1;
+}
+int sio_recv(int i, int j)
+{
+	ut_printf("ERROR .... sio_send called , not supposed to be called , this is a fix to compilation \n");
+	return 1;
+}
+int sio_send(int i, int j)
+{
+	ut_printf("ERROR .... sio_send called , not supposed to be called , this is a fix to compilation \n");
+	return 1;
+}
+

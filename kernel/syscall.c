@@ -216,7 +216,7 @@ static int init_uts_done=0;
 
 unsigned long SYS_uname(unsigned long *args)
 {
-	SYS_DEBUG("uname args:%x \n",args);
+	SYSCALL_DEBUG("uname args:%x \n",args);
 	if (init_uts_done==0) init_utsname();
 	ut_printf(" Inside uname : %s \n",g_utsname.sysname);
 	ut_memcpy(args,(unsigned char *)&g_utsname,sizeof(g_utsname));
@@ -225,11 +225,11 @@ unsigned long SYS_uname(unsigned long *args)
 #define ARCH_SET_FS 0x1002
 unsigned long SYS_arch_prctl(unsigned long code,unsigned long addr)
 {
-	SYS_DEBUG("sys arc_prctl : code :%x addr:%x \n",code,addr);
+	SYSCALL_DEBUG("sys arc_prctl : code :%x addr:%x \n",code,addr);
 	if (code == ARCH_SET_FS)
         	ar_archSetUserFS(addr);	
 	else
-		SYS_DEBUG(" ERROR arc_prctl code is invalid \n");
+		SYSCALL_DEBUG(" ERROR arc_prctl code is invalid \n");
 	return 0;
 }
 unsigned long snull(unsigned long *args)
