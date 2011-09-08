@@ -145,7 +145,10 @@ unsigned long xen_time(char *arg1, char *arg2) {
 	ut_printf(" new xen  system time:%x :%x %d \n", src->system_time,
 			src->tsc_timestamp, ns);
 if (init==0)
+{
 	start_networking();
+	start_webserver();
+}
 else
 	init_netfront(0,0,0,0);
 	init=1;

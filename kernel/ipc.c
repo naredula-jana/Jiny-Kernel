@@ -49,16 +49,17 @@ void sys_sem_signal(sys_sem_t sem)
 }
 
 
-uint32_t sys_arch_sem_wait(sys_sem_t sem, uint32_t timeout) {
+uint32_t sys_arch_sem_wait(sys_sem_t sem, uint32_t timeout_arg) {
 	unsigned long flags;
+	uint32_t timeout;
 
-	timeout=timeout*100;
+	timeout=timeout_arg*100;
 	while (1) {
 		if (sem->count <= 0 )
 		{
 			timeout=sc_wait(&(sem->wait_queue), timeout);
 		}
-
+		if (timeout_arg == 0) timeout=100;
 		local_irq_save(flags);
 		/* Atomically check that we can proceed */
 		if (sem->count > 0 || (timeout <= 0))

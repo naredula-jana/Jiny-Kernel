@@ -40,7 +40,7 @@
  * Author: Adam Dunkels <adam@sics.se>
  *
  */
-#if 1
+
 #define __types_h
 
 #include "lwip/opt.h"
@@ -335,6 +335,7 @@ static void tcpip_bringup_finished(void *p)
   sys_sem_signal(&tcpip_is_up);
 }
 
+// TODO  commented tcp checksum otherwise it is failing src/include/lwip/opt.h:1397:// JANA #define CHECKSUM_CHECK_TCP
 
 /* 
  * Utility function to bring the whole lot up.  Call this from app_main() 
@@ -396,4 +397,4 @@ void stop_networking(void)
   if (dev)
     shutdown_netfront(dev);
 }
-#endif
+

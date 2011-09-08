@@ -39,6 +39,8 @@ void ut_cls();
 void test_proc();
 static int sh_test1(char *arg1,char *arg2);
 static int sh_test2(char *arg1,char *arg2);
+int test_prod(char *arg1,char *arg2 );
+int test_cons(char *arg1,char *arg2 );
 static int sh_mmap(char *arg1,char *arg2);
 extern unsigned long xen_time(char *arg1,char *arg2);
 extern unsigned long xen_readcmd(char *arg1,char *arg2);
@@ -54,6 +56,8 @@ commands_t cmd_list[]=
 	{"i         ","Print IRQ stats","i",ar_printIrqStat},
 	{"t         ","Print thread list","t",sc_threadlist},
 	{"x        ","Print time","x",xen_time},
+	{"tp        ","test produce","tp",test_prod},
+	{"tc        ","test consume","tc",test_cons},
 	{"xw         ","xen write","xw",xen_writecmd},
 	{"xr         ","xen read time","xr",xen_readcmd},
 	{"kill <pid> ","kill process","kill",sh_kill},

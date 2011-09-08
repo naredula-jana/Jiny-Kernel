@@ -74,8 +74,8 @@ sys_mbox_t sys_mbox_new(int size)
         size = 32;
     else if (size == 1)
         size = 2;
-    mbox->count = size;
-    mbox->messages = mm_malloc(sizeof(void*)*size,0);
+    mbox->count = size+1; /* this is to create one empty slot , so as always  writer and reader does not meet*/
+    mbox->messages = mm_malloc(sizeof(void*)*(size+1),0);
     sys_sem_init(&mbox->read_sem, 0);
     mbox->reader = 0;
     sys_sem_init(&mbox->write_sem, size);
@@ -88,7 +88,6 @@ sys_mbox_t sys_mbox_new(int size)
  * programming error in lwIP and the developer should be notified. */
 void sys_mbox_free(sys_mbox_t mbox)
 {
-    ASSERT(mbox->reader == mbox->writer);
     mm_free(mbox->messages);
     mm_free(mbox);
 }
@@ -116,7 +115,7 @@ void sys_mbox_post(sys_mbox_t mbox, void *msg)
     if (mbox == SYS_MBOX_NULL)
         return;
     ret=IPC_TIMEOUT;
-    while (ret != IPC_TIMEOUT)
+    while (ret == IPC_TIMEOUT)
     {
     	ret=sys_arch_sem_wait(&mbox->write_sem,1000);
     }
@@ -128,7 +127,7 @@ int sys_mbox_trypost(sys_mbox_t mbox, void *msg)
 {
     if (mbox == SYS_MBOX_NULL)
         return ERR_BUF;
-    if (sys_arch_sem_wait(&mbox->write_sem,10)==IPC_TIMEOUT)
+    if (sys_arch_sem_wait(&mbox->write_sem,1)==IPC_TIMEOUT)
         return ERR_MEM;
     do_mbox_post(mbox, msg);
     return ERR_OK;
@@ -145,7 +144,7 @@ static void do_mbox_fetch(sys_mbox_t mbox, void **msg)
      * reader, but we may still need to prevent concurrency between readers.
      * FIXME: can there be concurrent readers? */
     prot = sys_arch_protect();
-    ASSERT(mbox->reader != mbox->writer);
+    ASSERT(mbox->reader != mbox->writer);  // TODO : as Hit once
     if (msg != NULL)
         *msg = mbox->messages[mbox->reader];
     mbox->reader = (mbox->reader + 1) % mbox->count;
@@ -192,7 +191,7 @@ uint32_t sys_arch_mbox_tryfetch(sys_mbox_t mbox, void **msg) {
     if (mbox == SYS_MBOX_NULL)
         return SYS_ARCH_TIMEOUT;
 
-    if (!sys_arch_sem_wait(&mbox->read_sem,100))
+    if (sys_arch_sem_wait(&mbox->read_sem,1)==SYS_ARCH_TIMEOUT)
 	return SYS_MBOX_EMPTY;
 
     do_mbox_fetch(mbox, msg);
@@ -314,5 +313,55 @@ int sio_send(int i, int j)
 {
 	ut_printf("ERROR .... sio_send called , not supposed to be called , this is a fix to compilation \n");
 	return 1;
+}
+
+
+/************************************************************************** TEST **********************/
+sys_mbox_t *tbox;
+int test_init()
+{
+static int init=0;
+if (init==0)
+{
+	init=1;
+	tbox=sys_mbox_new(30);
+}
+return 1;
+}
+
+int test_prod(char *arg1,char *arg2 )
+{
+	static unsigned long  prod=1;
+	int ret;
+test_init();
+ret=sys_mbox_trypost(tbox,prod);
+
+if (ret == 0)
+{
+   ut_printf("Sucessfully produces :%d \n",prod);
+   prod++;
+}else
+{
+	ut_printf(" ERROR : failed to produced :%d :%d \n",ret,prod);
+}
+
+}
+int test_cons(char *arg1,char *arg2 )
+{
+	int ret;
+	unsigned long cons;
+
+	test_init();
+	ret=sys_arch_mbox_tryfetch(tbox,&cons);
+
+	if (ret == 0)
+	{
+	   ut_printf("Sucessfully consumed :%d \n",cons);
+
+	}else
+	{
+		ut_printf(" ERROR : failed to consumed :%d :%d \n",ret,cons);
+	}
+
 }
 
