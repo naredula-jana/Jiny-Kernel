@@ -52,7 +52,7 @@ static void xenbus_evtchn_handler(evtchn_port_t port, struct pt_regs *regs,
 		void *ign) {
 	int ret;
 	ret=sc_wakeUp(&xb_waitq, NULL); /* wake all the waiting processes */
-	ut_printf(" Xenbus wait handler: Waking up the waiting process :%d \n",ret);
+	DEBUG(" Xenbus wait handler: Waking up the waiting process :%d \n",ret);
 }
 
 static uint32_t store_evtchannel;
@@ -98,10 +98,10 @@ static void process_responses() {
 		req_id=resp->req_id ;
 		if (req_id > NR_REQS || req_id < 0)
 		{
-			ut_printf("XEN ERROR in process responser sp:%x:%x:%x:%x \n",resp->type,resp->tx_id,resp->req_id,resp->len);
+			DEBUG("XEN ERROR in process responser sp:%x:%x:%x:%x \n",resp->type,resp->tx_id,resp->req_id,resp->len);
 			goto last ;
 		}
-		ut_printf("XEN  sp:%x:%x:%x:%x id:%d in_use:%d: \n",resp->type,resp->tx_id,resp->req_id,resp->len,req_id,req_info[req_id].in_use);
+		DEBUG("XEN  sp:%x:%x:%x:%x id:%d in_use:%d: \n",resp->type,resp->tx_id,resp->req_id,resp->len,req_id,req_info[req_id].in_use);
 		if (req_info[req_id].in_use == 1)
 		{
 				ut_memcpy((uint8_t *)&req_info[req_id].res_msg,(uint8_t *)resp,sizeof(struct xsd_sockmsg));
@@ -111,7 +111,7 @@ static void process_responses() {
 				req_info[req_id].resp_ready=1;
 		}else
 		{
-			ut_printf(" XEN ERROR:  no corresponding request\n");
+			DEBUG(" XEN ERROR:  no corresponding request\n");
 		}
 		processed_len=processed_len+resp->len;
 	}
@@ -267,7 +267,7 @@ int xenbus_read(const char *path, char *reply, int reply_len) {
 		reply[ret]='\0';
 	}else
 	{
-	   ut_printf(" NO DATA \n");
+	   DEBUG(" NO DATA \n");
 	}
 	release_xenbus_id(id);
 	return ret;

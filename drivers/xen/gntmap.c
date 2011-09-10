@@ -51,25 +51,6 @@ gntmap_find_entry(struct gntmap *map, unsigned long addr)
     return NULL;
 }
 
-int
-gntmap_set_max_grants(struct gntmap *map, int count)
-{
-
-    DEBUG("gntmap_set_max_grants(map=%p, count=%d)\n", map, count);
-
-
-    if (map->nentries != 0)
-        return -1;
-return 0;
-   // map->entries = xmalloc_array(struct gntmap_entry, count); TODO
-    if (map->entries == NULL)
-        return -2;
-
-    memset(map->entries, 0, sizeof(struct gntmap_entry) * count);
-    map->nentries = count;
-    return 0;
-}
-
 static int
 _gntmap_map_grant_ref(struct gntmap_entry *entry, 
                       unsigned long host_addr,

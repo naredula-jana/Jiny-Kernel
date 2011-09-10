@@ -232,13 +232,13 @@ void init_gnttab(void)
 
 	if (ret != 0)
 	{
-		ut_printf(" ERRRO after 3rd mmapping return value zero with test_data:%x  \n",-ret);
+		DEBUG(" ERRRO after 3rd mmapping return value zero with test_data:%x  \n",-ret);
 		return ;
 	}
 	//	BUG();
 
 
-	ut_printf("grant table SUCCES info area sec  : %x  \n", gnttab_table);
+	DEBUG("grant table SUCCES info area sec  : %x  \n", gnttab_table);
 }
 
 void

@@ -224,15 +224,10 @@ sys_thread_t sys_thread_new(char *name, void (* thread)(void *arg), void *arg, i
 {
     struct thread *t;
     int ret;
- /* TODO    if (stacksize > STACK_SIZE) {
-	printk("Can't start lwIP thread: stack size %d is too large for our %d\n", stacksize, STACK_SIZE);
-	do_exit();
-    }
-    lwip_thread = t = create_thread(name, thread, arg);*/
 
-    ret=sc_createKernelThread(thread,arg);
-    ut_printf(" Thread created for tcp/ip: %d:\n",ret);
-    return t;
+    ret=sc_createKernelThread(thread,arg,name);
+    DEBUG(" Thread created for tcp/ip: %d:\n",ret);
+    return ret;
 }
 
 /* This optional function does a "fast" critical region protection and returns
@@ -268,7 +263,7 @@ void lwip_printk(char *fmt, ...)
     va_list args;
     va_start(args, fmt);
     printk("lwIP: ");
-    ut_printf(0, fmt, args);
+    DEBUG(0, fmt, args);
     va_end(args);
 }
 
@@ -278,7 +273,7 @@ void lwip_die(char *fmt, ...)
     va_list args;
     va_start(args, fmt);
     printk("lwIP assertion failed: ");
-    ut_printf(0, fmt, args);
+    DEBUG(0, fmt, args);
     va_end(args);
     printk("\n");
     BUG();
@@ -301,17 +296,17 @@ struct sys_timeouts *sys_arch_timeouts(void)
 
 int sio_open (int i, int j)
 {
-	ut_printf("ERROR .... sio_send called , not supposed to be called , this is a fix to compilation \n");
+	DEBUG("ERROR .... sio_send called , not supposed to be called , this is a fix to compilation \n");
 	return 1;
 }
 int sio_recv(int i, int j)
 {
-	ut_printf("ERROR .... sio_send called , not supposed to be called , this is a fix to compilation \n");
+	DEBUG("ERROR .... sio_send called , not supposed to be called , this is a fix to compilation \n");
 	return 1;
 }
 int sio_send(int i, int j)
 {
-	ut_printf("ERROR .... sio_send called , not supposed to be called , this is a fix to compilation \n");
+	DEBUG("ERROR .... sio_send called , not supposed to be called , this is a fix to compilation \n");
 	return 1;
 }
 
@@ -338,11 +333,11 @@ ret=sys_mbox_trypost(tbox,prod);
 
 if (ret == 0)
 {
-   ut_printf("Sucessfully produces :%d \n",prod);
+   DEBUG("Sucessfully produces :%d \n",prod);
    prod++;
 }else
 {
-	ut_printf(" ERROR : failed to produced :%d :%d \n",ret,prod);
+	DEBUG(" ERROR : failed to produced :%d :%d \n",ret,prod);
 }
 
 }
@@ -356,11 +351,11 @@ int test_cons(char *arg1,char *arg2 )
 
 	if (ret == 0)
 	{
-	   ut_printf("Sucessfully consumed :%d \n",cons);
+	   DEBUG("Sucessfully consumed :%d \n",cons);
 
 	}else
 	{
-		ut_printf(" ERROR : failed to consumed :%d :%d \n",ret,cons);
+		DEBUG(" ERROR : failed to consumed :%d :%d \n",ret,cons);
 	}
 
 }

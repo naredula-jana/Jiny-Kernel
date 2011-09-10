@@ -320,7 +320,7 @@ static int sh_create(char *arg1,char *arg2)
 	int ret;
 
 	ut_printf("test FORKING before \n"); 
-	ret=sc_createKernelThread(load_test,arg1);
+	ret=sc_createKernelThread(load_test,arg1,"test");
 	ut_printf(" Parent process : pid: %d  \n",ret);
 	return 1;
 }

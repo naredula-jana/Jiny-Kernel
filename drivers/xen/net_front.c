@@ -51,7 +51,7 @@ static void netfront_evtchn_handler(evtchn_port_t port, struct pt_regs *regs,
 	int ret;
 	struct netfront_dev *dev = data;
 
-	ut_printf(" Xenbus netfront handler :%d \n", ret);
+	DEBUG(" Xenbus netfront handler :%d \n", ret);
 	if (dev->init_completed == 1)
 		network_rx(dev);
 }
@@ -163,7 +163,7 @@ void * init_netfront(char *_nodename, void(*thenetif_rx)(unsigned char* data,
 
 	ut_snprintf(path, 256, "%s/mac", nodename);
 	xen_readcmd(path, dev->mac, MAX_MAC_ADDR);
-	ut_printf("mac Address :%s: \n", dev->mac);
+	DEBUG("mac Address :%s: \n", dev->mac);
 	if (rawmac)
 		sscanf(dev->mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &rawmac[0],
 				&rawmac[1], &rawmac[2], &rawmac[3], &rawmac[4], &rawmac[5]);
@@ -174,7 +174,7 @@ void * init_netfront(char *_nodename, void(*thenetif_rx)(unsigned char* data,
 
 	dev->netif_rx = netif_rx;
 	dev->init_completed = 1;
-	ut_printf(" NET FRONT driver initialization completed  :%s\n", dev->mac);
+	DEBUG(" NET FRONT driver initialization completed  :%s\n", dev->mac);
 
 	return dev;
 }
@@ -287,7 +287,7 @@ void netfront_xmit(struct netfront_dev *dev, unsigned char* data, int len) /* TO
 }
 void shutdown_netfront(struct netfront_dev *dev)/* TODO */
 {
-	ut_printf(" shutdown_netfront :TODO ... \n");
+	DEBUG(" shutdown_netfront :TODO ... \n");
 }
 void network_rx(struct netfront_dev *dev) {
 	RING_IDX rp, cons, req_prod;

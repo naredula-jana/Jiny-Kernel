@@ -256,6 +256,7 @@ int sc_threadlist( char *arg1,char *arg2)
 		ut_printf(" %x %x %x %x %d %s\n",task,task->ticks,task->mm,task->mm->pgd,task->mm->count.counter,task->name);
 	}
 	spin_unlock_irqrestore(&sched_lock, flags);
+	return 1;
 }
 
 unsigned long setup_userstack(unsigned char **argv,unsigned char *env,unsigned long *stack_len,unsigned long *t_argc,unsigned long *t_argv,unsigned long *p_aux)
@@ -434,15 +435,35 @@ static int free_mm(struct mm_struct *mm)
 	return 1;
 }
 #define CLONE_VM 1
-unsigned long sc_createKernelThread(int (*fn)(void *),unsigned char  *args)
+unsigned long sc_createKernelThread(int (*fn)(void *),unsigned char  *args,unsigned char *thread_name)
 {
-	return SYS_sc_clone(fn,0,CLONE_VM,args);
+	unsigned long pid;
+	unsigned long flags;
+	struct list_head *pos;
+	struct task_struct *task;
+
+	pid = SYS_sc_clone(fn,0,CLONE_VM,args);
+
+	if (thread_name == 0)return pid;
+	spin_lock_irqsave(&sched_lock, flags);
+	list_for_each(pos, &task_queue.head) {
+		task=list_entry(pos, struct task_struct, task_link);
+		if (task->pid ==pid)
+		{
+			ut_strncpy(task->name,thread_name,MAX_TASK_NAME);
+			break;
+		}
+	}
+	spin_unlock_irqrestore(&sched_lock, flags);
+
+	return pid;
 }
 unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int clone_flags,void *args)
 {
 	struct task_struct *p;
 	struct mm_struct *mm;
 	unsigned long flags;
+
 
 	SYSCALL_DEBUG("clone fn:%x child_stack:%x flags:%x args:%x \n",fn,child_stack,clone_flags,args);
 	/* Initialize the stack  */
@@ -536,6 +557,7 @@ int SYS_sc_kill(unsigned long pid,unsigned long signal)
 		}
 	}
 	spin_unlock_irqrestore(&sched_lock, flags);
+	return 1;
 }
 /******************* schedule related functions **************************/
 

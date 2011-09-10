@@ -238,10 +238,10 @@ void netif_rx(unsigned char* data,int len)
 	static int stat_recv=0;
 	stat_recv++;
 	  if (the_interface != NULL) {
-		  ut_printf("Sending packet to tcpip layer :%d\n",len);
+		  DEBUG("Sending packet to tcpip layer :%d\n",len);
 	    netfront_input(the_interface, data, len);
 	  }
-   ut_printf("%d bytes incoming at %x  stat_recv:%d\n",len,data,stat_recv);
+   DEBUG("%d bytes incoming at %x  stat_recv:%d\n",len,data,stat_recv);
 }
 
 /*
@@ -331,7 +331,7 @@ netif_netfront_init(struct netif *netif)
 static struct semaphore tcpip_is_up;
 static void tcpip_bringup_finished(void *p)
 {
-  ut_printf("TCP/IP bringup ends.\n");
+  DEBUG("TCP/IP bringup ends.\n");
   sys_sem_signal(&tcpip_is_up);
 }
 
@@ -351,7 +351,7 @@ void start_networking(void)
   struct ip_addr gw = { 0 };
   char *ip = NULL;
 
-  ut_printf("Waiting for network.\n");
+  DEBUG("Waiting for network.\n");
   sys_sem_init(&tcpip_is_up,0);
   dev=init_netfront(NULL, NULL, rawmac, &ip);
   //dev= &g_netfront_dev;
@@ -365,12 +365,12 @@ void start_networking(void)
     else if (IN_CLASSC(ntohl(ipaddr.addr)))
       netmask.addr = htonl(IN_CLASSC_NET);
     else
-      ut_printf("Strange IP %s, leaving netmask to 0.\n", ip);
+      DEBUG("Strange IP %s, leaving netmask to 0.\n", ip);
   }
-  ut_printf("IP %x netmask %x gateway %x.\n",
+  DEBUG("IP %x netmask %x gateway %x.\n",
           ntohl(ipaddr.addr), ntohl(netmask.addr), ntohl(gw.addr));
   
-  ut_printf("TCP/IP bringup begins.\n");
+  DEBUG("TCP/IP bringup begins.\n");
   
   netif = mm_malloc(sizeof(struct netif),0);
   tcpip_init(tcpip_bringup_finished, netif);
@@ -388,7 +388,7 @@ void start_networking(void)
        struct ip_addr gw = { htonl(0xc0a801c8) };
        networking_set_addr(&ipaddr, &netmask, &gw);
    }
-  ut_printf("Latest Network is ready with IP.\n");
+  DEBUG("Latest Network is ready with IP.\n");
 }
 
 /* Shut down the network */

@@ -1,4 +1,4 @@
-#define DEBUG_ENABLE 1
+//#define DEBUG_ENABLE 1
 #include "common.h"
 #include "pci.h"
 #include "mm.h"
@@ -178,7 +178,7 @@ static inline int notify_remote_via_evtchn(evtchn_port_t port)
 {
     evtchn_send_t op;
     op.port = port;
-    ut_printf("xen : new Notifying remote  :%d\n",port);
+    DEBUG("xen : new Notifying remote  :%d\n",port);
     return HYPERVISOR_event_channel_op(EVTCHNOP_send, &op);
 }
 /********************************************************************/

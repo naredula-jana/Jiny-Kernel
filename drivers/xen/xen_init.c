@@ -65,14 +65,14 @@ static int check_platform_magic(long ioaddr, long iolen) {
 
 	protocol = inb(XEN_IOPORT_PROTOVER);
 
-	ut_printf("Xen I/O protocol version %d\n", protocol);
+	DEBUG("Xen I/O protocol version %d\n", protocol);
 
 	switch (protocol) {
 	case 1:
 		outw(XEN_IOPORT_LINUX_PRODNUM, XEN_IOPORT_PRODNUM);
 		outl(XEN_IOPORT_LINUX_DRVVER, XEN_IOPORT_DRVVER);
 		if (inw(XEN_IOPORT_MAGIC) != XEN_IOPORT_MAGIC_VAL) {
-			ut_printf("Xen Error : blacklisted by host\n");
+			DEBUG("Xen Error : blacklisted by host\n");
 			return -1;
 		}
 		/* Fall through */
@@ -86,10 +86,10 @@ static int check_platform_magic(long ioaddr, long iolen) {
 
 	return 0;
 
-	no_dev: ut_printf("Xen Error failed backend handshake: %s\n", err);
+	no_dev: DEBUG("Xen Error failed backend handshake: %s\n", err);
 	if (!unplug)
 		return 0;
-	ut_printf("Xen Error failed to execute specified dev_unplug options!\n");
+	DEBUG("Xen Error failed to execute specified dev_unplug options!\n");
 	return -1;
 }
 
@@ -142,7 +142,7 @@ unsigned long xen_time(char *arg1, char *arg2) {
 	unsigned long ns;
 	unsigned long e_pen, e_mask;
 	ns = src->system_time / 1000000000;
-	ut_printf(" new xen  system time:%x :%x %d \n", src->system_time,
+	DEBUG(" new xen  system time:%x :%x %d \n", src->system_time,
 			src->tsc_timestamp, ns);
 if (init==0)
 {
@@ -172,7 +172,7 @@ static int init_xen_info(void) {
 	g_sharedInfoArea = HOST_XEN_SH_ADDR;
 	vm_mmap(0, g_sharedInfoArea, PAGE_SIZE, PROT_WRITE, MAP_FIXED, phy_addr);
 
-	ut_printf("NEW shared info area sec  : %x phyaddr:%x \n", g_sharedInfoArea->wc_sec,phy_addr);
+	DEBUG("NEW shared info area sec  : %x phyaddr:%x \n", g_sharedInfoArea->wc_sec,phy_addr);
 	init_events();
 	if (1) {
 		struct xen_hvm_param evntchn, a;
@@ -180,12 +180,12 @@ static int init_xen_info(void) {
 		evntchn.domid = DOMID_SELF;
 		evntchn.index = HVM_PARAM_STORE_EVTCHN;
 		HYPERVISOR_hvm_op(HVMOP_get_param, &evntchn);
-		ut_printf("xen Event channel :%x:\n", evntchn.value);
+		DEBUG("xen Event channel :%x:\n", evntchn.value);
 		a.domid = DOMID_SELF;
 		a.index = HVM_PARAM_STORE_PFN;
 		HYPERVISOR_hvm_op(HVMOP_get_param, &a);
 		init_xenbus(a.value << PAGE_SHIFT, evntchn.value);
-		ut_printf("xen Event channel pfn :%x:\n", a.value);
+		DEBUG("xen Event channel pfn :%x:\n", a.value);
 	}
 	return 0;
 }
@@ -194,7 +194,7 @@ static void xen_pci_interrupt(registers_t regs)
 {
 
 	//*p = 0; /* reset the irq by resetting the status  */
-	ut_printf("LATEST  XEN PCI-INTERRUPT:  \n");
+	DEBUG("LATEST  XEN PCI-INTERRUPT:  \n");
 
 	do_hypervisor_callback(0);
 }
@@ -209,7 +209,7 @@ static uint32_t xen_cpuid_base(void) {
 		*(uint32_t*) (signature + 4) = ecx;
 		*(uint32_t*) (signature + 8) = edx;
 		signature[12] = 0;
-		ut_printf("XEN signature :%s: \n ", signature);
+		DEBUG("XEN signature :%s: \n ", signature);
 		// if (!strcmp("XenVMMXenVMM", signature) && ((eax - base) >= 2))
 		return base;
 	}
@@ -223,13 +223,13 @@ static int init_hypercall_stubs(pci_dev_header_t *pci_hdr) {
 
 	base = xen_cpuid_base();
 	if (base == 0) {
-		ut_printf("Detected Xen platform device but not Xen VMM?\n");
+		DEBUG("Detected Xen platform device but not Xen VMM?\n");
 		return -1;
 	}
 
 	cpuid(base + 1, &eax, &ebx, &ecx, &edx);
 
-	ut_printf("Xen version base:%x %d.%d.  \n", base, eax >> 16, eax & 0xffff);
+	DEBUG("Xen version base:%x %d.%d.  \n", base, eax >> 16, eax & 0xffff);
 
 	/*
 	 * Find largest supported number of hypercall pages.
@@ -237,7 +237,7 @@ static int init_hypercall_stubs(pci_dev_header_t *pci_hdr) {
 	 */
 	cpuid(base + 2, &npages, &msr, &ecx, &edx);
 	page = mm_getFreePages(0, 2);
-	ut_printf("XEN pages:%d  vaddr :%x paddr:%x trap_instr:%s:\n", npages,
+	DEBUG("XEN pages:%d  vaddr :%x paddr:%x trap_instr:%s:\n", npages,
 			page, __pa(page), TRAP_INSTR);
 	wrmsrl(msr, __pa(page));
 	ut_memcpy(hypercall_page, page, PAGE_SIZE - 1);
@@ -257,7 +257,7 @@ int init_xen_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len) {
 	uint32_t ret, i;
 	xen_pci_hdr = *pci_hdr;
 
-	ut_printf(" Initialising XEN PCI \n");
+	DEBUG(" Initialising XEN PCI \n");
 
 	if (bars[0].addr != 0 && bars[1].addr != 0) {
 		pci_ioaddr = bars[0].addr;
@@ -270,7 +270,7 @@ int init_xen_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len) {
 	}
 
 	if (pci_hdr->interrupt_line > 0) {
-		ut_printf(" Interrupt number : %i \n", pci_hdr->interrupt_line);
+		DEBUG(" Interrupt number : %i \n", pci_hdr->interrupt_line);
 		ar_registerInterrupt(32 + pci_hdr->interrupt_line, xen_pci_interrupt,
 				"xen_pci");
 	}

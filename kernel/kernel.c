@@ -87,7 +87,7 @@ void cmain ()
 		g_multiboot_mod_len=mod->mod_end - mod->mod_start;	
 	}
 	init_kernel(max_addr);
-	sc_createKernelThread(shell_main,0);
+	sc_createKernelThread(shell_main,0,"shell_main");
 	while(1) 
 	{
 		if ( g_debug_level==1 ) 

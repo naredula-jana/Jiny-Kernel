@@ -60,7 +60,7 @@ inline void mask_evtchn(uint32_t port) {
 	synch_set_bit(port, &s->evtchn_mask[0]);
 }
 void default_handler(evtchn_port_t port, struct pt_regs *regs, void *ignore) {
-	ut_printf("[Port %d] - event received\n", port);
+	DEBUG("[Port %d] - event received\n", port);
 }
 
 #define smp_processor_id() 0
@@ -108,7 +108,7 @@ int do_event(evtchn_port_t port, struct pt_regs *regs) {
 	clear_evtchn(port);
 
 	if (port >= NR_EVS) {
-		ut_printf("WARN: do_event(): Port number too large: %d\n", port);
+		DEBUG("WARN: do_event(): Port number too large: %d\n", port);
 		return 1;
 	}
 
