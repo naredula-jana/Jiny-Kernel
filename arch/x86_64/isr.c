@@ -84,7 +84,7 @@ void init_handlers()
 	ar_registerInterrupt(13, gpFault,"gpfault");
 }
 
-void ar_printIrqStat(char *arg1,char *arg2)
+int ar_printIrqStat(char *arg1,char *arg2)
 {
 	int i;
 
@@ -95,6 +95,7 @@ void ar_printIrqStat(char *arg1,char *arg2)
 		if (i<32 && g_interrupt_handlers[i].stat.num_error==0 && g_interrupt_handlers[i].stat.num_irqs==0) continue;
 		ut_printf(" %d: %s  %x %d %d\n",i-32,g_interrupt_handlers[i].name,g_interrupt_handlers[i].action,g_interrupt_handlers[i].stat.num_irqs,g_interrupt_handlers[i].stat.num_error);
 	}
+	return 1;
 }
 
 void ar_registerInterrupt(uint8_t n, isr_t handler,char *name)

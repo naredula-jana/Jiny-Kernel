@@ -13,6 +13,9 @@ struct iovec {
      size_t iov_len;     /* Number of bytes to transfer */
 };
 
+
+
+
 /* Naming : SYS : system call
  *
  */
@@ -74,7 +77,7 @@ page_struct_t *pc_getFreePage();
 unsigned long fs_registerFileSystem(struct filesystem *fs);
 struct inode *fs_getInode(char *filename);
 unsigned long fs_putInode(struct inode *inode);
-unsigned long fs_printInodes(char *arg1,char *arg2);
+int fs_printInodes(char *arg1,char *arg2);
 unsigned long fs_open(char *filename,int mode,int flags);
 struct page *fs_genericRead(struct inode *inode,unsigned long offset);
 ssize_t fs_read(struct file *fp ,unsigned char *buff ,unsigned long len);
@@ -96,17 +99,17 @@ unsigned long SYS_fs_fadvise(unsigned long fd,unsigned long offset, unsigned lon
 
 /* Utilities */
 void ut_showTrace(unsigned long *stack_top);
-int ut_strcmp(char *str1, char *str2);
+int ut_strcmp(unsigned char *str1, unsigned char *str2);
 void ut_printf (const char *format, ...);
 void ut_memcpy(unsigned char *dest, unsigned char *src, long len);
 void ut_memset(unsigned char *dest, unsigned char val, long len);
 int ut_memcmp(unsigned char *m1, unsigned char *m2,int len);
-char *ut_strcpy(char *dest, const char *src);
-char *ut_strncpy(char *dest, const char *src,int n);
-char *ut_strcat(char *dest, const char *src);
-int ut_strlen(const char * s);
-unsigned long ut_atol(char *p);
-unsigned int ut_atoi(char *p);
+unsigned char *ut_strcpy(unsigned char *dest, const unsigned char *src);
+unsigned char *ut_strncpy(unsigned char *dest, const unsigned char *src,int n);
+unsigned char *ut_strcat(unsigned char *dest, const unsigned char *src);
+int ut_strlen(const unsigned char * s);
+unsigned long ut_atol(unsigned char *p);
+unsigned int ut_atoi(unsigned char *p);
 int ut_sprintf(char * buf, const char *fmt, ...);
 int ut_snprintf(char * buf, size_t size, const char *fmt, ...);
 

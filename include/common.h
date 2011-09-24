@@ -101,4 +101,6 @@ int serial_write( char *buf , int len);
 void *kmalloc (long size, int flags);
 void kfree (const void *objp);
 extern addr_t g_jiffies;
+
+#define MAX_DMESG_LOG 30000
 #endif

@@ -271,7 +271,7 @@ unsigned long setup_userstack(unsigned char **argv,unsigned char *env,unsigned l
 		ut_printf(" ERROR  argv:0\n");	
 		 return 0;
 	}
-	stack=mm_getFreePages(MEM_CLEAR,0);
+	stack=(unsigned char *)mm_getFreePages(MEM_CLEAR,0);
 	p=stack+PAGE_SIZE;
 	len=0;	
 	real_stack=USERSTACK_ADDR+USERSTACK_LEN;

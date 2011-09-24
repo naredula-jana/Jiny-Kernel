@@ -58,7 +58,7 @@ static int inode_init(struct inode *inode,char *filename)
 
 /*************************** API functions ************************/
 
-unsigned long fs_printInodes(char *arg1,char *arg2)
+int fs_printInodes(char *arg1,char *arg2)
 {
         struct inode *tmp_inode;
         struct list_head *p;

@@ -56,7 +56,7 @@ void ut_showTrace(unsigned long *stack_top)
 		}
 	}
 }
-unsigned long ut_atol(char *p)
+unsigned long ut_atol(unsigned char *p)
 {
 	unsigned long a;
 	int i,m,k;
@@ -73,7 +73,7 @@ unsigned long ut_atol(char *p)
 	}
 	return a;
 }
-unsigned int ut_atoi(char *p)
+unsigned int ut_atoi(unsigned char *p)
 {         
 	unsigned int a;
 	int i,m,k;
@@ -117,7 +117,7 @@ void ut_memset(uint8_t *dest, uint8_t val, long len)
 
 // Compare two strings. Should return -1 if 
 // str1 < str2, 0 if they are equal or 1 otherwise.
-int ut_strcmp(char *str1, char *str2)
+int ut_strcmp(unsigned char *str1,unsigned  char *str2)
 {
 	int i = 0;
 	int failed = 0;
@@ -149,7 +149,7 @@ int ut_memcmp(unsigned char *m1, unsigned char *m2,int len)
 
 // Copy the NULL-terminated string src into dest, and
 // return dest.
-char *ut_strcpy(char *dest, const char *src)
+unsigned char *ut_strcpy(unsigned char *dest, const unsigned char *src)
 {
 	do
 	{
@@ -159,7 +159,7 @@ char *ut_strcpy(char *dest, const char *src)
 	*dest=0;
 	return dest;
 }
-char *ut_strncpy(char *dest, const char *src,int n)
+unsigned char *ut_strncpy(unsigned char *dest, const unsigned char *src,int n)
 {
 	int len=0;
         do
@@ -173,7 +173,7 @@ char *ut_strncpy(char *dest, const char *src,int n)
 }
 // Concatenate the NULL-terminated string src onto
 // the end of dest, and return dest.
-char *ut_strcat(char *dest, const char *src)
+unsigned char *ut_strcat(unsigned char *dest, const unsigned char *src)
 {
 	while (*dest != 0)
 	{
@@ -188,13 +188,13 @@ char *ut_strcat(char *dest, const char *src)
 	return dest;
 }
 
-int ut_strlen(const char * s)
+int ut_strlen(const unsigned char * s)
 {
-	const char *sc;
+	const unsigned char *sc;
 
 	for (sc = s; *sc != '\0'; ++sc)
 		/* nothing */;
-	return sc - s;
+	return (int)(sc - s);
 }
 #define ZEROPAD 1               /* pad with zero */
 #define SIGN    2               /* unsigned/signed long */

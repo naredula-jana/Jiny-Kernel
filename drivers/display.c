@@ -1,6 +1,6 @@
 /* kernel.c - the C part of the kernel */
 #include <stdarg.h>
-#include "common.h"
+#include "interface.h"
 /* Macros.  */
 
 /* Check if the bit BIT in FLAGS is set.  */
@@ -31,7 +31,7 @@ void ut_putchar (int c);
 void ut_printf (const char *format, ...);
 
 /* Clear the screen and initialize VIDEO, XPOS and YPOS.  */
-void ut_cls (void)
+int ut_cls (void)
 {
 	int i;
 	unsigned char *ptr;
@@ -46,6 +46,7 @@ void ut_cls (void)
 
 	xpos = 0;
 	ypos = 0;
+	return 1;
 }
 static void refresh_screen (void)
 {
@@ -136,12 +137,21 @@ static void scroll()
 	refresh_screen(); 
 }
 int g_serial_output =0 ;
+
+unsigned char g_dmesg[MAX_DMESG_LOG];
+unsigned long g_dmesg_index=0;
+
+
 /* Put the character C on the screen.  */
 static spinlock_t putchar_lock  = SPIN_LOCK_UNLOCKED;
 void ut_putchar (int c)
 {
 	unsigned char *ptr;
 	unsigned long  flags;
+
+	g_dmesg_index++;
+	g_dmesg[g_dmesg_index%MAX_DMESG_LOG]=(unsigned char)c;
+
 	if (g_serial_output == 1)
 	{
 		char buf[5];

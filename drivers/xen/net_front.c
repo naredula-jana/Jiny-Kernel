@@ -5,7 +5,7 @@
 /* Minimal network driver for Mini-OS.
  * Copyright (c) 2006-2007 Jacob Gorm Hansen, University of Copenhagen.
  * Based on netfront.c from Xen Linux.
- *
+ * Modified by Naredula Janardhana Reddy to suit Jiny OS
  * Does not handle fragments or extras.
  */
 
@@ -100,10 +100,7 @@ void * init_netfront(char *_nodename, void(*thenetif_rx)(unsigned char* data,
 	struct netfront_dev *dev;
 	uint32_t remote_domid = 0;
 
-	if (init_done == 1) {
-		network_rx(&g_netfront_dev);/* TODO temporarary */
-		return 1;
-	}
+	if (init_done == 1) return 0;
 
 	init_done = 1;
 	dev = &g_netfront_dev;

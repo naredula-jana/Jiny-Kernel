@@ -388,6 +388,7 @@ void start_networking(void)
        struct ip_addr gw = { htonl(0xc0a801c8) };
        networking_set_addr(&ipaddr, &netmask, &gw);
    }
+  network_rx(dev);
   DEBUG("Latest Network is ready with IP.\n");
 }
 

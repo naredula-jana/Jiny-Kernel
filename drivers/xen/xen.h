@@ -1,4 +1,4 @@
-//#define DEBUG_ENABLE 1
+#define DEBUG_ENABLE 1
 #include "common.h"
 #include "pci.h"
 #include "mm.h"

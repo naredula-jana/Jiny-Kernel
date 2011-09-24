@@ -12,7 +12,8 @@ unsigned long SYS_uname(unsigned long *args);
 unsigned long SYS_arch_prctl(unsigned long code,unsigned long addr);
 
 typedef struct {
-        unsigned long (*func)(unsigned long *args);
+    //    unsigned long (*func)(unsigned long *args);
+	void *func;
 } syscalltable_t;
 
 syscalltable_t syscalltable[]=
@@ -210,7 +211,8 @@ static int init_utsname()
 	ut_strcpy(g_utsname.nodename,"njana-desk");	
 	ut_strcpy(g_utsname.release,"2.6.35-22-generic");	
 	ut_strcpy(g_utsname.version,"#33-Ubuntu SMP Sun Sep 19 20:32:27 UTC 2010");	
-	ut_strcpy(g_utsname.machine,"x86_64");	
+	ut_strcpy(g_utsname.machine,"x86_64");
+	return 1;
 }
 static int init_uts_done=0;
 
@@ -219,9 +221,10 @@ unsigned long SYS_uname(unsigned long *args)
 	SYSCALL_DEBUG("uname args:%x \n",args);
 	if (init_uts_done==0) init_utsname();
 	ut_printf(" Inside uname : %s \n",g_utsname.sysname);
-	ut_memcpy(args,(unsigned char *)&g_utsname,sizeof(g_utsname));
+	ut_memcpy((unsigned char *)args,(unsigned char *)&g_utsname,sizeof(g_utsname));
 	return 0;
 }
+
 #define ARCH_SET_FS 0x1002
 unsigned long SYS_arch_prctl(unsigned long code,unsigned long addr)
 {

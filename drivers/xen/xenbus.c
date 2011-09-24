@@ -310,7 +310,7 @@ int xenbus_write(const char *path, char *val) {
 }
 
 
-unsigned long xen_readcmd(char *arg1, char *data, int max_len) {
+int xen_readcmd(char *arg1, char *data, int max_len) {
 	if (data == 0 ) return 0;
 	data[0]='\0';
 	DEBUG("arg1 :%s: \n",arg1);
@@ -319,7 +319,7 @@ unsigned long xen_readcmd(char *arg1, char *data, int max_len) {
 	return 1;
 }
 
-unsigned long xen_writecmd(char *arg1, char *arg2) {
+int xen_writecmd(char *arg1, char *arg2) {
 	int ret;
 	DEBUG("arg1 :%s: arg2:%s:\n",arg1,arg2);
 	ret=xenbus_write(arg1,arg2);

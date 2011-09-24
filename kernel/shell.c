@@ -32,19 +32,18 @@ static int sh_alloc_mem(char *arg1,char *arg2);
 static int sh_free_mem(char *arg1,char *arg2);
 static int sh_sync(char *arg1,char *arg2);
 static int sh_del(char *arg1,char *arg2);
-void ar_printIrqStat(char *arg1,char *arg2);
+int ar_printIrqStat(char *arg1,char *arg2);
 static int  test_hostshm(char *arg1,char *arg2);
 void ut_cls();
 
 void test_proc();
-static int sh_test1(char *arg1,char *arg2);
-static int sh_test2(char *arg1,char *arg2);
+
 int test_prod(char *arg1,char *arg2 );
 int test_cons(char *arg1,char *arg2 );
 static int sh_mmap(char *arg1,char *arg2);
-extern unsigned long xen_time(char *arg1,char *arg2);
-extern unsigned long xen_readcmd(char *arg1,char *arg2);
-extern unsigned long xen_writecmd(char *arg1,char *arg2);
+extern int xen_time(char *arg1,char *arg2);
+extern int xen_readcmd(char *arg1,char *arg2);
+extern int xen_writecmd(char *arg1,char *arg2);
 int scan_pagecache(char *arg1 , char *arg2);
 commands_t cmd_list[]=
 {
@@ -63,10 +62,7 @@ commands_t cmd_list[]=
 	{"kill <pid> ","kill process","kill",sh_kill},
 	{"cls       ","clear screen ","cls",ut_cls},
 	{"mp        ","Memory free areas","mp",mm_printFreeAreas},
-	{"test1     ","test1 ","test1",sh_test1},
-	{"test2     ","test2 ","test2",sh_test2},
 	{"maps      ","Memory map areas","maps",vm_printMmaps},
-	{"host      ","host shm test","host",test_hostshm},
 	{"ls        ","ls","ls",fs_printInodes},
 	{"pc        ","page cache stats","pc",pc_stats},
 	{"scan        ","scan page cache ","scan",scan_pagecache},
@@ -82,34 +78,8 @@ commands_t cmd_list[]=
 };
 
 extern void ut_putchar (int c); 
-static int test_hostshm(char *arg1,char *arg2)
-{
-	unsigned int *a;
-	unsigned int v,av;
-	a=ut_atol(arg1);
-	av=ut_atoi(arg2);
 
-	ut_printf(" arg1: %x :%x \n",a,v);
-	a=(unsigned char *)HOST_SHM_CTL_ADDR+8;
-	v=*a;
-	ut_printf(" hostshm : %x :%x \n",a,v);
-	/*	a=(unsigned char *)HOST_SHM_CTL_ADDR;
-	 *a=0xffffffff;*/ /* set the proper mask */
-	a=(unsigned char *)HOST_SHM_CTL_ADDR+12;
-	*a=av;
-	ut_printf(" new  hostshm : %x :%x \n",a,av);
-	return 1;
-}
-static int sh_test1(char *arg1,char *arg2)
-{
-	unsigned char *p;
 
-	p=0x104f20;
-	ut_printf(" Before Writing in to this Adress %x %x \n",p,*p);
-	(*p)=12;	
-	ut_printf(" After Writing in to this Adress %x  %x\n",p,*p);
-	return 1;
-}
 extern struct wait_struct g_hfs_waitqueue;
 #define CR0_WP 0x00010000 /* Write protect */
 static inline uint64_t read_cr0(void)       
@@ -126,6 +96,7 @@ static inline void write_cr0(uint64_t val)
 			:: "r" (val));          
 }
 #define CR0_AM 0x00040000 /* Alignment mask */
+#if 0
 static int sh_test2(char *arg1,char *arg2)
 {
 	uint64_t *p,val;
@@ -135,6 +106,7 @@ static int sh_test2(char *arg1,char *arg2)
 	*p=val;
 	flush_tlb(0x101000);
 	ut_printf("After writing table \n");
+	return 1;
 }
 static int sh_test3(char *arg1,char *arg2)
 {
@@ -155,6 +127,7 @@ static int sh_test3(char *arg1,char *arg2)
 	ut_printf(" after making write protect \n");
 	return 1;
 }
+#endif
 
 static char buf[6024];
 static int sh_mmap(char *arg1,char *arg2)
@@ -162,7 +135,7 @@ static int sh_mmap(char *arg1,char *arg2)
 	struct file *fp;
 	unsigned long addr;
 	unsigned char c,*p;	
-	int i,ret,wret;
+
 	fp=fs_open(arg1,0,0);
 	addr=ut_atol(arg2);
 
@@ -465,6 +438,7 @@ static int process_command(int cmd,char *p)
 	p[0]='\0';		
 	return 0;
 }
+#if 0
 static int process_symbol(int cmd,char *p)
 {
 	int i,ret,symbls;
@@ -492,6 +466,7 @@ static int process_symbol(int cmd,char *p)
 		ut_printf("Not found :%s: \n",p);
 	return 0;
 }
+#endif
 static int get_cmd(unsigned char *line)
 {
 	int i;
@@ -547,6 +522,7 @@ static int get_cmd(unsigned char *line)
 	line[i]='\0';
 	return cmd;
 }
+
 int shell_main()
 {
 	int i,cmd_type;
