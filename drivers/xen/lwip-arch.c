@@ -76,9 +76,9 @@ sys_mbox_t sys_mbox_new(int size)
         size = 2;
     mbox->count = size+1; /* this is to create one empty slot , so as always  writer and reader does not meet*/
     mbox->messages = mm_malloc(sizeof(void*)*(size+1),0);
-    sys_sem_init(&mbox->read_sem, 0);
+    sem_alloc(&mbox->read_sem, 0);
     mbox->reader = 0;
-    sys_sem_init(&mbox->write_sem, size);
+    sem_alloc(&mbox->write_sem, size);
     mbox->writer = 0;
     return mbox;
 }
@@ -89,6 +89,8 @@ sys_mbox_t sys_mbox_new(int size)
 void sys_mbox_free(sys_mbox_t mbox)
 {
     mm_free(mbox->messages);
+    sem_free(&mbox->read_sem);
+    sem_free(&mbox->write_sem);
     mm_free(mbox);
 }
 

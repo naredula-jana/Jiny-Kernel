@@ -352,7 +352,7 @@ void start_networking(void)
   char *ip = NULL;
 
   DEBUG("Waiting for network.\n");
-  sys_sem_init(&tcpip_is_up,0);
+  sem_alloc(&tcpip_is_up,0); /* TODO : need to free the sem */
   dev=init_netfront(NULL, NULL, rawmac, &ip);
   //dev= &g_netfront_dev;
   

@@ -185,6 +185,7 @@ unsigned long vm_brk(unsigned long addr, unsigned long len)
 int SYS_vm_mprotect(const void *addr, int len, int prot)
 { /* TODO */
 	SYSCALL_DEBUG("protect TODO :%x \n",addr);
+	return 1;
 }
 unsigned long SYS_vm_brk(unsigned long addr)
 {

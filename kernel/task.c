@@ -755,7 +755,8 @@ void do_softirq()
 
 
 #define MAX_WAIT_QUEUES 50
-static struct wait_struct *wait_queues[MAX_WAIT_QUEUES];
+static struct wait_struct *wait_queues[MAX_WAIT_QUEUES]; /* TODO : this need to be locked */
+int stat_wq_count=0;
 int sc_register_waitqueue(struct wait_struct *waitqueue)
 {
 	int i;
@@ -765,6 +766,7 @@ int sc_register_waitqueue(struct wait_struct *waitqueue)
 			waitqueue->queue=NULL;
 			waitqueue->lock=SPIN_LOCK_UNLOCKED;
 			wait_queues[i]=waitqueue;
+			stat_wq_count++;
 			return 0;
 		}
 	}
@@ -777,6 +779,7 @@ int sc_unregister_waitqueue(struct wait_struct *waitqueue)
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
 		if (wait_queues[i] == waitqueue) {
 			wait_queues[i]=0;
+			stat_wq_count--;
 			return 0;
 		}
 	}
