@@ -212,8 +212,15 @@ static int read_dev_conf(uint8_t bus , uint8_t dev,uint8_t func)
 		}
 		if (header.vendor_id == 0x1af4 && header.device_id==0x1110)
 			init_host_shm(&header,bars,3);
+#ifdef XEN
 		if (header.vendor_id == XEN_PLATFORM_VENDOR_ID  && header.device_id == XEN_PLATFORM_DEVICE_ID)
 			init_xen_pci(&header,bars,3);
+#endif
+#ifdef VIRTIO
+#define VIRTIO_PCI_VENDOR_ID 0x1af4
+		if (header.vendor_id == VIRTIO_PCI_VENDOR_ID  && (header.device_id >= 0x1000 && header.device_id <= 0x103f) )
+			init_virtio_pci(&header,bars,3);
+#endif
 	}
 	return 1;
 }

@@ -91,7 +91,7 @@ void init_rx_buffers(struct netfront_dev *dev) {
 static char nodename[256];
 static char path[256], value[256];
 void network_rx(struct netfront_dev *dev);
-void * init_netfront(char *_nodename, void(*thenetif_rx)(unsigned char* data,
+void * init_netfront( void(*thenetif_rx)(unsigned char* data,
 		int len), unsigned char *rawmac, char **ip) {
 	static int init_done = 0;
 	int i;
@@ -169,7 +169,7 @@ void * init_netfront(char *_nodename, void(*thenetif_rx)(unsigned char* data,
 	ut_snprintf(path, 256, "%s/state", nodename);
 	xen_writecmd(path, "4");/* TODO : need to check before updating state */
 
-	dev->netif_rx = netif_rx;
+	dev->netif_rx = thenetif_rx;
 	dev->init_completed = 1;
 	DEBUG(" NET FRONT driver initialization completed  :%s\n", dev->mac);
 

@@ -350,10 +350,14 @@ void start_networking(void)
   struct ip_addr netmask = { htonl(IF_NETMASK) };
   struct ip_addr gw = { 0 };
   char *ip = NULL;
+  static int network_started =0;
+  if (network_started != 0) return ;
+  network_started =1 ;
+
 
   DEBUG("Waiting for network.\n");
   sem_alloc(&tcpip_is_up,0); /* TODO : need to free the sem */
-  dev=init_netfront(NULL, NULL, rawmac, &ip);
+  dev=init_netfront(netif_rx, rawmac, &ip);
   //dev= &g_netfront_dev;
   
   if (ip) {
@@ -388,7 +392,7 @@ void start_networking(void)
        struct ip_addr gw = { htonl(0xc0a801c8) };
        networking_set_addr(&ipaddr, &netmask, &gw);
    }
-  network_rx(dev);
+  //network_rx(dev);
   DEBUG("Latest Network is ready with IP.\n");
 }
 

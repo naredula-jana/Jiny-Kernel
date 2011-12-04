@@ -54,11 +54,14 @@ commands_t cmd_list[]=
 	{"s   ","toggle SYSCALL debug","s",sh_syscalldebug},
 	{"i         ","Print IRQ stats","i",ar_printIrqStat},
 	{"t         ","Print thread list","t",sc_threadlist},
-	{"x        ","Print time","x",xen_time},
+#ifdef XEN
 	{"tp        ","test produce","tp",test_prod},
 	{"tc        ","test consume","tc",test_cons},
+
 	{"xw         ","xen write","xw",xen_writecmd},
 	{"xr         ","xen read time","xr",xen_readcmd},
+	{"x        ","Print time","x",xen_time},
+#endif
 	{"kill <pid> ","kill process","kill",sh_kill},
 	{"cls       ","clear screen ","cls",ut_cls},
 	{"mp        ","Memory free areas","mp",mm_printFreeAreas},
@@ -120,7 +123,7 @@ static int sh_test3(char *arg1,char *arg2)
 	val &= ~CR0_AM; /* Disable alignment-check */
 	/*
 	 * Set write protect bit in order to protect
-	 * write access to read-only pages from supervisor mode.
+	 * write access to read-only pages from supervisor mode
 	 */
 	val |= CR0_WP;
 	write_cr0(val);

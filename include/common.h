@@ -1,5 +1,8 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
+
+#define VIRTIO 1
+
 #include "spinlock.h"
 #include "atomic.h"
 #include "list.h"
