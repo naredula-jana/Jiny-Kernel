@@ -100,6 +100,7 @@ struct virtqueue {
 	const char *name;
 	struct virtio_device *vdev;
 	void *priv;
+	int qType; /* recv or sending */
 };
 
 /**
@@ -167,7 +168,7 @@ static inline int virtqueue_add_buf(struct virtqueue *vq,
 
 void virtqueue_kick(struct virtqueue *vq);
 
-void *virtqueue_get_buf(struct virtqueue *vq, unsigned int *len);
+void *virtio_removeFromQueue(struct virtqueue *vq, unsigned int *len);
 
 void virtqueue_disable_cb(struct virtqueue *vq);
 
