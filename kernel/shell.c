@@ -44,6 +44,7 @@ static int sh_mmap(char *arg1,char *arg2);
 extern int xen_time(char *arg1,char *arg2);
 extern int xen_readcmd(char *arg1,char *arg2);
 extern int xen_writecmd(char *arg1,char *arg2);
+extern int p9_cmd(char *arg1,char *arg2);
 int scan_pagecache(char *arg1 , char *arg2);
 commands_t cmd_list[]=
 {
@@ -62,6 +63,7 @@ commands_t cmd_list[]=
 	{"xr         ","xen read time","xr",xen_readcmd},
 	{"x        ","Print time","x",xen_time},
 #endif
+	{"p9 ","9p commands","p9",p9_cmd},
 	{"kill <pid> ","kill process","kill",sh_kill},
 	{"cls       ","clear screen ","cls",ut_cls},
 	{"mp        ","Memory free areas","mp",mm_printFreeAreas},
