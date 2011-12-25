@@ -22,6 +22,15 @@ extern unsigned long g_hostShmLen;
 extern kmem_cache_t *g_slab_inodep;
 extern kmem_cache_t *g_slab_filep;
 
+struct filesystem {
+	struct file *(*open)(char *filename,int mode);
+	int (*lseek)(struct file *file,  unsigned long offset,int whence);
+	ssize_t (*write)(struct inode *inode, uint64_t offset, unsigned char *buff,unsigned long len);
+	ssize_t (*read)(struct inode *inode, uint64_t offset,  unsigned char *buff,unsigned long len);
+	int (*close)(struct file *file);
+	int (*fdatasync)(struct file *file);
+};
+
 struct file {	
 	char filename[MAX_FILENAME];
         int type;
@@ -35,20 +44,15 @@ struct inode {
 	int nrpages;	
 	int type; /* short leaved (MRU) or long leaved (LRU) */
 	time_t mtime; /* last modified time */
-	unsigned long length; /* file length */
+	unsigned long fs_private;
+	struct filesystem *vfs;
+	unsigned long file_size; /* file length */
 	char filename[MAX_FILENAME];
 	struct list_head page_list;	
 	struct list_head vma_list;	
 	struct list_head inode_link;	
 };
 
-struct filesystem {
-	struct file *(*open)(char *filename,int mode);
-	int (*lseek)(struct file *file,  unsigned long offset,int whence);
-	ssize_t (*write)(struct file *file,  unsigned char *buff,unsigned long len);
-	ssize_t (*read)(struct file *file,  unsigned char *buff,unsigned long len);
-	int (*close)(struct file *file);
-	int (*fdatasync)(struct file *file);
-};
+
 
 #endif

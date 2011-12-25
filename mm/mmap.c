@@ -158,8 +158,8 @@ long vm_mmap(struct file *file, unsigned long addr, unsigned long len,
 		{
 			vma->vm_flags= vma->vm_flags | MAP_FIXED ;	
 			vma->vm_inode=file->inode;
-			if (len > (file->inode->length))
-				vma->vm_end=addr+file->inode->length;
+			if (len > (file->inode->file_size))
+				vma->vm_end=addr+file->inode->file_size;
 
 		}
 	}

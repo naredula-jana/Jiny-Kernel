@@ -52,40 +52,40 @@
 
 ************************************/
 struct vm_area_struct {
-        struct mm_struct *vm_mm;       /* The address space we belong to. */
-        unsigned long vm_start;         /* Our start address within vm_mm. */
-        unsigned long vm_end;           /* The first byte after our end address
-                                           within vm_mm. */
+	struct mm_struct *vm_mm; /* The address space we belong to. */
+	unsigned long vm_start; /* Our start address within vm_mm. */
+	unsigned long vm_end; /* The first byte after our end address
+	 within vm_mm. */
 
-        /* linked list of VM areas per task, sorted by address */
-        struct vm_area_struct *vm_next;
+	/* linked list of VM areas per task, sorted by address */
+	struct vm_area_struct *vm_next;
 
-        unsigned long vm_prot;          /* Access permissions of this VMA. */
-        unsigned long vm_flags;         /* Flags, listed below. */
+	unsigned long vm_prot; /* Access permissions of this VMA. */
+	unsigned long vm_flags; /* Flags, listed below. */
 
-        /* Information about our backing store: */
-        unsigned long vm_pgoff;         /* Offset (within vm_file) in PAGE_SIZE
-                                           units, *not* PAGE_CACHE_SIZE */
-        struct inode *vm_inode;          /* File we map to (can be NULL). */
-        unsigned long vm_private_data;         /* was vm_pte (shared mem) */
+	/* Information about our backing store: */
+	unsigned long vm_pgoff; /* Offset (within vm_file) in PAGE_SIZE
+	 units, *not* PAGE_CACHE_SIZE */
+	struct inode *vm_inode; /* File we map to (can be NULL). */
+	unsigned long vm_private_data; /* was vm_pte (shared mem) */
 	struct list_head inode_vma_link; /* vmas connected to inode */
 };
 
 typedef struct page {
-        /* these must be first (free area handling) */
-        struct page *next;
-        struct page *prev;
+	/* these must be first (free area handling) */
+	struct page *next;
+	struct page *prev;
 
-        atomic_t count;
-        unsigned long flags;    /* atomic flags, some possibly updated asynchronously */
+	atomic_t count;
+	unsigned long flags; /* atomic flags, some possibly updated asynchronously */
 
 	unsigned int age; /* youngest =1 or eldest =100 */
 
 	struct inode *inode;
-	unsigned long offset; /* offset in the inode */
-	struct list_head lru_link;          /* LRU list: the page can be in freelist,active or inactive in of the list   */
-	unsigned char list_type ; /* LRU list # is stored */
-	struct list_head list;          /*TODO: currently used 1)  SLAB 2) pagecache:inodelist  */
+	uint64_t offset; /* offset in the inode */
+	struct list_head lru_link; /* LRU list: the page can be in freelist,active or inactive in of the list   */
+	unsigned char list_type; /* LRU list # is stored */
+	struct list_head list; /*TODO: currently used 1)  SLAB 2) pagecache:inodelist  */
 } page_struct_t;
 
 #define ADDR_LIST_MAX 50
@@ -130,5 +130,14 @@ extern struct mm_struct *g_kernel_mm;
 #define PageDirty(page)      (test_bit(PG_dirty, &(page)->flags))
 #define PageSetDirty(page)      set_bit(PG_dirty, &(page)->flags)
 #define PageClearDirty(page)    clear_bit(PG_dirty, &(page)->flags)
+
+
+static inline unsigned char *pcPageToPtr(struct page *p) {
+	unsigned char *addr;
+	unsigned long pn;
+	pn = p - pagecache_map;
+	addr = pc_startaddr + pn * PC_PAGESIZE;
+	return addr;
+}
 
 #endif

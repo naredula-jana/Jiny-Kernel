@@ -71,36 +71,52 @@ enum p9_msg_t {
         P9_TYPE_RWSTAT,
 };
 
+typedef struct {
+	unsigned char name[200];
+	uint32_t fid;
+}p9_file_t;
+#define MAX_P9_FILES 100
+typedef struct  {
+	uint16_t tag;
+	uint8_t type,recv_type;
+	unsigned long addr;
+
+
+	unsigned char *pkt_buf;
+	unsigned long pkt_len;
+
+	unsigned long *user_data;
+	unsigned long userdata_len;
+
+	uint32_t root_fid;
+	uint32_t next_free_fid;
+	p9_file_t files[MAX_P9_FILES];
+}p9_client_t;
+
 /*
 * See Also: http://plan9.bell-labs.com/magic/man2html/2/fcall
 */
-struct p9_fcall {
-	uint32_t size; /*  current size inclcive of itself , used while writing */
+typedef struct p9_fcall {
+	size_t size; /*  current size inclcive of itself , used while writing */
 	uint8_t type;
 	uint16_t tag;
 
 	size_t offset; /* current offset , used while reading */
 
 	size_t capacity; /* maximum sdata size */
+	p9_client_t *client;
 	uint8_t *sdata;
-};
+}p9_fcall_t;
 
-typedef struct  {
-	uint16_t tag;
-	uint8_t type,recv_type;
-	unsigned long addr;
 
-	uint32_t root_fid;
-	unsigned char *pkt_buf;
-	unsigned long pkt_len;
 
-	unsigned long *user_data;
-	unsigned long userdata_len;
-}p9_client_t;
 
-extern int p9pdu_init(struct p9_fcall *pdu, uint8_t type, uint16_t tag, unsigned char *addr, unsigned long len);
-extern int p9pdu_read_v(struct p9_fcall *pdu, const char *fmt, ...);
-extern int p9pdu_read(struct p9_fcall *pdu, const char *fmt, va_list ap);
-extern int p9pdu_write(struct p9_fcall *pdu,  const char *fmt, va_list ap);
+extern int p9pdu_init(p9_fcall_t *pdu, uint8_t type, uint16_t tag, p9_client_t *client, unsigned long addr, unsigned long len);
+extern int p9pdu_read_v(p9_fcall_t *pdu, const char *fmt, ...);
+extern int p9pdu_read(p9_fcall_t *pdu, const char *fmt, va_list ap);
+extern int p9pdu_write(p9_fcall_t *pdu,  const char *fmt, va_list ap);
+extern unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...);
+extern int p9_read_rpc(p9_client_t *client, const char *fmt, ...);
+extern int p9pdu_finalize(p9_fcall_t *pdu);
 
 #endif

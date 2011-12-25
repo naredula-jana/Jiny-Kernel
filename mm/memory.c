@@ -328,5 +328,7 @@ void init_memory(unsigned long phy_end_addr)
 	}
 
 	virt_start_addr=init_free_area( virt_start_addr, virt_end_addr);
+	pc_init(virt_start_addr,0x1000000); /* page cache init */
+	virt_start_addr=virt_start_addr+0x1000000;
 	init_mem(virt_start_addr, virt_end_addr);
 }

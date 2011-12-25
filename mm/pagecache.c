@@ -210,7 +210,9 @@ int pc_init(unsigned char *start_addr,unsigned long len)
 	page_struct_t *p;
 	int i;
 
-	pc_startaddr=(unsigned char *)start_addr;
+	unsigned long s = start_addr;
+	start_addr = ((s*PC_PAGESIZE)/PC_PAGESIZE);
+	pc_startaddr=(unsigned char *)(start_addr);
 	pc_endaddr=(unsigned char *)start_addr+len;
 	total_pages=len/PC_PAGESIZE;
 	reserved_size=sizeof(fileCache_t)+sizeof(page_struct_t)*total_pages;
@@ -336,7 +338,7 @@ int pc_insertPage(struct inode *inode,struct page *page)
 	int ret=0;
 	int i=0;
 
-	if (page->offset > inode->length) return ret;
+	if (page->offset > inode->file_size) return ret;
 	if (!(page->list.next==0 && page->list.prev==0 &&page->lru_link.next==0 && page->lru_link.prev==0 ))
 	{
 		BUG();

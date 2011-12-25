@@ -23,20 +23,15 @@ static size_t pdu_write(struct p9_fcall *pdu, const void *data, size_t size) {
 	return size - len;
 }
 
-int p9pdu_init(struct p9_fcall *pdu, uint8_t type, uint16_t tag,
-		unsigned char *addr, unsigned long len) {
-
-		pdu->sdata = addr;
-		pdu->capacity = len;
-
-
-	if (pdu->sdata == 0)
-		return 0;
+int p9pdu_init(struct p9_fcall *pdu, uint8_t type, uint16_t tag, p9_client_t *client, unsigned long addr, unsigned long len) {
+    pdu->client= client;
+	pdu->capacity = len;
+	pdu->sdata = addr;
 	if (type != 0) {
 		pdu->type = type;
 		pdu->tag = tag;
 		pdu->size = 7;
-	}else {
+	} else {
 		pdu->type = 0;
 		pdu->tag = 0;
 		pdu->size = len;
@@ -48,12 +43,12 @@ int p9pdu_init(struct p9_fcall *pdu, uint8_t type, uint16_t tag,
 int p9pdu_read_v(struct p9_fcall *pdu, const char *fmt, ...) {
 	va_list ap;
 	va_start(ap,fmt);
-	return p9pdu_read(pdu,fmt,ap);
+	return p9pdu_read(pdu, fmt, ap);
 }
 int p9pdu_write_v(struct p9_fcall *pdu, const char *fmt, ...) {
 	va_list ap;
 	va_start(ap,fmt);
-	return p9pdu_write(pdu,fmt,ap);
+	return p9pdu_write(pdu, fmt, ap);
 }
 int p9pdu_finalize(struct p9_fcall *pdu) {
 	int size = pdu->size;
@@ -61,7 +56,10 @@ int p9pdu_finalize(struct p9_fcall *pdu) {
 
 	pdu->size = 0;
 	err = p9pdu_write_v(pdu, "dbw", size, pdu->type, pdu->tag);
-	pdu->size = size;
+	if (pdu->client->type == P9_TYPE_TWRITE)
+		pdu->size = size + pdu->client->userdata_len;
+	else
+	    pdu->size = size;
 
 #ifdef CONFIG_NET_9P_DEBUG
 	if ((p9_debug_level & P9_DEBUG_PKT) == P9_DEBUG_PKT)
@@ -135,8 +133,8 @@ int p9pdu_read(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 int p9pdu_write(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 	const char *ptr;
 	int errcode = 0;
-//	va_list ap;
-//	va_start(ap,fmt);
+	//	va_list ap;
+	//	va_start(ap,fmt);
 
 	for (ptr = fmt; *ptr; ptr++) {
 		switch (*ptr) {

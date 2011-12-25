@@ -47,143 +47,105 @@ int init_virtio_9p_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev) {
 	inb(dev->pci_ioaddr + VIRTIO_PCI_ISR);
 
 	sc_register_waitqueue(&p9_waitq);
+	return 1;
 }
 unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The call will be blocked till the reply is receivied */
-	struct p9_fcall pdu;
+	p9_fcall_t pdu;
 	int ret;
 	unsigned long addr;
 	va_list ap;
 	va_start(ap,fmt);
 
-	p9pdu_init(&pdu, client->type, client->tag, client->pkt_buf, client->pkt_len);
+	p9pdu_init(&pdu, client->type, client->tag, client,client->pkt_buf, client->pkt_len);
 	ret = p9pdu_write(&pdu, fmt, ap);
 	va_end(ap);
 	p9pdu_finalize(&pdu);
 
 	struct scatterlist sg[4];
 	unsigned int out, in;
-	sg[0].page_link = pdu.sdata;
+	sg[0].page_link = client->pkt_buf;
 	sg[0].length = 1024;
 	sg[0].offset = 0;
 	out = 1;
 	if (client->type == P9_TYPE_TREAD) {
-		sg[1].page_link = pdu.sdata + 1024;
+		sg[1].page_link = client->pkt_buf + 1024;
 		sg[1].length = 11; /* exactly 11 bytes for read response header , data will be from user buffer*/
 		sg[1].offset = 0;
 		sg[2].page_link = client->user_data;
 		sg[2].length = client->userdata_len;
 		sg[2].offset = 0;
 		in = 2;
+	} else  if  (client->type == P9_TYPE_TWRITE) {
+		sg[1].page_link = client->user_data;
+		sg[1].length = client->userdata_len;
+		sg[1].offset = 0;
+		sg[0].length =23 ; /* this for header , eventhough it is having space pick the data from sg[1] */
+
+		sg[2].page_link = client->pkt_buf + 1024;
+		sg[2].length = 1024;
+		sg[2].offset = 0;
+		out = 2;
+		in =1;
 	} else {
-		sg[1].page_link = pdu.sdata + 1024;
+		sg[1].page_link = client->pkt_buf + 1024;
 		sg[1].length = 1024;
 		sg[1].offset = 0;
 		in = 1;
 	}
-	virtqueue_add_buf_gfp(virtio_devices[0].vq[0], sg, out, in,
-			sg[0].page_link, 0);
+	virtqueue_add_buf_gfp(virtio_devices[0].vq[0], sg, out, in, sg[0].page_link, 0);
 	virtqueue_kick(virtio_devices[0].vq[0]);
 
 	sc_wait(&p9_waitq, 100);
 	unsigned int len;
 	len = 0;
 	addr = virtio_removeFromQueue(virtio_devices[0].vq[0], &len);
-	if (addr == 0) {
-		DEBUG("9p cmd EMPTY\n");
+	if (addr != client->pkt_buf) {
+		DEBUG("9p write : got invalid address : %x \n",addr);
 		return 0;
 	}
-	client->addr = addr;
-	return addr;
+	return client->pkt_buf;
 }
 
 int p9_read_rpc(p9_client_t *client, const char *fmt, ...) {
 	unsigned char *recv;
-	struct p9_fcall pdu;
+	p9_fcall_t pdu;
 	int ret;
 	uint32_t total_len;
 	unsigned char type;
 	uint16_t tag;
-	unsigned long addr = client->addr;
 
 	va_list ap;
 	va_start(ap,fmt);
 
-	recv = addr + 1024;
-	p9pdu_init(&pdu, 0, 0, recv, 1024);
+	recv = client->pkt_buf + 1024;
+	p9pdu_init(&pdu, 0, 0, client,recv, 1024);
 	ret = p9pdu_read_v(&pdu, "dbw", &total_len, &type, &tag);
 	client->recv_type = type;
 	ret = p9pdu_read(&pdu, fmt, ap);
 	va_end(ap);
-	DEBUG("Recv Header ret:%x total len :%x stype:%x rtype:%x tag:%x \n",ret ,total_len,client->type,type,tag);
+	DEBUG("Recv Header ret:%x total len :%x stype:%x(%d) rtype:%x(%d) tag:%x \n",ret ,total_len,client->type,client->type,type,type,tag);
 	DEBUG(" : c:%x:%x:%x:%x :%x:%x:%x:%x data:%x:%x:%x:%x\n", recv[0], recv[1], recv[2], recv[3], recv[4], recv[5], recv[6], recv[7],recv[12], recv[13], recv[14], recv[15]);
+	if (type == 107) {
+		recv[100]='\0';
+		DEBUG(" recv error data :%s: \n ",&recv[9]);
+	}
 	return ret;
 }
 
-static p9_client_t client;
-int p9_clientInit() {
-static int init=0;
-uint32_t msg_size;
-int ret;
-unsigned char version[200];
-unsigned long addr;
-	if (init != 0) return 1;
-
-	client.pkt_buf = (unsigned char *)mm_getFreePages(MEM_CLEAR, 0);
-	client.pkt_len = 4098;
-    init=1;
-
-	client.type = P9_TYPE_TVERSION;
-	client.tag = 0xffff;
-
-	addr = p9_write_rpc(&client, "ds", 0x2040, "9P2000.u");
-	if (addr != 0) {
-		ret = p9_read_rpc(&client, "ds", &msg_size, version);
-	}
-	DEBUG("New cmd:%x size:%x version:%s \n",ret, msg_size,version);
-
-	client.type = P9_TYPE_TATTACH;
-	client.tag = 0x13;
-	client.root_fid = 132;
-	addr = p9_write_rpc(&client, "ddss", client.root_fid, ~0, "jana", "");
-	if (addr != 0) {
-		ret = p9_read_rpc(&client, "");
-	}
-	return 1;
-}
-
-static unsigned char data[100];
 int p9_cmd(char *arg1, char *arg2) {
-	unsigned long addr;
-	uint32_t msg_size;
+	unsigned char buf[100];
+	unsigned long  fp;
 	int ret;
+   fp=fs_open(arg1,1,0);
 
-	p9_clientInit();
+ ut_strcpy(buf,"ABCjanardhana reddy abc 123451111111111");
+   ret=fs_write(fp,buf, 99);
+   buf[10]=0;
+   DEBUG("Before fdatasync \n");
+   fs_fdatasync(fp);
+   DEBUG(" WRITE len :%d data:%s:",ret,buf);
 
-	client.type = P9_TYPE_TWALK;
-	addr = p9_write_rpc(&client, "ddws", client.root_fid, 201, 1, "testabc");
-	if (addr != 0) {
-		ret = p9_read_rpc(&client, "");
-	}
-
-	client.type = P9_TYPE_TOPEN;
-	addr = p9_write_rpc(&client, "db", 201, 0);
-	if (addr != 0) {
-		ret = p9_read_rpc(&client, "");
-	}
-
-	client.type = P9_TYPE_TREAD;
-	client.user_data = data;
-	client.userdata_len = 100;
-	unsigned long offset = 0;
-	uint32_t read_len;
-	addr = p9_write_rpc(&client, "dqd", 201, offset, 200);
-	if (addr != 0) {
-		ret = p9_read_rpc(&client, "d", &read_len);
-	}
-	data[10] = 0;
-	DEBUG("read len :%d  new DATA  :%s:\n",read_len,data);
-
-	return 1;
+   return 1;
 }
 void virtio_9p_interrupt(registers_t regs) {
 	unsigned char isr;

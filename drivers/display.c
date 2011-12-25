@@ -130,7 +130,26 @@ int g_serial_output = 0;
 
 unsigned char g_dmesg[MAX_DMESG_LOG];
 unsigned long g_dmesg_index = 0;
+int ut_logFlush(char *arg1, char *arg2) {
+	static int init = 0;
+	static unsigned long start_offset=0;
+	static unsigned long fd;
+	int ret;
 
+	if (init == 0) {
+		fd = fs_open("jiny.log", 1, 0);
+		if (fd ==0) return 0;
+		init = 1;
+	}
+	if (fd == 0) return 0;
+	if ((g_dmesg_index-start_offset) > 0) {
+       ret=fs_write(fd,&g_dmesg[start_offset],(g_dmesg_index-start_offset));
+       fs_fdatasync(fd);
+       start_offset=start_offset+ret;
+	}
+
+	return 1;
+}
 /* Put the character C on the screen.  */
 static spinlock_t putchar_lock = SPIN_LOCK_UNLOCKED;
 void ut_putchar(int c) {

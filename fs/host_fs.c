@@ -140,7 +140,7 @@ static struct file *hfOpen(char *filename,int mode)
 	{
 		ret=request_hostserver(REQUEST_OPEN,inodep,0,0,mode);
 		if (ret < 0) goto error;
-		inodep->length=ret;
+		inodep->file_size=ret;
 	}
 	filep->inode=inodep;
 	filep->offset=0;
@@ -172,7 +172,7 @@ static int hfFdatasync(struct file *filep)
 		page=list_entry(p, struct page, list);
 		if (PageDirty(page))
 		{
-			int len=inode->length;
+			int len=inode->file_size;
 			if (len < (page->offset+PC_PAGESIZE))
 			{
 				len=len-page->offset;
@@ -234,54 +234,13 @@ error:
 	if (tmp_len > 0){
 		struct inode *inode=filep->inode;
 		filep->offset=filep->offset+tmp_len;
-		if (inode->length < filep->offset)
-			inode->length=filep->offset;	
+		if (inode->file_size < filep->offset)
+			inode->file_size=filep->offset;
 	}
 	return tmp_len;
 }
 
-struct page *fs_genericRead(struct inode *inode,unsigned long offset)
-{
-	struct page *page;
-	int tret;
-	int err=0;
 
-	page=pc_getInodePage(inode,offset);
-        if (page == NULL)
-        {
-                page=pc_getFreePage();
-                if (page == NULL)
-                {
-                        err=-3;
-                        goto error;
-                }
-                page->offset=OFFSET_ALIGN(offset);
-
-                tret=request_hostserver(REQUEST_READ,inode,page,PC_PAGESIZE,0);
-                if (tret > 0)
-                {
-                        if (pc_insertPage(inode,page) ==0)
-                        {
-                                pc_putFreePage(page);
-                                err=-5;
-                                goto error;
-                        }
-                }else
-                {
-                        pc_putFreePage(page);
-                        err=-4;
-                        goto error;
-                }
-        }
-	
-error:
-	if (err < 0) 
-	{
-		DEBUG(" Error in reading the file :%i \n",-err);
-		page=0;
-	}
-	return page;
-}
 
 static ssize_t hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 {
@@ -293,7 +252,7 @@ static ssize_t hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 	if (filep ==0) return 0;
 	DEBUG("Read filename from hs  :%s: offset:%d inode:%x buff:%x len:%x \n",filep->filename,filep->offset,filep->inode,buff,len);
 	inode=filep->inode;
-	if (inode->length <= filep->offset) return 0;
+	if (inode->file_size <= filep->offset) return 0;
 
 	page=fs_genericRead(filep->inode,filep->offset);
 	if (page == 0) return 0;
@@ -301,10 +260,10 @@ static ssize_t hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 	ret=PC_PAGESIZE;
 	ret=ret-(filep->offset-OFFSET_ALIGN(filep->offset));
 	if (ret> len) ret=len;
-	if ((filep->offset+ret) > inode->length)
+	if ((filep->offset+ret) > inode->file_size)
 	{
 		int r;
-		r=inode->length - filep->offset;
+		r=inode->file_size - filep->offset;
 		if (r <ret) ret=r;
 	}
 	if (page > 0  && ret > 0)
