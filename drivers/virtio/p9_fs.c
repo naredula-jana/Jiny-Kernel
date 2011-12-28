@@ -26,7 +26,7 @@ static int p9ClientInit() {
 	client.type = P9_TYPE_TVERSION;
 	client.tag = 0xffff;
 
-	addr = p9_write_rpc(&client, "ds", 0x2040, "9P2000.u");
+	addr = p9_write_rpc(&client, "ds", 4090*2, "9P2000.u");
 	if (addr != 0) {
 		ret = p9_read_rpc(&client, "ds", &msg_size, version);
 	}
@@ -61,7 +61,6 @@ static int p9_open(uint32_t fid, unsigned char *filename, int flags, int arg_mod
 		client.type = P9_TYPE_TCREATE;
 		perm = 0x666;
 		addr = p9_write_rpc(&client, "dsdb", fid, filename, perm, mode_b);
-
 	} else {
 		client.type = P9_TYPE_TOPEN;
 		addr = p9_write_rpc(&client, "db", fid, mode_b);
@@ -69,18 +68,7 @@ static int p9_open(uint32_t fid, unsigned char *filename, int flags, int arg_mod
 
 	if (addr != 0) {
 		ret = p9_read_rpc(&client, "");
-		if (client.recv_type == P9_TYPE_RCREATE) {/* remove the directory fid , it is replaced with the newly created fid*/
-			for (i = 0; i < MAX_P9_FILES; i++) {
-				if (client.files[i].fid == fid) {
-					client.files[i].name[0] = '\0';
-					client.files[i].parent_fid = -1;
-					break;
-				}
-			}
-			ret = 1;
-		}else if (client.recv_type == P9_TYPE_ROPEN) {
-			ret = 1;
-		}
+		ret = 1;
 	}
 	return ret;;
 }
@@ -150,8 +138,19 @@ static uint32_t p9_walk(unsigned char *filename, int flags, unsigned char **crea
 					}
 				} else {
 					if ((flags&O_CREAT) && (j == levels) && (client.recv_type != P9_TYPE_RWALK))
-					{
-						ret_fd = parent_fid;
+					{ /* Retry it without name */
+						addr = p9_write_rpc(&client, "ddw", parent_fid, client.next_free_fid, 0);
+						if (addr != 0) {
+							ret = p9_read_rpc(&client, "");
+							if ((empty_fd != -1) &&  (client.recv_type == P9_TYPE_RWALK)) {
+								ret_fd=client.next_free_fid;
+								client.files[empty_fd].fid = client.next_free_fid;
+								client.next_free_fid++; /* TODO : there will be collision , the logic need to replaced with better one */
+								ut_strcpy(client.files[empty_fd].name, names[j]);
+								client.files[empty_fd].parent_fid = parent_fid;
+							}
+							else ret_fd =0;
+						}
                         len=ut_strlen(filename)-ut_strlen(names[j]);
                         *create_filename=filename+len;
 						goto last;
@@ -181,8 +180,7 @@ static uint32_t p9_read(uint32_t fid, uint64_t offset, unsigned char *data, uint
 	if (addr != 0) {
 		ret = p9_read_rpc(&client, "d", &read_len);
 	}
-	data[10] = 0;
-	DEBUG("read len :%d  new DATA  :%s:\n",read_len,data);
+
 	return read_len;
 }
 
@@ -200,9 +198,9 @@ static uint32_t p9_write(uint32_t fid, uint64_t offset, unsigned char *data, uin
 	if (addr != 0) {
 		ret = p9_read_rpc(&client, "d", &write_len);
 	}
-	data[10] = 0;
+
 	rd = client.pkt_buf+1024+10;
-	 rd[20]='\0';
+	rd[20]='\0';
 	DEBUG("write len :%d  write_rpc ret:%d : \n",data_len,ret);
 	return write_len;
 }

@@ -146,21 +146,21 @@ int p9pdu_write(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 			break;
 		case 'w': {
 			uint16_t val = cpu_to_le16(va_arg(ap, int));
-			DEBUG(" w:%x",val);
+			DEBUG(" w:%x(%d)",val,val);
 			if (pdu_write(pdu, &val, sizeof(val)))
 				errcode = -2;
 		}
 			break;
 		case 'd': {
 			uint32_t val = cpu_to_le32(va_arg(ap, int32_t));
-			DEBUG(" d:%x",val);
+			DEBUG(" d:%x(%d)",val,val);
 			if (pdu_write(pdu, &val, sizeof(val)))
 				errcode = -3;
 		}
 			break;
 		case 'q': {
 			uint64_t val = cpu_to_le64(va_arg(ap, int64_t));
-			DEBUG(" q:%x",val);
+			DEBUG(" q:%x(%d)",val,val);
 			if (pdu_write(pdu, &val, sizeof(val)))
 				errcode = -3;
 		}

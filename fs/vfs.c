@@ -8,6 +8,7 @@
 *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
 *
 */
+#define DEBUG_ENABLE 1
 #include "common.h"
 #include "mm.h"
 #include "vfs.h"
@@ -164,8 +165,8 @@ static int vfsDataSync(struct file *filep)
 			}
 			if (len > 0)
 			{
-				vfs_fs->write(inode, page->offset, pcPageToPtr(page),len);
-				if (ret > 0)
+				ret=vfs_fs->write(inode, page->offset, pcPageToPtr(page),len);
+				if (ret == len)
 				{
 					pc_pagecleaned(page);
 				}
@@ -239,7 +240,7 @@ ssize_t SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt) {
 }
 static ssize_t vfswrite(struct file *filep, unsigned char *buff, unsigned long len) {
 	int ret;
-	int tmp_len, size;
+	int tmp_len, size, page_offset;
 	struct page *page;
 
 	ret = 0;
@@ -258,20 +259,22 @@ static ssize_t vfswrite(struct file *filep, unsigned char *buff, unsigned long l
 			}
 			page->offset = OFFSET_ALIGN(filep->offset);
 			if (pc_insertPage(filep->inode, page) == 0) {
-				BUG();
+				BUG(); /* TODO: as hit once */
 			}
 		}
 		size = PC_PAGESIZE;
 		if (size > (len - tmp_len))
 			size = len - tmp_len;
-		ut_memcpy(pcPageToPtr(page), buff + tmp_len, size);
+		page_offset=filep->offset-page->offset;
+		ut_memcpy(pcPageToPtr(page)+page_offset, buff + tmp_len, size);
 		pc_pageDirted(page);
+		filep->offset=filep->offset+size;
 		tmp_len = tmp_len + size;
-		DEBUG("write memcpy :%x %x  %d \n",buff,to_ptr(page),size);
+		DEBUG("write memcpy :%x %x  %d \n",buff,pcPageToPtr(page),size);
 	}
-	error: if (tmp_len > 0) {
+	error:
+	if (tmp_len > 0) {
 		struct inode *inode = filep->inode;
-		filep->offset = filep->offset + tmp_len;
 		if (inode->file_size < filep->offset)
 			inode->file_size = filep->offset;
 	}
@@ -365,7 +368,7 @@ static ssize_t vfsread(struct file *filep, unsigned char *buff, unsigned long le
 		ut_memcpy(buff, pcPageToPtr(page) + (filep->offset
 				-OFFSET_ALIGN(filep->offset)), ret);
 		filep->offset = filep->offset + ret;
-		DEBUG(" memcpy :%x %x  %d \n",buff,to_ptr(page),ret);
+		DEBUG(" memcpy :%x %x  %d \n", buff, pcPageToPtr(page), ret);
 	}
 	return ret;
 }

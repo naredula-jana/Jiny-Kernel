@@ -51,7 +51,7 @@ int init_virtio_9p_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev) {
 }
 unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The call will be blocked till the reply is receivied */
 	p9_fcall_t pdu;
-	int ret;
+	int ret,i;
 	unsigned long addr;
 	va_list ap;
 	va_start(ap,fmt);
@@ -98,7 +98,16 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 	sc_wait(&p9_waitq, 100);
 	unsigned int len;
 	len = 0;
-	addr = virtio_removeFromQueue(virtio_devices[0].vq[0], &len);
+	i=0;
+	addr=0;
+	while (i < 3 && addr == 0) {
+		addr = virtio_removeFromQueue(virtio_devices[0].vq[0], &len); /* TODO : here sometime returns zero because of some race condition */
+		i++;
+		if (addr == 0) {
+			DEBUG(" RACE CONDITIOn so sleeping for while \n");
+			sc_sleep(300);
+		}
+	}
 	if (addr != client->pkt_buf) {
 		DEBUG("9p write : got invalid address : %x \n",addr);
 		return 0;
@@ -130,9 +139,9 @@ int p9_read_rpc(p9_client_t *client, const char *fmt, ...) {
 	}
 	return ret;
 }
-
+static 	unsigned char buf[1100];
 int p9_cmd(char *arg1, char *arg2) {
-	unsigned char buf[100];
+
 	unsigned long rfp, wfp;
 	int i, wret, ret;
 
@@ -148,8 +157,8 @@ int p9_cmd(char *arg1, char *arg2) {
 			DEBUG("ERROR Cannot open writefile:%s\n",arg2);
 			return 0;
 		}
-		for (i = 0; i < 100; i++) {
-			ret = fs_read(rfp, buf, 99);
+		for (i = 0; i < 20; i++) {
+			ret = fs_read(rfp, buf, 1000);
 			if (ret > 0) {
 				wret = fs_write(wfp, buf, ret);
 				if (wret > 0) {
