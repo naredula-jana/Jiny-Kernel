@@ -22,6 +22,11 @@ struct semaphore
 typedef struct semaphore *sys_sem_t;
 /* ipc */
 
+void *mutexCreate();
+int mutexLock(void *p);
+int mutexUnLock(void *p);
+int mutexDestroy(void *p);
+
 int sem_alloc(struct semaphore *sem, uint8_t count);
 int sem_free(struct semaphore *sem);
 

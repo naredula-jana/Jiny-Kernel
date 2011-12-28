@@ -12,6 +12,28 @@
 #ifndef IPC_C
 #define IPC_C
 #include "interface.h"
+void *mutexCreate() { // TODO implementing TODO
+    struct semaphore *sem = mm_malloc(sizeof(struct semaphore),0);
+
+    sem_alloc(sem, 1);
+    return sem;
+}
+int mutexLock(void *p){
+	if (p==0) return 0;
+	while (sys_arch_sem_wait(p,100) != 1) ;
+	return 1;
+}
+int mutexUnLock(void *p) {
+	if (p==0) return 0;
+	sys_sem_signal(p);
+	return 1;
+}
+
+int mutexDestroy(void *p) {
+	if (p==0) return 0;
+	sys_sem_free(p);
+	return 1;
+}
 
 /* this call consume system resources */
 int sem_alloc(struct semaphore *sem,uint8_t count)

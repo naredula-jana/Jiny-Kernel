@@ -129,10 +129,10 @@ unsigned long SYS_fs_open(char *filename, int mode, int flags) {
 	return -1;
 }
 
-unsigned long fs_open(char *filename, int mode, int flags) {
+unsigned long fs_open(char *filename, int flags, int mode) {
 	if (vfs_fs == 0)
 		return 0;
-	return vfs_fs->open(filename, mode);
+	return vfs_fs->open(filename, flags, mode);
 }
 
 unsigned long SYS_fs_fdatasync(unsigned long fd) {
@@ -389,10 +389,18 @@ ssize_t SYS_fs_read(unsigned long fd, unsigned char *buff, unsigned long len) {
 	return vfsread(file, buff, len);
 }
 
+static int vfsClose(struct file *filep)
+{
+	if (filep->inode != 0) fs_putInode(filep->inode);
+	filep->inode=0;
+	kmem_cache_free(g_slab_filep, filep);
+	return 1;
+}
+
 int fs_close(struct file *file) {
 	if (vfs_fs == 0)
 		return 0;
-	return vfs_fs->close(file);
+	return vfsClose(file);
 }
 
 unsigned long SYS_fs_close(unsigned long fd) {

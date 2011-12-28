@@ -30,7 +30,7 @@ static int p9ClientInit() {
 	if (addr != 0) {
 		ret = p9_read_rpc(&client, "ds", &msg_size, version);
 	}
-	DEBUG("New cmd:%x size:%x version:%s \n",ret, msg_size,version);
+	DEBUG("New cmd:%x size:%x version:%s  pkt_buf:%x\n",ret, msg_size,version,client.pkt_buf);
 
 	client.type = P9_TYPE_TATTACH;
 	client.tag = 0x13;
@@ -45,46 +45,127 @@ static int p9ClientInit() {
 	client.next_free_fid = client.root_fid+1;
 	return 1;
 }
-static int p9_open(uint32_t fid, int mode) {
+static int p9_open(uint32_t fid, unsigned char *filename, int flags, int arg_mode) {
 	unsigned long addr;
 	uint8_t mode_b;
-	int ret;
+	uint32_t perm;
+	int i,ret=-1;
 
-	client.type = P9_TYPE_TOPEN;
-	if (mode ==1) mode_b=1;
-	addr = p9_write_rpc(&client, "db", fid, mode_b);
+	if (flags & O_RDONLY)
+		mode_b = 0;
+	else if (flags & O_WRONLY)
+		mode_b = 1;
+	else if (flags & O_RDWR)
+		mode_b = 2;
+	if (flags & O_CREAT) {
+		client.type = P9_TYPE_TCREATE;
+		perm = 0x666;
+		addr = p9_write_rpc(&client, "dsdb", fid, filename, perm, mode_b);
+
+	} else {
+		client.type = P9_TYPE_TOPEN;
+		addr = p9_write_rpc(&client, "db", fid, mode_b);
+	}
+
 	if (addr != 0) {
 		ret = p9_read_rpc(&client, "");
-	}
-	return ret;
-}
-static uint32_t p9_walk(unsigned char *filename) {
-	unsigned long addr;
-	int ret;
-	int i, empty_fid = -1;
-
-	for (i = 0; i < MAX_P9_FILES; i++) {
-		if (client.files[i].fid != 0) {
-			if (ut_strcmp(client.files[i].name, filename) == 0) {
-				return client.files[i].fid;
+		if (client.recv_type == P9_TYPE_RCREATE) {/* remove the directory fid , it is replaced with the newly created fid*/
+			for (i = 0; i < MAX_P9_FILES; i++) {
+				if (client.files[i].fid == fid) {
+					client.files[i].name[0] = '\0';
+					client.files[i].parent_fid = -1;
+					break;
+				}
 			}
+			ret = 1;
+		}else if (client.recv_type == P9_TYPE_ROPEN) {
+			ret = 1;
+		}
+	}
+	return ret;;
+}
+
+static void *walkLock=0;
+//TODO: handling locking in entire p9 using new mutex calls
+static uint32_t p9_walk(unsigned char *filename, int flags, unsigned char **create_filename) {
+	unsigned long addr;
+	static unsigned char names[MAX_P9_FILEDEPTH][MAX_P9_FILELENGTH];
+	int ret, len, levels;
+	int i, j, empty_fd = -1;
+	uint32_t parent_fid, ret_fd = 0;
+
+	i = 0;
+	levels = 0;
+	j = 0;
+	mutexLock(walkLock);
+	while (i < MAX_P9_FILELENGTH && (filename[i] != '\0')) {
+		if (filename[i] == '/') {
+			if (j > 0) {
+				names[levels][j] = '\0';
+				levels++;
+			}
+			j = 0;
+			i++;
 			continue;
 		}
-		if (empty_fid == -1)
-			empty_fid = i;
+		names[levels][j] = filename[i];
+		j++;
+		i++;
 	}
-	client.type = P9_TYPE_TWALK;
-	addr = p9_write_rpc(&client, "ddws", client.root_fid, client.next_free_fid, 1, filename);
-	if (addr != 0) {
-		ret = p9_read_rpc(&client, "");
-		if (empty_fid != -1) {
-			client.files[empty_fid].fid = client.next_free_fid;
-			client.next_free_fid++; /* TODO : there will be collision , the logic need to replaced with better one */
-			ut_strcpy(client.files[empty_fid].name, filename);
-			return client.files[empty_fid].fid;
+	names[levels][j] = '\0';
+	j = 0;
+	parent_fid = client.root_fid;
+	while (j <= levels) { // start to walk
+		empty_fd = -1;
+		ret_fd = 0;
+		for (i = 0; i < MAX_P9_FILES; i++) {
+			if (client.files[i].fid != 0) {
+				if ((ut_strcmp(client.files[i].name, names[j]) == 0) && (client.files[i].parent_fid == parent_fid)) {
+					parent_fid = client.files[i].fid;
+					ret_fd = client.files[i].fid;
+					if (j == levels) { // leaf level
+						goto last;
+					}
+					break;
+				}
+				continue;
+			}
+			if (empty_fd == -1)
+				empty_fd = i;
 		}
+		if (ret_fd == 0) { // walk only if it is not found in cache
+			client.type = P9_TYPE_TWALK;
+			addr = p9_write_rpc(&client, "ddws", parent_fid, client.next_free_fid, 1, names[j]);
+			if (addr != 0) {
+				ret = p9_read_rpc(&client, "");
+				if ((empty_fd != -1) && (client.recv_type == P9_TYPE_RWALK)) {
+					client.files[empty_fd].fid = client.next_free_fid;
+					client.next_free_fid++; /* TODO : there will be collision , the logic need to replaced with better one */
+					ut_strcpy(client.files[empty_fd].name, names[j]);
+					client.files[empty_fd].parent_fid = parent_fid;
+					parent_fid = client.files[empty_fd].fid; /* new fd becoms parent for next walk or search */
+					if (j == levels) {
+						ret_fd = client.files[empty_fd].fid;
+						goto last;
+					}
+				} else {
+					if ((flags&O_CREAT) && (j == levels) && (client.recv_type != P9_TYPE_RWALK))
+					{
+						ret_fd = parent_fid;
+                        len=ut_strlen(filename)-ut_strlen(names[j]);
+                        *create_filename=filename+len;
+						goto last;
+					}
+					ret_fd = 0;
+					goto last;
+				}
+			}
+		}
+		j++;
 	}
-	return 0;
+
+	last: mutexUnLock(walkLock);
+	return ret_fd;
 }
 
 static uint32_t p9_read(uint32_t fid, uint64_t offset, unsigned char *data, uint32_t data_len) {
@@ -127,18 +208,19 @@ static uint32_t p9_write(uint32_t fid, uint64_t offset, unsigned char *data, uin
 }
 
 struct filesystem p9_fs;
-static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, unsigned char *data, int data_len, int mode) {
+static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, unsigned char *data, int data_len, int flags, int mode) {
 	uint32_t fid;
+	unsigned char *createFilename;
 
 	if (inode == 0)
 		return -1;
 	if (type == REQUEST_OPEN) {
-		fid = p9_walk(inode->filename);
+		fid = p9_walk(inode->filename, flags, &createFilename);
 		if (fid > 0) {
 			inode->fs_private = fid;
-			return p9_open(fid, mode);
+			return p9_open(fid, createFilename, flags, mode);
 		} else {
-
+            return -1;
 		}
 	} else if (type == REQUEST_READ) {
 		fid = inode->fs_private;
@@ -149,7 +231,7 @@ static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, u
 	}
 }
 
-static struct file *p9Open(char *filename, int mode) {
+static struct file *p9Open(unsigned char *filename, int flags, int mode) {
 	struct file *filep;
 	struct inode *inodep;
 	int ret;
@@ -169,7 +251,7 @@ static struct file *p9Open(char *filename, int mode) {
 		goto error;
 	if (inodep->fs_private == 0) /* need to get info from host  irrespective the file present, REQUEST_OPEN checks the file modification and invalidated the pages*/
 	{
-		ret = p9Request(REQUEST_OPEN, inodep, 0, 0, 0, mode);
+		ret = p9Request(REQUEST_OPEN, inodep, 0, 0, 0, flags, mode);
 		if (ret < 0)
 			goto error;
 		inodep->file_size = ret;
@@ -177,7 +259,9 @@ static struct file *p9Open(char *filename, int mode) {
 	filep->inode = inodep;
 	filep->offset = 0;
 	return filep;
-	error: if (filep != NULL)
+
+error:
+    if (filep != NULL)
 		kmem_cache_free(g_slab_filep, filep);
 	if (inodep != NULL) {
 		fs_putInode(inodep);
@@ -193,21 +277,18 @@ static int p9Fdatasync(struct file *filep) {
 
 	return 1;
 }
-static int p9Write(struct inode *inode, uint64_t offset, unsigned char *data, int data_len) {
+static int p9Write(struct inode *inode, uint64_t offset, unsigned char *data, unsigned long  data_len) {
 	p9ClientInit();
-    return  p9Request(REQUEST_WRITE, inode, offset, data, data_len, 0);
+    return  p9Request(REQUEST_WRITE, inode, offset, data, data_len, 0, 0);
 }
 
-static int p9Read(struct inode *inode, uint64_t offset, unsigned char *data, int data_len) {
+static int p9Read(struct inode *inode, uint64_t offset, unsigned char *data, unsigned long  data_len) {
 	p9ClientInit();
-    return  p9Request(REQUEST_READ, inode, offset, data, data_len, 0);
+    return  p9Request(REQUEST_READ, inode, offset, data, data_len, 0, 0);
 }
 
 static int p9Close(struct file *filep) {
-	if (filep->inode != 0)
-		fs_putInode(filep->inode);
-	filep->inode = 0;
-	kmem_cache_free(g_slab_filep, filep);
+
 	return 1;
 }
 
@@ -215,10 +296,13 @@ int p9_initFs() {
 //	p9ClientInit(); /* TODO need to include here */
 	p9_fs.open = p9Open;
 	p9_fs.read = p9Read;
-	p9_fs.close = p9Close;
+	p9_fs.close = p9Close; // TODO
 	p9_fs.write = p9Write;
-	p9_fs.fdatasync = p9Fdatasync;
-	p9_fs.lseek = p9Lseek;
+	p9_fs.fdatasync = p9Fdatasync; //TODO
+	p9_fs.lseek = p9Lseek; //TODO
+
+    walkLock=mutexCreate();
+    if (walkLock==0) return 0;
 	fs_registerFileSystem(&p9_fs);
 
 	return 1;

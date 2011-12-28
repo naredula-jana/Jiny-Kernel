@@ -237,7 +237,7 @@ add_head:
 	avail = (vq->vring.avail->idx + vq->num_added++) % vq->vring.num;
 	vq->vring.avail->ring[avail] = head;
 
-	pr_debug("Added buffer head %i to %p\n", head, vq);
+	//pr_debug("Added buffer head %i to %p\n", head, vq);
 	END_USE(vq);
 
 	return vq->num_free;

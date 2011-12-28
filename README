@@ -17,6 +17,24 @@ The goals of the project are:
 	3) Higly modularise:  To define well defined interface between modules , so as any module can be replaced by keeping the interface same. (see include/interface.h for more details.
 
 ------------------------------------------
+Feature Currently Available:
+
+Page Cache : 
+   - LRU and MRU based (based on the research paper)
+   
+File System : 
+   - 9p
+   - Host based file system(proporatory)
+   
+Virtualization:
+    - Xen : xenbus, network driver using xen para.
+    - KVM : virtio - P9
+    
+User level :
+   - user app can run in user mode without libc and without shared libs.
+ 
+
+-----------------------------------------
 page cache Algorithm based on paper:
       Every file is tagged as Long lived(LRU) or short lived(MRU). Based on the tag, the pages of file will processed differently in the page cache. Page cache algorithm tries to evacuate the Short lived files as soon as possible to create a space for the long lived files. From the Application point of view, a file is tagged by using fadvise call after the open call. This approach of tagging will help applications like hadoop to retain the temporary files as long as possible in dirty state before they are removed, this saves disk io both interms of read and write.
 

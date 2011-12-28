@@ -14,12 +14,14 @@
 #include "common.h"
 #include "task.h"
 #include "interface.h"
+struct wait_struct g_hfs_waitqueue;
 
+#if 0  /* host_fs is  becoming obsolute , it is getting replaced with more standard NFS like P9 protocol */
 #define OFFSET_ALIGN(x) ((x/PC_PAGESIZE)*PC_PAGESIZE)
 #define MAX_SERVER_WAIT_SEC 8 /* in units of seconds */
 struct filesystem host_fs;
 static fileCache_t *shm_headerp=0;
-struct wait_struct g_hfs_waitqueue;
+
 
 static inline unsigned char *to_ptr(struct page *p)  
 {
@@ -277,9 +279,6 @@ static ssize_t hfRead(struct file *filep,unsigned char *buff, unsigned long len)
 
 static int hfClose(struct file *filep)
 {
-	if (filep->inode != 0) fs_putInode(filep->inode);
-	filep->inode=0;
-	kmem_cache_free(g_slab_filep, filep);	
 	return 1;	
 }
 
@@ -320,3 +319,4 @@ int init_hostFs()
 	fs_registerFileSystem(&host_fs);
 	return 1;	
 }
+#endif

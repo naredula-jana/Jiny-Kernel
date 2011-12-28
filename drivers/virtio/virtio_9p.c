@@ -124,8 +124,7 @@ int p9_read_rpc(p9_client_t *client, const char *fmt, ...) {
 	ret = p9pdu_read(&pdu, fmt, ap);
 	va_end(ap);
 	DEBUG("Recv Header ret:%x total len :%x stype:%x(%d) rtype:%x(%d) tag:%x \n",ret ,total_len,client->type,client->type,type,type,tag);
-	DEBUG(" : c:%x:%x:%x:%x :%x:%x:%x:%x data:%x:%x:%x:%x\n", recv[0], recv[1], recv[2], recv[3], recv[4], recv[5], recv[6], recv[7],recv[12], recv[13], recv[14], recv[15]);
-	if (type == 107) {
+	if (type == 107) { // TODO better way of handling other and this error
 		recv[100]='\0';
 		DEBUG(" recv error data :%s: \n ",&recv[9]);
 	}
@@ -134,20 +133,59 @@ int p9_read_rpc(p9_client_t *client, const char *fmt, ...) {
 
 int p9_cmd(char *arg1, char *arg2) {
 	unsigned char buf[100];
-	unsigned long  fp;
-	int ret;
-   fp=fs_open(arg1,1,0);
+	unsigned long rfp, wfp;
+	int i, wret, ret;
 
- ut_strcpy(buf,"ABCjanardhana reddy abc 123451111111111");
-   ret=fs_write(fp,buf, 99);
-   buf[10]=0;
-   DEBUG("Before fdatasync \n");
-   fs_fdatasync(fp);
-   DEBUG(" WRITE len :%d data:%s:",ret,buf);
+	//if (arg2 != 0) {
+#if 1
+		rfp = fs_open(arg1, O_RDONLY, 0);
+		if (rfp == 0) {
+			DEBUG("ERROR Cannot open readfile:%s\n",arg1);
+			return 0;
+		}
+		wfp = fs_open(arg2, O_CREAT | O_WRONLY, 0);
+		if (wfp == 0) {
+			DEBUG("ERROR Cannot open writefile:%s\n",arg2);
+			return 0;
+		}
+		for (i = 0; i < 100; i++) {
+			ret = fs_read(rfp, buf, 99);
+			if (ret > 0) {
+				wret = fs_write(wfp, buf, ret);
+				if (wret > 0) {
+					DEBUG("cp wret :%d ret:%d \n",wret,ret);
+					fs_fdatasync(wfp);
+				} else {
+					DEBUG("Fail to write\n");
+					return 0;
+				}
+			} else
+				return 1;
+		}
+#else
+	} else {
+		unsigned long fp;
+		fp = fs_open(arg1, O_CREAT | O_WRONLY, 0);
+		ut_strcpy(buf, "ABCjanardhana reddy abc 123451111111111");
+		ret = fs_write(fp, buf, 99);
+		buf[10] = 0;
+		DEBUG("Before fdatasync \n");
+		fs_fdatasync(fp);
+		DEBUG(" WRITE len :%d data:%s:",ret,buf);
 
-   return 1;
+		fp = fs_open(arg1, 0, 0);
+		if (fp == 0) {
+			DEBUG("Fail to open the file :%s \n",arg1);
+			return 0;
+		}
+		ret = fs_read(fp, buf, 99);
+		buf[15] = '\0';
+		DEBUG(" READ len :%d data:%s:",ret,buf);
+	}
+#endif
+	return 1;
 }
-void virtio_9p_interrupt(registers_t regs) {
+void virtio_9p_interrupt(registers_t regs) { // TODO: handling similar  type of interrupt generating while serving P9 interrupt.
 	unsigned char isr;
 	int ret;
 

@@ -71,9 +71,11 @@ enum p9_msg_t {
         P9_TYPE_RWSTAT,
 };
 
+#define MAX_P9_FILEDEPTH 10
+#define MAX_P9_FILELENGTH 200
 typedef struct {
-	unsigned char name[200];
-	uint32_t fid;
+	unsigned char name[MAX_P9_FILELENGTH];
+	uint32_t parent_fid,fid;
 }p9_file_t;
 #define MAX_P9_FILES 100
 typedef struct  {
@@ -85,7 +87,7 @@ typedef struct  {
 	unsigned char *pkt_buf;
 	unsigned long pkt_len;
 
-	unsigned long *user_data;
+	unsigned char *user_data;
 	unsigned long userdata_len;
 
 	uint32_t root_fid;

@@ -1,4 +1,4 @@
-
+#define DEBUG_ENABLE 1
 #include "9p.h"
 #define cpu_to_le16(x) x /* already intel is little indian */
 #define cpu_to_le32(x) x /* already intel is little indian */
@@ -75,8 +75,7 @@ int p9pdu_finalize(struct p9_fcall *pdu) {
 int p9pdu_read(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 	const char *ptr;
 	int errcode = 0;
-	//va_list ap;
-	//va_start(ap,fmt);
+
 
 	for (ptr = fmt; *ptr; ptr++) {
 		switch (*ptr) {
@@ -127,43 +126,48 @@ int p9pdu_read(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 
 		}
 	}
-	//va_end(ap);
+
 	return errcode;
 }
 int p9pdu_write(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 	const char *ptr;
 	int errcode = 0;
-	//	va_list ap;
-	//	va_start(ap,fmt);
 
+	DEBUG("P9Write: ");
 	for (ptr = fmt; *ptr; ptr++) {
+
 		switch (*ptr) {
 		case 'b': {
 			unsigned char val = va_arg(ap, int);
+			DEBUG(" b:%x",val);
 			if (pdu_write(pdu, &val, sizeof(val)))
 				errcode = -1;
 		}
 			break;
 		case 'w': {
 			uint16_t val = cpu_to_le16(va_arg(ap, int));
+			DEBUG(" w:%x",val);
 			if (pdu_write(pdu, &val, sizeof(val)))
 				errcode = -2;
 		}
 			break;
 		case 'd': {
 			uint32_t val = cpu_to_le32(va_arg(ap, int32_t));
+			DEBUG(" d:%x",val);
 			if (pdu_write(pdu, &val, sizeof(val)))
 				errcode = -3;
 		}
 			break;
 		case 'q': {
 			uint64_t val = cpu_to_le64(va_arg(ap, int64_t));
+			DEBUG(" q:%x",val);
 			if (pdu_write(pdu, &val, sizeof(val)))
 				errcode = -3;
 		}
 			break;
 		case 's': {
 			const char *sptr = va_arg(ap, const char *);
+
 			uint16_t len = 0;
 			if (sptr) {
 				len = ut_strlen(sptr);
@@ -173,11 +177,13 @@ int p9pdu_write(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 			errcode = p9pdu_write_v(pdu, "w", len);
 			if (!errcode && pdu_write(pdu, sptr, len))
 				errcode = -1;
+			DEBUG(" s:%s",sptr);
 		}
 			break;
 
 		}
 	}
-	//va_end(ap);
+	DEBUG(" \n");
+
 	return errcode;
 }
