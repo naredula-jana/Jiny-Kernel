@@ -18,11 +18,13 @@ static int p9ClientInit() {
 
 	if (init != 0)
 		return 1;
+	init = 1;
 
 	client.pkt_buf = (unsigned char *) mm_getFreePages(MEM_CLEAR, 0);
 	client.pkt_len = 4098;
-	init = 1;
 
+	client.lock = mutexCreate();
+    if (client.lock == 0) return 0;
 	client.type = P9_TYPE_TVERSION;
 	client.tag = 0xffff;
 
@@ -59,7 +61,9 @@ static int p9_open(uint32_t fid, unsigned char *filename, int flags, int arg_mod
 		mode_b = 2;
 	if (flags & O_CREAT) {
 		client.type = P9_TYPE_TCREATE;
-		perm = 0x666;
+		perm = 0x1ff; /* this is same as 777 */
+		if (flags & O_DIRECTORY)
+			perm = perm | 0x80000000;
 		addr = p9_write_rpc(&client, "dsdb", fid, filename, perm, mode_b);
 	} else {
 		client.type = P9_TYPE_TOPEN;
@@ -73,7 +77,7 @@ static int p9_open(uint32_t fid, unsigned char *filename, int flags, int arg_mod
 	return ret;;
 }
 
-static void *walkLock=0;
+
 //TODO: handling locking in entire p9 using new mutex calls
 static uint32_t p9_walk(unsigned char *filename, int flags, unsigned char **create_filename) {
 	unsigned long addr;
@@ -85,7 +89,7 @@ static uint32_t p9_walk(unsigned char *filename, int flags, unsigned char **crea
 	i = 0;
 	levels = 0;
 	j = 0;
-	mutexLock(walkLock);
+
 	while (i < MAX_P9_FILELENGTH && (filename[i] != '\0')) {
 		if (filename[i] == '/') {
 			if (j > 0) {
@@ -163,7 +167,7 @@ static uint32_t p9_walk(unsigned char *filename, int flags, unsigned char **crea
 		j++;
 	}
 
-	last: mutexUnLock(walkLock);
+	last:
 	return ret_fd;
 }
 
@@ -205,67 +209,93 @@ static uint32_t p9_write(uint32_t fid, uint64_t offset, unsigned char *data, uin
 	return write_len;
 }
 
+static uint32_t p9_remove(uint32_t fid) {
+	unsigned long addr;
+	int i,ret=0;
+
+	client.type = P9_TYPE_TREMOVE;
+	client.user_data = 0;
+	client.userdata_len = 0;
+
+	addr = p9_write_rpc(&client, "d", fid);
+	if (addr != 0) {
+		ret = p9_read_rpc(&client, "");
+		if (client.recv_type == P9_TYPE_RREMOVE) {
+			ret = 1;
+			for (i = 0; i < MAX_P9_FILES; i++) {
+				if (client.files[i].fid ==fid) { /* remove the fid as the file is sucessfully removed */
+					client.files[i].fid = 0;
+					break;
+				}
+			}
+		}
+	}
+
+	return ret;
+}
+
+static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
+	unsigned long addr;
+	int i,ret=0;
+
+	client.type = P9_TYPE_TSTAT;
+	client.user_data = 0;
+	client.userdata_len = 0;
+
+	addr = p9_write_rpc(&client, "d", fid);
+	if (addr != 0) {
+	//	ret = p9_read_rpc(&client, "wwdbdqdddq",&dummyw,&dummyw, &dummyd,);
+		if (client.recv_type == P9_TYPE_RSTAT) {
+			ret = 1;
+		}
+	}
+
+	return ret;
+}
+
 struct filesystem p9_fs;
+/* This is central switch where the call from vfs routed to the p9 functions */
 static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, unsigned char *data, int data_len, int flags, int mode) {
 	uint32_t fid;
 	unsigned char *createFilename;
+	int ret = -1 ;
 
 	if (inode == 0)
-		return -1;
+		return ret;
+
+	mutexLock(client.lock);
 	if (type == REQUEST_OPEN) {
 		fid = p9_walk(inode->filename, flags, &createFilename);
 		if (fid > 0) {
 			inode->fs_private = fid;
-			return p9_open(fid, createFilename, flags, mode);
+			ret = p9_open(fid, createFilename, flags, mode);
 		} else {
-            return -1;
+            ret = -1;
 		}
 	} else if (type == REQUEST_READ) {
 		fid = inode->fs_private;
-		return p9_read(fid, offset, data, data_len);
+		ret = p9_read(fid, offset, data, data_len);
 	} else if (type == REQUEST_WRITE) {
 		fid = inode->fs_private;
-		return p9_write(fid, offset, data, data_len);
+		ret = p9_write(fid, offset, data, data_len);
+	} else if (type == REQUEST_REMOVE) {
+		fid = inode->fs_private;
+		ret = p9_remove(fid);
+	} else if (type == REQUEST_STAT) {
+		fid = inode->fs_private;
+		ret = p9_stat(fid, data);
 	}
+
+last:
+    mutexUnLock(client.lock);
+    return ret;
 }
 
-static struct file *p9Open(unsigned char *filename, int flags, int mode) {
-	struct file *filep;
-	struct inode *inodep;
-	int ret;
-
+static int p9Open(struct inode *inodep, int flags, int mode) {
 	p9ClientInit();
-	filep = kmem_cache_alloc(g_slab_filep, 0);
-	if (filep == 0)
-		goto error;
-	if (filename != 0) {
-		ut_strcpy(filep->filename, filename);
-	} else {
-		goto error;
-	}
-
-	inodep = fs_getInode(filep->filename);
-	if (inodep == 0)
-		goto error;
-	if (inodep->fs_private == 0) /* need to get info from host  irrespective the file present, REQUEST_OPEN checks the file modification and invalidated the pages*/
-	{
-		ret = p9Request(REQUEST_OPEN, inodep, 0, 0, 0, flags, mode);
-		if (ret < 0)
-			goto error;
-		inodep->file_size = ret;
-	}
-	filep->inode = inodep;
-	filep->offset = 0;
-	return filep;
-
-error:
-    if (filep != NULL)
-		kmem_cache_free(g_slab_filep, filep);
-	if (inodep != NULL) {
-		fs_putInode(inodep);
-	}
-	return 0;
+	return p9Request(REQUEST_OPEN, inodep, 0, 0, 0, flags, mode);
 }
+
 static int p9Lseek(struct file *filep, unsigned long offset, int whence) {
 	filep->offset = offset;
 	return 1;
@@ -275,14 +305,24 @@ static int p9Fdatasync(struct file *filep) {
 
 	return 1;
 }
-static int p9Write(struct inode *inode, uint64_t offset, unsigned char *data, unsigned long  data_len) {
+static int p9Write(struct inode *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
 	p9ClientInit();
-    return  p9Request(REQUEST_WRITE, inode, offset, data, data_len, 0, 0);
+    return  p9Request(REQUEST_WRITE, inodep, offset, data, data_len, 0, 0);
 }
 
-static int p9Read(struct inode *inode, uint64_t offset, unsigned char *data, unsigned long  data_len) {
+static int p9Read(struct inode *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
 	p9ClientInit();
-    return  p9Request(REQUEST_READ, inode, offset, data, data_len, 0, 0);
+    return  p9Request(REQUEST_READ, inodep, offset, data, data_len, 0, 0);
+}
+
+static int p9Remove(struct inode *inodep) {
+	p9ClientInit();
+    return  p9Request(REQUEST_REMOVE, inodep, 0, 0, 0, 0, 0);
+}
+
+static int p9Stat(struct inode *inodep, struct fileStat *statp) {
+	p9ClientInit();
+    return  p9Request(REQUEST_STAT, inodep, 0, statp, 0, 0, 0);
 }
 
 static int p9Close(struct file *filep) {
@@ -296,11 +336,11 @@ int p9_initFs() {
 	p9_fs.read = p9Read;
 	p9_fs.close = p9Close; // TODO
 	p9_fs.write = p9Write;
+	p9_fs.remove = p9Remove;
+	p9_fs.stat = p9Stat;
 	p9_fs.fdatasync = p9Fdatasync; //TODO
 	p9_fs.lseek = p9Lseek; //TODO
 
-    walkLock=mutexCreate();
-    if (walkLock==0) return 0;
 	fs_registerFileSystem(&p9_fs);
 
 	return 1;

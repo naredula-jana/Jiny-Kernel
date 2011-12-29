@@ -89,6 +89,7 @@ typedef struct  {
 
 	unsigned char *user_data;
 	unsigned long userdata_len;
+	void *lock;
 
 	uint32_t root_fid;
 	uint32_t next_free_fid;

@@ -111,6 +111,49 @@ unsigned long fs_putInode(struct inode *inode) {
 
 	return 0;
 }
+
+static struct file *vfsOpen(unsigned char *filename, int flags, int mode) {
+	struct file *filep;
+	struct inode *inodep;
+	int ret;
+
+	filep = kmem_cache_alloc(g_slab_filep, 0);
+	if (filep == 0)
+		goto error;
+	if (filename != 0) {
+		ut_strcpy(filep->filename, filename);
+	} else {
+		goto error;
+	}
+
+	inodep = fs_getInode(filep->filename);
+	if (inodep == 0)
+		goto error;
+	if (inodep->fs_private == 0) /* need to get info from host  irrespective the file present, REQUEST_OPEN checks the file modification and invalidated the pages*/
+	{
+		ret = vfs_fs->open(inodep, flags, mode);
+		if (ret < 0)
+			goto error;
+		inodep->file_size = ret;
+	}
+	filep->inode = inodep;
+	filep->offset = 0;
+	return filep;
+
+error:
+    if (filep != NULL)
+		kmem_cache_free(g_slab_filep, filep);
+	if (inodep != NULL) {
+		fs_putInode(inodep);
+	}
+	return 0;
+}
+unsigned long fs_open(char *filename, int flags, int mode) {
+	if (vfs_fs == 0)
+		return 0;
+	return vfsOpen(filename, flags, mode);
+}
+
 unsigned long SYS_fs_open(char *filename, int mode, int flags) {
 	struct file *filep;
 	int total;
@@ -128,12 +171,6 @@ unsigned long SYS_fs_open(char *filename, int mode, int flags) {
 			fs_close(filep);
 	}
 	return -1;
-}
-
-unsigned long fs_open(char *filename, int flags, int mode) {
-	if (vfs_fs == 0)
-		return 0;
-	return vfs_fs->open(filename, flags, mode);
 }
 
 unsigned long SYS_fs_fdatasync(unsigned long fd) {
@@ -259,7 +296,7 @@ static ssize_t vfswrite(struct file *filep, unsigned char *buff, unsigned long l
 			}
 			page->offset = OFFSET_ALIGN(filep->offset);
 			if (pc_insertPage(filep->inode, page) == 0) {
-				BUG(); /* TODO: as hit once */
+				BUG();
 			}
 		}
 		size = PC_PAGESIZE;
@@ -269,15 +306,13 @@ static ssize_t vfswrite(struct file *filep, unsigned char *buff, unsigned long l
 		ut_memcpy(pcPageToPtr(page)+page_offset, buff + tmp_len, size);
 		pc_pageDirted(page);
 		filep->offset=filep->offset+size;
+		struct inode *inode = filep->inode;
+		if (inode->file_size < filep->offset)
+			inode->file_size = filep->offset;
 		tmp_len = tmp_len + size;
 		DEBUG("write memcpy :%x %x  %d \n",buff,pcPageToPtr(page),size);
 	}
 	error:
-	if (tmp_len > 0) {
-		struct inode *inode = filep->inode;
-		if (inode->file_size < filep->offset)
-			inode->file_size = filep->offset;
-	}
 	return tmp_len;
 }
 ssize_t SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
@@ -415,7 +450,41 @@ unsigned long SYS_fs_close(unsigned long fd) {
 		return 0;
 	return fs_close(file);
 }
+static int vfsRemove(struct file *filep)
+{
+    int ret;
 
+	ret = vfs_fs->remove(filep->inode);
+	if (ret == 1) {
+		if (filep->inode != 0) fs_putInode(filep->inode);
+		filep->inode=0;
+		kmem_cache_free(g_slab_filep, filep);
+	}
+	return ret;
+}
+
+int fs_remove(struct file *file) {
+	if (vfs_fs == 0)
+		return 0;
+	return vfsRemove(file);
+}
+static int vfsStat(struct file *filep)
+{
+    int ret;
+    struct fileStat stat;
+
+	ret = vfs_fs->stat(filep->inode,&stat);
+	if (ret == 1) {
+//TODO
+	}
+	return ret;
+}
+
+int fs_stat(struct file *file) {
+	if (vfs_fs == 0)
+		return 0;
+	return vfsStat(file);
+}
 unsigned long fs_fadvise(struct inode *inode, unsigned long offset,
 		unsigned long len, int advise) {
 	struct page *page;
@@ -449,7 +518,7 @@ unsigned long SYS_fs_fadvise(unsigned long fd, unsigned long offset,
 }
 
 unsigned long fs_registerFileSystem(struct filesystem *fs) {
-	vfs_fs = fs;
+	vfs_fs = fs; // TODO : currently only one lowelevel filsystem is hardwired to vfs.
 	return 1;
 }
 

@@ -146,12 +146,13 @@ int p9_cmd(char *arg1, char *arg2) {
 	int i, wret, ret;
 
 	//if (arg2 != 0) {
-#if 1
+#if 0
 		rfp = fs_open(arg1, O_RDONLY, 0);
 		if (rfp == 0) {
 			DEBUG("ERROR Cannot open readfile:%s\n",arg1);
 			return 0;
 		}
+		//wfp = fs_open("testdir", O_CREAT | O_DIRECTORY, 0);
 		wfp = fs_open(arg2, O_CREAT | O_WRONLY, 0);
 		if (wfp == 0) {
 			DEBUG("ERROR Cannot open writefile:%s\n",arg2);
@@ -172,8 +173,14 @@ int p9_cmd(char *arg1, char *arg2) {
 				return 1;
 		}
 #else
+		if (0) {
 	} else {
 		unsigned long fp;
+
+		fp = fs_open(arg1,  O_WRONLY, 0);
+		fs_remove(fp);
+		return 1;
+
 		fp = fs_open(arg1, O_CREAT | O_WRONLY, 0);
 		ut_strcpy(buf, "ABCjanardhana reddy abc 123451111111111");
 		ret = fs_write(fp, buf, 99);
