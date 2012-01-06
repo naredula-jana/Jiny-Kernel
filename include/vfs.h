@@ -102,9 +102,10 @@ struct inode {
 struct fileStat {
 	uint32_t mode;
 	uint32_t atime,mtime;
-	uint64_t length;
+	uint64_t st_size;
 
 };
+typedef struct fileStat fileStat_t;
 
 
 #endif

@@ -202,10 +202,16 @@ void ut_printf(const char *format, ...) {
 	unsigned long val, flags;
 	int i;
 	char buf[40];
+	char *p;
 
 	spin_lock_irqsave(&display_lock, flags);
 	va_list vl;
 	va_start(vl,format);
+
+	ut_snprintf(buf,35,"%d:",g_jiffies);  // print timestamp before line
+	p=&buf[0];
+	while (*p)
+		ut_putchar(*p++);
 
 	arg++;
 	i = 0;
@@ -213,7 +219,7 @@ void ut_printf(const char *format, ...) {
 		if (c != '%')
 			ut_putchar(c);
 		else {
-			char *p;
+
 
 			c = *format++;
 			switch (c) {

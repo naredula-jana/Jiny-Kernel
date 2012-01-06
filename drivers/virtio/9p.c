@@ -76,7 +76,6 @@ int p9pdu_read(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 	const char *ptr;
 	int errcode = 0;
 
-
 	for (ptr = fmt; *ptr; ptr++) {
 		switch (*ptr) {
 		case 'b': {
@@ -105,6 +104,17 @@ int p9pdu_read(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 				break;
 			}
 			*val = le32_to_cpu(le_val);
+		}
+			break;
+
+		case 'q': {
+			uint64_t *val = va_arg(ap, int64_t *);
+			uint64_t le_val;
+			if (pdu_read(pdu, &le_val, sizeof(le_val))) {
+				errcode = -6;
+				break;
+			}
+			*val = le64_to_cpu(le_val);
 		}
 			break;
 

@@ -237,6 +237,10 @@ static uint32_t p9_remove(uint32_t fid) {
 static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
 	unsigned long addr;
 	int i,ret=0;
+	uint64_t dummyq;
+	uint32_t dummyd;
+	uint16_t dummyw;
+	uint8_t dummyb;
 
 	client.type = P9_TYPE_TSTAT;
 	client.user_data = 0;
@@ -244,7 +248,9 @@ static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
 
 	addr = p9_write_rpc(&client, "d", fid);
 	if (addr != 0) {
-	//	ret = p9_read_rpc(&client, "wwdbdqdddq",&dummyw,&dummyw, &dummyd,);
+		//"wwdbdqdddqssss?sddd"
+		ret = p9_read_rpc(&client, "wwdbdqdddq",&dummyw,&dummyw,&dummyd,&dummyb,&dummyd,&dummyq,&dummyd,&dummyd,&dummyd,&stat->st_size);
+		DEBUG("stats length :%x \n",stat->st_size);
 		if (client.recv_type == P9_TYPE_RSTAT) {
 			ret = 1;
 		}
