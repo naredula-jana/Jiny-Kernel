@@ -45,6 +45,7 @@ void ut_showTrace(unsigned long *stack_top)
 	stack_end = stack_end+TASK_SIZE-10;
 	code_end = &placement_address;
 	ut_printf("\nCALL Trace: %x  code_end:%x  %x :%x  \n",stack,code_end,stack_top,stack_end);
+
 	if (stack_end) {
 		while ((stack_top < stack_end) && i<12) {
 			addr = *stack_top;

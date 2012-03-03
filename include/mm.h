@@ -104,9 +104,9 @@ extern kmem_cache_t *mm_cachep;
 extern page_struct_t *pagecache_map;
 extern unsigned char *pc_startaddr;
 extern unsigned char *pc_endaddr;
-extern unsigned long pc_phy_startaddr,pc_phy_endaddr;
+
 extern struct mm_struct *g_kernel_mm;
-#define is_pc_paddr(addr) (addr>pc_phy_startaddr && addr<=pc_phy_endaddr)
+#define is_pc_paddr(paddr) (paddr>__pa(pc_startaddr) && paddr<=__pa(pc_endaddr))
 /* Page flag bit values */
 #define PG_locked                0
 #define PG_error                 1

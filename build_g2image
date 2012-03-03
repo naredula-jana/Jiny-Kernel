@@ -1,3 +1,4 @@
+make clean
 make
 sudo losetup /dev/loop0 -d
 sudo losetup /dev/loop0  bin/g2_image

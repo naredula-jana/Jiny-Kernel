@@ -35,7 +35,7 @@
 extern int g_syscall_debug;
 extern unsigned long g_debug_level;
 #define SYSCALL_DEBUG(x...) do { \
-	if (g_syscall_debug==1 && g_serial_output==1)	{ut_printf("SYSCALL "); ut_printf(x);} \
+	if (g_syscall_debug==1)	{ut_printf("SYSCALL "); ut_printf(x);} \
 } while (0) 
 
  //#define DEBUG_ENABLE 1

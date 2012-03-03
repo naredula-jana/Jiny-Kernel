@@ -218,7 +218,6 @@ static int sh_sync(char *arg1,char *arg2)
 }
 static int sh_cat(char *arg1,char *arg2)
 {
-	//	unsigned char buf[1024];
 	struct file *fp;
 	int i,ret;
 	fp=fs_open(arg1,0,0);
@@ -238,7 +237,7 @@ static int sh_cat(char *arg1,char *arg2)
 		if (ret > 0)
 		{
 			buf[20]='\0';
-			ut_printf("%d: DATA Read sr :%s: %d \n",i,buf,ret);
+			ut_printf("%d: DATA Read  %d \n",i,ret);
 		}else
 		{
 			ut_printf(" Return value of read :%i: \n",ret);
@@ -277,22 +276,28 @@ static int sh_free_mem(char *arg1,char *arg2)
 	ut_printf(" free addr  %s :%x  order:%x\n",arg1,addr,order);
 	return 1;	
 }
-static int load_test(char *arg1,char *arg2)
+
+static int load_test1(char *arg1,char *arg2)
 {
 //	char *argv[]={"First argument","second argument",0};
 	char *argv[]={0};
 	if (g_current_task->thread.argv==0)
 	{
 		char *arg[5];
-		arg[0]="//home/njana/jiny/test/std_test";
+		arg[0]="test123";
 		arg[1]=0;
         //	SYS_sc_execve("/home/njana/jiny/test/test3",argv,0);
-        	SYS_sc_execve("/home/njana/jiny/test/std_test",arg,0);
+        	SYS_sc_execve("test123",arg,0);
 	}else
 	{
         	SYS_sc_execve(g_current_task->thread.argv,argv,0);
 	}
 	ut_printf(" ERROR: COntrol Never Reaches\n");
+	return 1;
+}
+static int load_test(char *arg1,char *arg2)
+{
+	sc_createKernelThread(load_test1,0,"load_test");
 	return 1;
 }
 static int sh_create(char *arg1,char *arg2)

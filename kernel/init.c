@@ -25,11 +25,14 @@ kmem_cache_t *vm_area_cachep;
 kmem_cache_t *mm_cachep;
 int init_kernel(unsigned long end_addr)
 {
-	ut_printf("Initalising ISR & descriptors \n");
+	ut_printf("Initalising: ISR descriptors.. \n");
 	init_descriptor_tables();
+
+	ut_printf("Initalising: keyboard and serial.. \n");
 	init_driver_keyboard();
 	init_serial();
-	ut_printf("Initalising MEMORY physical memory highest addrss:%x \n",end_addr);
+
+	ut_printf("Initalising: MEMORY physical memory highest addrss:%x \n",end_addr);
 	init_memory(end_addr);
 	kmem_cache_init();
 	kmem_cache_sizes_init();
@@ -37,9 +40,14 @@ int init_kernel(unsigned long end_addr)
 	vm_area_cachep = kmem_cache_create("vm_area_struct",sizeof(struct vm_area_struct), 0,0, NULL, NULL);
 	mm_cachep = kmem_cache_create("mm_struct",sizeof(struct mm_struct), 0,0,NULL,NULL);
 
+	ut_printf("Initalising: syscall,tasks.. \n");
 	init_syscall();
 	init_tasking();
+
+	ut_printf("Initalising: PCI.. \n");
 	init_pci();
+
+	ut_printf("Initalising: VFS.. \n");
 	init_vfs();
 //	ar_registerInterrupt(128,syscall_handler);
 	ut_printf("Initialization completed \n");

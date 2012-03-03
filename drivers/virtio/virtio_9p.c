@@ -104,7 +104,7 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 		addr = virtio_removeFromQueue(virtio_devices[0].vq[0], &len); /* TODO : here sometime returns zero because of some race condition */
 		i++;
 		if (addr == 0) {
-			DEBUG(" RACE CONDITIOn so sleeping for while \n");
+			ut_printf(" RACE CONDITIOn so sleeping for while \n");
 			sc_sleep(300);
 		}
 	}

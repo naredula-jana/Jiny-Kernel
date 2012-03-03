@@ -8,6 +8,7 @@
 *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
 *
 */
+//#define DEBUG_ENABLE 1
 #include "mm.h"
 #include "vfs.h"
 #include "list.h"
@@ -35,7 +36,7 @@ typedef struct page_list{
         atomic_t count;
 }page_list_t;
 
-extern unsigned long g_hostShmPhyAddr;
+
 page_struct_t *pagecache_map;
 unsigned char *pc_startaddr;
 unsigned char *pc_endaddr;
@@ -137,7 +138,7 @@ static int _pagelist_add(page_struct_t *page, page_list_t *list,int tail)
 	atomic_inc(&list->count);
 	spin_unlock_irqrestore(&pc_lock, flags);
 
-	DEBUG(" List INCREASE :%d: type:%d: \n",list->count.counter,list->list_type); 
+//	DEBUG(" List INCREASE :%d: type:%d: \n",list->count.counter,list->list_type);
 	return 1;
 }
 static page_struct_t *_pagelist_remove(page_list_t *list)
@@ -211,7 +212,7 @@ int pc_init(unsigned char *start_addr,unsigned long len)
 	int i;
 
 	unsigned long s = start_addr;
-	start_addr = ((s*PC_PAGESIZE)/PC_PAGESIZE);
+	start_addr = ((s+PC_PAGESIZE)/PC_PAGESIZE)*PC_PAGESIZE;
 	pc_startaddr=(unsigned char *)(start_addr);
 	pc_endaddr=(unsigned char *)start_addr+len;
 	total_pages=len/PC_PAGESIZE;
@@ -238,7 +239,7 @@ int pc_init(unsigned char *start_addr,unsigned long len)
 
 	}
 	pc_totalpages=free_list.count.counter;
-	DEBUG(" startaddr: %x endaddr:%x totalpages:%d reserved size:%d \n",pc_startaddr,pc_endaddr,total_pages,reserved_size);	
+	DEBUG("Pagecache orgstart:%x startaddr: %x endaddr:%x totalpages:%d reserved size:%d \n", s, pc_startaddr, pc_endaddr, total_pages, reserved_size);
 	return 1;
 }
 static int list_count(struct list_head *head)
@@ -295,7 +296,9 @@ unsigned long pc_getVmaPage(struct vm_area_struct *vma,unsigned long offset)
 	page=fs_genericRead(inode,offset);
 	if (page == NULL) return 0;
 
-	ret=to_ptr(page)-pc_startaddr + g_hostShmPhyAddr;
+	//ret=to_ptr(page)-pc_startaddr + g_hostShmPhyAddr;
+	ret=to_ptr(page);
+	ret=__pa(ret);
 	DEBUG(" mapInodepage phy addr :%x  hostphyaddr:%x offset:%x diff:%x \n",ret,g_hostShmPhyAddr,offset,(to_ptr(page)-pc_startaddr));
 	return ret; /* return physical address */
 }

@@ -390,7 +390,7 @@ extern void enter_userspace();
 static unsigned long push_to_userland()
 {
 	struct user_regs *p;
-	DEBUG(" from PUSH_TO_USERLAND \n");
+	DEBUG(" from PUSH113_TO_USERLAND \n");
 	/* From here onwards DO NOT  call any function that consumes stack */
 	asm("cli");
 	asm("movq %%rsp,%0" : "=m" (p));
@@ -465,7 +465,7 @@ unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int clone_flags,
 	unsigned long flags;
 
 
-	SYSCALL_DEBUG("clone fn:%x child_stack:%x flags:%x args:%x \n",fn,child_stack,clone_flags,args);
+//	SYSCALL_DEBUG("clone fn:%x child_stack:%x flags:%x args:%x \n",fn,child_stack,clone_flags,args);
 	/* Initialize the stack  */
 	p = alloc_task_struct();
 	if ( p == 0) BUG();
@@ -530,7 +530,7 @@ unsigned long  SYS_sc_fork()
 int SYS_sc_exit(int status)
 {
 	unsigned long flags;
-	SYSCALL_DEBUG("exit : status:%d \n",status);
+	SYSCALL_DEBUG("sys exit : status:%d \n",status);
 
 	spin_lock_irqsave(&sched_lock, flags);
 	list_del(&g_current_task->task_link);

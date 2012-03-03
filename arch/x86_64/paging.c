@@ -295,11 +295,10 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 			}
 			else if ((level==2 && pde->ps==1) || level ==1) /* Leaf level entries */
 			{
-#if 1 
 				page=(*v & (~0xfff));
-				DEBUG(" Freeing leaf entry from page table level:%d  vaddr:%x paddr:%x pc_start:%x %x \n",level,page,*v,pc_phy_startaddr,pc_phy_endaddr);
+				DEBUG(" Freeing leaf entry from page table level:%d  vaddr:%x paddr:%x  \n",level,page,*v);
 				if (is_pc_paddr(page))
-				{ /* TODO : page cache*/
+				{ /* TODO : page cache, need to decrease the usage count*/
 
 				}else
 				{
@@ -309,7 +308,6 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 					{ /* TODO */
 					}
 				}
-#endif
 				*v=0;
 			}
 			else /* Non leaf level entries */

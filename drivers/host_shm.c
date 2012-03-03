@@ -8,7 +8,7 @@ pci_bar_t host_shm_pci_bar[4];
 unsigned long g_hostShmLen=0;
 unsigned long g_hostShmPhyAddr=0;
 
-unsigned long pc_phy_startaddr,pc_phy_endaddr;
+//unsigned long pc_phy_startaddr,pc_phy_endaddr;
 extern struct wait_struct g_hfs_waitqueue;
 static void host_shm_interrupt(registers_t regs)
 {
@@ -46,8 +46,8 @@ int init_host_shm(pci_dev_header_t *pci_hdr,pci_bar_t bars[], uint32_t len)
         }
 	if (bars[2].addr !=0)
 	{
-		pc_phy_startaddr=bars[2].addr;
-		pc_phy_endaddr=pc_phy_startaddr+bars[2].len;
+	//TODO	pc_phy_startaddr=bars[2].addr;
+	//TODO	pc_phy_endaddr=pc_phy_startaddr+bars[2].len;
 		if ((ret=vm_mmap(0,HOST_SHM_ADDR ,bars[2].len,PROT_WRITE,MAP_FIXED,bars[2].addr))<0)
 		{
 			ut_printf("ERROR : mmap fails for Host_shm addr :%x len:%x ret:%x \n",bars[2].addr,bars[2].len,ret);
