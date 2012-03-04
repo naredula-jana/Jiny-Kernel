@@ -8,7 +8,7 @@
 *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
 *
 */
-#define DEBUG_ENABLE 1
+//#define DEBUG_ENABLE 1
 #include "common.h"
 #include "mm.h"
 #include "vfs.h"

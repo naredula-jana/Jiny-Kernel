@@ -116,7 +116,7 @@ static void notify(struct virtqueue *vq) {
 		DEBUG("ERROR in VIRTIO Notify in VIRT queue :%x\n",vq);
 	}
 
-	DEBUG("VIRTIO NOTIFY in VIRT queue kicking :%x\n",vq);
+	//DEBUG("VIRTIO NOTIFY in VIRT queue kicking :%x\n",vq);
 	/* we write the queue's selector into the notification register to
 	 * signal the other end */
 	outw(dev->pci_ioaddr + VIRTIO_PCI_QUEUE_NOTIFY, index);

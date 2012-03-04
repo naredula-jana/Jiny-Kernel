@@ -1,4 +1,4 @@
-#define DEBUG_ENABLE 1
+//#define DEBUG_ENABLE 1
 #include "common.h"
 #include "pci.h"
 #include "mm.h"
@@ -209,7 +209,7 @@ void virtio_9p_interrupt(registers_t regs) { // TODO: handling similar  type of 
 	unsigned char isr;
 	int ret;
 
-	DEBUG("Recevid virtio interrupt \n");
+	//DEBUG("Recevid virtio interrupt \n");
 	isr = inb(virtio_devices[0].pci_ioaddr + VIRTIO_PCI_ISR);
 	ret = sc_wakeUp(&p9_waitq, NULL); /* wake all the waiting processes */
 }

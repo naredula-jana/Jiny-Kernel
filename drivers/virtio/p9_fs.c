@@ -205,7 +205,7 @@ static uint32_t p9_write(uint32_t fid, uint64_t offset, unsigned char *data, uin
 
 	rd = client.pkt_buf+1024+10;
 	rd[20]='\0';
-	DEBUG("write len :%d  write_rpc ret:%d : \n",data_len,ret);
+	//DEBUG("P9 write len :%d  write_rpc ret:%d : \n",data_len,ret);
 	return write_len;
 }
 

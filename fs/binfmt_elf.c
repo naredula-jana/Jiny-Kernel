@@ -111,7 +111,6 @@ unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsi
 	}
 
 	eppnt = elf_phdata;
-	DEBUG("start address : %x offset :%x \n",ELF_PAGESTART(eppnt->p_vaddr),eppnt->p_offset);
 	fs_lseek(file,(unsigned long)elf_ex.e_phoff,0);
 	retval = fs_read(file, (unsigned char *)eppnt, j);
 	if (retval != j)
@@ -119,7 +118,7 @@ unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsi
 		error = -5;
 		goto out_free_ph;
 	}
-
+	DEBUG("START address : %x offset :%x \n",ELF_PAGESTART(eppnt->p_vaddr),eppnt->p_offset);
 	for (j = 0, i = 0; i<elf_ex.e_phnum; i++)
 		if ((eppnt + i)->p_type == PT_LOAD) j++;
 	if (j == 0)

@@ -259,7 +259,7 @@ void virtqueue_kick(struct virtqueue *_vq)
 
 	/* Need to update avail index before checking if we should notify */
 	virtio_mb();
-
+	vq->notify(&vq->vq); // TODO : JANA extra added for testing purpose
 	if (vq->event ?
 	    vring_need_event(vring_avail_event(&vq->vring), new, old) :
 	    !(vq->vring.used->flags & VRING_USED_F_NO_NOTIFY))

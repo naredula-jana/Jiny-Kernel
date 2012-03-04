@@ -153,11 +153,17 @@ int ar_archSetUserFS(unsigned long addr) /* TODO need to reimplement using LDT *
 {
 	int cpu=0;
 
+
 	/* User fs data segment */
-	seg_descr_setup(&gdt_entries[cpu][UDATA_DESCR], SEG_TYPE_DATA, SEG_DPL_USER,addr, 0xfffff, SEG_FLG_PRESENT | SEG_FLG_64BIT | SEG_FLG_GRAN);
+	//seg_descr_setup(&gdt_entries[cpu][UDATA_DESCR], SEG_TYPE_DATA, SEG_DPL_USER,addr, 0xfffff, SEG_FLG_PRESENT | SEG_FLG_64BIT | SEG_FLG_GRAN);
+	seg_descr_setup(&gdt_entries[cpu][FS_UDATA_DESCR], SEG_TYPE_DATA, SEG_DPL_USER,addr, 0xfffff, SEG_FLG_PRESENT | SEG_FLG_64BIT | SEG_FLG_GRAN);
+//	gdt_entries[cpu][FS_UDATA_DESCR].flags_high = 0xd ; /* TODO temporary hardcoded */
 	gdtr_load(&gdt_ptr);
 
-	g_cpu_state[cpu].user_fs=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
+	//g_cpu_state[cpu].user_fs=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
+	g_cpu_state[cpu].user_fs=GDT_SEL(FS_UDATA_DESCR) | SEG_DPL_USER;; /* 8th location in gdt table */
+//	g_cpu_state[cpu].user_fs=0x23 ; /* TODO : remove later just for testing purpose */
+	g_cpu_state[cpu].user_fs_base=addr ;
 }
 
 

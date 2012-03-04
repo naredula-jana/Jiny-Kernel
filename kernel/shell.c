@@ -136,7 +136,7 @@ static int sh_test3(char *arg1,char *arg2)
 }
 #endif
 
-static char buf[6024];
+static char buf[26024];
 static int sh_mmap(char *arg1,char *arg2)
 {
 	struct file *fp;
@@ -232,8 +232,8 @@ static int sh_cat(char *arg1,char *arg2)
 	i=1;
 	while (ret > 0)
 	{	
-		ret=fs_read(fp,buf,5000);
-		buf[5001]='\0';
+		ret=fs_read(fp,buf,20000);
+		buf[20001]='\0';
 		if (ret > 0)
 		{
 			buf[20]='\0';
@@ -284,10 +284,10 @@ static int load_test1(char *arg1,char *arg2)
 	if (g_current_task->thread.argv==0)
 	{
 		char *arg[5];
-		arg[0]="test123";
+		arg[0]=arg1;
 		arg[1]=0;
         //	SYS_sc_execve("/home/njana/jiny/test/test3",argv,0);
-        	SYS_sc_execve("test123",arg,0);
+        	SYS_sc_execve(arg1,arg,0);
 	}else
 	{
         	SYS_sc_execve(g_current_task->thread.argv,argv,0);
@@ -295,17 +295,13 @@ static int load_test1(char *arg1,char *arg2)
 	ut_printf(" ERROR: COntrol Never Reaches\n");
 	return 1;
 }
-static int load_test(char *arg1,char *arg2)
-{
-	sc_createKernelThread(load_test1,0,"load_test");
-	return 1;
-}
+
 static int sh_create(char *arg1,char *arg2)
 {
 	int ret;
 
-	ut_printf("test FORKING before \n"); 
-	ret=sc_createKernelThread(load_test,arg1,"test");
+	ut_printf("test FORKING before : %s \n",arg1);
+	ret=sc_createKernelThread(load_test1,arg1,"test");
 	ut_printf(" Parent process : pid: %d  \n",ret);
 	return 1;
 }

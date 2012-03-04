@@ -183,7 +183,10 @@ void ar_irqHandler(void *p,unsigned int int_no)
 	}else
 	{
 		g_interrupt_handlers[int_no].stat.num_error++;
-		if (int_no != 32)	    ut_printf("UNhandled interrupt ..: %d \n",int_no);
+		if (int_no != 32)	 {
+			//ut_printf("UNhandled interrupt ..: %d \n",int_no);
+
+		}
 	}
 }
 

@@ -16,7 +16,7 @@
    pushq %rax;     \
    pushq %rcx;     \
    pushq %rdx;     \
-   mov %gs:(CPU_STATE_USER_PTD_OFFSET),%rax; \
+   mov %gs:(CPU_STATE_USER_FS_BASE),%rax; \
    movq $0xC0000100, %rcx; \
    movq %rax,%rdx; \
    shr $32,%rdx;\

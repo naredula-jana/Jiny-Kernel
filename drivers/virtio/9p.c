@@ -1,4 +1,4 @@
-#define DEBUG_ENABLE 1
+//#define DEBUG_ENABLE 1
 #include "9p.h"
 #define cpu_to_le16(x) x /* already intel is little indian */
 #define cpu_to_le32(x) x /* already intel is little indian */
