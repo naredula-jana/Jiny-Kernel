@@ -9,6 +9,7 @@ int g_syscall_debug=1;
 long SYS_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags,unsigned long fd, unsigned long off);
 unsigned long snull(unsigned long *args);
 unsigned long SYS_uname(unsigned long *args);
+unsigned long SYS_fs_stat(unsigned long *args);
 unsigned long SYS_arch_prctl(unsigned long code,unsigned long addr);
 
 typedef struct {
@@ -23,7 +24,7 @@ syscalltable_t syscalltable[]=
 	{SYS_fs_open},
 	{SYS_fs_close}, 
 	{snull},
-	{snull}, /* 5 */
+	{SYS_fs_stat}, /* 5 */
 	{snull},
 	{snull},
 	{snull}, 
@@ -215,7 +216,11 @@ static int init_utsname()
 	return 1;
 }
 static int init_uts_done=0;
-
+unsigned long SYS_fs_stat(unsigned long *args) /* TODO : need to implement */
+{
+	SYSCALL_DEBUG("DUMMY fs_stat  args:%x \n",args);
+	return 0;
+}
 unsigned long SYS_uname(unsigned long *args)
 {
 	SYSCALL_DEBUG("uname args:%x \n",args);

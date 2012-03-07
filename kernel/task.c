@@ -302,7 +302,7 @@ unsigned long setup_userstack(unsigned char **argv,unsigned char *env,unsigned l
 	
 	real_stack=USERSTACK_ADDR+USERSTACK_LEN+p-(stack+PAGE_SIZE);
 	*p_aux=p;
-	len=(total_args+1)*8;
+	len=(total_args+1+1)*8; /* we are assuming emoty env */
 	if ((p-len-1) > stack)
 	{
 		unsigned long *t;
@@ -386,6 +386,7 @@ struct user_regs {
 	struct intr_stack_frame isf;
 };
 #define DEFAULT_RFLAGS_VALUE (0x10202)
+#define GLIBC_PASSING 1
 extern void enter_userspace();
 static unsigned long push_to_userland()
 {
@@ -397,8 +398,13 @@ static unsigned long push_to_userland()
 	p=p-1;
 	asm("subq $0xa0,%rsp");
 	p->gpres.rbp=0;
+#ifndef GLIBC_PASSING
 	p->gpres.rsi=g_current_task->thread.userland.sp; /* second argument to main i.e argv */
 	p->gpres.rdi=g_current_task->thread.userland.argc; /* first argument argc */
+#else
+	p->gpres.rsi=0;
+	p->gpres.rdi=0;
+#endif
 	p->gpres.rdx=0;
 	p->gpres.rbx=p->gpres.rcx=0;
 	p->gpres.rax=p->gpres.r10=0;
@@ -411,6 +417,11 @@ static unsigned long push_to_userland()
 	p->isf.rsp=g_current_task->thread.userland.sp;
 	p->isf.cs=GDT_SEL(UCODE_DESCR) | SEG_DPL_USER;
 	p->isf.ss=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
+
+	g_cpu_state[0].user_fs=0;
+	g_cpu_state[0].user_gs=0;
+	g_cpu_state[0].user_fs_base=0;
+
 	enter_userspace();	
 }
 static int free_mm(struct mm_struct *mm)

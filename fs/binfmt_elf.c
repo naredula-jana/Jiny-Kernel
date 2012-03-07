@@ -170,40 +170,43 @@ out:
 		DEBUG(" ERROR in elf loader :%d\n",-error);
 	}else
 	{
-		vm_mmap(0,USERSTACK_ADDR,USERSTACK_LEN,PROT_READ | PROT_WRITE ,MAP_ANONYMOUS,0);	
-		if (stack_len > 0)
-		{
-			aux_vec=aux_addr;
-			if (aux_vec != 0)
-			{
+		vm_mmap(0, USERSTACK_ADDR, USERSTACK_LEN, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0);
+		if (stack_len > 0) {
+			aux_vec = aux_addr;
+			if (aux_vec != 0) {
 				int aux_last;
 
-				aux_index=0;
-				aux_last=(MAX_AUX_VEC_ENTRIES-2)*2;
+				aux_index = 0;
+				aux_last = (MAX_AUX_VEC_ENTRIES - 2) * 2;
 
-				//AUX_ENT(AT_HWCAP, ELF_HWCAP);
-				AUX_ENT(AT_HWCAP, 0); /* TODO */
-        			AUX_ENT(AT_PAGESZ, PAGE_SIZE);
-        			AUX_ENT(AT_CLKTCK, 100);
-        			AUX_ENT(AT_PHDR, load_addr + elf_ex.e_phoff);
-        			AUX_ENT(AT_PHENT, sizeof(struct elf_phdr));
-        			AUX_ENT(AT_PHNUM, elf_ex.e_phnum);
-        			AUX_ENT(AT_BASE, 0);
-        			AUX_ENT(AT_FLAGS, 0);
-        			AUX_ENT(AT_ENTRY, elf_ex.e_entry);
-        			AUX_ENT(AT_UID, 0);
-        			AUX_ENT(AT_EUID, 0);
-        			AUX_ENT(AT_GID, 0);
-        			AUX_ENT(AT_EGID, 0);
-     //   AUX_ENT(AT_SECURE, security_bprm_secureexec(bprm));
+				AUX_ENT(AT_HWCAP, 0xbfebfbff); /* TODO: need to modify*/
+				AUX_ENT(AT_PAGESZ, PAGE_SIZE);
+				AUX_ENT(AT_CLKTCK, 100);
+				AUX_ENT(AT_PHDR, load_addr + elf_ex.e_phoff);
+				AUX_ENT(AT_PHENT, sizeof(struct elf_phdr));
+				AUX_ENT(AT_PHNUM, elf_ex.e_phnum);
+				AUX_ENT(AT_BASE, 0);
+				AUX_ENT(AT_FLAGS, 0);
+				AUX_ENT(AT_ENTRY, elf_ex.e_entry);
 
-				aux_vec[aux_last]=  0x1234567887654321;
-				aux_vec[aux_last+1]=0x1122334455667788;
-        			AUX_ENT(AT_RANDOM, userstack_addr((unsigned long)&aux_vec[aux_last]));
-      //  AUX_ENT(AT_EXECFN, bprm->exec);	
+				AUX_ENT(AT_UID, 0x1f4); /* TODO : remove  UID hard coded to 0x1f4 for the next four entries  */
+				AUX_ENT(AT_EUID, 0x1f4);
+				AUX_ENT(AT_GID, 0x1f4);
+				AUX_ENT(AT_EGID, 0x1f4);
+
+				AUX_ENT(AT_SECURE, 0x0);
+
+				aux_vec[aux_last] = 0x1234567887654321;
+				aux_vec[aux_last + 1] = 0x1122334455667788;
+				AUX_ENT(AT_RANDOM, userstack_addr((unsigned long)&aux_vec[aux_last]));
+
+				aux_vec[aux_last + 2] = 0x34365f363878; /* This is string "x86_64" */
+				AUX_ENT(AT_PLATFORM, userstack_addr((unsigned long)&aux_vec[aux_last+2]));
+
+				//  AUX_ENT(AT_EXECFN, bprm->exec);
 			}
-			ut_memcpy(USERSTACK_ADDR+USERSTACK_LEN-stack_len,tmp_stack,stack_len);
-			
+			ut_memcpy(USERSTACK_ADDR + USERSTACK_LEN - stack_len, tmp_stack, stack_len);
+
 		}
 	}
 	DEBUG(" Program start address(autod) : %x \n",elf_ex.e_entry);

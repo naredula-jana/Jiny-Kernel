@@ -12,8 +12,7 @@ Long term :
 
 Running Linux program:
 - syscalls proper implementation as linux and adding any syscall related fs
-DONE - enable & disabling the prints by variable
-DONE - chnaging filep to fd , and removing the ut_printf
+
 ---------------------------------------------------------
 fixes:
  1) when system call number more then max limit, raising pagefault
@@ -25,8 +24,9 @@ p9 :
   - fseek , stats , close, closing fids, 
   - interpreting qid 
 ----------------------------------  
-TODO for executing userland program:
+
+ for executing userland program(busybox ):
 1) pagecache: freeing and allocating pagecache page by incrementing/decrementing usage count.
 2) fs_seek in loading elf not implemented
-3) while mapping stack address hardcoded
+3) while mapping stack address hardcoded, it may collide with other maps in user program
 
