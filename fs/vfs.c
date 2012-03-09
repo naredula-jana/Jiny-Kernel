@@ -321,7 +321,7 @@ ssize_t SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
 	SYSCALL_DEBUG("write fd:%d buff:%x len:%x \n",fd,buff,len);
 	if (fd == 1) {
 		ut_printf("%s", buff);/* TODO need to terminate the buf with \0  */
-		return 1;
+		return len;
 	}
 
 	file = fd_to_file(fd);

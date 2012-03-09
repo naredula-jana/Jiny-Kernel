@@ -521,6 +521,7 @@ unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int clone_flags,
 	/* link to queue */
 	g_pid++;
 	p->pid=g_pid;
+	p->ppid=g_current_task->pid;
 	p->run_link.next=0;
 	p->run_link.prev=0;
 	p->task_link.next=0;

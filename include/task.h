@@ -33,6 +33,7 @@ struct mm_struct {
         atomic_t count;                      /* How many references to "struct mm_struct" (users count as 1) */
 	struct fs_struct fs;
 	unsigned long brk_addr,brk_len;
+	unsigned long anonymous_addr;
 };
 // This structure defines a 'task' - a process.
 #define MAX_TASK_NAME 40
@@ -42,7 +43,7 @@ struct task_struct {
 	volatile long state;    /* -1 unrunnable, 0 runnable, >0 stopped */
 	unsigned long flags;    /* per process flags, defined below */
 	unsigned long pending_signal;	
-	unsigned long pid;
+	unsigned long pid,ppid;
 	unsigned char name[MAX_TASK_NAME+1];
 	int counter;
 	int sleep_ticks;

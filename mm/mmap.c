@@ -129,7 +129,6 @@ long SYS_vm_mmap(unsigned long fd, unsigned long addr, unsigned long len,
 
 	SYSCALL_DEBUG("mmap fs:%d addr:%x len:%x prot:%x flags:%x pgpff:%x \n",fd,addr,len,prot,flags,pgoff);
 	file=fd_to_file(fd);
-	if (file ==0 ) return 0;
 	return vm_mmap(file,  addr, len, prot, flags, pgoff) ;
 }
 
@@ -162,6 +161,15 @@ long vm_mmap(struct file *file, unsigned long addr, unsigned long len,
 				vma->vm_end=addr+file->inode->file_size;
 
 		}
+	} else if (flags | MAP_ANONYMOUS) {
+		if (addr == 0) {
+			if (mm->anonymous_addr == 0)
+				mm->anonymous_addr = USERANONYMOUS_ADDR;
+			vma->vm_start = mm->anonymous_addr;
+			vma->vm_end = addr + len;
+			mm->anonymous_addr = mm->anonymous_addr+len;
+		}
+
 	}
 	vma_link(mm, vma);
 	return 1;

@@ -9,11 +9,32 @@ int g_syscall_debug=1;
 long SYS_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags,unsigned long fd, unsigned long off);
 unsigned long snull(unsigned long *args);
 unsigned long SYS_uname(unsigned long *args);
-unsigned long SYS_fs_stat(unsigned long *args);
+
 unsigned long SYS_arch_prctl(unsigned long code,unsigned long addr);
+unsigned long SYS_fs_fstat(int fd, void *buf);
+unsigned long SYS_fs_stat(const char *path, void *buf);
+unsigned long SYS_fs_fstat(int fd, void *buf);
+unsigned long SYS_sigaction();
+unsigned long SYS_getuid();
+unsigned long SYS_getgid();
+unsigned long SYS_setuid(unsigned long uid) ;
+unsigned long SYS_setgid(unsigned long gid) ;
+unsigned long SYS_geteuid() ;
+unsigned long SYS_sigaction();
+unsigned long SYS_ioctl();
+unsigned long SYS_getpid();
+unsigned long SYS_getppid();
+unsigned long SYS_wait4(void *arg1, void *arg2, void *arg3, void *arg4);
+struct pollfd {
+    int   fd;         /* file descriptor */
+    short events;     /* requested events */
+    short revents;    /* returned events */
+};
+unsigned long SYS_poll(struct pollfd *fds, int nfds, int timeout);
+unsigned long SYS_getcwd(unsigned char *buf, int len);
+unsigned long SYS_fs_fcntl(int fd, int cmd, void *args);
 
 typedef struct {
-    //    unsigned long (*func)(unsigned long *args);
 	void *func;
 } syscalltable_t;
 
@@ -23,10 +44,10 @@ syscalltable_t syscalltable[]=
 	{SYS_fs_write}, /* 1  */
 	{SYS_fs_open},
 	{SYS_fs_close}, 
-	{snull},
-	{SYS_fs_stat}, /* 5 */
-	{snull},
-	{snull},
+	{SYS_fs_stat},
+	{SYS_fs_fstat}, /* 5 */
+	{SYS_sigaction},
+	{SYS_poll},
 	{snull}, 
 	{SYS_vm_mmap}, 
 	{SYS_vm_mprotect},/* 10 */
@@ -35,7 +56,7 @@ syscalltable_t syscalltable[]=
 	{snull}, 
 	{snull},
 	{snull}, /* 15 */
-	{snull},
+	{SYS_ioctl},
 	{snull},
 	{snull}, 
 	{SYS_fs_readv}, 
@@ -58,7 +79,7 @@ syscalltable_t syscalltable[]=
 	{snull},
 	{snull},
 	{snull}, 
-	{snull}, 
+	{SYS_getpid},
 	{snull}, /* 40 */
 	{snull},
 	{snull},
@@ -80,7 +101,7 @@ syscalltable_t syscalltable[]=
 	{snull}, 
 	{SYS_sc_execve}, 
 	{SYS_sc_exit}, /* 60 */
-	{snull},
+	{SYS_wait4},
 	{SYS_sc_kill},
 	{SYS_uname}, 
 	{snull}, 
@@ -91,14 +112,14 @@ syscalltable_t syscalltable[]=
 	{snull}, 
 	{snull}, /* 70 */
 	{snull},
-	{snull},
+	{SYS_fs_fcntl},
 	{snull}, 
 	{snull}, 
 	{SYS_fs_fdatasync}, /* 75 */
 	{snull},
 	{snull},
 	{snull}, 
-	{snull}, 
+	{SYS_getcwd},
 	{snull}, /* 80 */
 	{snull},
 	{snull},
@@ -121,15 +142,15 @@ syscalltable_t syscalltable[]=
 	{snull}, 
 	{snull}, /* 100 */
 	{snull},
-	{snull},
+	{SYS_getuid},
+	{snull}, 
+	{SYS_getgid},
+	{SYS_setuid}, /* 105 */
+	{SYS_setgid},
+	{SYS_geteuid},
 	{snull}, 
 	{snull}, 
-	{snull}, /* 105 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 110 */
+	{SYS_getppid}, /* 110 */
 	{snull},
 	{snull},
 	{snull}, 
@@ -216,11 +237,7 @@ static int init_utsname()
 	return 1;
 }
 static int init_uts_done=0;
-unsigned long SYS_fs_stat(unsigned long *args) /* TODO : need to implement */
-{
-	SYSCALL_DEBUG("DUMMY fs_stat  args:%x \n",args);
-	return 0;
-}
+
 unsigned long SYS_uname(unsigned long *args)
 {
 	SYSCALL_DEBUG("uname args:%x \n",args);
@@ -240,6 +257,14 @@ unsigned long SYS_arch_prctl(unsigned long code,unsigned long addr)
 		SYSCALL_DEBUG(" ERROR arc_prctl code is invalid \n");
 	return 0;
 }
+unsigned long SYS_getpid() {
+	SYSCALL_DEBUG("getpid :\n");
+	return g_current_task->pid;
+}
+unsigned long SYS_getppid() {
+	SYSCALL_DEBUG("getppid :\n");
+	return g_current_task->ppid;
+}
 unsigned long snull(unsigned long *args)
 {
 	unsigned long syscall_no;
@@ -249,3 +274,90 @@ unsigned long snull(unsigned long *args)
 	while(1);
 	return 1;
 }
+
+/*****************************************
+ TODO : Below are hardcoded system calls , need to make generic *
+ ******************************************/
+unsigned long SYS_getuid() {
+	SYSCALL_DEBUG("getuid(Hardcoded) :\n");
+	return 500;
+}
+unsigned long SYS_getgid() {
+	SYSCALL_DEBUG("getgid(Hardcoded) :\n");
+	return 500;
+}
+unsigned long SYS_setuid(unsigned long uid) {
+	SYSCALL_DEBUG("setuid(Hardcoded) :%x(%d)\n",uid,uid);
+	return 0;
+}
+unsigned long SYS_setgid(unsigned long gid) {
+	SYSCALL_DEBUG("setgid(Hardcoded) :%x(%d)\n",gid,gid);
+	return 0;
+}
+unsigned long SYS_geteuid() {
+	SYSCALL_DEBUG("geteuid(Hardcoded) :\n");
+	return 500;
+}
+unsigned long SYS_sigaction(){
+	SYSCALL_DEBUG("sigaction(Dummy) \n");
+	return 0;
+}
+unsigned long SYS_ioctl(){
+	SYSCALL_DEBUG("ioctl(Dummy) \n");
+	return 0;
+}
+struct stat {
+ unsigned  long i;
+};
+#if 0
+struct stat {
+    dev_t     st_dev;     /* ID of device containing file */
+    ino_t     st_ino;     /* inode number */
+    mode_t    st_mode;    /* protection */
+    nlink_t   st_nlink;   /* number of hard links */
+    uid_t     st_uid;     /* user ID of owner */
+    gid_t     st_gid;     /* group ID of owner */
+    dev_t     st_rdev;    /* device ID (if special file) */
+    off_t     st_size;    /* total size, in bytes */
+    blksize_t st_blksize; /* blocksize for file system I/O */
+    blkcnt_t  st_blocks;  /* number of 512B blocks allocated */
+    time_t    st_atime;   /* time of last access */
+    time_t    st_mtime;   /* time of last modification */
+    time_t    st_ctime;   /* time of last status change */
+};
+#endif
+
+unsigned long SYS_fs_stat(const char *path, void *buf)
+{
+	SYSCALL_DEBUG("stat(Dummy) path:%x buf:%x \n",path,buf);
+	return 0;
+}
+unsigned long SYS_fs_fstat(int fd, void *buf)
+{
+	SYSCALL_DEBUG("fstat(Dummy)  fd:%x buf:%x \n",fd,buf);
+	return 0;
+}
+unsigned long SYS_fs_fcntl(int fd, int cmd, void *args) {
+	SYSCALL_DEBUG("fcntl(Dummy)  fd:%x cmd:%x args:%x\n",fd,cmd,args);
+	return 0;
+}
+unsigned long SYS_wait4(void *arg1, void *arg2, void *arg3, void *arg4) {
+	SYSCALL_DEBUG("wait4(Dummy)  arg1:%x arg2:%x arg3:%x\n",arg1,arg2,arg3);
+	return 0;
+}
+/*************************************
+ * TODO : partially implemented calls
+ * **********************************/
+
+unsigned long SYS_poll(struct pollfd *fds, int nfds, int timeout) {
+	SYSCALL_DEBUG("poll(partial)  fds:%x nfds:%d timeout:%d  \n",fds,nfds,timeout);
+	if (nfds==0 || fds==0 || timeout==0) return 0;
+
+}
+unsigned long SYS_getcwd(unsigned char *buf, int len) {
+	SYSCALL_DEBUG("getcwd(partial)  buf:%x len:%d  \n",buf,len);
+	if (buf == 0) return 0;
+	ut_strcpy(buf,"/root");
+     return buf;
+}
+
