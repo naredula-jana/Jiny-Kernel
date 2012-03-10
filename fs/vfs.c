@@ -319,8 +319,8 @@ ssize_t SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
 	struct file *file;
 
 	SYSCALL_DEBUG("write fd:%d buff:%x len:%x \n",fd,buff,len);
-	if (fd == 1) {
-		ut_printf("%s", buff);/* TODO need to terminate the buf with \0  */
+	if (fd == 1 || fd ==2) { /* TODO: remove the fd==2 later , this is only for testing */
+		ut_printf("write %d\n", len);/* TODO need to terminate the buf with \0  */
 		return len;
 	}
 

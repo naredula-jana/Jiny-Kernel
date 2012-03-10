@@ -157,11 +157,11 @@ long vm_mmap(struct file *file, unsigned long addr, unsigned long len,
 		{
 			vma->vm_flags= vma->vm_flags | MAP_FIXED ;	
 			vma->vm_inode=file->inode;
-			if (len > (file->inode->file_size))
-				vma->vm_end=addr+file->inode->file_size;
+			//if (len > (file->inode->file_size)) /*TODO: need to do stat and find the file length*/
+				//vma->vm_end=addr+file->inode->file_size;
 
 		}
-	} else if (flags | MAP_ANONYMOUS) {
+	} else if (flags & MAP_ANONYMOUS) {
 		if (addr == 0) {
 			if (mm->anonymous_addr == 0)
 				mm->anonymous_addr = USERANONYMOUS_ADDR;

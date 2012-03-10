@@ -14,6 +14,7 @@ unsigned long SYS_arch_prctl(unsigned long code,unsigned long addr);
 unsigned long SYS_fs_fstat(int fd, void *buf);
 unsigned long SYS_fs_stat(const char *path, void *buf);
 unsigned long SYS_fs_fstat(int fd, void *buf);
+unsigned long SYS_fs_dup2(int fd1, int fd2);
 unsigned long SYS_sigaction();
 unsigned long SYS_getuid();
 unsigned long SYS_getgid();
@@ -73,7 +74,7 @@ syscalltable_t syscalltable[]=
 	{snull}, /* 30 */
 	{snull},
 	{snull},
-	{snull}, 
+	{SYS_fs_dup2},
 	{snull}, 
 	{snull}, /* 35 */
 	{snull},
@@ -329,8 +330,13 @@ struct stat {
 
 unsigned long SYS_fs_stat(const char *path, void *buf)
 {
-	SYSCALL_DEBUG("stat(Dummy) path:%x buf:%x \n",path,buf);
-	return 0;
+	SYSCALL_DEBUG("stat(hardcoded) ppath:%x buf:%x \n",path,buf);
+	return -1;
+}
+unsigned long SYS_fs_dup2(int fd1, int fd2)
+{
+	SYSCALL_DEBUG("dup2(hardcoded)  fd1:%x fd2:%x \n",fd1,fd2);
+	return fd2;
 }
 unsigned long SYS_fs_fstat(int fd, void *buf)
 {

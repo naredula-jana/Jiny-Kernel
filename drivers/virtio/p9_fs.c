@@ -258,7 +258,13 @@ static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
 
 	return ret;
 }
-
+void update_size(struct inode *inode,uint64_t offset, int len ) {
+	if (inode !=0 && len > 0) {
+		if (inode->file_size < (offset+len))
+			inode->file_size = offset+len;
+	}
+	return ;
+}
 struct filesystem p9_fs;
 /* This is central switch where the call from vfs routed to the p9 functions */
 static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, unsigned char *data, int data_len, int flags, int mode) {
@@ -281,9 +287,11 @@ static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, u
 	} else if (type == REQUEST_READ) {
 		fid = inode->fs_private;
 		ret = p9_read(fid, offset, data, data_len);
+		update_size(inode,offset,ret);
 	} else if (type == REQUEST_WRITE) {
 		fid = inode->fs_private;
 		ret = p9_write(fid, offset, data, data_len);
+		update_size(inode,offset,ret);
 	} else if (type == REQUEST_REMOVE) {
 		fid = inode->fs_private;
 		ret = p9_remove(fid);

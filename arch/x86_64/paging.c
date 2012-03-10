@@ -394,8 +394,9 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip)
 	vma=vm_findVma(mm,(addr & PAGE_MASK),8); /* length changed to just 8 bytes at maximum , instead of entire page*/
 	if (vma == 0) 
 	{
-		if ( user ==1)
+		if ( user == 1)
 		{
+			DEBUG("ERROR: Segmenttaion Fault addr:%x \n",addr);
 			SYS_sc_exit(1);
 			return 1;
 		}
