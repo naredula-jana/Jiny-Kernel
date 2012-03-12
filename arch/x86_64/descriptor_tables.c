@@ -21,24 +21,6 @@ idt_entry_t idt_entries[256];
 struct cpu_state g_cpu_state[1];
 static tss_t tss[CONFIG_NRCPUS];
 
-int ar_updateCpuState(int cpuid)
-{
-	unsigned long p=g_current_task;
-	if (g_cpu_state[cpuid].user_stack==0) 
-	{
-		g_cpu_state[cpuid].user_stack=USERSTACK_ADDR+USERSTACK_LEN;	
-		/*g_cpu_state[cpuid].user_ds=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
-		g_cpu_state[cpuid].user_es=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
-		g_cpu_state[cpuid].user_fs=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
-		g_cpu_state[cpuid].user_gs=GDT_SEL(UDATA_DESCR) | SEG_DPL_USER; */
-		g_cpu_state[cpuid].user_ds=0;
-		g_cpu_state[cpuid].user_es=0;
-		g_cpu_state[cpuid].user_fs=0;
-		g_cpu_state[cpuid].user_gs=0;
-	}
-	g_cpu_state[cpuid].kernel_stack=p+TASK_SIZE; 
-	return 1;
-}
 // Initialisation routine - zeroes all the interrupt service routines,
 // initialises the GDT and IDT.
 void init_descriptor_tables()
@@ -157,10 +139,27 @@ int ar_archSetUserFS(unsigned long addr) /* TODO need to reimplement using LDT *
 	seg_descr_setup(&gdt_entries[cpu][FS_UDATA_DESCR], SEG_TYPE_DATA, SEG_DPL_USER,addr, 0xfffff, SEG_FLG_PRESENT | SEG_FLG_64BIT | SEG_FLG_GRAN);
 	gdtr_load(&gdt_ptr);
 
-	g_cpu_state[cpu].user_fs=GDT_SEL(FS_UDATA_DESCR) | SEG_DPL_USER;; /* 8th location in gdt table */
+	g_cpu_state[cpu].user_fs=GDT_SEL(FS_UDATA_DESCR) | SEG_DPL_USER; /* 8th location in gdt table */
 	g_cpu_state[cpu].user_fs_base=addr ;
+	g_current_task->thread.userland.user_fs=g_cpu_state[cpu].user_fs;
+	g_current_task->thread.userland.user_fs_base=g_cpu_state[cpu].user_fs_base;
 }
+int ar_updateCpuState(struct task_struct *p)
+{
+	int cpuid=0;
 
+	g_cpu_state[cpuid].user_stack=p->thread.userland.user_stack;
+	g_cpu_state[cpuid].user_ds = p->thread.userland.user_ds;
+	g_cpu_state[cpuid].user_es = p->thread.userland.user_es;
+	g_cpu_state[cpuid].user_fs = p->thread.userland.user_fs;
+	g_cpu_state[cpuid].user_gs = p->thread.userland.user_gs;
+	g_cpu_state[cpuid].user_fs_base = p->thread.userland.user_fs_base;
+	g_cpu_state[cpuid].kernel_stack = (unsigned long) p + TASK_SIZE;
+
+	seg_descr_setup(&gdt_entries[cpuid][FS_UDATA_DESCR], SEG_TYPE_DATA, SEG_DPL_USER, g_cpu_state[cpuid].user_fs_base, 0xfffff, SEG_FLG_PRESENT | SEG_FLG_64BIT | SEG_FLG_GRAN);
+	gdtr_load(&gdt_ptr);
+	return 1;
+}
 
 extern uint8_t ar_irqsTable[];
 extern uint8_t ar_faultsTable[];

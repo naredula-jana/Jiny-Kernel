@@ -373,11 +373,20 @@ unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned ch
 	mm_putFreePages(tmp_stack,0);
 	ut_strncpy(g_current_task->name,file,MAX_TASK_NAME);
 	vm_printMmaps(0,0);
-	ar_updateCpuState(0);
+
 	g_current_task->thread.userland.ip=main_func;
 	g_current_task->thread.userland.sp=t_argv;
 	g_current_task->thread.userland.argc=t_argc;
 	g_current_task->thread.userland.argv=t_argv;
+
+	g_current_task->thread.userland.user_stack = USERSTACK_ADDR+USERSTACK_LEN;
+	g_current_task->thread.userland.user_ds=0;
+	g_current_task->thread.userland.user_es=0;
+	g_current_task->thread.userland.user_gs=0;
+	g_current_task->thread.userland.user_fs=0;
+
+	g_current_task->thread.userland.user_fs_base=0;
+	ar_updateCpuState(g_current_task);
 	push_to_userland();
 }
 
@@ -749,7 +758,7 @@ void sc_schedule()
 		flush_tlb(next->mm->pgd);
 	}	
 /* update the cpu state  and tss state for system calls */
-	ar_updateCpuState(0);
+	ar_updateCpuState(next);
 	ar_setupTssStack((unsigned long)next+TASK_SIZE);
 /* finally switch the task */
 	switch_to(prev,next,prev);

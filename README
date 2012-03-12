@@ -11,10 +11,12 @@ JINY KERNEL 0.1  (JINY :  Jana's tINY)
 	a) To model the page cache(MRU+LRU) suitable for hadoop like applications.
 	b) To model Host based filesystem(HFS): HFS is filesystem run in guest OS but does file i/o using the shared memory between the guest and host os. HFS does not need any block drivers, it communicated with block devices using the shared memory between guest and host OS.  
 ------------------------------------------
+
 The goals of the project are:
 	1) It should be monalitic kernel with a small footprint: To keep kernel size small. This is done by writing paravirtualised drivers  if it not running on the bare metal. To begin with, file system is implemented  with a paravirtualised driver.
 	2) powerful command line and debug environment.
 	3) Higly modularise:  To define well defined interface between modules , so as any module can be replaced by keeping the interface same. (see include/interface.h for more details.
+        4) virtualization frendly or supporting para-virtualization on kvm and xen.
 
 ------------------------------------------
 Feature Currently Available:
@@ -24,14 +26,22 @@ Page Cache :
    
 File System : 
    - 9p
-   - Host based file system(proporatory)
+   - Host based file system(proporatory) 
+   - TODO: Ramfs
    
 Virtualization:
-    - Xen : xenbus, network driver using xen para.
-    - KVM : virtio - P9
-    
+    - Xen : xenbus, network driver using xen paravirtualised.
+    - KVM : virtio + P9
+    - TODO: KVM : virtio + network stack(tcp/ip)
+   
+Networking:
+   - TCP/IP from LWIP integrated using XEN paravirtualised Network driver .
+   - TODO - doing the same abov one with KVM virtio network driver.
+
 User level :
-   - user app can run in user mode without libc and without shared libs.
+   - user app(ring-3) can run in user mode without libc and without shared libs.
+   - small user app compiled with libc statically can RUN sucessfully.
+   - CURRENTLY ONGOING: trying busybox with statically compiled(halfway)- implementing necessary system calls.
  
 
 -----------------------------------------
@@ -74,9 +84,6 @@ Interface functions:
 		page_struct_t *pc_getFreePage();
 	when page freed:
 		int pc_putFreePage(struct page *page);
-
-------------------------------------------	
-Host based File System (HFS):
 
 _____________________________
  Running :
@@ -127,3 +134,6 @@ gdbsx -a 1 64  9999
 -----------------------------------
 git push may give error, in that case changes the url in .git/config as : url = git@github.com:naredula-jana/Jiny-Kernel.git
 -------------------------------------
+
+Acknowledgemnts :
+   - Thanks to Kashyap(https://github.com/ckkashyap/) for helping while fixing hardware related issues.

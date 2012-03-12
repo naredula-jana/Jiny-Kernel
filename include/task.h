@@ -14,6 +14,9 @@
 struct user_thread {
 	unsigned long ip,sp;
 	unsigned long argc,argv;
+
+	unsigned long user_stack,user_ds,user_es,user_gs;
+	unsigned long user_fs,user_fs_base;
 };
 struct thread_struct {
 	void *sp; /* kernel stack pointer when scheduling start */
