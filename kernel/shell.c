@@ -292,7 +292,7 @@ static int load_test1(char *arg1,char *arg2)
 	{
 		char name[100];
 		char *arg[5];
-		ut_strcpy(name,"a.out");
+		ut_strcpy(name,"busybox");
 		arg[0]=name;
 		arg[1]=0;
         	SYS_sc_execve(g_current_task->thread.argv,arg,0);

@@ -25,14 +25,14 @@ kmem_cache_t *vm_area_cachep;
 kmem_cache_t *mm_cachep;
 int init_kernel(unsigned long end_addr)
 {
-	ut_printf("Initalising: ISR descriptors.. \n");
+	ut_printf("Initialising: ISR descriptors.. \n");
 	init_descriptor_tables();
 
-	ut_printf("Initalising: keyboard and serial.. \n");
+	ut_printf("Initialising: keyboard and serial.. \n");
 	init_driver_keyboard();
 	init_serial();
 
-	ut_printf("Initalising: MEMORY physical memory highest addrss:%x \n",end_addr);
+	ut_printf("Initialising: MEMORY physical memory highest addrss:%x \n",end_addr);
 	init_memory(end_addr);
 	kmem_cache_init();
 	kmem_cache_sizes_init();

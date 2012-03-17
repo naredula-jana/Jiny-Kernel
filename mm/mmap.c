@@ -122,28 +122,28 @@ struct vm_area_struct *vm_findVma(struct mm_struct *mm,unsigned long addr, unsig
 	return 0;
 }
 
-long SYS_vm_mmap(unsigned long fd, unsigned long addr, unsigned long len,
-		unsigned long prot, unsigned long flags, unsigned long pgoff)
+long SYS_vm_mmap(unsigned long addr, unsigned long len,
+		unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff)
 {
 	struct file *file;
 
-	SYSCALL_DEBUG("mmap fs:%d addr:%x len:%x prot:%x flags:%x pgpff:%x \n",fd,addr,len,prot,flags,pgoff);
+	SYSCALL_DEBUG("mmap fd:%x addr:%x len:%x prot:%x flags:%x pgpff:%x \n",fd,addr,len,prot,flags,pgoff);
 	file=fd_to_file(fd);
 	return vm_mmap(file,  addr, len, prot, flags, pgoff) ;
 }
 
-long vm_mmap(struct file *file, unsigned long addr, unsigned long len,
+unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len,
 		unsigned long prot, unsigned long flags, unsigned long pgoff)
 {
 	struct mm_struct *mm = g_current_task->mm;
 	struct vm_area_struct *vma;
 
-	DEBUG(" mmap : addr:%x len:%x pgoff:%x flags \n",addr,len,pgoff,flags);
+	DEBUG(" mmap : file:%x addr:%x len:%x pgoff:%x flags:%x \n",file,addr,len,pgoff,flags);
 	vma=vm_findVma(mm,addr,len);
-	if (vma) return -1;
+	if (vma) return 0;
 
 	vma = kmem_cache_alloc(vm_area_cachep, 0);
-	if (vma==0) return -2;
+	if (vma==0) return 0;
 
 	vma->vm_flags = flags;		
 	vma->vm_start=addr;
@@ -166,13 +166,13 @@ long vm_mmap(struct file *file, unsigned long addr, unsigned long len,
 			if (mm->anonymous_addr == 0)
 				mm->anonymous_addr = USERANONYMOUS_ADDR;
 			vma->vm_start = mm->anonymous_addr;
-			vma->vm_end = addr + len;
+			vma->vm_end = vma->vm_start + len;
 			mm->anonymous_addr = mm->anonymous_addr+len;
 		}
 
 	}
 	vma_link(mm, vma);
-	return 1;
+	return vma->vm_start;
 }
 
 /*
@@ -180,7 +180,7 @@ long vm_mmap(struct file *file, unsigned long addr, unsigned long len,
  *  anonymous maps.  eventually we may be able to do some
  *  brk-specific accounting here.
  */
-unsigned long vm_brk(unsigned long addr, unsigned long len)
+unsigned long vm_setupBrk(unsigned long addr, unsigned long len)
 {
 	len = PAGE_ALIGN(len);
 	if (!len)

@@ -58,7 +58,7 @@ unsigned long SYS_vm_brk(unsigned long addr);
 int SYS_vm_munmap(unsigned long addr, unsigned long len);
 int SYS_vm_mprotect(const void *addr, int len, int prot);
 unsigned long vm_brk(unsigned long addr, unsigned long len);
-long vm_mmap(struct file *fp, unsigned long addr, unsigned long len,unsigned long prot, unsigned long flags, unsigned long pgoff);
+unsigned long vm_mmap(struct file *fp, unsigned long addr, unsigned long len,unsigned long prot, unsigned long flags, unsigned long pgoff);
 int vm_munmap(struct mm_struct *mm, unsigned long addr, unsigned long len);
 
 /* page cache */

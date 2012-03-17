@@ -33,68 +33,55 @@ symb_table_t *g_symbol_table=0;
 unsigned long g_total_symbols=0;
 /* Check if MAGIC is valid and print the Multiboot information structure
    pointed by ADDR.  */
-void cmain ()
-{
+void cmain() {  /* This is the first c function to be executed */
 	multiboot_info_t *mbi;
 	unsigned long max_addr;
-	int i; 
+	int i;
 	/* Clear the screen.  */
-	ut_cls ();
+	ut_cls();
 
 	/* Am I booted by a Multiboot-compliant boot loader?  */
-	if (g_multiboot_magic != MULTIBOOT_BOOTLOADER_MAGIC)
-	{
-		ut_printf ("INVALID  magic:%x addr :%x   \n", g_multiboot_magic,g_multiboot_info_ptr);
-		while(1);
+	if (g_multiboot_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
+		ut_printf("INVALID  magic:%x addr :%x   \n", g_multiboot_magic, g_multiboot_info_ptr);
+		while (1)
+			;
 		return;
 	}
 
 	/* Set MBI to the address of the Multiboot information structure.  */
 	mbi = (multiboot_info_t *) g_multiboot_info_ptr;
-	mbi=__va(mbi);
-	ut_printf("mbi: %x mem_lower = %x(%d)KB , mem_upper=%x(%d)KB count:%d addr:%x mmaplen:%d mmpaddr:%x \n",mbi,  mbi->mem_lower,mbi->mem_lower, mbi->mem_upper,mbi->mem_upper,mbi->mods_count,mbi->mods_addr,mbi->mmap_length,mbi->mmap_addr);
-	/* Are mmap_* valid?  */
-	if (CHECK_FLAG (mbi->flags, 6))
-	{
-		memory_map_t *mmap;
+	mbi = __va(mbi);
+	ut_printf("mbi: %x mem_lower = %x(%d)KB , mem_upper=%x(%d)KB count:%d addr:%x mmaplen:%d mmpaddr:%x \n", mbi, mbi->mem_lower, mbi->mem_lower, mbi->mem_upper, mbi->mem_upper,
+			mbi->mods_count, mbi->mods_addr, mbi->mmap_length, mbi->mmap_addr);
 
-		ut_printf ("mmap_addr = 0x%x, mmap_length = 0x%x\n",
-				(unsigned) mbi->mmap_addr, (unsigned) mbi->mmap_length);
-		for (mmap = (memory_map_t *) __va(mbi->mmap_addr);
-				(unsigned long) mmap < __va(mbi->mmap_addr) + mbi->mmap_length;
-				mmap = (memory_map_t *) ((unsigned long) mmap
-					+ mmap->size + sizeof (mmap->size)))
-		{
-			ut_printf ("mmap:%x size=0x%x, base_addr high=0x%x low=0x%x,"
-					" length = %x %x, type = 0x%x\n",mmap,
-					(unsigned) mmap->size,
-					(unsigned) mmap->base_addr_high,
-					(unsigned) mmap->base_addr_low,
-					(unsigned) mmap->length_high,
-					(unsigned) mmap->length_low,
-					(unsigned) mmap->type);
-			if (mmap->base_addr_high==0x0 && mmap->base_addr_low==0x100000)
-				max_addr=0x100000 + (unsigned long)mmap->length_low ;
-				
+	/* Are mmap_* valid?  */
+	if (CHECK_FLAG (mbi->flags, 6)) {
+		memory_map_t *mmap;
+		ut_printf("mmap_addr = 0x%x, mmap_length = 0x%x\n", (unsigned) mbi->mmap_addr, (unsigned) mbi->mmap_length);
+		for (mmap = (memory_map_t *) __va(mbi->mmap_addr); (unsigned long) mmap < __va(mbi->mmap_addr) + mbi->mmap_length; mmap = (memory_map_t *) ((unsigned long) mmap
+				+ mmap->size + sizeof(mmap->size))) {
+			ut_printf("mmap:%x size=0x%x, base_addr high=0x%x low=0x%x,"
+				" length = %x %x, type = 0x%x\n", mmap, (unsigned) mmap->size, (unsigned) mmap->base_addr_high, (unsigned) mmap->base_addr_low, (unsigned) mmap->length_high,
+					(unsigned) mmap->length_low, (unsigned) mmap->type);
+			if (mmap->base_addr_high == 0x0 && mmap->base_addr_low == 0x100000)
+				max_addr = 0x100000 + (unsigned long) mmap->length_low;
+
 		}
 	}
-	if  (mbi->mods_count > 0)
-	{
+	if (mbi->mods_count > 0) {
 		multiboot_mod_t *mod;
-	
-		mod=mbi->mods_addr;
-		g_multiboot_mod_addr=mod->mod_start;	
-		g_multiboot_mod_len=mod->mod_end - mod->mod_start;	
+
+		mod = mbi->mods_addr;
+		g_multiboot_mod_addr = mod->mod_start;
+		g_multiboot_mod_len = mod->mod_end - mod->mod_start;
 	}
 	init_kernel(max_addr);
-	sc_createKernelThread(shell_main,0,"shell_main");
-	while(1) 
-	{
-		if ( g_debug_level==1 ) 
-		{
-	//		ut_printf(" Inside the Idle Task \n");
+	sc_createKernelThread(shell_main, 0, "shell_main");
+	while (1) {
+		if (g_debug_level == 1) {
+			//		ut_printf(" Inside the Idle Task \n");
 		}
 		__asm__("hlt");
 	}
-	return ;
+	return;
 }    

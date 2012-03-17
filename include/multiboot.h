@@ -84,6 +84,8 @@ typedef struct memory_map
   uint32_t base_addr_high;
   uint32_t length_low;
   uint32_t length_high;
+#define MULTIBOOT_MEMORY_AVAILABLE              1
+#define MULTIBOOT_MEMORY_RESERVED               2
   uint32_t type;
 } memory_map_t;
 typedef struct multiboot_module {

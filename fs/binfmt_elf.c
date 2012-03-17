@@ -135,13 +135,15 @@ unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsi
 		error=1;
 		if (eppnt->p_filesz > 0)
 		{	
-			error = vm_mmap(file,
+			unsigned long addr;
+			addr = vm_mmap(file,
 				ELF_PAGESTART(eppnt->p_vaddr),
 				eppnt->p_filesz+ELF_PAGEOFFSET(eppnt->p_vaddr) ,
 				PROT_READ | PROT_WRITE | PROT_EXEC,
 				0,
 				(eppnt->p_offset -
 				 ELF_PAGEOFFSET(eppnt->p_vaddr)));
+			if (addr ==0) error =0;
 		}
 		//if (error != ELF_PAGESTART(eppnt->p_vaddr))
 		if (error != 1)
@@ -157,7 +159,7 @@ unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsi
 		bss = eppnt->p_memsz + eppnt->p_vaddr;
 		DEBUG(" bss :%x len:%x memsz:%x elf_bss:%x \n",bss,len,eppnt->p_memsz,elf_bss);
 		if (bss > len) {
-			vm_brk(len, bss - len);
+			vm_setupBrk(len, bss - len);
 		}
 		error = 0;
 	}

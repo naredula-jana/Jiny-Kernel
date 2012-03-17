@@ -315,7 +315,7 @@ void init_memory(unsigned long phy_end_addr)
 	ut_printf(" Initializing memory phy_endaddr : %x video:%x \n",phy_end_addr,VIDEO);
 	virt_start_addr=initialise_paging( phy_end_addr);
 	virt_end_addr=__va(phy_end_addr);
-	ut_printf(" After Paging initalized start_addr: %x endaddr: %x video:%x \n",virt_start_addr,virt_end_addr,VIDEO);
+	ut_printf(" After Paging initialized start_addr: %x endaddr: %x video:%x \n",virt_start_addr,virt_end_addr,VIDEO);
 
 	if (g_multiboot_mod_len > 0) /* symbol file  reside at the end of memory, it can acess only when page table is initialised */
 	{

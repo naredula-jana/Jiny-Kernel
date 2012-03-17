@@ -35,7 +35,7 @@ Virtualization:
     - TODO: KVM : virtio + network stack(tcp/ip)
    
 Networking:
-   - TCP/IP from LWIP integrated using XEN paravirtualised Network driver .
+   - TCP/IP stack(from LWIP) integrated with XEN paravirtualised Network driver .
    - TODO - doing the same abov one with KVM virtio network driver.
 
 User level :
@@ -135,5 +135,5 @@ gdbsx -a 1 64  9999
 git push may give error, in that case changes the url in .git/config as : url = git@github.com:naredula-jana/Jiny-Kernel.git
 -------------------------------------
 
-Acknowledgemnts :
+Acknowledgements :
    - Thanks to Kashyap(https://github.com/ckkashyap/) for helping while fixing hardware related issues.

@@ -1,3 +1,4 @@
+#define DEBUG_ENABLE 1
 #include "pci.h"
 void init_pci();
 uint8_t inb(uint16_t port)
@@ -172,7 +173,7 @@ static int get_bar(pci_addr_t *addr, int barno, uint32_t *start, uint32_t *len)
 		return -1;
 	}
 	if (*start == 0 ) return 0;
-	ut_printf("   barno:%d start :%i len:%i \n",barno,*start,*len);
+	DEBUG("   barno:%d start :%i len:%i \n",barno,*start,*len);
 	return 0;
 }
 #define XEN_PLATFORM_VENDOR_ID 0x5853
@@ -200,8 +201,8 @@ static int read_dev_conf(uint8_t bus , uint8_t dev,uint8_t func)
 	}
 	if (header.vendor_id != 0xffff)
 	{
-		ut_printf(" PCI bus:%d devic:%d func:%d  vendor:%x devices:%x int:%x:%x baser:%i \n",bus,dev,func,header.vendor_id,header.device_id,header.interrupt_line,header.interrupt_pin,header.base_address_registers[0]); 
-		ut_printf("   base addr :%i :%i :%i :%i \n",header.base_address_registers[0],header.base_address_registers[1],header.base_address_registers[2],header.base_address_registers[3]);
+		DEBUG(" PCI bus:%d devic:%d func:%d  vendor:%x devices:%x int:%x:%x baser:%i \n",bus,dev,func,header.vendor_id,header.device_id,header.interrupt_line,header.interrupt_pin,header.base_address_registers[0]);
+		DEBUG("   base addr :%i :%i :%i :%i \n",header.base_address_registers[0],header.base_address_registers[1],header.base_address_registers[2],header.base_address_registers[3]);
 		for(i=0; i<5;i++)
 		{
 			get_bar(&addr,i,&bars[i].addr,&bars[i].len); 
@@ -227,13 +228,15 @@ static int read_dev_conf(uint8_t bus , uint8_t dev,uint8_t func)
 static int pci_initialised=0;
 void init_pci()
 {
-	int i;
+	int i,j;
 	if (pci_initialised == 1) return;
 	pci_initialised=1;
-	ut_printf(" Scanning PCI devices info \n");
-	for (i=0; i<5; i++)
-	{
-		read_dev_conf(0,i,0); 
+	DEBUG(" Scanning PCI devices info started \n");
+	for (i = 0; i < 5; i++) {
+		for (j = 0; j < 5; j++)
+			read_dev_conf(i, j, 0);
 	}
+	DEBUG(" Scanning PCI devices info Ended \n");
+
 	return ;
 }
