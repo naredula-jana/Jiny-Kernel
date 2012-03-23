@@ -11,35 +11,39 @@ addr_t g_kernel_page_dir=0;
 // Defined in kheap.c
 extern addr_t end; 
 addr_t placement_address=(addr_t)&end;
-static int handle_mm_fault(addr_t addr,unsigned long faulting_ip);
-static void mk_pte(pte_t *pte, addr_t fr,int global,int user)
+static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int writeFault);
+static void mk_pte(pte_t *pte, addr_t fr,int global,int user,int rw)
 {
-        pte->present=1;
-        pte->rw=1;
-	if (user == 1) 
-		pte->user=1;
+	pte->present = 1;
+	if (rw == 0)
+	    pte->rw = 0;
 	else
-        	pte->user=0;
-        pte->pwt=0;
-        pte->pcd=0;
-        pte->accessed=0;
-        pte->dirty=0;
-        pte->pat=0;
-        if (global==1)
-                pte->global=1;
-        else
-                pte->global=0;
+		pte->rw = 1;
 
-        pte->avl=0;
+	if (user == 1)
+		pte->user = 1;
+	else
+		pte->user = 0;
 
-        pte->count=0;
-        pte->nx=0;
-	if (pte->frame != 0)
-	{
-		ut_printf("ERROR : non zero value pte:%x value:%x \n",pte,pte->frame);
-		BUG();
+	pte->pwt = 0;
+	pte->pcd = 0;
+	pte->accessed = 0;
+	pte->dirty = 0;
+	pte->pat = 0;
+	if (global == 1)
+		pte->global = 1;
+	else
+		pte->global = 0;
+
+	pte->avl = 0;
+
+	pte->count = 0;
+	pte->nx = 0;
+	if (pte->frame != 0) {
+		/*ut_printf("ERROR : non zero value pte:%x value:%x \n", pte, pte->frame);
+		BUG();*/
 	}
-        pte->frame = fr;
+	pte->frame = fr;
 }
 static void mk_pde(pde_t *pde, addr_t fr,int page_size,int global,int user)  
 {
@@ -137,38 +141,42 @@ int ar_flushTlbGlobal()
                         : "memory");       
 	return 1;
 }
-void ar_pageFault(struct fault_ctx *ctx)
-{
+void ar_pageFault(struct fault_ctx *ctx) {
 	// The faulting address is stored in the CR2 register.
 	addr_t faulting_address;
 	asm volatile("mov %%cr2, %0" : "=r" (faulting_address));
 
 	// The error code gives us details of what happened.
-	int present   = !(ctx->errcode & 0x1); // Page not present
-	int rw = ctx->errcode & 0x2;           // Write operation?
-	int us = ctx->errcode & 0x4;           // Processor was in user-mode?
-	int reserved = ctx->errcode & 0x8;     // Overwritten CPU-reserved bits of page entry?
-	int id = ctx->errcode & 0x10;          // Caused by an instruction fetch?
-	struct gpregs *gp=ctx->gprs;
+	int present = !(ctx->errcode & 0x1); // Page not present
+	int rw = ctx->errcode & 0x2; // Write operation?
+	int us = ctx->errcode & 0x4; // Processor was in user-mode?
+	int reserved = ctx->errcode & 0x8; // Overwritten CPU-reserved bits of page entry?
+	int id = ctx->errcode & 0x10; // Caused by an instruction fetch?
+	struct gpregs *gp = ctx->gprs;
 
 	// Output an error message.
 	DEBUG("new PAGE FAULT  ip:%x  addr: %x \n",ctx->istack_frame->rip,faulting_address);
-        DEBUG("rbp:%x rsi:%x rdi:%x rdx:%x rcx:%x rbx:%x \n",gp->rbp,gp->rsi,gp->rdi,gp->rdx,gp->rcx,gp->rbx);
-        DEBUG("r15:%x r14:%x r13:%x r12:%x r11:%x r10:%x \n",gp->r15,gp->r14,gp->r13,gp->r12,gp->r11,gp->r10);
-        DEBUG("r9:%x r8:%x rax:%x rsp:%x\n",gp->r9,gp->r8,gp->rax,ctx->istack_frame->rsp);	
-	ut_printf("PAGE FAULT ctx:%x  ip:%x  addr: %x ",ctx,ctx->istack_frame->rip,faulting_address);
+	DEBUG("rbp:%x rsi:%x rdi:%x rdx:%x rcx:%x rbx:%x \n",gp->rbp,gp->rsi,gp->rdi,gp->rdx,gp->rcx,gp->rbx);
+	DEBUG("r15:%x r14:%x r13:%x r12:%x r11:%x r10:%x \n",gp->r15,gp->r14,gp->r13,gp->r12,gp->r11,gp->r10);
+	DEBUG("r9:%x r8:%x rax:%x rsp:%x\n",gp->r9,gp->r8,gp->rax,ctx->istack_frame->rsp);
+	ut_printf("PAGE FAULT ctx:%x  ip:%x  addr: %x ", ctx, ctx->istack_frame->rip, faulting_address);
 	if (present) {
 		ut_printf("page fault: Updating present \n");
 		//mm_debug=1;
-		handle_mm_fault(faulting_address,ctx->istack_frame->rip);         
-		return ;
+		handle_mm_fault(faulting_address, ctx->istack_frame->rip, 0);
+		return;
 	}
 	if (rw) {
 		ut_printf("Read-only \n");
-		BUG();
-		}
-	if (us) {DEBUG("user-mode \n");}
-	if (reserved) {DEBUG("reserved \n");}
+		handle_mm_fault(faulting_address, ctx->istack_frame->rip, 1);
+		return;
+	}
+	if (us) {
+		DEBUG("user-mode \n");
+	}
+	if (reserved) {
+		DEBUG("reserved \n");
+	}
 	if (g_current_task->mm != g_kernel_mm) /* user level thread */
 	{
 		SYS_sc_exit(1);
@@ -370,7 +378,7 @@ int ar_pageTableCopy(struct mm_struct *src_mm,struct mm_struct *dest_mm)
 	return 1;
 }
 
-static int handle_mm_fault(addr_t addr,unsigned long faulting_ip)
+static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_fault)
 {
 	struct mm_struct *mm;
 	struct vm_area_struct *vma;
@@ -454,7 +462,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip)
 
 
 	/* By Now we have pointer to all 4 tables , Now check the required page*/
-
+    int writeFlag = vma->vm_prot&PROT_WRITE;
 	if (vma->vm_flags & MAP_ANONYMOUS)
 	{
 		v=mm_getFreePages(MEM_CLEAR,0); /* get page of 4k size for actual page */	
@@ -464,10 +472,21 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip)
 	{
 		if ( vma->vm_inode != NULL)
 		{
+
 			asm volatile("sti");
 			p=(unsigned long *)pc_getVmaPage(vma,vma->vm_private_data+(addr-vma->vm_start));
+			if (write_fault && (writeFlag!= 0)) {
+				addr_t *fp;
+				fp=mm_getFreePages(0,0);
+				ut_memcpy(fp,__va(p),4096);
+				p=__pa(fp);
+				writeFlag = 1 ;
+
+			}else{
+				writeFlag = 0 ; /* this should be a COW data pages */
+			}
 			asm volatile("cli");
-			DEBUG(" Adding to LEAF: pagecache  paddr: %x vaddr: %x\n",p,addr);
+			ut_printf(" Adding to LEAF: pagecache  paddr: %x vaddr: %x\n",p,addr);
 		}else
 		{
 			p=vma->vm_private_data + (addr-vma->vm_start) ; 	
@@ -482,9 +501,9 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip)
 	if (p==0) BUG();
 	pl1=(pl1+(L1_INDEX(addr)));
 	if (addr > KERNEL_ADDR_START ) /* then it is kernel address */
-		mk_pte(__va(pl1),((addr_t)p>>12),1,0);/* global=on, user=off */
+		mk_pte(__va(pl1),((addr_t)p>>12),1,0,1);/* global=on, user=off rw=on*/
 	else	
-		mk_pte(__va(pl1),((addr_t)p>>12),0,1); /* global=off, user=on */
+		mk_pte(__va(pl1),((addr_t)p>>12), 0, 1, writeFlag); /* global=off, user=on rw=flag from vma*/
 
 	ar_flushTlbGlobal();
 	flush_tlb_entry(addr);

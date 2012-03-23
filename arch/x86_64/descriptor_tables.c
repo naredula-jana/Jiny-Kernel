@@ -131,6 +131,10 @@ void init_gdt(int cpu)
 	gdtr_load(&gdt_ptr);
 	tr_load(GDT_SEL(TSS_DESCR));
 }
+void set_userfs(unsigned long fs)
+{
+	asm volatile("mov %0, %%fs":: "r"(fs));
+}
 int ar_archSetUserFS(unsigned long addr) /* TODO need to reimplement using LDT */
 {
 	int cpu=0;
@@ -143,6 +147,7 @@ int ar_archSetUserFS(unsigned long addr) /* TODO need to reimplement using LDT *
 	g_cpu_state[cpu].user_fs_base=addr ;
 	g_current_task->thread.userland.user_fs=g_cpu_state[cpu].user_fs;
 	g_current_task->thread.userland.user_fs_base=g_cpu_state[cpu].user_fs_base;
+	set_userfs(g_cpu_state[cpu].user_fs);
 }
 int ar_updateCpuState(struct task_struct *p)
 {

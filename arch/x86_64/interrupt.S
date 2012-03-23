@@ -5,14 +5,14 @@
 #define SAVE_AND_LOAD_SEGMENT_REGISTERS         \
    mov %ds, %gs:CPU_STATE_USER_DS_OFFSET;            \
    mov %es, %gs:CPU_STATE_USER_ES_OFFSET;            \
-   mov %fs, %gs:CPU_STATE_USER_FS_OFFSET;            \
+ /*  mov %fs, %gs:CPU_STATE_USER_FS_OFFSET;            \*/
    mov %gs, %gs:CPU_STATE_USER_GS_OFFSET;            \
    mov %gs:(CPU_STATE_KERNEL_DS_OFFSET),%ds;
 
 #define RESTORE_USER_SEGMENT_REGISTERS        \
    mov %gs:(CPU_STATE_USER_DS_OFFSET),%ds;  \
    mov %gs:(CPU_STATE_USER_ES_OFFSET),%es; \
-   mov %gs:(CPU_STATE_USER_FS_OFFSET),%fs; \
+/*   mov %gs:(CPU_STATE_USER_FS_OFFSET),%fs; \*/
    pushq %rax;     \
    pushq %rcx;     \
    pushq %rdx;     \

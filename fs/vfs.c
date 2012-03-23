@@ -246,9 +246,15 @@ ssize_t SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt) {
 	struct file *file;
 
 	SYSCALL_DEBUG("writev: fd:%d iovec:%x count:%d\n",fd,iov,iovcnt);
+
 	file = fd_to_file(fd);
 	ret = 0;
 	for (i = 0; i < iovcnt; i++) {
+		if (fd == 1 || fd ==2) { /* TODO: remove the fd==2 later , this is only for testing */
+			ut_printf("write %s\n", iov[i].iov_base);/* TODO need to terminate the buf with \0  */
+			ret= ret + iov[i].iov_len;
+			continue;
+		}
 		tret = fs_write(file, iov[i].iov_base, iov[i].iov_len);
 		if (tret > 0)
 			ret = ret + tret;

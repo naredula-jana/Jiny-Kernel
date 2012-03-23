@@ -552,7 +552,7 @@ int SYS_sc_exit(int status)
 {
 	unsigned long flags;
 	SYSCALL_DEBUG("sys exit : status:%d \n",status);
-
+	set_userfs(0);
 	spin_lock_irqsave(&sched_lock, flags);
 	list_del(&g_current_task->task_link);
 	g_current_task->state=TASK_DEAD;

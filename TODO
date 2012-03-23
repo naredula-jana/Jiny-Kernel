@@ -29,4 +29,5 @@ p9 :
 1) pagecache: freeing and allocating pagecache page by incrementing/decrementing usage count.
 2) fs_seek in loading elf not implemented
 3) while mapping stack address hardcoded, it may collide with other maps in user program
-
+ 4) while reading the file contents, getting stuck @ paging.c:468
+5) fs segment register is currently used only for user application, during app switching the content should be modified in schedule function
