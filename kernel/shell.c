@@ -276,7 +276,7 @@ static int sh_free_mem(char *arg1,char *arg2)
 	ut_printf(" free addr  %s :%x  order:%x\n",arg1,addr,order);
 	return 1;	
 }
-
+static unsigned char tmp_arg2[100];
 static int load_test1(char *arg1,char *arg2)
 {
 //	char *argv[]={"First argument","second argument",0};
@@ -292,10 +292,14 @@ static int load_test1(char *arg1,char *arg2)
 	{
 		char name[100];
 		char *arg[5];
-		ut_strcpy(name,"busybox");
+		ut_strcpy(name,g_current_task->thread.argv);
 		arg[0]=name;
-		arg[1]=0;
-        	SYS_sc_execve(g_current_task->thread.argv,arg,0);
+		if (tmp_arg2[0]=='\0')
+		    arg[1]=0;
+		else
+		    arg[1]=tmp_arg2;
+		arg[2]=0;
+        SYS_sc_execve(g_current_task->thread.argv,arg,0);
 	}
 	ut_printf(" ERROR: COntrol Never Reaches\n");
 	return 1;
@@ -304,8 +308,11 @@ static int load_test1(char *arg1,char *arg2)
 static int sh_create(char *arg1,char *arg2)
 {
 	int ret;
+	char *arg[5];
 
+	tmp_arg2[0]='\0';
 	ut_printf("test FORKING before : %s \n",arg1);
+	ut_strcpy(tmp_arg2,arg2);
 	ret=sc_createKernelThread(load_test1,arg1,"test");
 	ut_printf(" Parent process : pid: %d  \n",ret);
 	return 1;

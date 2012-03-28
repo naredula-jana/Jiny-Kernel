@@ -3,7 +3,7 @@
 #include "isr.h"
 
 unsigned long SYS_printf(unsigned long *args);
-unsigned long SYS_exit(unsigned long args);
+
 unsigned long SYS_fork();
 int g_syscall_debug=1;
 long SYS_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags,unsigned long fd, unsigned long off);
@@ -15,16 +15,19 @@ unsigned long SYS_fs_fstat(int fd, void *buf);
 unsigned long SYS_fs_stat(const char *path, void *buf);
 unsigned long SYS_fs_fstat(int fd, void *buf);
 unsigned long SYS_fs_dup2(int fd1, int fd2);
-unsigned long SYS_sigaction();
+unsigned long SYS_rt_sigaction();
 unsigned long SYS_getuid();
 unsigned long SYS_getgid();
 unsigned long SYS_setuid(unsigned long uid) ;
 unsigned long SYS_setgid(unsigned long gid) ;
+unsigned long SYS_setpgid(unsigned long pid, unsigned long gid);
 unsigned long SYS_geteuid() ;
 unsigned long SYS_sigaction();
 unsigned long SYS_ioctl();
 unsigned long SYS_getpid();
 unsigned long SYS_getppid();
+unsigned long SYS_getpgrp();
+unsigned long SYS_exit_group();
 unsigned long SYS_wait4(void *arg1, void *arg2, void *arg3, void *arg4);
 struct pollfd {
     int   fd;         /* file descriptor */
@@ -32,6 +35,11 @@ struct pollfd {
     short revents;    /* returned events */
 };
 unsigned long SYS_poll(struct pollfd *fds, int nfds, int timeout);
+struct timespec {
+    long   tv_sec;        /* seconds */
+    long   tv_nsec;       /* nanoseconds */
+};
+unsigned long SYS_nanosleep(const struct timespec *req, struct timespec *rem);
 unsigned long SYS_getcwd(unsigned char *buf, int len);
 unsigned long SYS_fs_fcntl(int fd, int cmd, void *args);
 
@@ -39,175 +47,58 @@ typedef struct {
 	void *func;
 } syscalltable_t;
 
-syscalltable_t syscalltable[]=
-{
-	{SYS_fs_read} ,
-	{SYS_fs_write}, /* 1  */
-	{SYS_fs_open},
-	{SYS_fs_close}, 
-	{SYS_fs_stat},
-	{SYS_fs_fstat}, /* 5 */
-	{SYS_sigaction},
-	{SYS_poll},
-	{snull}, 
-	{SYS_vm_mmap}, 
-	{SYS_vm_mprotect},/* 10 */
-	{SYS_vm_munmap},
-	{SYS_vm_brk},
-	{snull}, 
-	{snull},
-	{snull}, /* 15 */
-	{SYS_ioctl},
-	{snull},
-	{snull}, 
-	{SYS_fs_readv}, 
-	{SYS_fs_writev}, /* 20 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 25 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 30 */
-	{snull},
-	{snull},
-	{SYS_fs_dup2},
-	{snull}, 
-	{snull}, /* 35 */
-	{snull},
-	{snull},
-	{snull}, 
-	{SYS_getpid},
-	{snull}, /* 40 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 45 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 50 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 55 */
-	{SYS_sc_clone},
-	{SYS_sc_fork},
-	{snull}, 
-	{SYS_sc_execve}, 
-	{SYS_sc_exit}, /* 60 */
-	{SYS_wait4},
-	{SYS_sc_kill},
-	{SYS_uname}, 
-	{snull}, 
-	{snull}, /* 65 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 70 */
-	{snull},
-	{SYS_fs_fcntl},
-	{snull}, 
-	{snull}, 
-	{SYS_fs_fdatasync}, /* 75 */
-	{snull},
-	{snull},
-	{snull}, 
-	{SYS_getcwd},
-	{snull}, /* 80 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 85 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 90 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 95 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 100 */
-	{snull},
-	{SYS_getuid},
-	{snull}, 
-	{SYS_getgid},
-	{SYS_setuid}, /* 105 */
-	{SYS_setgid},
-	{SYS_geteuid},
-	{snull}, 
-	{snull}, 
-	{SYS_getppid}, /* 110 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 115 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 120 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 125 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 130 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 135 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 140 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 145 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 150 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull}, /* 155 */
-	{snull},
-	{snull},
-	{SYS_arch_prctl}, 
-	{snull}, 
-	{snull}, /* 160 */
-	{snull},
-	{snull},
-	{snull}, 
-	{snull}, 
-	{snull} 
-};
+syscalltable_t syscalltable[] = {
+/* 0 */
+{ SYS_fs_read },/* 0 */{ SYS_fs_write }, { SYS_fs_open }, { SYS_fs_close }, { SYS_fs_stat }, { SYS_fs_fstat }, /* 5 */
+{ snull }, { SYS_poll }, { snull }, { SYS_vm_mmap }, { SYS_vm_mprotect },/* 10 */
+{ SYS_vm_munmap }, { SYS_vm_brk }, { SYS_rt_sigaction }, { snull }, { snull }, /* 15 */
+{ SYS_ioctl }, { snull }, { snull }, { SYS_fs_readv }, { SYS_fs_writev }, /* 20 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 25 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 30 */
+{ snull }, { snull }, { SYS_fs_dup2 }, { snull }, { SYS_nanosleep }, /* 35 = nanosleep */
+{ snull }, { snull }, { snull }, { SYS_getpid }, { snull }, /* 40 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 45 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 50 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 55 */
+{ SYS_sc_clone }, { SYS_sc_fork }, { snull }, { SYS_sc_execve }, { SYS_sc_exit }, /* 60 */
+{ SYS_wait4 }, { SYS_sc_kill }, { SYS_uname }, { snull }, { snull }, /* 65 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 70 */
+{ snull }, { SYS_fs_fcntl }, { snull }, { snull }, { SYS_fs_fdatasync }, /* 75 */
+{ snull }, { snull }, { snull }, { SYS_getcwd }, { snull }, /* 80 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 85 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 90 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 95 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 100 */
+{ snull }, { SYS_getuid }, { snull }, { SYS_getgid }, { SYS_setuid }, /* 105 */
+{ SYS_setgid }, { SYS_geteuid }, { snull }, { SYS_setpgid }, { SYS_getppid }, /* 110 */
+{ SYS_getpgrp }, { snull }, { snull }, { snull }, { snull }, /* 115 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 120 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 125 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 130 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 135 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 140 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 145 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 150 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 155 */
+{ snull }, { snull }, { SYS_arch_prctl }, { snull }, { snull }, /* 160 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 165 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 170 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 175 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 180 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 185 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 190 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 195 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 200 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 205 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 210 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 215 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 220 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 225 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 230  */
+{ SYS_exit_group }, { snull }, { snull }, { snull }, { snull }, /* 235 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 240 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 245 */
+{ snull }, { snull }, { snull }, { snull }, };
 
 
 #define UTSNAME_LENGTH	65 
@@ -262,6 +153,18 @@ unsigned long SYS_getpid() {
 	SYSCALL_DEBUG("getpid :\n");
 	return g_current_task->pid;
 }
+
+
+unsigned long SYS_nanosleep(const struct timespec *req, struct timespec *rem) {
+	int ticks;
+	SYSCALL_DEBUG("nanosleep :\n");
+	if (req == 0)
+		return 0;
+	ticks = req->tv_sec * 100;
+	ticks = ticks + req->tv_nsec / 100000;
+	sc_sleep(ticks); /* units of 10ms */
+	return 0;
+}
 unsigned long SYS_getppid() {
 	SYSCALL_DEBUG("getppid :\n");
 	return g_current_task->ppid;
@@ -272,7 +175,7 @@ unsigned long snull(unsigned long *args)
 
 	asm volatile("movq %%rax,%0" : "=r" (syscall_no));
 	ut_printf("ERROR: SYSCALL null as hit :%d \n",syscall_no);	
-	while(1);
+	SYS_sc_exit(123);
 	return 1;
 }
 
@@ -295,16 +198,34 @@ unsigned long SYS_setgid(unsigned long gid) {
 	SYSCALL_DEBUG("setgid(Hardcoded) :%x(%d)\n",gid,gid);
 	return 0;
 }
+static unsigned long temp_pgid=0;
+unsigned long SYS_setpgid(unsigned long pid, unsigned long gid) {
+	SYSCALL_DEBUG("setpgid(Hardcoded) :%x(%d)\n",gid,gid);
+	temp_pgid=gid;
+	return 0;
+}
 unsigned long SYS_geteuid() {
 	SYSCALL_DEBUG("geteuid(Hardcoded) :\n");
 	return 500;
 }
-unsigned long SYS_sigaction(){
+unsigned long SYS_getpgrp() {
+	SYSCALL_DEBUG("getpgrp(Hardcoded) :\n");
+	return 0x123;
+}
+unsigned long SYS_rt_sigaction(){
 	SYSCALL_DEBUG("sigaction(Dummy) \n");
 	return 0;
 }
-unsigned long SYS_ioctl(){
-	SYSCALL_DEBUG("ioctl(Dummy) \n");
+#define TIOCSPGRP 0x5410
+unsigned long SYS_ioctl(int d, int request, unsigned long *addr){
+	SYSCALL_DEBUG("ioctl(Dummy) d:%x request:%x addr:%x\n",d,request,addr);
+	if (request == TIOCSPGRP && addr != 0) {
+      *addr=temp_pgid;
+      return 0;
+	}
+	if (addr != 0) {
+	   *addr=0x123;
+	}
 	return 0;
 }
 struct stat {
@@ -365,5 +286,10 @@ unsigned long SYS_getcwd(unsigned char *buf, int len) {
 	if (buf == 0) return 0;
 	ut_strcpy(buf,"/root");
      return buf;
+}
+unsigned long SYS_exit_group(){
+	SYSCALL_DEBUG("exit_group :\n");
+	SYS_sc_exit(1);
+	return 0;
 }
 

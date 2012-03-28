@@ -152,6 +152,7 @@ int ut_memcmp(unsigned char *m1, unsigned char *m2,int len)
 // return dest.
 unsigned char *ut_strcpy(unsigned char *dest, const unsigned char *src)
 {
+	if (src==0 ) return dest;
 	do
 	{
 		*dest++ = *src++;

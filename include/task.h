@@ -49,7 +49,7 @@ struct task_struct {
 	unsigned long pid,ppid;
 	unsigned char name[MAX_TASK_NAME+1];
 	int counter;
-	int sleep_ticks;
+	unsigned long sleep_ticks;
 	unsigned long ticks;	
 	struct thread_struct thread;
 	struct mm_struct *mm;

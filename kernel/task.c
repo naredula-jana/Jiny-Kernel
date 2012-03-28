@@ -105,10 +105,10 @@ void inline init_waitqueue(struct wait_struct *waitqueue)
 	waitqueue->lock=SPIN_LOCK_UNLOCKED;
 	return;
 }
-static inline void add_to_waitqueue(struct wait_struct *waitqueue,struct task_struct * p,int dur) 
+static inline void add_to_waitqueue(struct wait_struct *waitqueue,struct task_struct * p,unsigned long  dur)
 {  
 	struct task_struct *tmp,*ptmp;
-	int cum_dur,prev_cum_dur;
+	unsigned long  cum_dur,prev_cum_dur;
 	unsigned long flags;
 
 	spin_lock_irqsave(&waitqueue->lock, flags);
@@ -222,7 +222,7 @@ int sc_wakeUp(struct wait_struct *waitqueue,struct task_struct * p)
 }
 
 
-int sc_wait(struct wait_struct *waitqueue,int ticks)
+int sc_wait(struct wait_struct *waitqueue,unsigned long ticks)
 {
 	g_current_task->state=TASK_INTERRUPTIBLE;
 	add_to_waitqueue(waitqueue,g_current_task,ticks);
@@ -231,7 +231,9 @@ int sc_wait(struct wait_struct *waitqueue,int ticks)
 	else
 	  return g_current_task->sleep_ticks;
 }
-int sc_sleep(int ticks) /* each tick is 100HZ or 10ms */
+unsigned long sc_sleep(unsigned long  ticks) /* each tick is 100HZ or 10ms */
+/* TODO : return number ticks elapesed  instead of 1*/
+/* TODO : when multiple user level thread sleep it is not retuning in corresct time , it may be because the idle thread halting*/
 {
 	g_current_task->state=TASK_INTERRUPTIBLE;
 	add_to_waitqueue(&g_timerqueue,g_current_task,ticks);
@@ -302,7 +304,7 @@ unsigned long setup_userstack(unsigned char **argv,unsigned char *env,unsigned l
 	
 	real_stack=USERSTACK_ADDR+USERSTACK_LEN+p-(stack+PAGE_SIZE);
 	*p_aux=p;
-	len=(total_args+1+1)*8; /* we are assuming emoty env */
+	len=(total_args+1+1)*8; /* TODO: we are assuming empty env */
 	if ((p-len-1) > stack)
 	{
 		unsigned long *t;
@@ -537,6 +539,9 @@ unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int clone_flags,
 	p->task_link.prev=0;
 	p->next_wait=p->prev_wait=NULL;
 
+	p->thread.userland.user_fs = 0;
+	p->thread.userland.user_fs_base = 0;
+
 	spin_lock_irqsave(&sched_lock, flags);
 	list_add_tail(&p->task_link,&task_queue.head);
 	add_to_runqueue(p);
@@ -552,7 +557,7 @@ int SYS_sc_exit(int status)
 {
 	unsigned long flags;
 	SYSCALL_DEBUG("sys exit : status:%d \n",status);
-	set_userfs(0);
+	ar_updateCpuState(g_current_task);
 	spin_lock_irqsave(&sched_lock, flags);
 	list_del(&g_current_task->task_link);
 	g_current_task->state=TASK_DEAD;
@@ -676,6 +681,7 @@ void init_tasking()
 	g_current_task->state=TASK_RUNNING;
 	g_current_task->pid=g_pid;
 	g_current_task->mm=g_kernel_mm;
+	ar_archSetUserFS(0);
 	list_add_tail(&g_current_task->task_link,&task_queue.head);
 	ut_strncpy(g_current_task->name,"idle",MAX_TASK_NAME);
 	g_pid++;

@@ -83,7 +83,7 @@ void sys_sem_signal(sys_sem_t sem)
 
 uint32_t sys_arch_sem_wait(sys_sem_t sem, uint32_t timeout_arg) {
 	unsigned long flags;
-	uint32_t timeout;
+	unsigned long timeout;
 
 	timeout=timeout_arg*100;
 	while (1) {

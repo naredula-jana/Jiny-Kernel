@@ -1,7 +1,7 @@
 JINY KERNEL 0.1  (JINY :  Jana's tINY)
 
 1) WHAT IS JINY?.
- Jiny is a small foot print kernel, initally will be running on a virtual environment and with limited functionality on a baremetal. It is designed to run efficently with small foot print on a virtual environment.
+ Jiny is a small foot print Toy kernel, initally will be running on a virtual environment and with limited functionality on a baremetal. It is designed to run efficently with small foot print on a virtual environment.
 
 2) ON WHAT HARDWARE DOES IT RUN?
  It will be fully tested for x86-64. partially done for x86-32 but discontinued.

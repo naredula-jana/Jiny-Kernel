@@ -159,6 +159,9 @@ unsigned long SYS_fs_open(char *filename, int mode, int flags) {
 	int total;
 
 	SYSCALL_DEBUG("open : filename :%s: mode:%x flags:%x \n",filename,mode,flags);
+	if (ut_strcmp(filename,"/dev/tty") == 0){
+		return 1;
+	}
 	filep = fs_open(filename, mode, flags);
 	total = g_current_task->mm->fs.total;
 	if (filep != 0 && total < MAX_FDS) {
@@ -324,9 +327,9 @@ static ssize_t vfswrite(struct file *filep, unsigned char *buff, unsigned long l
 ssize_t SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
 	struct file *file;
 
-	SYSCALL_DEBUG("write fd:%d buff:%x len:%x \n",fd,buff,len);
+	//SYSCALL_DEBUG("write fd:%d buff:%x len:%x \n",fd,buff,len);
 	if (fd == 1 || fd ==2) { /* TODO: remove the fd==2 later , this is only for testing */
-		ut_printf("write %s\n", buff);/* TODO need to terminate the buf with \0  */
+		ut_printf("%s", buff);/* TODO need to terminate the buf with \0  */
 		return len;
 	}
 

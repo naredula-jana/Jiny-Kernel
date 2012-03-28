@@ -131,23 +131,19 @@ void init_gdt(int cpu)
 	gdtr_load(&gdt_ptr);
 	tr_load(GDT_SEL(TSS_DESCR));
 }
-void set_userfs(unsigned long fs)
-{
-	asm volatile("mov %0, %%fs":: "r"(fs));
-}
+
 int ar_archSetUserFS(unsigned long addr) /* TODO need to reimplement using LDT */
 {
-	int cpu=0;
+	int cpu = 0;
 
-	/* User fs data segment */
-	seg_descr_setup(&gdt_entries[cpu][FS_UDATA_DESCR], SEG_TYPE_DATA, SEG_DPL_USER,addr, 0xfffff, SEG_FLG_PRESENT | SEG_FLG_64BIT | SEG_FLG_GRAN);
-	gdtr_load(&gdt_ptr);
-
-	g_cpu_state[cpu].user_fs=GDT_SEL(FS_UDATA_DESCR) | SEG_DPL_USER; /* 8th location in gdt table */
-	g_cpu_state[cpu].user_fs_base=addr ;
-	g_current_task->thread.userland.user_fs=g_cpu_state[cpu].user_fs;
-	g_current_task->thread.userland.user_fs_base=g_cpu_state[cpu].user_fs_base;
-	set_userfs(g_cpu_state[cpu].user_fs);
+	if (addr == 0) {
+		g_current_task->thread.userland.user_fs = 0;
+		g_current_task->thread.userland.user_fs_base = 0;
+	} else {
+		g_current_task->thread.userland.user_fs = GDT_SEL(FS_UDATA_DESCR) | SEG_DPL_USER; /* 8th location in gdt table */
+		g_current_task->thread.userland.user_fs_base = addr;
+	}
+	ar_updateCpuState(g_current_task);
 }
 int ar_updateCpuState(struct task_struct *p)
 {
@@ -163,6 +159,7 @@ int ar_updateCpuState(struct task_struct *p)
 
 	seg_descr_setup(&gdt_entries[cpuid][FS_UDATA_DESCR], SEG_TYPE_DATA, SEG_DPL_USER, g_cpu_state[cpuid].user_fs_base, 0xfffff, SEG_FLG_PRESENT | SEG_FLG_64BIT | SEG_FLG_GRAN);
 	gdtr_load(&gdt_ptr);
+	asm volatile("mov %0, %%fs":: "r"(g_cpu_state[cpuid].user_fs));
 	return 1;
 }
 

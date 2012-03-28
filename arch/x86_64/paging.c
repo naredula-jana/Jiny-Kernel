@@ -159,15 +159,15 @@ void ar_pageFault(struct fault_ctx *ctx) {
 	DEBUG("rbp:%x rsi:%x rdi:%x rdx:%x rcx:%x rbx:%x \n",gp->rbp,gp->rsi,gp->rdi,gp->rdx,gp->rcx,gp->rbx);
 	DEBUG("r15:%x r14:%x r13:%x r12:%x r11:%x r10:%x \n",gp->r15,gp->r14,gp->r13,gp->r12,gp->r11,gp->r10);
 	DEBUG("r9:%x r8:%x rax:%x rsp:%x\n",gp->r9,gp->r8,gp->rax,ctx->istack_frame->rsp);
-	ut_printf("PAGE FAULT ctx:%x  ip:%x  addr: %x ", ctx, ctx->istack_frame->rip, faulting_address);
+	DEBUG("PAGE FAULT ctx:%x  ip:%x  addr: %x ", ctx, ctx->istack_frame->rip, faulting_address);
 	if (present) {
-		ut_printf("page fault: Updating present \n");
+		DEBUG("page fault: Updating present \n");
 		//mm_debug=1;
 		handle_mm_fault(faulting_address, ctx->istack_frame->rip, 0);
 		return;
 	}
 	if (rw) {
-		ut_printf("Read-only \n");
+		DEBUG("Read-only \n");
 		handle_mm_fault(faulting_address, ctx->istack_frame->rip, 1);
 		return;
 	}
@@ -486,7 +486,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 				writeFlag = 0 ; /* this should be a COW data pages */
 			}
 			asm volatile("cli");
-			ut_printf(" Adding to LEAF: pagecache  paddr: %x vaddr: %x\n",p,addr);
+			DEBUG(" Adding to LEAF: pagecache  paddr: %x vaddr: %x\n",p,addr);
 		}else
 		{
 			p=vma->vm_private_data + (addr-vma->vm_start) ; 	

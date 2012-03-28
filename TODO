@@ -16,12 +16,12 @@ Running Linux program:
 ---------------------------------------------------------
 fixes:
  1) when system call number more then max limit, raising pagefault
-  2) argv strings in sys_execve should be multiples of 8 , otherwise stack pointer is not getting the multiples of 8
-  3) auxilary vector need to added after the environment variable
+ 2) argv strings in sys_execve should be multiples of 8 , otherwise stack pointer is not getting the multiples of 8
+
 ------------------------------
 p9 :
   - unhandled interrupt-15
-  - fseek , stats , close, closing fids, 
+  - fseek, stats, close, closing fids, 
   - interpreting qid 
 ----------------------------------  
 
@@ -29,5 +29,7 @@ p9 :
 1) pagecache: freeing and allocating pagecache page by incrementing/decrementing usage count.
 2) fs_seek in loading elf not implemented
 3) while mapping stack address hardcoded, it may collide with other maps in user program
- 4) while reading the file contents, getting stuck @ paging.c:468
+4) while reading the file contents, getting stuck @ paging.c:468
 5) fs segment register is currently used only for user application, during app switching the content should be modified in schedule function
+6) clearing all data when user thread exit.
+7) running two or more userlevel threads

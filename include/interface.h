@@ -23,8 +23,8 @@ struct iovec {
 int sc_register_waitqueue(struct wait_struct *waitqueue);
 int sc_unregister_waitqueue(struct wait_struct *waitqueue);
 int sc_wakeUp(struct wait_struct *waitqueue,struct task_struct * p);
-int sc_wait(struct wait_struct *waitqueue,int ticks);
-int sc_sleep(int ticks); /* each tick is 100HZ or 10ms */
+int sc_wait(struct wait_struct *waitqueue,unsigned long ticks);
+unsigned long  sc_sleep(unsigned long ticks); /* each tick is 100HZ or 10ms */
 unsigned long SYS_sc_fork();
 unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int flags,void *args);
 int SYS_sc_exit(int status);
