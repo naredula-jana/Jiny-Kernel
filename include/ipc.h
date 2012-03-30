@@ -7,16 +7,18 @@
 
 #define IPC_TIMEOUT 0xffffffffUL
 
+#if 0
 struct wait_struct {
 	struct task_struct *queue;
 	spinlock_t lock;
 };
+#endif
 
 struct semaphore
 {
 	int count;
 	spinlock_t sem_lock; /* this is to protect count */
-	struct wait_struct wait_queue;
+	queue_t wait_queue;
 };
 
 typedef struct semaphore *sys_sem_t;

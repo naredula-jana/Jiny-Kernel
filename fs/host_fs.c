@@ -14,7 +14,7 @@
 #include "common.h"
 #include "task.h"
 #include "interface.h"
-struct wait_struct g_hfs_waitqueue;
+extern queue_t g_hfs_waitqueue;
 
 #if 0  /* host_fs is  becoming obsolute , it is getting replaced with more standard NFS like P9 protocol */
 #define OFFSET_ALIGN(x) ((x/PC_PAGESIZE)*PC_PAGESIZE)

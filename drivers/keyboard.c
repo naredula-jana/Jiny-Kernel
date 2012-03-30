@@ -64,13 +64,12 @@ static int current_pos=0;
 static int read_pos=0;
 struct task_struct *waiting_task=0;
 int keyboard_int=0;
-extern struct wait_struct g_timerqueue;
 void dr_keyBoardBH() /* bottom half */
 {
 	//keyboard_int=0;
 	if (waiting_task != 0)
 	{
-		sc_wakeUp(&g_timerqueue,waiting_task);
+		sc_wakeUp(0,waiting_task);
 		waiting_task=0;
 	}
 }

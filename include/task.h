@@ -38,6 +38,12 @@ struct mm_struct {
 	unsigned long brk_addr,brk_len;
 	unsigned long anonymous_addr;
 };
+typedef struct queue{
+	struct list_head head;
+	atomic_t count;
+	spinlock_t lock; /* newly added */
+}queue_t;
+
 // This structure defines a 'task' - a process.
 #define MAX_TASK_NAME 40
 /*
@@ -49,13 +55,14 @@ struct task_struct {
 	unsigned long pid,ppid;
 	unsigned char name[MAX_TASK_NAME+1];
 	int counter;
-	unsigned long sleep_ticks;
+	long sleep_ticks;
 	unsigned long ticks;	
 	struct thread_struct thread;
 	struct mm_struct *mm;
 	struct list_head run_link; /* run queue */
 	struct list_head task_link; /* task queue */
-	struct task_struct *next_wait,  *prev_wait;  /* wait queue */
+	struct list_head wait_queue; /* wait queue */
+
 	unsigned long magic_numbers[4]; /* already stack is default fill with magic numbers */
 }; 
 

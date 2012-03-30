@@ -18,17 +18,15 @@
 struct task_struct *g_current_task,*g_idle_task;
 struct mm_struct *g_kernel_mm=0;
 
-typedef struct queue{
-	struct list_head head;
-	atomic_t count;
-}queue_t;
+
 static queue_t run_queue;
 static queue_t task_queue;
 static spinlock_t sched_lock  = SPIN_LOCK_UNLOCKED;
-struct wait_struct g_timerqueue;
+
+static queue_t timer_queue;
 unsigned long g_pid=0;
 unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles per second  */
-unsigned long  g_nr_waiting=0;
+
 static struct task_struct *g_task_dead=0;  /* TODO : remove me later */
 
 #define is_kernelThread(task) (task->mm == g_kernel_mm)
@@ -50,13 +48,18 @@ static void free_task_struct(struct task_struct *p)
 }
 static inline void add_to_runqueue(struct task_struct * p) /* Add at the first */
 {
+	if (p->magic_numbers[0]!=MAGIC_LONG || p->magic_numbers[1]!=MAGIC_LONG) /* safety check */
+	{
+		DEBUG(" Task Stack got CORRUPTED task:%x :%x :%x \n",p,p->magic_numbers[0],p->magic_numbers[1]);
+		BUG();
+	}
 	list_add_tail(&p->run_link,&run_queue.head);
 	atomic_inc(&run_queue.count);
 }
 
 static inline struct task_struct *get_from_runqueue()
 {
-	struct task_struct * p;
+	struct task_struct *p;
 	struct list_head *node;
 
 	if (run_queue.head.next == &run_queue.head)
@@ -99,144 +102,158 @@ static inline void move_last_runqueue(struct task_struct * p)
 
 
 /******************************************  WAIT QUEUE *******************/
-void inline init_waitqueue(struct wait_struct *waitqueue)
-{
-	waitqueue->queue=NULL;
-	waitqueue->lock=SPIN_LOCK_UNLOCKED;
+void inline init_waitqueue(queue_t *waitqueue) {
+	INIT_LIST_HEAD(&(waitqueue->head));
+	waitqueue->lock = SPIN_LOCK_UNLOCKED;
+	waitqueue->count.counter = 0;
 	return;
 }
-static inline void add_to_waitqueue(struct wait_struct *waitqueue,struct task_struct * p,unsigned long  dur)
-{  
-	struct task_struct *tmp,*ptmp;
-	unsigned long  cum_dur,prev_cum_dur;
+
+static void add_to_waitqueue(queue_t *waitqueue, struct task_struct * p, long ticks) {
+
+	long cum_ticks,prev_cum_ticks;
+	struct list_head *pos, *prev_pos;
+	struct task_struct *task;
 	unsigned long flags;
 
 	spin_lock_irqsave(&waitqueue->lock, flags);
+	cum_ticks = 0;
+	prev_cum_ticks = 0;
+	if (waitqueue->head.next == &waitqueue->head) {
+		p->sleep_ticks = ticks;
+		list_add_tail(&p->wait_queue, &waitqueue->head);
+	} else {
+		prev_pos = &waitqueue->head;
+		list_for_each(pos, &waitqueue->head) {
+			task = list_entry(pos, struct task_struct, wait_queue);
+			prev_cum_ticks = cum_ticks;
+			cum_ticks = cum_ticks + task->sleep_ticks;
 
-	cum_dur=0;
-	prev_cum_dur=0;	
-	if (waitqueue->queue == NULL) 
-	{
-		waitqueue->queue=p;
-		p->sleep_ticks=dur;
-		p->next_wait=NULL;
-		p->prev_wait=NULL;
-	}else
-	{
-		tmp=waitqueue->queue;
-		while (tmp->next_wait != NULL)
-		{
-			if (dur < cum_dur) break;
-			prev_cum_dur=cum_dur;
-			cum_dur=cum_dur+tmp->sleep_ticks;
-			tmp=tmp->next_wait;
+			if (cum_ticks > ticks) {
+				p->sleep_ticks = (ticks - prev_cum_ticks);
+				task->sleep_ticks = task->sleep_ticks - p->sleep_ticks;
+				list_add(&p->wait_queue, prev_pos);
+				goto last;
+			}
+			prev_pos = pos;
 		}
-		p->next_wait=tmp;
-		/* prev_cum_dur < dur < cum_dir  */
-		if (tmp->prev_wait == NULL) /* Inserting at first node */
-		{
-			if (waitqueue->queue != tmp) BUG();
-			waitqueue->queue=p;
-			p->sleep_ticks=dur;
-			tmp->prev_wait=p;
-			p->prev_wait=NULL;
-		}else
-		{
-			ptmp=tmp->prev_wait;
-			ptmp->next_wait=p;
-			p->prev_wait=ptmp;
-			p->sleep_ticks=dur-prev_cum_dur;
-			tmp->prev_wait=p;
-		}
+		list_add_tail(&p->wait_queue, &waitqueue->head);
 	}
-	g_nr_waiting++;
+
+	last: atomic_inc(&waitqueue->count);
 	spin_unlock_irqrestore(&waitqueue->lock, flags);
 }
-static inline int del_from_waitqueue(struct wait_struct *waitqueue,struct task_struct * p)
-{
-	struct task_struct *next = p->next_wait;
-	struct task_struct *prev = p->prev_wait;
+
+/* delete from the  wait queue */
+static int del_from_waitqueue(queue_t *waitqueue, struct task_struct *p) {
+	struct list_head *pos;
+	struct task_struct *task;
+	int ret = 0;
 	unsigned long flags;
 
-	if (p->state != TASK_INTERRUPTIBLE) return 0;
 	spin_lock_irqsave(&waitqueue->lock, flags);
-	g_nr_waiting--; /* TODO : */
-	if (next != NULL)
-	{
-		next->prev_wait = prev;
-		next->sleep_ticks=next->sleep_ticks + p->sleep_ticks;
-	}
-	if (prev != NULL)
-	{
-		prev->next_wait = next;
+	list_for_each(pos, &waitqueue->head) {
+		task = list_entry(pos, struct task_struct, wait_queue);
+
+		if (p == task) {
+			pos = pos->next;
+			if (pos != &waitqueue->head) {
+				task = list_entry(pos, struct task_struct, wait_queue);
+				task->sleep_ticks = task->sleep_ticks + p->sleep_ticks;
+			}
+			p->sleep_ticks = 0;
+			atomic_dec(&waitqueue->count);
+			ret = 1;
+			list_del(&p->wait_queue);
+			goto last;
+		}
 	}
 
-	if (waitqueue->queue == p)
-	{
-		waitqueue->queue=next;
-	}
-	if (waitqueue->queue == NULL)
-	{
-	}
-	p->next_wait = NULL;
-	p->prev_wait = NULL;
-	p->sleep_ticks=0;
+	last:
 
 	spin_unlock_irqrestore(&waitqueue->lock, flags);
-	return 1;
+	return ret;
 }
 
-int sc_wakeUp(struct wait_struct *waitqueue,struct task_struct * p)
+
+#define MAX_WAIT_QUEUES 50
+static queue_t *wait_queues[MAX_WAIT_QUEUES]; /* TODO : this need to be locked */
+int stat_wq_count=0;
+int sc_register_waitqueue(queue_t *waitqueue)
 {
-	int ret=0;
+	int i;
+
+	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
+		if (wait_queues[i] == 0) {
+			init_waitqueue(waitqueue);
+			wait_queues[i]=waitqueue;
+			stat_wq_count++;
+			return 0;
+		}
+	}
+	return -1;
+}
+/* TODO It should be called from all the places where sc_register_waitqueue is called, currently it is unregister is called only from few places*/
+int sc_unregister_waitqueue(queue_t *waitqueue)
+{
+	int i;
+
+	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
+		if (wait_queues[i] == waitqueue) {
+			/*TODO:  remove the tasks present in the queue */
+			wait_queues[i]=0;
+			stat_wq_count--;
+			return 0;
+		}
+	}
+	return -1;
+}
+int sc_wakeUp(queue_t *waitqueue, struct task_struct *task) {
+	struct list_head *pos;
+	int ret = 0;
 
 	unsigned long flags;
-	if (p == NULL)
-	{
-		while (waitqueue->queue != NULL)
-		{
-			p=waitqueue->queue;
+	if (waitqueue == NULL)
+		waitqueue = &timer_queue;
+	if (task == NULL) {
+		while (waitqueue->head.next != &waitqueue->head) {
+			task=list_entry(waitqueue->head.next, struct task_struct, wait_queue);
 			spin_lock_irqsave(&sched_lock, flags);
-			if (del_from_waitqueue(waitqueue,p) == 1)
-			{
-				p->state = TASK_RUNNING;
-				if (p->run_link.next==0)
-					add_to_runqueue(p);
+			if (del_from_waitqueue(waitqueue, task) == 1) {
+				task->state = TASK_RUNNING;
+				if (task->run_link.next == 0)
+					add_to_runqueue(task);
 				ret++;
 			}
 			spin_unlock_irqrestore(&sched_lock, flags);
-		}	
-	}else
-	{
+		}
+	} else {
 		spin_lock_irqsave(&sched_lock, flags);
-		if (del_from_waitqueue(waitqueue,p) == 1)
-		{
-			p->state = TASK_RUNNING;
-			if (p->run_link.next==0)
-				add_to_runqueue(p);
+		if (del_from_waitqueue(waitqueue, task) == 1) {
+			task->state = TASK_RUNNING;
+			if (task->run_link.next == 0)
+				add_to_runqueue(task);
 			ret++;
 		}
 		spin_unlock_irqrestore(&sched_lock, flags);
 	}
 	return ret;
 }
-
-
-int sc_wait(struct wait_struct *waitqueue,unsigned long ticks)
-{
-	g_current_task->state=TASK_INTERRUPTIBLE;
-	add_to_waitqueue(waitqueue,g_current_task,ticks);
+int sc_wait(queue_t *waitqueue, unsigned long ticks) {
+	g_current_task->state = TASK_INTERRUPTIBLE;
+	add_to_waitqueue(waitqueue, g_current_task, ticks);
 	sc_schedule();
-	if (g_current_task->sleep_ticks <= 0 ) return 0;
+	if (g_current_task->sleep_ticks <= 0)
+		return 0;
 	else
-	  return g_current_task->sleep_ticks;
+		return g_current_task->sleep_ticks;
 }
-unsigned long sc_sleep(unsigned long  ticks) /* each tick is 100HZ or 10ms */
-/* TODO : return number ticks elapesed  instead of 1*/
-/* TODO : when multiple user level thread sleep it is not retuning in corresct time , it may be because the idle thread halting*/
+unsigned long sc_sleep( long  ticks) /* each tick is 100HZ or 10ms */
+/* TODO : return number ticks elapsed  instead of 1*/
+/* TODO : when multiple user level thread sleep it is not returning in correct time , it may be because the idle thread halting*/
 {
+	add_to_waitqueue(&timer_queue, g_current_task, ticks);
 	g_current_task->state=TASK_INTERRUPTIBLE;
-	add_to_waitqueue(&g_timerqueue,g_current_task,ticks);
 	sc_schedule();
 	return 1;
 }
@@ -255,7 +272,7 @@ int sc_threadlist( char *arg1,char *arg2)
 		else
 			ut_printf("%d",task->pid);
 		
-		ut_printf(" %x %x %x %x %d %s\n",task,task->ticks,task->mm,task->mm->pgd,task->mm->count.counter,task->name);
+		ut_printf(" %x %x %x %x %d %s %d\n",task,task->ticks,task->mm,task->mm->pgd,task->mm->count.counter,task->name,task->sleep_ticks);
 	}
 	spin_unlock_irqrestore(&sched_lock, flags);
 	return 1;
@@ -537,7 +554,7 @@ unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int clone_flags,
 	p->run_link.prev=0;
 	p->task_link.next=0;
 	p->task_link.prev=0;
-	p->next_wait=p->prev_wait=NULL;
+	p->wait_queue.next=p->wait_queue.prev=NULL;
 
 	p->thread.userland.user_fs = 0;
 	p->thread.userland.user_fs_base = 0;
@@ -666,6 +683,7 @@ void init_tasking()
 
 	INIT_LIST_HEAD(&(run_queue.head));
 	INIT_LIST_HEAD(&(task_queue.head));
+	init_waitqueue(&timer_queue);
 	run_queue.count.counter=0;
 	task_queue.count.counter=0;
 
@@ -686,7 +704,6 @@ void init_tasking()
 	ut_strncpy(g_current_task->name,"idle",MAX_TASK_NAME);
 	g_pid++;
 	init_timer();
-	init_waitqueue(&g_timerqueue);
 }
 static unsigned long intr_flags;
 void sc_schedule()
@@ -781,71 +798,47 @@ void do_softirq()
 }
 
 
-#define MAX_WAIT_QUEUES 50
-static struct wait_struct *wait_queues[MAX_WAIT_QUEUES]; /* TODO : this need to be locked */
-int stat_wq_count=0;
-int sc_register_waitqueue(struct wait_struct *waitqueue)
-{
-	int i;
 
-	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
-		if (wait_queues[i] == 0) {
-			waitqueue->queue=NULL;
-			waitqueue->lock=SPIN_LOCK_UNLOCKED;
-			wait_queues[i]=waitqueue;
-			stat_wq_count++;
-			return 0;
-		}
-	}
-	return -1;
-}
-int sc_unregister_waitqueue(struct wait_struct *waitqueue)
-{
-	int i;
 
-	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
-		if (wait_queues[i] == waitqueue) {
-			wait_queues[i]=0;
-			stat_wq_count--;
-			return 0;
-		}
-	}
-	return -1;
-}
 static void timer_callback(registers_t regs)
 {
 	int i;
 
+	/* 1. increment timestamp */
 	g_jiffies++;
 	g_current_task->counter--;
-	if (g_timerqueue.queue != NULL)
-	{
-		g_timerqueue.queue->sleep_ticks--;
-		if (g_timerqueue.queue->sleep_ticks <= 0)
-		{
-			struct task_struct *p;
 
-			p=g_timerqueue.queue;
-			del_from_waitqueue(&g_timerqueue,p);			
-			p->state = TASK_RUNNING;
-			if (p->run_link.next==0)
-				add_to_runqueue(p);
+	/*2. Update Timer wait queue */
+	if (timer_queue.head.next != &timer_queue.head)
+	{
+		struct task_struct *task;
+		task=list_entry(timer_queue.head.next, struct task_struct, wait_queue);
+
+		task->sleep_ticks--;
+		if (task->sleep_ticks <= 0)
+		{
+			del_from_waitqueue(&timer_queue,task);
+			task->state = TASK_RUNNING;
+			if (task->run_link.next==0)
+				add_to_runqueue(task);
 		}
 	}
+	/* 3. Rest of wait queues */
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
 		if (wait_queues[i] == 0) continue;
-		if (wait_queues[i]->queue != NULL) {
-			wait_queues[i]->queue->sleep_ticks--;
-			if (wait_queues[i]->queue->sleep_ticks <= 0) {
-				struct task_struct *p;
+		if (wait_queues[i]->head.next != &wait_queues[i]->head) {
+			struct task_struct *task;
+			task=list_entry(wait_queues[i]->head.next, struct task_struct, wait_queue);
 
-				p = wait_queues[i]->queue;
-				del_from_waitqueue(wait_queues[i], p);
-				p->state = TASK_RUNNING;
-				if (p->run_link.next == 0)
-					add_to_runqueue(p);
+			task->sleep_ticks--;
+			if (task->sleep_ticks <= 0) {
+
+				del_from_waitqueue(wait_queues[i],task);
+				task->state = TASK_RUNNING;
+				if (task->run_link.next == 0)
+					add_to_runqueue(task);
 				else
-					ut_printf(" BUG identified \n");
+					ut_printf(" BUG identified in wait queue \n");
 			}
 		}
 	}

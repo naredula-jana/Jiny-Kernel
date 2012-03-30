@@ -1,4 +1,5 @@
 #include "common.h"
+#include "task.h"
 #include "pci.h"
 #include "mm.h"
 #include "vfs.h"
@@ -9,7 +10,7 @@ unsigned long g_hostShmLen=0;
 unsigned long g_hostShmPhyAddr=0;
 
 //unsigned long pc_phy_startaddr,pc_phy_endaddr;
-extern struct wait_struct g_hfs_waitqueue;
+queue_t g_hfs_waitqueue;
 static void host_shm_interrupt(registers_t regs)
 {
 	uint32_t  i,*p,ret;

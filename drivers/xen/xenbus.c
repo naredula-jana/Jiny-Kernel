@@ -46,7 +46,7 @@ static struct xenbus_req_info req_info[NR_REQS];
         typeof(y) tmpy = (y);                 \
         tmpx < tmpy ? tmpx : tmpy;            \
         })
-struct wait_struct xb_waitq;
+queue_t xb_waitq;
 
 static void xenbus_evtchn_handler(evtchn_port_t port, struct pt_regs *regs,
 		void *ign) {

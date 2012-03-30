@@ -156,12 +156,12 @@ unsigned long SYS_getpid() {
 
 
 unsigned long SYS_nanosleep(const struct timespec *req, struct timespec *rem) {
-	int ticks;
-	SYSCALL_DEBUG("nanosleep :\n");
+	long ticks;
+	SYSCALL_DEBUG("nanosleep sec:%d nsec:%d:\n",req->tv_sec,req->tv_nsec);
 	if (req == 0)
 		return 0;
 	ticks = req->tv_sec * 100;
-	ticks = ticks + req->tv_nsec / 100000;
+	ticks = ticks + (req->tv_nsec / 100000);
 	sc_sleep(ticks); /* units of 10ms */
 	return 0;
 }

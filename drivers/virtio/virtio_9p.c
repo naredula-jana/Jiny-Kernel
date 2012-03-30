@@ -13,7 +13,7 @@
 
 extern virtio_dev_t virtio_devices[];
 extern int virtio_dev_count;
-static struct wait_struct p9_waitq;
+static queue_t p9_waitq;
 
 static int virtio_addToP9Queue(struct virtqueue *vq, unsigned long buf,
 		unsigned long out_len, unsigned long in_len);
