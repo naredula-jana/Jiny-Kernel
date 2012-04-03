@@ -1,2 +1,5 @@
 bin/
 */*.o
+bin/g2_image
+bin/kernel_bin
+bin/obj_file

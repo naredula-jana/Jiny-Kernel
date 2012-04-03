@@ -1,17 +1,11 @@
 Short term :
-- rewriting wait in kernel/task
 - cleaning defines 
 - including header files in .S files
 - locking @ inode level  
 
 Long term :	
 - implementing useful system calls 
-- code reorg:
-- init functions streamlining
 - enhancing debugging,logging and shell features 	
-
-Running Linux program:
-- syscalls proper implementation as linux and adding any syscall related fs
 
 ---------------------------------------------------------
 fixes:
@@ -24,12 +18,51 @@ p9 :
   - fseek, stats, close, closing fids, 
   - interpreting qid 
 ----------------------------------  
-
- for executing userland program(busybox ):
+executing userland program(busybox ):
 1) pagecache: freeing and allocating pagecache page by incrementing/decrementing usage count.
 2) fs_seek in loading elf not implemented
 3) while mapping stack address hardcoded, it may collide with other maps in user program
 4) while reading the file contents, getting stuck @ paging.c:468
 5) fs segment register is currently used only for user application, during app switching the content should be modified in schedule function
-6) clearing all data when user thread exit.
-7) running two or more userlevel threads
+6) printf are not getting triggered immedietly but at triggered when the user level thread is getting exit, looks something buffering @ libc.
+7) thread clean when exit/context switch: 
+            a) xmm registers are cleaned
+            b) es,ds registers are used by user threads , need to reload back to kernel when it switched to kernel threads
+            
+            
+8) Handling swapgs when the control is moving from level 0 to 3 and viceversa:  This may be cause for problem-4(getting stuck while reading p9 data)
+
+Dealing with the swapgs instruction is especially tricky.  Swapgs
+toggles whether gs is the kernel gs or the user gs.  The swapgs
+instruction is rather fragile: it must nest perfectly and only in
+single depth, it should only be used if entering from user mode to
+kernel mode and then when returning to user-space, and precisely
+so. If we mess that up even slightly, we crash.
+
+So when we have a secondary entry, already in kernel mode, we *must
+not* use SWAPGS blindly - nor must we forget doing a SWAPGS when it's
+not switched/swapped yet.
+
+Now, there's a secondary complication: there's a cheap way to test
+which mode the CPU is in and an expensive way.
+
+The cheap way is to pick this info off the entry frame on the kernel
+stack, from the CS of the ptregs area of the kernel stack:
+
+	xorl %ebx,%ebx
+	testl $3,CS+8(%rsp)
+	je error_kernelspace
+	SWAPGS
+
+The expensive (paranoid) way is to read back the MSR_GS_BASE value
+(which is what SWAPGS modifies):
+
+	movl $1,%ebx
+	movl $MSR_GS_BASE,%ecx
+	rdmsr
+	testl %edx,%edx
+	js 1f   /* negative -> in kernel */
+	SWAPGS
+	xorl %ebx,%ebx
+1:	ret
+---------------------------------------------------------

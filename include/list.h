@@ -88,6 +88,7 @@ static inline void __list_del(struct list_head *prev, struct list_head *next)
  */
 static inline void list_del(struct list_head *entry)
 {
+	if (entry->next==0 || entry->prev==0) return;
 	__list_del(entry->prev, entry->next);
 	entry->next = (void *) 0;
 	entry->prev = (void *) 0;

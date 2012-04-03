@@ -62,6 +62,9 @@ struct task_struct {
 	struct list_head run_link; /* run queue */
 	struct list_head task_link; /* task queue */
 	struct list_head wait_queue; /* wait queue */
+	struct {
+		unsigned long ticks_consumed;
+	} stats;
 
 	unsigned long magic_numbers[4]; /* already stack is default fill with magic numbers */
 }; 
