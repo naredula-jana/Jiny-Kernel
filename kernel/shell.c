@@ -230,6 +230,7 @@ static int sh_cat(char *arg1,char *arg2)
 	buf[1000]=0;
 	ret=1;
 	i=1;
+
 	while (ret > 0)
 	{	
 		ret=fs_read(fp,buf,20000);

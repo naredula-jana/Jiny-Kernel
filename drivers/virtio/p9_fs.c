@@ -249,7 +249,9 @@ static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
 	addr = p9_write_rpc(&client, "d", fid);
 	if (addr != 0) {
 		//"wwdbdqdddqssss?sddd"
-		ret = p9_read_rpc(&client, "wwdbdqdddq",&dummyw,&dummyw,&dummyd,&dummyb,&dummyd,&dummyq,&dummyd,&dummyd,&dummyd,&stat->st_size);
+		//Q=bdq
+		//"wwdQdddqsssssddd"
+		ret = p9_read_rpc(&client, "wwwdbdqdddq",&dummyw,&dummyw,&dummyw,&dummyd,&dummyb,&dummyd,&stat->inode_no,&stat->mode,&stat->atime,&stat->mtime,&stat->st_size);
 		DEBUG("stats length :%x \n",stat->st_size);
 		if (client.recv_type == P9_TYPE_RSTAT) {
 			ret = 1;

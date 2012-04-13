@@ -95,6 +95,7 @@ syscall_entry:
 	subq $IRET_OFFSET_SIZE,%rsp
         movq %rcx,IRET_OFFSET_RIP(%rsp)
         movq %r11,IRET_OFFSET_RFLAGS(%rsp)
+        movq %rcx,%gs:CPU_STATE_USER_IP
         movq $(GDT_SEL(UCODE_DESCR) | SEG_DPL_USER),IRET_OFFSET_CS(%rsp)
         movq $(GDT_SEL(UDATA_DESCR) | SEG_DPL_USER),IRET_OFFSET_SS(%rsp)
  

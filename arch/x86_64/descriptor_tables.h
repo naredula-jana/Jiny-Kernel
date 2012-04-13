@@ -9,7 +9,8 @@
 #define CPU_STATE_USER_FS_OFFSET 0x28
 #define CPU_STATE_USER_GS_OFFSET 0x30
 #define CPU_STATE_USER_FS_BASE 0x38
-#define CPU_STATE_USER_PTD_OFFSET 0x40
+#define CPU_STATE_USER_IP 0x40
+//#define CPU_STATE_USER_PTD_OFFSET 0x40
 
 #define IRET_OFFSET_RIP 0x0
 #define IRET_OFFSET_CS 0x8
@@ -139,6 +140,7 @@ struct cpu_state { /* NOTE: do not alter the attributes, there location matter *
         unsigned long kernel_ds;
         unsigned long user_stack;
         unsigned long user_ds,user_es,user_fs,user_gs,user_fs_base;
+        unsigned long user_ip; /* Stats and debugging pupose */
 };
 extern struct cpu_state g_cpu_state[];
 

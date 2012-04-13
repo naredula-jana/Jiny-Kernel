@@ -14,6 +14,7 @@
 #include "vfs.h"
 #include "interface.h"
 
+
 static struct filesystem *vfs_fs = 0;
 static kmem_cache_t *slab_inodep;
 static LIST_HEAD(inode_list);
@@ -21,14 +22,7 @@ spinlock_t g_inode_lock = SPIN_LOCK_UNLOCKED; /* protects inode_list */
 #define OFFSET_ALIGN(x) ((x/PC_PAGESIZE)*PC_PAGESIZE) /* the following 2 need to be removed */
 
 kmem_cache_t *g_slab_filep;
-unsigned long fd_to_file(int fd) {
-	int total;
-	total = g_current_task->mm->fs.total;
-	if (fd > 2 && total >= fd) {
-		return g_current_task->mm->fs.filep[fd];
-	} else
-		return 0;
-}
+
 static int inode_init(struct inode *inode, char *filename, struct filesystem *vfs) {
 	unsigned long flags;
 
@@ -429,7 +423,7 @@ ssize_t SYS_fs_read(unsigned long fd, unsigned char *buff, unsigned long len) {
 
 	SYSCALL_DEBUG("read fd:%d buff:%x len:%x \n",fd,buff,len);
 	file = fd_to_file(fd);
-	if ((vfs_fs == 0) || (vfs_fs->read==0))
+	if ((file==0) || (vfs_fs == 0) || (vfs_fs->read==0))
 		return 0;
 	if (file == 0)
 		return 0;
@@ -477,22 +471,21 @@ int fs_remove(struct file *file) {
 		return 0;
 	return vfsRemove(file);
 }
-static int vfsStat(struct file *filep)
+static int vfsStat(struct file *filep, struct fileStat *stat)
 {
     int ret;
-    struct fileStat stat;
 
-	ret = vfs_fs->stat(filep->inode,&stat);
+	ret = vfs_fs->stat(filep->inode,stat);
 	if (ret == 1) {
 //TODO
 	}
 	return ret;
 }
 
-int fs_stat(struct file *file) {
+int fs_stat(struct file *file, struct fileStat *stat) {
 	if (vfs_fs == 0)
 		return 0;
-	return vfsStat(file);
+	return vfsStat(file, stat);
 }
 unsigned long fs_fadvise(struct inode *inode, unsigned long offset,
 		unsigned long len, int advise) {

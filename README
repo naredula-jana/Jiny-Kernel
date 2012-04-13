@@ -36,14 +36,15 @@ Virtualization:
    
 Networking:
    - TCP/IP stack(from LWIP) integrated with XEN paravirtualised Network driver .
-   - TODO - doing the same abov one with KVM virtio network driver.
+   - TODO - doing the same above one with KVM virtio network driver.
 
 User level :
    - user app(ring-3) can run in user mode without libc and without shared libs.
    - small user app compiled with libc statically can RUN sucessfully.
    - CURRENTLY ONGOING: trying busybox with statically compiled(halfway)- implementing necessary system calls.
  
-
+TODO Features:
+  - SMP and cpu-hotplug
 -----------------------------------------
 page cache Algorithm based on paper:
       Every file is tagged as Long lived(LRU) or short lived(MRU). Based on the tag, the pages of file will processed differently in the page cache. Page cache algorithm tries to evacuate the Short lived files as soon as possible to create a space for the long lived files. From the Application point of view, a file is tagged by using fadvise call after the open call. This approach of tagging will help applications like hadoop to retain the temporary files as long as possible in dirty state before they are removed, this saves disk io both interms of read and write.

@@ -2,6 +2,7 @@
 #define __VFS_H__
 #include "common.h"
 #include "mm.h"
+#include "task.h"
 #define MAX_FILENAME 200
 #define HOST_SHM_ADDR 0xd0000000
 #define HOST_SHM_CTL_ADDR 0xd1000000
@@ -103,9 +104,11 @@ struct fileStat {
 	uint32_t mode;
 	uint32_t atime,mtime;
 	uint64_t st_size;
-
+	uint64_t inode_no;
 };
 typedef struct fileStat fileStat_t;
+
+#define fd_to_file(fd) (fd > 2 && g_current_task->mm->fs.total >= fd) ? (g_current_task->mm->fs.filep[fd]) : (0)
 
 
 #endif

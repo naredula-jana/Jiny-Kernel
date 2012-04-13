@@ -7,6 +7,7 @@
 #include "atomic.h"
 #include "list.h"
 #include "isr.h"
+#include "descriptor_tables.h"
 //#include "types.h"
 #include "multiboot.h"
 #ifndef NULL
@@ -35,7 +36,7 @@
 extern int g_syscall_debug;
 extern unsigned long g_debug_level;
 #define SYSCALL_DEBUG(x...) do { \
-	if (g_syscall_debug==1)	{ut_printf("SYSCALL "); ut_printf(x);} \
+	if (g_syscall_debug==1)	{ut_printf("SYSCALL(uip: %x) ",g_cpu_state[0].user_ip); ut_printf(x);} \
 } while (0) 
 
  //#define DEBUG_ENABLE 1

@@ -418,7 +418,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 	pl3=(*v) & (~0xfff);
 	if (pl3==0)
 	{
-		v=mm_getFreePages(0,0); /* get page of 4k size for page table */	
+		v=mm_getFreePages(MEM_CLEAR,0); /* get page of 4k size for page table */
 		if (v ==0) BUG();
 		ut_memset(v,0,4096);
 		pl3=__pa(v);
@@ -434,7 +434,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 
 	if (pl2==0)
 	{
-		v=mm_getFreePages(0,0); /* get page of 4k size for page table */	
+		v=mm_getFreePages(MEM_CLEAR,0); /* get page of 4k size for page table */
 		if (v ==0) BUG();
 		ut_memset(v,0,4096);
 		pl2=__pa(v);
@@ -450,7 +450,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 
 	if (pl1==0)
 	{
-		v=mm_getFreePages(0,0); /* get page of 4k size for page table */	
+		v=mm_getFreePages(MEM_CLEAR,0); /* get page of 4k size for page table */
 		if (v ==0) BUG();
 		ut_memset(v,0,4096);
 		pl1=__pa(v);
@@ -477,7 +477,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 			p=(unsigned long *)pc_getVmaPage(vma,vma->vm_private_data+(addr-vma->vm_start));
 			if (write_fault && (writeFlag!= 0)) {
 				addr_t *fp;
-				fp=mm_getFreePages(0,0);
+				fp=mm_getFreePages(MEM_CLEAR,0);
 				ut_memcpy(fp,__va(p),4096);
 				p=__pa(fp);
 				writeFlag = 1 ;

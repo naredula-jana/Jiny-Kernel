@@ -10,6 +10,7 @@ long SYS_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigne
 unsigned long snull(unsigned long *args);
 unsigned long SYS_uname(unsigned long *args);
 
+unsigned long SYS_futex(unsigned long *a);
 unsigned long SYS_arch_prctl(unsigned long code,unsigned long addr);
 unsigned long SYS_fs_fstat(int fd, void *buf);
 unsigned long SYS_fs_stat(const char *path, void *buf);
@@ -89,7 +90,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 190 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 195 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 200 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 205 */
+{ snull }, { SYS_futex }, { snull }, { snull }, { snull }, /* 205 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 210 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 215 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 220 */
@@ -228,9 +229,7 @@ unsigned long SYS_ioctl(int d, int request, unsigned long *addr){
 	}
 	return 0;
 }
-struct stat {
- unsigned  long i;
-};
+
 #if 0
 struct stat {
     dev_t     st_dev;     /* ID of device containing file */
@@ -247,12 +246,37 @@ struct stat {
     time_t    st_mtime;   /* time of last modification */
     time_t    st_ctime;   /* time of last status change */
 };
-#endif
 
+#endif
+struct stat {
+	unsigned long int st_dev; /* ID of device containing file */
+	unsigned long int st_ino; /* inode number */
+	unsigned int st_mode; /* protection */
+	unsigned long int st_nlink; /* number of hard links */
+	unsigned int st_uid; /* user ID of owner */
+	unsigned int st_gid; /* group ID of owner */
+	unsigned long int st_rdev; /* device ID (if special file) */
+	long int st_size; /* total size, in bytes */
+	long int st_blksize; /* blocksize for file system I/O */
+	long int st_blocks; /* number of 512B blocks allocated */
+	long int st_atime; /* time of last access */
+	long int st_mtime; /* time of last modification */
+	long int st_ctime; /* time of last status change */
+};
 unsigned long SYS_fs_stat(const char *path, void *buf)
 {
-	SYSCALL_DEBUG("stat(hardcoded) ppath:%x buf:%x \n",path,buf);
-	return -1;
+	struct file *fp;
+	int i,ret;
+	SYSCALL_DEBUG("stat( ppath:%x buf:%x \n",path,buf);
+//return -1;
+	if (path==0 || buf==0) return -1;
+
+	fp=fs_open(path,0,0);
+	if ( fp==0 ) return -1;
+	ret = fs_stat(fp, buf);
+    fs_close(fp);
+
+	return ret;
 }
 unsigned long SYS_fs_dup2(int fd1, int fd2)
 {
@@ -261,8 +285,17 @@ unsigned long SYS_fs_dup2(int fd1, int fd2)
 }
 unsigned long SYS_fs_fstat(int fd, void *buf)
 {
-	SYSCALL_DEBUG("fstat(Dummy)  fd:%x buf:%x \n",fd,buf);
-	return 0;
+	struct file *fp;
+	SYSCALL_DEBUG("fstat  fd:%x buf:%x \n",fd,buf);
+//return 0;
+	fp=fd_to_file(fd);
+	if (fp <= 0 || buf==0) return -1;
+	return fs_stat(fp, buf);
+}
+unsigned long SYS_futex(unsigned long *a){
+	SYSCALL_DEBUG("futex  addr:%x \n",a);
+	*a=0;
+	return 1;
 }
 unsigned long SYS_fs_fcntl(int fd, int cmd, void *args) {
 	SYSCALL_DEBUG("fcntl(Dummy)  fd:%x cmd:%x args:%x\n",fd,cmd,args);

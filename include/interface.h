@@ -86,6 +86,7 @@ unsigned long fs_lseek(struct file *fp ,unsigned long offset, int whence);
 unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsigned long stack_len,unsigned long aux_addr);
 ssize_t fs_write(struct file *file,unsigned char *buff ,unsigned long len);
 unsigned long fs_fdatasync(struct file *file);
+int fs_stat(struct file *file, struct fileStat *stat);
 
 ssize_t SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt);
 ssize_t SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt);
