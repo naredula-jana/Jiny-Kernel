@@ -12,8 +12,29 @@ unsigned long SYS_uname(unsigned long *args);
 
 unsigned long SYS_futex(unsigned long *a);
 unsigned long SYS_arch_prctl(unsigned long code,unsigned long addr);
+struct timespec {
+    long   tv_sec;        /* seconds */
+    long   tv_nsec;       /* nanoseconds */
+};
+struct stat {
+	unsigned long int st_dev; /* ID of device containing file */
+	unsigned long int st_ino; /* inode number */
+	unsigned long int st_nlink; /* number of hard links */
+	unsigned int st_mode; /* protection */
+	unsigned int st_uid; /* user ID of owner */
+	unsigned int st_gid; /* group ID of owner */
+    int __pad0;
+	unsigned long int st_rdev; /* device ID (if special file) */
+	long int st_size; /* total size, in bytes */
+	long int st_blksize; /* blocksize for file system I/O */
+	long int st_blocks; /* number of 512B blocks allocated */
+	struct timespec st_atime; /* time of last access */
+	struct timespec st_mtime; /* time of last modification */
+	struct timespec st_ctime; /* time of last status change */
+	long int __unused[3];
+};
 unsigned long SYS_fs_fstat(int fd, void *buf);
-unsigned long SYS_fs_stat(const char *path, void *buf);
+unsigned long SYS_fs_stat(const char *path, struct stat *buf);
 unsigned long SYS_fs_fstat(int fd, void *buf);
 unsigned long SYS_fs_dup2(int fd1, int fd2);
 unsigned long SYS_rt_sigaction();
@@ -36,10 +57,7 @@ struct pollfd {
     short revents;    /* returned events */
 };
 unsigned long SYS_poll(struct pollfd *fds, int nfds, int timeout);
-struct timespec {
-    long   tv_sec;        /* seconds */
-    long   tv_nsec;       /* nanoseconds */
-};
+
 unsigned long SYS_nanosleep(const struct timespec *req, struct timespec *rem);
 unsigned long SYS_getcwd(unsigned char *buf, int len);
 unsigned long SYS_fs_fcntl(int fd, int cmd, void *args);
@@ -230,52 +248,23 @@ unsigned long SYS_ioctl(int d, int request, unsigned long *addr){
 	return 0;
 }
 
-#if 0
-struct stat {
-    dev_t     st_dev;     /* ID of device containing file */
-    ino_t     st_ino;     /* inode number */
-    mode_t    st_mode;    /* protection */
-    nlink_t   st_nlink;   /* number of hard links */
-    uid_t     st_uid;     /* user ID of owner */
-    gid_t     st_gid;     /* group ID of owner */
-    dev_t     st_rdev;    /* device ID (if special file) */
-    off_t     st_size;    /* total size, in bytes */
-    blksize_t st_blksize; /* blocksize for file system I/O */
-    blkcnt_t  st_blocks;  /* number of 512B blocks allocated */
-    time_t    st_atime;   /* time of last access */
-    time_t    st_mtime;   /* time of last modification */
-    time_t    st_ctime;   /* time of last status change */
-};
-
-#endif
-struct stat {
-	unsigned long int st_dev; /* ID of device containing file */
-	unsigned long int st_ino; /* inode number */
-	unsigned int st_mode; /* protection */
-	unsigned long int st_nlink; /* number of hard links */
-	unsigned int st_uid; /* user ID of owner */
-	unsigned int st_gid; /* group ID of owner */
-	unsigned long int st_rdev; /* device ID (if special file) */
-	long int st_size; /* total size, in bytes */
-	long int st_blksize; /* blocksize for file system I/O */
-	long int st_blocks; /* number of 512B blocks allocated */
-	long int st_atime; /* time of last access */
-	long int st_mtime; /* time of last modification */
-	long int st_ctime; /* time of last status change */
-};
-unsigned long SYS_fs_stat(const char *path, void *buf)
+unsigned long SYS_fs_stat(const char *path, struct stat *buf)
 {
 	struct file *fp;
+	struct fileStat fstat;
 	int i,ret;
-	SYSCALL_DEBUG("stat( ppath:%x buf:%x \n",path,buf);
+	SYSCALL_DEBUG("stat( ppath:%x buf:%x size:%d\n",path,buf,sizeof(struct stat));
 //return -1;
 	if (path==0 || buf==0) return -1;
 
 	fp=fs_open(path,0,0);
 	if ( fp==0 ) return -1;
-	ret = fs_stat(fp, buf);
-    fs_close(fp);
+	ret = fs_stat(fp, &fstat);
+	buf->st_size = fstat.st_size ;
+	buf->st_ino = fstat.inode_no ;
+/* TODO : fill the rest of the feilds from fstat */
 
+    fs_close(fp);
 	return ret;
 }
 unsigned long SYS_fs_dup2(int fd1, int fd2)

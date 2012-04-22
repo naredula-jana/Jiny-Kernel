@@ -29,7 +29,7 @@ unsigned long SYS_sc_fork();
 unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int flags,void *args);
 int SYS_sc_exit(int status);
 int SYS_sc_kill(unsigned long pid,unsigned long signal);
-unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned char *env);
+unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned char **env);
 int sc_threadlist( char *arg1,char *arg2);
 unsigned long sc_createKernelThread(int (*fn)(void *),unsigned char *argv,unsigned char *name);
 void sc_schedule();

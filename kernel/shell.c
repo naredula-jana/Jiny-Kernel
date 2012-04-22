@@ -278,6 +278,7 @@ static int sh_free_mem(char *arg1,char *arg2)
 	return 1;	
 }
 static unsigned char tmp_arg2[100];
+static unsigned char *envs[]={"HOSTNAME=jana", "USER=jana", "HOME=/home/jana", "PWD=/home/jana", 0};
 static int load_test1(char *arg1,char *arg2)
 {
 //	char *argv[]={"First argument","second argument",0};
@@ -288,7 +289,7 @@ static int load_test1(char *arg1,char *arg2)
 		arg[0]=arg1;
 		arg[1]=0;
         //	SYS_sc_execve("/home/njana/jiny/test/test3",argv,0);
-        	SYS_sc_execve(arg1,arg,0);
+        	SYS_sc_execve(arg1,arg,envs);
 	}else
 	{
 		char name[100];
@@ -300,7 +301,7 @@ static int load_test1(char *arg1,char *arg2)
 		else
 		    arg[1]=tmp_arg2;
 		arg[2]=0;
-        SYS_sc_execve(g_current_task->thread.argv,arg,0);
+        SYS_sc_execve(g_current_task->thread.argv,arg,envs);
 	}
 	ut_printf(" ERROR: COntrol Never Reaches\n");
 	return 1;

@@ -268,11 +268,13 @@ int sc_threadlist(char *arg1, char *arg2) {
 	return 1;
 }
 
-unsigned long setup_userstack(unsigned char **argv, unsigned char *env, unsigned long *stack_len, unsigned long *t_argc, unsigned long *t_argv, unsigned long *p_aux) {
+static unsigned long setup_userstack(unsigned char **argv, unsigned char **env, unsigned long *stack_len, unsigned long *t_argc, unsigned long *t_argv, unsigned long *p_aux) {
 	int i, len, total_args = 0;
+	int total_envs =0;
 	unsigned char *p, *stack;
 	unsigned long real_stack, addr;
 	unsigned char *target_argv[12];
+	unsigned char *target_env[12];
 
 	if (argv == 0 && env == 0) {
 		ut_printf(" ERROR  argv:0\n");
@@ -282,6 +284,7 @@ unsigned long setup_userstack(unsigned char **argv, unsigned char *env, unsigned
 	p = stack + PAGE_SIZE;
 	len = 0;
 	real_stack = USERSTACK_ADDR + USERSTACK_LEN;
+
 	for (i = 0; argv[i] != 0 && i < 10; i++) {
 		total_args++;
 		len = ut_strlen(argv[i]);
@@ -295,9 +298,23 @@ unsigned long setup_userstack(unsigned char **argv, unsigned char *env, unsigned
 			goto error;
 		}
 	}
-
 	target_argv[i] = 0;
-	target_argv[i + 1] = 0;
+
+	for (i = 0; env[i] != 0 && i < 10; i++) {
+		total_envs++;
+		len = ut_strlen(env[i]);
+		if ((p - len - 1) > stack) {
+			p = p - len - 1;
+			real_stack = real_stack - len - 1;
+			DEBUG(" envs :%d address:%x \n",i,real_stack);
+			ut_strcpy(p, env[i]);
+			target_env[i] = real_stack;
+		} else {
+			goto error;
+		}
+	}
+	target_env[i] = 0;
+
 	addr = p;
 	addr = (addr / 8) * 8;
 	p = addr;
@@ -306,29 +323,36 @@ unsigned long setup_userstack(unsigned char **argv, unsigned char *env, unsigned
 
 	real_stack = USERSTACK_ADDR + USERSTACK_LEN + p - (stack + PAGE_SIZE);
 	*p_aux = p;
-	len = (total_args + 1 + 1) * 8; /* TODO: we are assuming empty env */
+	len = (1+total_args + 1 + total_envs+1) * 8; /* total_args+args+0+envs+0 */
 	if ((p - len - 1) > stack) {
 		unsigned long *t;
 
-		p = p - len;
-		real_stack = real_stack - len;
-		ut_memcpy(p, target_argv, len);
-		DEBUG(" arg0:%x arg1:%x arg2:%x len:%d \n",target_argv[0],target_argv[1],target_argv[2],len);
-		p = p - 8;
+		p = p - (total_envs+1)*8;
+		ut_memcpy(p, target_env, (total_envs+1)*8);
+
+		p = p - (1+total_args+1)*8;
+		ut_memcpy(p+8, target_argv, (total_args+1)*8);
 		t = p;
 		*t = total_args; /* store argc at the top of stack */
+
+		DEBUG(" arg0:%x arg1:%x arg2:%x len:%d \n",target_argv[0],target_argv[1],target_argv[2],len);
+		DEBUG(" arg0:%x arg1:%x arg2:%x len:%d \n",target_env[0],target_env[1],target_env[2],len);
+
+		real_stack = real_stack - len;
 	} else {
 		goto error;
 	}
+
+
 	*stack_len = PAGE_SIZE - (p - stack);
 	*t_argc = total_args;
-	*t_argv = real_stack - 8;
+	*t_argv = real_stack ;
 	return stack;
 
 	error: mm_putFreePages(stack, 0);
 	return 0;
 }
-unsigned long SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char *env) {
+unsigned long SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **env) {
 	struct file *fp;
 	struct mm_struct *mm;
 	unsigned long main_func;
@@ -349,6 +373,7 @@ unsigned long SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned 
 	mm = kmem_cache_alloc(mm_cachep, 0);
 	if (mm == 0)
 		BUG();
+	ut_memset(mm,0,sizeof(struct mm_struct)); /* clear the mm struct */
 	atomic_set(&mm->count,1);
 	mm->pgd = 0;
 	mm->mmap = 0;
