@@ -432,7 +432,12 @@ ssize_t SYS_fs_read(unsigned long fd, unsigned char *buff, unsigned long len) {
 
 static int vfsClose(struct file *filep)
 {
-	if (filep->inode != 0) fs_putInode(filep->inode);
+    int ret;
+
+	if (filep->inode != 0) {
+		ret = vfs_fs->close(filep->inode);
+		fs_putInode(filep->inode);
+	}
 	filep->inode=0;
 	kmem_cache_free(g_slab_filep, filep);
 	return 1;

@@ -15,12 +15,9 @@ fixes:
 ------------------------------
 p9 :
   - unhandled interrupt-15
-  - fseek, close, closing fids, 
+  - fseek, closing fids, 
   - interpreting qid 
-  - stat bug: second time calling stat on the same file causing the following error:
-  Root cause : file need to close.
-  (qemu) qemu-system-x86_64: /data/kvm/qemu_src/qemu-kvm-1.0-rc2/hw/9pfs/virtio-9p.c:1582: v9fs_open: Assertion `!(fidp->fid_type != P9_FID_NONE)' failed.
-  
+
 ----------------------------------  
 executing userland program(busybox ):
 1) pagecache: freeing and allocating pagecache page by incrementing/decrementing usage count.

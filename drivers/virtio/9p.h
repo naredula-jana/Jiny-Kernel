@@ -76,6 +76,7 @@ enum p9_msg_t {
 typedef struct {
 	unsigned char name[MAX_P9_FILELENGTH];
 	uint32_t parent_fid,fid;
+	uint32_t opened;
 }p9_file_t;
 #define MAX_P9_FILES 100
 typedef struct  {

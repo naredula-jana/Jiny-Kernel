@@ -53,6 +53,14 @@ static int p9_open(uint32_t fid, unsigned char *filename, int flags, int arg_mod
 	uint32_t perm;
 	int i,ret=-1;
 
+	for (i = 0; i < MAX_P9_FILES; i++) {
+		if (client.files[i].fid ==fid) {
+			if (client.files[i].opened == 1) return 1;
+			client.files[i].opened = 1;
+			break;
+		}
+	}
+
 	if (flags & O_RDONLY)
 		mode_b = 0;
 	else if (flags & O_WRONLY)
@@ -149,6 +157,7 @@ static uint32_t p9_walk(unsigned char *filename, int flags, unsigned char **crea
 							if ((empty_fd != -1) &&  (client.recv_type == P9_TYPE_RWALK)) {
 								ret_fd=client.next_free_fid;
 								client.files[empty_fd].fid = client.next_free_fid;
+								client.files[empty_fd].opened = 0;
 								client.next_free_fid++; /* TODO : there will be collision , the logic need to replaced with better one */
 								ut_strcpy(client.files[empty_fd].name, names[j]);
 								client.files[empty_fd].parent_fid = parent_fid;
@@ -230,10 +239,31 @@ static uint32_t p9_remove(uint32_t fid) {
 			}
 		}
 	}
-
 	return ret;
 }
+static uint32_t p9_close(uint32_t fid) {
+	unsigned long addr;
+	int i, ret = 0;
 
+	client.type = P9_TYPE_TCLUNK;
+	client.user_data = 0;
+	client.userdata_len = 0;
+
+	addr = p9_write_rpc(&client, "d", fid);
+	if (addr != 0) {
+		ret = p9_read_rpc(&client, "");
+		if (client.recv_type == P9_TYPE_RCLUNK) {
+			ret = 1;
+			for (i = 0; i < MAX_P9_FILES; i++) {
+				if (client.files[i].fid == fid) { /* remove the fid as the file is sucessfully closed */
+					client.files[i].fid = 0;
+					break;
+				}
+			}
+		}
+	}
+	return ret;
+}
 static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
 	unsigned long addr;
 	int i,ret=0;
@@ -300,6 +330,9 @@ static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, u
 	} else if (type == REQUEST_STAT) {
 		fid = inode->fs_private;
 		ret = p9_stat(fid, data);
+	} else if (type == REQUEST_CLOSE) {
+		fid = inode->fs_private;
+		ret = p9_close(fid);
 	}
 
 last:
@@ -341,16 +374,16 @@ static int p9Stat(struct inode *inodep, struct fileStat *statp) {
     return  p9Request(REQUEST_STAT, inodep, 0, statp, 0, 0, 0);
 }
 
-static int p9Close(struct file *filep) {
-
-	return 1;
+static int p9Close(struct inode *inodep) {
+	p9ClientInit();
+    return  p9Request(REQUEST_CLOSE, inodep, 0, 0, 0, 0, 0);
 }
 
 int p9_initFs() {
 //	p9ClientInit(); /* TODO need to include here */
 	p9_fs.open = p9Open;
 	p9_fs.read = p9Read;
-	p9_fs.close = p9Close; // TODO
+	p9_fs.close = p9Close;
 	p9_fs.write = p9Write;
 	p9_fs.remove = p9Remove;
 	p9_fs.stat = p9Stat;
