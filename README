@@ -108,6 +108,7 @@ mke2fs bin/g2_image
 sudo mount /dev/loop0 /tmp/ab/
 populate files into /tmp/ab/
 
+
 sudo umount /tmp/ab
 sudo grub-install --force  /dev/loop0 
 -------------------------------
