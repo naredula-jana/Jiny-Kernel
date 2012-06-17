@@ -1,4 +1,4 @@
-SOURCE_ROOT=/data/code/Jiny-Kernel/
+SOURCE_ROOT=/opt_src/Jiny-Kernel/
 # NETWORKING =1 
 INCLUDE=. -DNETWORKING -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURCE_ROOT)/arch/x86_64/
 
@@ -15,7 +15,7 @@ C_SOURCES=$(wildcard *.c)
 ASM_SOURCES=$(wildcard *.s)
 GNUASM_SOURCES=$(wildcard *.S)
 SOURCES=$(C_SOURCES) $(ASM_SOURCES)
-XEN_INCLUDE=/data/xen/xen-4.1.1/dist/install/usr/include -I/data/lwip/src/include -I/data/lwip/src/include/ipv4 -I$(SOURCE_ROOT)/drivers/xen/ -I$(SOURCE_ROOT)/drivers/lwip/ -I$(SOURCE_ROOT)/drivers/xen/arch/
+XEN_INCLUDE=/opt_src/xen/xen-4.1.1/dist/install/usr/include -I/opt_src/lwip/src/include -I/opt_src/lwip/src/include/ipv4 -I$(SOURCE_ROOT)/drivers/xen/ -I$(SOURCE_ROOT)/drivers/lwip/ -I$(SOURCE_ROOT)/drivers/xen/arch/
 
 C_OBJECTS=$(patsubst %.c,%.o,$(C_SOURCES))
 GNUASM_OBJECTS=$(patsubst  %.S,%.o,$(GNUASM_SOURCES))

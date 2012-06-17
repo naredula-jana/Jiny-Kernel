@@ -10,7 +10,7 @@
 
 #define __types_h
 
-#include "/data/code/Jiny-Kernel/include/ipc.h"
+#include "/opt_src/Jiny-Kernel/include/ipc.h"
 #define SYS_SEM_NULL ((sys_sem_t) NULL)
 
 struct mbox {
