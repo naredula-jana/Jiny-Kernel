@@ -33,6 +33,7 @@ static int sh_free_mem(char *arg1,char *arg2);
 static int sh_sync(char *arg1,char *arg2);
 static int sh_del(char *arg1,char *arg2);
 int ar_printIrqStat(char *arg1,char *arg2);
+static int sh_test1(char *arg1,char *arg2);
 static int  test_hostshm(char *arg1,char *arg2);
 void ut_cls();
 
@@ -81,6 +82,7 @@ commands_t cmd_list[]=
 	{"del <file>","flush file-remove from page cache       ","del",sh_del},
 	{"cp <f1> <f2>","copy f1 f2       ","cp",sh_cp},
 	{"sync <f1>","sync f1       ","sync",sh_sync},
+	{"t1 ","t1 file","t1",sh_test1},
 	{0,0,0,0}
 };
 
@@ -198,6 +200,26 @@ static int sh_del(char *arg1,char *arg2)
 	}
 	fs_fadvise(wfp,0,0,POSIX_FADV_DONTNEED);
 	ut_printf("after del \n");
+	return 0;
+}
+static int sh_test1(char *arg1,char *arg2)
+{
+	struct file *wfp;
+	struct fileStat fstat;
+	int i,ret,wret;
+
+	wfp=fs_open(arg1,0,0);
+	if (wfp==0)
+	{
+		ut_printf(" Error opening file :%s: \n",arg1);
+		return 0;
+	}
+
+    for (i=0; i<ut_atoi(arg2); i++)
+	    ret = fs_stat(wfp, &fstat);
+	ut_printf("fstat size :%d inode:%d \n",fstat.st_size,fstat.inode_no);
+    fs_close(wfp);
+
 	return 0;
 }
 static int sh_sync(char *arg1,char *arg2)

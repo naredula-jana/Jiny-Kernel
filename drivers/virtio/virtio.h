@@ -233,4 +233,10 @@ struct virtio_driver {
 
 int register_virtio_driver(struct virtio_driver *drv);
 void unregister_virtio_driver(struct virtio_driver *drv);
+#define VIRTIO_ID_NET		1 /* virtio net */
+#define VIRTIO_ID_BLOCK		2 /* virtio block */
+#define VIRTIO_ID_CONSOLE	3 /* virtio console */
+#define VIRTIO_ID_RNG		4 /* virtio ring */
+#define VIRTIO_ID_BALLOON	5 /* virtio balloon */
+#define VIRTIO_ID_9P		9 /* 9p virtio console */
 #endif /* _LINUX_VIRTIO_H */

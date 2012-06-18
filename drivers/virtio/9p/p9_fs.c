@@ -9,6 +9,7 @@
 #define OFFSET_ALIGN(x) ((x/PC_PAGESIZE)*PC_PAGESIZE) /* the following 2 need to be removed */
 
 static p9_client_t client;
+
 static int p9ClientInit() {
 	static int init = 0;
 	uint32_t msg_size;
@@ -282,7 +283,7 @@ static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
 		//Q=bdq
 		//"wwdQdddqsssssddd"
 		ret = p9_read_rpc(&client, "wwwdbdqdddq",&dummyw,&dummyw,&dummyw,&dummyd,&dummyb,&dummyd,&stat->inode_no,&stat->mode,&stat->atime,&stat->mtime,&stat->st_size);
-		DEBUG("stats length :%x \n",stat->st_size);
+		//DEBUG("stats length :%x \n",stat->st_size);
 		if (client.recv_type == P9_TYPE_RSTAT) {
 			ret = 1;
 		}

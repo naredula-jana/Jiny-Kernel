@@ -5,10 +5,10 @@
 #include "vfs.h"
 #include "task.h"
 #include "interface.h"
-#include <virtio.h>
-#include <virtio_ring.h>
-#include <virtio_pci.h>
-#include <virtio_net.h>
+#include "../virtio.h"
+#include "../virtio_ring.h"
+#include "../virtio_pci.h"
+#include "../virtio_net.h"
 #include "9p.h"
 
 extern virtio_dev_t virtio_devices[];
