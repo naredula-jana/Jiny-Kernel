@@ -26,7 +26,8 @@ typedef struct virtio_pciDevices {
 	int (*init)(pci_dev_header_t *pci_hdr, virtio_dev_t *dev);
 	void (*isr)(registers_t regs);
 };
-struct virtio_pciDevices pciDevices[] = { { .name = "virtio-9p", .pciSubId = 9, .init = init_virtio_9p_pci, .isr = virtio_9p_interrupt, },
+static struct virtio_pciDevices pciDevices[] = {
+		{ .name = "virtio-9p", .pciSubId = 9, .init = init_virtio_9p_pci, .isr = virtio_9p_interrupt, },
 		{ .name = "virtio-net", .pciSubId = 1, .init = init_virtio_net_pci, .isr = virtio_net_interrupt, },
 		{ .name = 0, .pciSubId = 0, .init =0, .isr = 0, }};
 
@@ -44,6 +45,7 @@ int init_virtio_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len) {
 		virtio_devices[virtio_dev_count].pci_iolen = bars[0].len;
 		virtio_devices[virtio_dev_count].pci_mmio = bars[1].addr;
 		virtio_devices[virtio_dev_count].pci_mmiolen = bars[1].len;
+		virtio_devices[virtio_dev_count].rx_func = 0;
 	} else {
 		ut_printf(" ERROR in initializing VIRTIO PCI driver \n");
 		return 0;
@@ -58,7 +60,7 @@ int init_virtio_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len) {
 			virtio_devices[virtio_dev_count].type = pci_hdr->subsys_id;
 
 			if (pci_hdr->interrupt_line > 0) {
-				DEBUG(" virtio Interrupt number : %i \n", pci_hdr->interrupt_line);
+				//DEBUG(" virtio Interrupt number : %i \n", pci_hdr->interrupt_line);
 				ar_registerInterrupt(32 + pci_hdr->interrupt_line, pciDevices[i].isr, pciDevices[i].name);
 			}
 			virtio_dev_count++;
@@ -70,7 +72,7 @@ int init_virtio_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len) {
 }
 int virtio_createQueue(uint16_t index, virtio_dev_t *dev, int qType);
 
-int virtio_addToQueue(struct virtqueue *vq, unsigned long buf, unsigned long len) {
+int virtio_netAddToQueue(struct virtqueue *vq, unsigned long buf, unsigned long len) {
 	struct scatterlist sg[2];
 
 	if (buf == 0) {
@@ -83,13 +85,13 @@ int virtio_addToQueue(struct virtqueue *vq, unsigned long buf, unsigned long len
 	sg[1].page_link = buf + sizeof(struct virtio_net_hdr);
 	sg[1].length = len - sizeof(struct virtio_net_hdr);
 	sg[1].offset = 0;
-	DEBUG(" scatter gather-0: %x:%x sg-1 :%x:%x \n",sg[0].page_link,__pa(sg[0].page_link),sg[1].page_link,__pa(sg[1].page_link));
+	//DEBUG(" scatter gather-0: %x:%x sg-1 :%x:%x \n",sg[0].page_link,__pa(sg[0].page_link),sg[1].page_link,__pa(sg[1].page_link));
 	if (vq->qType == 1) {
 		virtqueue_add_buf_gfp(vq, sg, 0, 2, sg[0].page_link, 0);/* recv q*/
 	} else {
 		virtqueue_add_buf_gfp(vq, sg, 2, 0, sg[0].page_link, 0);/* send q */
 	}
-	virtqueue_kick(vq);
+
 	return 1;
 }
 static int get_order(unsigned long size) {

@@ -2,7 +2,7 @@ JINY KERNEL 0.1  (JINY :  Jana's tINY)
 
 1) WHAT IS JINY?.
  Jiny is a small foot print Toy kernel, initally will be running on a virtual environment and with limited functionality on a baremetal. It is designed to run efficently with small foot print on a virtual environment.
-
+  
 2) ON WHAT HARDWARE DOES IT RUN?
  It will be fully tested for x86-64. partially done for x86-32 but discontinued.
 
@@ -10,13 +10,14 @@ JINY KERNEL 0.1  (JINY :  Jana's tINY)
  JINY will be used initially 
 	a) To model the page cache(MRU+LRU) suitable for hadoop like applications.
 	b) To model Host based filesystem(HFS): HFS is filesystem run in guest OS but does file i/o using the shared memory between the guest and host os. HFS does not need any block drivers, it communicated with block devices using the shared memory between guest and host OS.  
+    c) Benchmarking virtio net performance.
 ------------------------------------------
 
 The goals of the project are:
 	1) It should be monalitic kernel with a small footprint: To keep kernel size small. This is done by writing paravirtualised drivers  if it not running on the bare metal. To begin with, file system is implemented  with a paravirtualised driver.
 	2) powerful command line and debug environment.
 	3) Higly modularise:  To define well defined interface between modules , so as any module can be replaced by keeping the interface same. (see include/interface.h for more details.
-        4) virtualization frendly or supporting para-virtualization on kvm and xen.
+    4) virtualization features like virtio,xen para drivers, hot cpu plugin, hot mem plugin, hot network plugin .
 
 ------------------------------------------
 Feature Currently Available:
@@ -32,7 +33,8 @@ File System :
 Virtualization:
     - Xen : xenbus, network driver using xen paravirtualised.
     - KVM : virtio + P9
-    - TODO: KVM : virtio + network stack(tcp/ip)
+    - KVM : virtio + test server with udp stack(tcp/ip)
+    - TODO: virtio +LWIP (tcp/ip)
    
 Networking:
    - TCP/IP stack(from LWIP) integrated with XEN paravirtualised Network driver .
@@ -49,7 +51,6 @@ TODO Features:
 page cache Algorithm based on paper:
       Every file is tagged as Long lived(LRU) or short lived(MRU). Based on the tag, the pages of file will processed differently in the page cache. Page cache algorithm tries to evacuate the Short lived files as soon as possible to create a space for the long lived files. From the Application point of view, a file is tagged by using fadvise call after the open call. This approach of tagging will help applications like hadoop to retain the temporary files as long as possible in dirty state before they are removed, this saves disk io both interms of read and write.
 
- 
 Data Structures:
 	page : Every page containg age attribute, age is updated when ever the page is accessed(read) or dirted(write) depending on type of file.If age of page made eldest means page is going to evacuate from the system very soon. The value of age can varies from 1(youngest) to n(eldest). n is configirable default may be 100. 
 	queues : active,inactive,LRU dirty,MRU dirty and free queue.
@@ -87,55 +88,7 @@ Interface functions:
 		int pc_putFreePage(struct page *page);
 
 _____________________________
- Running :
-  -> multiboot (hd1)/kernel
-  -> boot
 
-vim commands:
-    ESC V G =   for entire file
-    ESC V % =  for a block
-  V= visual mode
-
-find . | grep "[chS]$" | xargs grep -n TODO
-------------------------------
-Constructing the image for grub2 (Not sucessfull):
-
-dd if=/dev/zero of=bin/g2_image bs=512 count=8000
---sudo losetup /dev/loop0 -d
---sudo losetup /dev/loop0  bin/g2_image
---sudo mke2fs /dev/loop0
-mke2fs bin/g2_image
-sudo mount /dev/loop0 /tmp/ab/
-populate files into /tmp/ab/
-
-
-sudo umount /tmp/ab
-sudo grub-install --force  /dev/loop0 
--------------------------------
-WorkAround:
-    - use old image as bootable disk for grub, use second disk to store the kernel.
------------------------------------
-Running on KVM:
-
-sudo ./qemu-system-x86_64 -s -m 1024M -L /home/njana/qemu/opt/qemu.12.5/share/qemu -hda /home/njana/jiny/bin/g2_bootdisk -hdb /home/njana/jiny/bin/g2_image -enable-kvm  -chardev socket,path=/tmp/jana,id=jana -device ivshmem,chardev=jana,size=2m,msi=off -serial /dev/pts/1 -vnc :4
- 
-serial :
-  -serial /dev/pt/1 
-where /dev/pts/1 is the pty for the console running qemu
-
-Attaching to gdb: (add -S to qemu command line)
- 
-target remote localhost:1234 
-set architecture i386:x86-64
----------------------------------------------------
-Running on Xen:
-
-xl create -c ./jiny_xen.conf
-gdbsx -a 1 64  9999
-
------------------------------------
-git push may give error, in that case changes the url in .git/config as : url = git@github.com:naredula-jana/Jiny-Kernel.git
--------------------------------------
-
-Acknowledgements :
-   - Thanks to Kashyap(https://github.com/ckkashyap/) for helping while fixing hardware related issues.
+papers:
+  1) doc/PageCache-Open-Cirrus.pdf  - paper appered @ open cirrus-2011.
+  2) doc/malloc_paper_techpulse_submit_final.pdf  - memory optimization techiniques.

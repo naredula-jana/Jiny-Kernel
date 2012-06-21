@@ -47,6 +47,11 @@ int init_kernel(unsigned long end_addr)
 	ut_printf("Initalising: PCI.. \n");
 	init_pci();
 
+#ifdef NETWORKING
+//	init_LwipTcpIpStack();
+#endif
+	init_TestUdpStack();
+
 	ut_printf("Initalising: VFS.. \n");
 	init_vfs();
 //	ar_registerInterrupt(128,syscall_handler);

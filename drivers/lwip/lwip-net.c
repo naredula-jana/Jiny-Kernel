@@ -343,7 +343,7 @@ static void tcpip_bringup_finished(void *p)
  * which calls back to tcpip_bringup_finished(), which 
  * lets us know it's OK to continue.
  */
-void start_networking(void)
+void init_LwipTcpIpStack(void)
 {
   struct netif *netif;
   struct ip_addr ipaddr = { htonl(IF_IPADDR) };

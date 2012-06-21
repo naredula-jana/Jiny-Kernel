@@ -20,7 +20,7 @@
 #include "virtio.h"
 #include "virtio_pci.h"
 #include "virtio_ring.h"
-#include "virtio_config.h"
+//#include "virtio_config.h"
 
 
 /* virtio guest is communicating with a virtual "device" that actually runs on
@@ -313,7 +313,7 @@ void *virtio_removeFromQueue(struct virtqueue *_vq, unsigned int *len)
 	}
 
 	if (!more_used(vq)) {
-		pr_debug("No more buffers in queue\n");
+	//	pr_debug("No more buffers in queue\n");
 		END_USE(vq);
 		return NULL;
 	}

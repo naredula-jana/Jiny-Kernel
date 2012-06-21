@@ -8,13 +8,11 @@
 #include "../virtio.h"
 #include "../virtio_ring.h"
 #include "../virtio_pci.h"
-#include "../virtio_net.h"
 #include "9p.h"
 
-extern virtio_dev_t virtio_devices[];
-extern int virtio_dev_count;
-static queue_t p9_waitq;
 
+static queue_t p9_waitq;
+static virtio_dev_t *p9_dev=0;
 static int virtio_addToP9Queue(struct virtqueue *vq, unsigned long buf,
 		unsigned long out_len, unsigned long in_len);
 
@@ -47,6 +45,7 @@ int init_virtio_9p_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev) {
 	inb(dev->pci_ioaddr + VIRTIO_PCI_ISR);
 
 	sc_register_waitqueue(&p9_waitq);
+	p9_dev = dev;
 	return 1;
 }
 unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The call will be blocked till the reply is receivied */
@@ -92,8 +91,8 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 		sg[1].offset = 0;
 		in = 1;
 	}
-	virtqueue_add_buf_gfp(virtio_devices[0].vq[0], sg, out, in, sg[0].page_link, 0);
-	virtqueue_kick(virtio_devices[0].vq[0]);
+	virtqueue_add_buf_gfp(p9_dev->vq[0], sg, out, in, sg[0].page_link, 0);
+	virtqueue_kick(p9_dev->vq[0]);
 
 	sc_wait(&p9_waitq, 100);
 	unsigned int len;
@@ -101,7 +100,7 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 	i=0;
 	addr=0;
 	while (i < 3 && addr == 0) {
-		addr = virtio_removeFromQueue(virtio_devices[0].vq[0], &len); /* TODO : here sometime returns zero because of some race condition */
+		addr = virtio_removeFromQueue(p9_dev->vq[0], &len); /* TODO : here sometime returns zero because of some race condition */
 		i++;
 		if (addr == 0) {
 			ut_printf(" RACE CONDITIOn so sleeping for while \n");
@@ -210,6 +209,6 @@ void virtio_9p_interrupt(registers_t regs) { // TODO: handling similar  type of 
 	int ret;
 
 	//DEBUG("Recevid virtio interrupt \n");
-	isr = inb(virtio_devices[0].pci_ioaddr + VIRTIO_PCI_ISR);
+	isr = inb(p9_dev->pci_ioaddr + VIRTIO_PCI_ISR);
 	ret = sc_wakeUp(&p9_waitq, NULL); /* wake all the waiting processes */
 }
