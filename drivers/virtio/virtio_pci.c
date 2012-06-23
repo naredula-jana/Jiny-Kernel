@@ -72,28 +72,7 @@ int init_virtio_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len) {
 }
 int virtio_createQueue(uint16_t index, virtio_dev_t *dev, int qType);
 
-int virtio_netAddToQueue(struct virtqueue *vq, unsigned long buf, unsigned long len) {
-	struct scatterlist sg[2];
 
-	if (buf == 0) {
-		buf = mm_getFreePages(MEM_CLEAR, 0);
-		len = 4096;
-	}
-	sg[0].page_link = buf;
-	sg[0].length = sizeof(struct virtio_net_hdr); /* TODO hardcoded */
-	sg[0].offset = 0;
-	sg[1].page_link = buf + sizeof(struct virtio_net_hdr);
-	sg[1].length = len - sizeof(struct virtio_net_hdr);
-	sg[1].offset = 0;
-	//DEBUG(" scatter gather-0: %x:%x sg-1 :%x:%x \n",sg[0].page_link,__pa(sg[0].page_link),sg[1].page_link,__pa(sg[1].page_link));
-	if (vq->qType == 1) {
-		virtqueue_add_buf_gfp(vq, sg, 0, 2, sg[0].page_link, 0);/* recv q*/
-	} else {
-		virtqueue_add_buf_gfp(vq, sg, 2, 0, sg[0].page_link, 0);/* send q */
-	}
-
-	return 1;
-}
 static int get_order(unsigned long size) {
 	int order;
 

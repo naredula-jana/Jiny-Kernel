@@ -10,6 +10,7 @@
 #include "../virtio_pci.h"
 #include "virtio_net.h"
 
+#define WITH_BOTTOM_HALF 1
 typedef unsigned int u32;
 
 u16 ip_sum_calc(u16 len_ip_header, unsigned char buff[]) {
@@ -34,10 +35,12 @@ u16 ip_sum_calc(u16 len_ip_header, unsigned char buff[]) {
 	return ((u16) sum);
 }
 static unsigned char mac[10];
-static void *net_dev = 0;
+static virtio_dev_t *net_dev = 0;
+queue_t nbh_waitq;
 static int process_pkt(unsigned char *c, unsigned long len) {
 	unsigned char ip[5], port[3], tc;
 	u16 *pcsum;
+	struct virtio_net_hdr *hdr=c;
 
 	//DEBUG("type of packet :%x \n",h->flags);
 
@@ -93,18 +96,69 @@ static int process_pkt(unsigned char *c, unsigned long len) {
 		return 0;
 	}
 }
+int netbh_started=0;
+int max_cont_recv=0;
+void net_BH() {
+	unsigned long addr, *len;
+	int ret;
+	int recv=0;
+    int from_sleep=1;
+	netbh_started=1;
 
-static int net_rx(unsigned char *c, unsigned long len) {
+	while (1) {
+		//sti();
+		len = 0;
+		addr = virtio_removeFromQueue(net_dev->vq[0], &len);
+		if (addr == 0) {
+			if (recv > 0)
+			{
+				//virtqueue_kick(net_dev->vq[0]);
+				recv=0;
+			}
+			recv--;
+			virtqueue_enable_cb(net_dev->vq[0]);
 
-	if (process_pkt(c, len) == 1) {
-		netfront_xmit(net_dev, c, len);
-		mm_putFreePages(c, 0);
-	} else {
-		mm_putFreePages(c, 0);
-	}
-
-	return 1;
+#if 0
+if (recv < -3){
+			//if (from_sleep==1)
+			  //   sc_wait(&nbh_waitq, 100);
+			//else
+				sc_wait(&nbh_waitq, 100);
 }
+#endif
+			from_sleep=1;
+			continue;
+		}else{
+			if (recv <= 0) recv=0;
+		}
+		recv++;
+		if (recv > max_cont_recv) max_cont_recv=recv;
+		if (from_sleep==1){
+		//	virtqueue_disable_cb(net_dev->vq[0]);
+			from_sleep=0;
+		}
+		//c = addr;
+		//DEBUG("%d: new NEW ISR:%d :%x addd:%x len:%x c:%x:%x:%x:%x  c+10:%x:%x:%x:%x\n", i, index, isr, addr, len, c[0], c[1], c[2], c[3], c[10], c[11], c[12], c[13]);
+
+		if (process_pkt(addr, len) == 1) {
+			netfront_xmit(net_dev, addr, len);
+		} else {
+			mm_putFreePages(addr, 0);
+		}
+		addBufToQueue(net_dev->vq[0], 0, 4096);
+	//	if ((recv % 10) ==0)
+		virtqueue_kick(net_dev->vq[0]);
+	}
+}
+
 void init_TestUdpStack() {
-	net_dev = init_netfront(net_rx, mac, 0);
+
+#ifdef WITH_BOTTOM_HALF
+	int i,ret;
+
+	sc_register_waitqueue(&nbh_waitq);
+	ret=sc_createKernelThread(net_BH,0,"net_rx");
+#endif
+
+	net_dev = init_netfront(0, mac, 0);
 }

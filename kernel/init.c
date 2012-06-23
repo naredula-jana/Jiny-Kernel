@@ -50,12 +50,14 @@ int init_kernel(unsigned long end_addr)
 #ifdef NETWORKING
 //	init_LwipTcpIpStack();
 #endif
-	init_TestUdpStack();
+
 
 	ut_printf("Initalising: VFS.. \n");
 	init_vfs();
 //	ar_registerInterrupt(128,syscall_handler);
 	ut_printf("Initialization completed \n");
+
+
 	return 1 ;
 }
 

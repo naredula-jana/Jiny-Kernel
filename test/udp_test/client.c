@@ -74,6 +74,7 @@ send_func(){
 	target_t=start_time;
 	curr_t=start_time;
 	while(curr_t<end_time && send_pkts<total_pkts) {
+		sprintf(buf,"[pkt Current time :%d ]",curr_t);
 		sendto(sfd,buf,pkt_size-28,0,(struct sockaddr *)&server,sizeof(server));
 #ifdef DEBUG
 		printf("packet send : currtime:%d\n",curr_t);

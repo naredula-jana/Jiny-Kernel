@@ -76,7 +76,9 @@ void cmain() {  /* This is the first c function to be executed */
 		g_multiboot_mod_len = mod->mod_end - mod->mod_start;
 	}
 	init_kernel(max_addr);
+	sti();
 	sc_createKernelThread(shell_main, 0, "shell_main");
+	init_TestUdpStack();
 	while (1) {
 		if (g_debug_level == 1) {
 			//		ut_printf(" Inside the Idle Task \n");

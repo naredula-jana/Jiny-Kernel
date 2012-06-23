@@ -202,12 +202,25 @@ static int sh_del(char *arg1,char *arg2)
 	ut_printf("after del \n");
 	return 0;
 }
+int i1=0;
+void t11(){
+	while(1) i1++;
+}
+int i2=0;
+void t22(){
+	while(1) i2++;
+}
 static int sh_test1(char *arg1,char *arg2)
 {
 	struct file *wfp;
 	struct fileStat fstat;
 	int i,ret,wret;
 
+
+
+	ret=sc_createKernelThread(t11,0,"test");
+	ret=sc_createKernelThread(t22,0,"test");
+	return ;
 	wfp=fs_open(arg1,0,0);
 	if (wfp==0)
 	{

@@ -640,11 +640,13 @@ __POP(rdi) __POP(rsi)
 				"movq %[next_sp],%%rsp\n\t"        /* restore ESP   */ \
 				"movq $1f,%[prev_ip]\n\t"  /* save    EIP   */     \
 				"pushq %[next_ip]\n\t"     /* restore EIP   */     \
+				"sti\n\t" \
 				"jmp __switch_to\n"        /* regparm call  */     \
 				"1:\t"                                             \
 				"popq %%rbp\n\t"           /* restore EBP   */     \
 				RESTORE_CONTEXT \
-				"popfq\n"                  /* restore flags */     \
+				"popfq\n\t"                  /* restore flags */     \
+				"sti\n"  \
 				\
 				/* output parameters */                            \
 				: [prev_sp] "=m" (prev->thread.sp),                \
@@ -710,8 +712,9 @@ static void delete_task(struct task_struct *task) {
 	free_task_struct(task);
 }
 
-static unsigned long intr_flags;
+
 void sc_schedule() {
+	unsigned long intr_flags;
 	struct task_struct *prev, *next;
 
 	if (!g_current_task) {
@@ -726,6 +729,7 @@ void sc_schedule() {
 	}
 
 	g_current_task->ticks++;
+
 	spin_lock_irqsave(&sched_lock, intr_flags);
 	prev = g_current_task;
 
