@@ -41,6 +41,7 @@ WorkAround:
 -----------------------------------
 Running on KVM:
 
+./ivshmem_server -m 2m -p /tmp/jana
 sudo ./qemu-system-x86_64 -s -m 1024M -L /home/njana/qemu/opt/qemu.12.5/share/qemu -hda /home/njana/jiny/bin/g2_bootdisk -hdb /home/njana/jiny/bin/g2_image -enable-kvm  -chardev socket,path=/tmp/jana,id=jana -device ivshmem,chardev=jana,size=2m,msi=off -serial /dev/pts/1 -vnc :4
  
 serial :
