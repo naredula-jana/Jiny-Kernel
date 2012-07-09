@@ -26,6 +26,7 @@
 #define VM_SHARED       0x00000008
 
 #define MEM_CLEAR 0x8000000 
+#define MEM_FOR_CACHE 0x4000000
 
 #define PROT_READ       0x1             /* page can be read */
 #define PROT_WRITE      0x2             /* page can be written */

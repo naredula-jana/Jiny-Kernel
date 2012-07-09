@@ -51,6 +51,8 @@ int init_kernel(unsigned long end_addr)
 //	init_LwipTcpIpStack();
 #endif
 
+	kmemleak_init();
+
 
 	ut_printf("Initalising: VFS.. \n");
 	init_vfs();

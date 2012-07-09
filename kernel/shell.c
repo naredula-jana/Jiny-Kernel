@@ -210,17 +210,26 @@ int i2=0;
 void t22(){
 	while(1) i2++;
 }
+static unsigned long test_mp;
 static int sh_test1(char *arg1,char *arg2)
 {
 	struct file *wfp;
 	struct fileStat fstat;
-	int i,ret,wret;
-
-
+	int i,k,ret,wret;
+unsigned long mp;
+test_mp= mm_malloc(100,0);
+mp= mm_malloc(120,0);
+ut_printf("alloced memory: %x\n",mp);
+mp= mm_malloc(130,0);
+ut_printf("alloced memory: %x\n",mp);
+k=ut_atoi(arg1);
+if (k==1)
+kmemleak_scan();
+	return 0;
 
 	ret=sc_createKernelThread(t11,0,"test");
 	ret=sc_createKernelThread(t22,0,"test");
-	return ;
+	return 0;
 	wfp=fs_open(arg1,0,0);
 	if (wfp==0)
 	{

@@ -1176,7 +1176,7 @@ static int kmem_cache_grow (kmem_cache_t * cachep, int flags)
 	 */
 
 	/* Get mem for the objs. */
-	if (!(objp = kmem_getpages(cachep, flags)))
+	if (!(objp = kmem_getpages(cachep, flags|MEM_FOR_CACHE)))
 		goto failed;
 
 	/* Get slab management. */
@@ -1381,6 +1381,9 @@ try_again:
 	objp = kmem_cache_alloc_one(cachep);
 #endif
 	local_irq_restore(save_flags);
+#ifdef MEMLEAK_TOOL
+	kmemleak_alloc(objp, cachep->objsize, cachep);
+#endif
 	return objp;
 alloc_new_slab:
 #ifdef CONFIG_SMP
@@ -1528,6 +1531,9 @@ static inline void __kmem_cache_free (kmem_cache_t *cachep, void* objp)
 		free_block(cachep, &objp, 1);
 	}
 #else
+#ifdef MEMLEAK_TOOL
+	kmemleak_free(objp,cachep);
+#endif
 	kmem_cache_free_one(cachep, objp);
 #endif
 }

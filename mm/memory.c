@@ -129,6 +129,7 @@ static inline void free_pages_ok(unsigned long map_nr, unsigned long order)
 					spin_unlock_irqrestore(&free_area_lock, flags); \
 					DEBUG(" Page alloc return address: %x mask:%x order:%d \n",ADDRESS(map_nr),gfp_mask,order); \
 					if (gfp_mask & MEM_CLEAR) ut_memset(ADDRESS(map_nr),0,PAGE_SIZE<<order); \
+					if (!(gfp_mask & MEM_FOR_CACHE)) kmemleak_alloc(ADDRESS(map_nr),PAGE_SIZE<<order,0);\
 					return ADDRESS(map_nr); \
 				} \
 				prev = ret; \
@@ -264,30 +265,30 @@ int mm_printFreeAreas(char *arg1,char *arg2)
         ut_printf("total = %d\n", total);
 	return 1;
 }
-int mm_putFreePages(unsigned long addr, unsigned long order)
-{
-        unsigned long map_nr = MAP_NR(addr);
+int mm_putFreePages(unsigned long addr, unsigned long order) {
+	unsigned long map_nr = MAP_NR(addr);
 
-        if (map_nr < g_max_mapnr) {
-                page_struct_t * map = g_mem_map + map_nr;
-                if (PageReserved(map))
-		{
-               		goto error; 
+#ifdef MEMLEAK_TOOL
+	kmemleak_free(addr,0);
+#endif
+	if (map_nr < g_max_mapnr) {
+		page_struct_t * map = g_mem_map + map_nr;
+		if (PageReserved(map)) {
+			goto error;
 		}
-                if (atomic_dec_and_test(&map->count)) {
-                        if (PageSwapCache(map))
-                                ut_printf ("PANIC Freeing swap cache pages");
-                        map->flags &= ~(1 << PG_referenced);
-                        free_pages_ok(map_nr, order);
-			if (init_done == 1)
-			{
-			DEBUG(" Freeing memory addr:%x order:%d \n",addr,order);
+		if (atomic_dec_and_test(&map->count)) {
+			if (PageSwapCache(map))
+				ut_printf("PANIC Freeing swap cache pages");
+			map->flags &= ~(1 << PG_referenced);
+			free_pages_ok(map_nr, order);
+			if (init_done == 1) {
+				DEBUG(" Freeing memory addr:%x order:%d \n", addr, order);
 			}
-                        return 1;
-                }
-        }
-error:
-	ut_printf(" ERROR in freeing the area  addr:%x order:%x \n",addr,order);
+			return 1;
+		}
+	}
+	error: ut_printf(" ERROR in freeing the area  addr:%x order:%x \n", addr,
+			order);
 	BUG();
 	return 0;
 }
