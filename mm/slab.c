@@ -1382,7 +1382,7 @@ try_again:
 #endif
 	local_irq_restore(save_flags);
 #ifdef MEMLEAK_TOOL
-	kmemleak_alloc(objp, cachep->objsize, cachep);
+	memleakHook_alloc(objp, cachep->objsize, 0, cachep);
 #endif
 	return objp;
 alloc_new_slab:
@@ -1532,7 +1532,7 @@ static inline void __kmem_cache_free (kmem_cache_t *cachep, void* objp)
 	}
 #else
 #ifdef MEMLEAK_TOOL
-	kmemleak_free(objp,cachep);
+	memleakHook_free(objp,cachep);
 #endif
 	kmem_cache_free_one(cachep, objp);
 #endif

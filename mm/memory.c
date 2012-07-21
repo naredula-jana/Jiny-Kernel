@@ -129,7 +129,7 @@ static inline void free_pages_ok(unsigned long map_nr, unsigned long order)
 					spin_unlock_irqrestore(&free_area_lock, flags); \
 					DEBUG(" Page alloc return address: %x mask:%x order:%d \n",ADDRESS(map_nr),gfp_mask,order); \
 					if (gfp_mask & MEM_CLEAR) ut_memset(ADDRESS(map_nr),0,PAGE_SIZE<<order); \
-					if (!(gfp_mask & MEM_FOR_CACHE)) kmemleak_alloc(ADDRESS(map_nr),PAGE_SIZE<<order,0);\
+					if (!(gfp_mask & MEM_FOR_CACHE)) memleakHook_alloc(ADDRESS(map_nr),PAGE_SIZE<<order,0,0);\
 					return ADDRESS(map_nr); \
 				} \
 				prev = ret; \
@@ -269,7 +269,7 @@ int mm_putFreePages(unsigned long addr, unsigned long order) {
 	unsigned long map_nr = MAP_NR(addr);
 
 #ifdef MEMLEAK_TOOL
-	kmemleak_free(addr,0);
+	memleakHook_free(addr,0);
 #endif
 	if (map_nr < g_max_mapnr) {
 		page_struct_t * map = g_mem_map + map_nr;

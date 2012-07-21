@@ -40,8 +40,10 @@
 
 /* Modified by Naredula Janardhana Reddy while porting to Jiny */
 
-#include "common.h"
+//#include "common.h"
+#include "os_dep.h"
 #include "prio_tree.h"
+#include "misc.h"
 #define ULONG_MAX       (~0UL)
 #if 0
 #define RADIX_INDEX(vma)  ((vma)->vm_pgoff)
@@ -79,7 +81,7 @@ static unsigned long index_bits_to_maxindex[BITS_PER_LONG];
 void  prio_tree_init(void)
 {
 	unsigned int i;
-	static init_done = 0;
+	static int init_done = 0;
 	if (init_done == 1)
 		return;
 	init_done = 0;

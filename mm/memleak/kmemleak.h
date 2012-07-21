@@ -17,7 +17,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  */
-
+#if 0
 #ifndef __KMEMLEAK_H
 #define __KMEMLEAK_H
 
@@ -104,3 +104,4 @@ static inline void kmemleak_no_scan(const void *ptr)
 #endif	/* CONFIG_DEBUG_KMEMLEAK */
 
 #endif	/* __KMEMLEAK_H */
+#endif

@@ -217,9 +217,14 @@ static int sh_test1(char *arg1,char *arg2)
 	struct fileStat fstat;
 	int i,k,ret,wret;
 unsigned long mp;
+
 test_mp= mm_malloc(100,0);
+mm_free(test_mp);
+
+test_mp= mm_malloc(100,0);
+ut_printf("alloced memory: %x\n",test_mp);
 mp= mm_malloc(120,0);
-ut_printf("alloced memory: %x\n",mp);
+ut_printf("alloced memory: %x mp_addr:%x \n",mp,&mp);
 mp= mm_malloc(130,0);
 ut_printf("alloced memory: %x\n",mp);
 k=ut_atoi(arg1);
