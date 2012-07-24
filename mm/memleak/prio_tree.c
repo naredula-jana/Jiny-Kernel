@@ -152,6 +152,7 @@ static struct prio_tree_node *prio_tree_expand(struct prio_tree_root *root,
 
 /*
  * Replace a prio_tree_node with a new node and return the old node
+ * The function return NULL only in the case bug
  */
 struct prio_tree_node *prio_tree_replace(struct prio_tree_root *root,
 		struct prio_tree_node *old, struct prio_tree_node *node)
@@ -159,7 +160,7 @@ struct prio_tree_node *prio_tree_replace(struct prio_tree_root *root,
 	INIT_PRIO_TREE_NODE(node);
 
 	if (prio_tree_root(old)) {
-		BUG_ON(root->prio_tree_node != old);
+		BUG_ON(root->prio_tree_node != old,1);
 		/*
 		 * We can reduce root->index_bits here. However, it is complex
 		 * and does not help much to improve performance (IMO).
@@ -183,8 +184,9 @@ struct prio_tree_node *prio_tree_replace(struct prio_tree_root *root,
 		node->right = old->right;
 		old->right->parent = node;
 	}
-
 	return old;
+out:
+   return NULL;
 }
 
 /*
@@ -224,6 +226,7 @@ struct prio_tree_node *prio_tree_insert(struct prio_tree_root *root,
 		    (h_index == heap_index && r_index > radix_index)) {
 			struct prio_tree_node *tmp = node;
 			node = prio_tree_replace(root, cur, node);
+			if (node == NULL) goto out;
 			cur = tmp;
 			/* swap indices */
 			index = r_index;
@@ -264,8 +267,9 @@ struct prio_tree_node *prio_tree_insert(struct prio_tree_root *root,
 			size_flag = 1;
 		}
 	}
+out:
 	/* Should not reach here */
-	BUG();
+	printf("Error in prio_tree insert\n");
 	return NULL;
 }
 
@@ -304,7 +308,7 @@ void prio_tree_remove(struct prio_tree_root *root, struct prio_tree_node *node)
 	}
 
 	if (prio_tree_root(cur)) {
-		BUG_ON(root->prio_tree_node != cur);
+		BUG_ON(root->prio_tree_node != cur,2);
 		__INIT_PRIO_TREE_ROOT(root, root->raw);
 		return;
 	}
@@ -314,8 +318,12 @@ void prio_tree_remove(struct prio_tree_root *root, struct prio_tree_node *node)
 	else
 		cur->parent->left = cur->parent;
 
-	while (cur != node)
+	while (cur != node) {
 		cur = prio_tree_replace(root, cur->parent, cur);
+		if (cur == NULL) goto out;
+	}
+out:
+   return;
 }
 
 /*
@@ -342,8 +350,8 @@ static struct prio_tree_node *prio_tree_left(struct prio_tree_iter *iter,
 				iter->size_level++;
 		} else {
 			if (iter->size_level) {
-				BUG_ON(!prio_tree_left_empty(iter->cur));
-				BUG_ON(!prio_tree_right_empty(iter->cur));
+				BUG_ON(!prio_tree_left_empty(iter->cur),3);
+				BUG_ON(!prio_tree_right_empty(iter->cur),4);
 				iter->size_level++;
 				iter->mask = ULONG_MAX;
 			} else {
@@ -353,7 +361,7 @@ static struct prio_tree_node *prio_tree_left(struct prio_tree_iter *iter,
 		}
 		return iter->cur;
 	}
-
+out:
 	return NULL;
 }
 
@@ -384,8 +392,8 @@ static struct prio_tree_node *prio_tree_right(struct prio_tree_iter *iter,
 				iter->size_level++;
 		} else {
 			if (iter->size_level) {
-				BUG_ON(!prio_tree_left_empty(iter->cur));
-				BUG_ON(!prio_tree_right_empty(iter->cur));
+				BUG_ON(!prio_tree_left_empty(iter->cur),5);
+				BUG_ON(!prio_tree_right_empty(iter->cur),6);
 				iter->size_level++;
 				iter->mask = ULONG_MAX;
 			} else {
@@ -395,7 +403,7 @@ static struct prio_tree_node *prio_tree_right(struct prio_tree_iter *iter,
 		}
 		return iter->cur;
 	}
-
+out:
 	return NULL;
 }
 

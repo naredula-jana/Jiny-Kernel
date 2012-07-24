@@ -17,14 +17,14 @@
 #define NULL ((void *) 0)
 #define TASK_SIZE 4*(0x1000)
 typedef long  size_t;
-#define BUG()  ut_printf("BUG ..\n")
+
 #endif
 
 extern unsigned long g_jiffies;
 extern struct task_struct *g_current_task;
 extern long g_idle_task;
 extern void *placement_address;
-
+#define printf ut_printf
 #define pr_debug ut_printf
 #define strcmp ut_strcmp
 

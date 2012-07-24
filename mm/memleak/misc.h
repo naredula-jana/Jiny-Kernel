@@ -98,7 +98,9 @@ static inline void hlist_del(struct hlist_node *n)
           (void) (&_min1 == &_min2);              \
           _min1 < _min2 ? _min1 : _min2; })
 
+extern int memleakHook_disable();
+extern int memleak_serious_bug;
 #define unlikely(x)     (x) /* TODO */
-#define BUG_ON(condition) do { if (unlikely((condition)!=0)) BUG(); } while(0)
+#define BUG_ON(condition,y) do { if (unlikely((condition)!=0)) {printf("BUGON: %d\n",y);  memleakHook_disable(); memleak_serious_bug=1; goto out;}} while(0)
 
 
