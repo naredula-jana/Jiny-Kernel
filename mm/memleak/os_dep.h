@@ -1,7 +1,7 @@
 #ifndef __OSDEP_H
 #define __OSDEP_H
 
-#define MAX_STATIC_OBJS 10000
+#define MAX_STATIC_OBJS 100
 #define MAX_STATIC_SCAN_AREAS 100
 
 #if 0
