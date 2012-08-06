@@ -101,7 +101,14 @@ addr_t initialise_paging(addr_t end_addr)
 
 //	ut_printf("Initializing PAGING  nframes:%x  FR:%x l2:%x i=%d \n",nframes,fr,level2_table,i);
 	p=0x00102000; /* TODO: the following two lines need to remove later */
-	*p=0; /* reset the L3 table first entry need only when the paging is enabled */
+	/* reset the L3 table first entry need only when the paging is enabled */
+
+#ifdef SMP
+	/* for SMP it is reset to zero after all the cpus are up */
+#else
+	*p=0;
+#endif
+
 	VIDEO=__va(VIDEO);
 	flush_tlb(0x101000);
 	return placement_address;

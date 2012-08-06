@@ -33,6 +33,8 @@ extern unsigned long g_debug_level;
 } while (0) 
 #endif
 
+extern int brk_pnt;
+#define BRK while(brk_pnt==0)
 
 #define MAX_SYMBOLLEN 40
 #define TYPE_TEXT 0

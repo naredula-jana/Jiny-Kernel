@@ -97,7 +97,7 @@ typedef unsigned char u8;
 /*
  * Kmemleak configuration and common defines.
  */
-#define MAX_TRACE		4	/* stack trace length */
+#define MAX_TRACE		1	/* stack trace length */
 #define MSECS_MIN_AGE		5000	/* minimum object age for reporting */
 #define SECS_FIRST_SCAN		60	/* delay before the first scan */
 #define SECS_SCAN_WAIT		600	/* subsequent auto scanning delay */
@@ -221,11 +221,11 @@ static atomic_t kmemleak_error = ATOMIC_INIT(0);
 #define MAX_ERRORS 10
 static int stat_obj_count,stat_errors[MAX_ERRORS];
 
-#define MAX_TYPES 300
+#define MAX_TYPES 500
 static struct {
 	int count;
 	unsigned long type;
-	unsigned long mem_consumed;
+	unsigned long mem_leak,mem_consumed;
 	unsigned long *trace[MAX_TRACE];
 }obj_types[MAX_TYPES];
 
@@ -476,7 +476,7 @@ static unsigned int save_stack_trace(unsigned long **trace_output) {
 	unsigned long *stack_top = &addr;
 	unsigned long sz, stack_end;
 	int i;
-//return 0;
+return 0;
 
 	stack_trace.max_entries = MAX_TRACE;
 	stack_trace.nr_entries = 0;
@@ -538,6 +538,7 @@ static struct kmemleak_object *create_object(unsigned long ptr, size_t size, int
 	object = kmem_cache_alloc(object_cache, 0);
 	if (!object) {
 		memleak_serious_bug=1;
+		sanity_location=801;
 		goto out;
 	}
 	sanity_check(object,3);
@@ -589,6 +590,7 @@ static void delete_object(unsigned long ptr) {
 			if (objs[i].pointer == ptr) {
 				pr_debug("ERROR Found the pointer But Failed using Tree :%x  %d next=%x\n",ptr, i, objs[i].next);
 				memleak_serious_bug = 1;
+				sanity_location=809;
 				return;
 			}
 		}
@@ -669,12 +671,15 @@ static void kmemleak_alloc(const void *ptr, int size, int type, void *cachep) {
 	}
 
 	if (memleak_serious_bug==1){
+		printf(" inside the create\n");
 		kmemleak_scan();
 	}
+#if 0
     if (sysctl_memleak_scan==2){
     	sysctl_memleak_scan=0;
 		kmemleak_scan();
     }
+#endif
 }
 
 /**
@@ -695,10 +700,12 @@ static void kmemleak_free(const void *ptr, void *cachep) {
 		printf(" inside the delete\n");
 		kmemleak_scan();
 	}
+#if 0
     if (sysctl_memleak_scan==2){
     	sysctl_memleak_scan=0;
 		kmemleak_scan();
     }
+#endif
 }
 static void kmemleak_update(const void *ptr,unsigned long type) {
 	struct kmemleak_object *object;
@@ -852,29 +859,24 @@ static void scan_gray_list(void) {
  */
 
 void kmemleak_scan(void) {
-	//static int scanned = 0;
+	static int scanned = 0;
 	struct kmemleak_object *object;
 	unsigned long flags;
 	int new_leaks = 0;
 	int total_obj = 0;
 	int i,k;
 
-	printf("sanity location:%d  arg1: %x arg2:%x total object count:%d\n", sanity_location,err_arg1,err_arg2,stat_obj_count);
-	if (sanity_location != 0) {
+    if (scanned==1) return ;
+	printf("sanity location:%d  seriousbug:%d  arg1: %x arg2:%x total object count:%d\n", sanity_location,memleak_serious_bug, err_arg1,err_arg2,stat_obj_count);
+
+
+	if (sanity_location != 0 || memleak_serious_bug==1) {
 		atomic_set(&kmemleak_enabled, 0);
 		memleakHook_disable();
-		goto out;
+	//	goto out;
 	}
-#if 0
-	if (scanned == 0) {
-		scanned = 1;
-	} else {
-		printf("ERROR: Already Scanned \n");
-		return;
-	}
-	atomic_set(&kmemleak_enabled, 0);
-	memleakHook_disable();
-#endif
+
+	scanned=1;
 
 	spin_lock_irqsave(&kmemleak_lock, flags); /* global lock: scan to freeze entire memory*/
 	/* global lock , this is to freeze memory while scanning */
@@ -904,48 +906,55 @@ void kmemleak_scan(void) {
 
 	int totaltypes = 0;
 	int withtype = 0;
+	int total_mem=0;
 	list_for_each_entry(object, &object_list, object_list) {
-		if (object->count == 0) {
-			//		if (object->type !=0) {
-			int found = 0;
 
-			for (i = 0; i < totaltypes && i < MAX_TYPES; i++) {
-				if (obj_types[i].type == object->type) {
-					obj_types[i].count++;
-					obj_types[i].mem_consumed = obj_types[i].mem_consumed
-							+ object->size;
-					found = 1;
-					break;
-				}
+		int found = 0;
+
+		for (i = 0; i < totaltypes && i < MAX_TYPES; i++) {
+			if (obj_types[i].type == object->type) {
+				obj_types[i].count++;
+				obj_types[i].mem_consumed = obj_types[i].mem_consumed
+						+ object->size;
+				if (object->count == 0)
+					obj_types[totaltypes].mem_leak = obj_types[totaltypes].mem_leak+object->size;
+				found = 1;
+				break;
 			}
-			if (found == 0 && (totaltypes < (MAX_TYPES - 1))) {
-				obj_types[totaltypes].type = object->type;
-				obj_types[totaltypes].count = 1;
-				obj_types[totaltypes].mem_consumed = 0;
-				for (k=0; k<MAX_TRACE; k++)
-					obj_types[totaltypes].trace[k]=object->trace[k];
-				totaltypes++;
-			}
-			if (object->type != 0)
-				withtype++;
-			new_leaks++;
 		}
+		if (found == 0 && (totaltypes < (MAX_TYPES - 1))) {
+			if (object->count == 0){
+				obj_types[totaltypes].mem_leak = object->size;
+				for (k = 0; k < MAX_TRACE; k++)
+								obj_types[totaltypes].trace[k] = object->trace[k];
+			}
+			obj_types[totaltypes].type = object->type;
+			obj_types[totaltypes].count = 1;
+			obj_types[totaltypes].mem_consumed = object->size;
+			totaltypes++;
+		}
+		if (object->type != 0)
+			withtype++;
+		if (object->count == 0)
+			new_leaks++;
+
+		total_mem = total_mem + object->size;
 	}
 	spin_unlock_irqrestore(&kmemleak_lock, flags); /* unlock the global lock */
 
 
+
 	for (i = 0; (i < totaltypes) && (i < MAX_TYPES); i++) {
 		if (obj_types[i].type != 0)
-			pr_debug("type:%s  cnt:%d mem:%d trace:%x-%x-%x-%x\n", obj_types[i].type,
-					obj_types[i].count, obj_types[i].mem_consumed,obj_types[i].trace[0],obj_types[i].trace[1],obj_types[i].trace[2],obj_types[i].trace[3]);
+			pr_debug(" cnt:%d mem:%d K leak:%d type:%s  trace:%x-%x-%x-%x\n",
+					obj_types[i].count, obj_types[i].mem_consumed/1024, obj_types[i].mem_leak, obj_types[i].type, obj_types[i].trace[0], obj_types[i].trace[1],obj_types[i].trace[2],obj_types[i].trace[3]);
 		else
-			pr_debug("type:NOTYPE  cnt:%d mem:%d trace:%x-%x-%x-%x\n", obj_types[i].count, obj_types[i].mem_consumed,obj_types[i].trace[0],obj_types[i].trace[1],obj_types[i].trace[2],obj_types[i].trace[3]);
+			pr_debug("cnt:%d mem:%d K leak:%d type:NOTYPE  trace:%x-%x-%x-%x\n", obj_types[i].count, obj_types[i].mem_consumed/1024, obj_types[i].mem_leak, obj_types[i].trace[0],obj_types[i].trace[1],obj_types[i].trace[2],obj_types[i].trace[3]);
 
 	}
-	pr_debug("New2.0 Total Leaks : %d  total obj:%d stat_total:%d withtype:%d\n",
-			new_leaks, total_obj, stat_obj_count, withtype);
+	pr_debug("New2.0 Total Leaks : %d  total obj:%d stat_total:%d withtype:%d totalmem:%d K\n",
+			new_leaks, total_obj, stat_obj_count, withtype,total_mem/1024);
 
-out:
 	for (i = 0; i < MAX_ERRORS; i++)
 		if (stat_errors[i] != 0)
 			pr_debug("memleak error-%d  : %d\n", i, stat_errors[i]);
@@ -959,7 +968,7 @@ void kmemleak_init(void) {
 	unsigned long flags;
 	int i;
 
-	pr_debug("kmemleak init version 2.12 :%x \n",object_cache);
+	pr_debug("kmemleak init version 2.16 :%x \n",object_cache);
 	prio_tree_init();
 	stat_obj_count=0;
 	for (i=0; i<MAX_ERRORS; i++)

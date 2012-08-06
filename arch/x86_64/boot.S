@@ -76,7 +76,7 @@ t1:
         movl %eax, %es
         movl %eax, %fs
         movl %eax, %gs
-	movl %eax, %ss
+	    movl %eax, %ss
         /*
          * Prepare for entering 64bits mode
          */

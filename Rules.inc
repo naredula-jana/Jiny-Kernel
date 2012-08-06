@@ -1,5 +1,6 @@
 SOURCE_ROOT=/opt_src/Jiny-Kernel/
 NETWORKING =1 
+SMP=1
 INCLUDE=. -DNETWORKING -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURCE_ROOT)/arch/x86_64/
 
 
@@ -30,6 +31,9 @@ INCLUDE=. -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURCE_ROOT)/inclu
 
 ifdef NETWORKING
 INCLUDE += -DNETWORKING 
+endif
+ifdef SMP
+INCLUDE += -DSMP
 endif
 
 %.o: %.c

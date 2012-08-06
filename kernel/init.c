@@ -23,8 +23,10 @@ extern void init_serial();
 kmem_cache_t *vm_area_cachep;
 /* SLAB cache for mm_struct structures (tsk->mm) */
 kmem_cache_t *mm_cachep;
+int brk_pnt=0;
 int init_kernel(unsigned long end_addr)
 {
+	int ret;
 	ut_printf("Initialising: ISR descriptors.. \n");
 	init_descriptor_tables();
 
@@ -53,12 +55,22 @@ int init_kernel(unsigned long end_addr)
 
 	kmemleak_init();
 
+#ifdef SMP
+	ut_printf("Initializing SMP\n");
 
+	if ((ret=vm_mmap(0,__va(0xFee00000) ,0x8000,PROT_WRITE,MAP_FIXED,0xFee00000)) == 0) /* this is for SMP */
+	{
+		ut_printf("ERROR : mmap fails for \n");
+		return 0;
+	}
+	//BRK;
+	ret=imps_force(2);
+	ut_printf(" smp force result:%d \n",ret);
+#endif
 	ut_printf("Initalising: VFS.. \n");
 	init_vfs();
 //	ar_registerInterrupt(128,syscall_handler);
 	ut_printf("Initialization completed \n");
-
 
 	return 1 ;
 }

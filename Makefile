@@ -6,7 +6,9 @@ XEN_OBJ=drivers/xen/xen_init.o drivers/xen/xenbus.o drivers/xen/evntchn.o driver
 VIRTIO_OBJ= drivers/virtio/virtio_ring.o drivers/virtio/virtio_pci.o drivers/virtio/net/virtio_net.o drivers/virtio/net/test_udpserver.o drivers/virtio/9p/virtio_9p.o drivers/virtio/9p/9p.o drivers/virtio/9p/p9_fs.o
 MEMLEAK_OBJ=mm/memleak/memleak.o mm/memleak/os_dep.o mm/memleak/prio_tree.o  mm/memleak/memleak_hook.o
 OBJECTS=arch/$(ARCH_DIR)/boot.o arch/$(ARCH_DIR)/init.o arch/$(ARCH_DIR)/syscall.o arch/$(ARCH_DIR)/isr.o arch/$(ARCH_DIR)/descriptor_tables.o arch/$(ARCH_DIR)/pci.o arch/$(ARCH_DIR)/paging.o arch/$(ARCH_DIR)/interrupt.o drivers/display.o drivers/keyboard.o drivers/serial.o drivers/host_shm.o mm/memory.o mm/slab.o mm/mmap.o mm/pagecache.o fs/binfmt_elf.o fs/vfs.o fs/host_fs.o $(MEMLEAK_OBJ) $(VIRTIO_OBJ)
-
+#ifdef SMP
+OBJECTS += arch/$(ARCH_DIR)/smp/smp-imps.o arch/$(ARCH_DIR)/smp/trampoline_64.o arch/$(ARCH_DIR)/smp/head.S
+#endif
 
 ifdef NETWORKING
 OBJECTS += $(LWIP_OBJ) 
@@ -27,6 +29,7 @@ all: lwip.a
 	make SOURCE_ROOT=$$PWD -C drivers/virtio/9p
 	make SOURCE_ROOT=$$PWD -C drivers/virtio/net
 	make SOURCE_ROOT=$$PWD -C arch/$(ARCH_DIR)
+	make SOURCE_ROOT=$$PWD -C arch/$(ARCH_DIR)/smp
 	make SOURCE_ROOT=$$PWD -C mm
 	make SOURCE_ROOT=$$PWD -C mm/memleak
 	make SOURCE_ROOT=$$PWD -C fs
