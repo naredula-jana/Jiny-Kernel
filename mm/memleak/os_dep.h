@@ -22,7 +22,7 @@ typedef long  size_t;
 
 extern unsigned long g_jiffies;
 extern struct task_struct *g_current_task;
-extern long g_idle_task;
+extern long g_idle_tasks;
 extern void *placement_address;
 #define printf ut_printf
 #define pr_debug ut_printf

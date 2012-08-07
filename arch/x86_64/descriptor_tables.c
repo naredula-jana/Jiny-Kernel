@@ -98,6 +98,7 @@ static void tss_init(tss_t *tssp)
 
 	tssp->iomap_base = TSS_BASIC_SIZE;
 }
+
 void init_gdt(int cpu)
 {
 	ut_memset(&gdt_entries[cpu][0], 0, sizeof(gdt_entries[cpu]));
@@ -222,6 +223,11 @@ static void init_idt()
 
 	init_handlers();
 
+	idtr_load(&idt_ptr);
+	asm volatile("sti");
+}
+void init_smp_gdt(int cpu){
+	gdtr_load(&gdt_ptr);
 	idtr_load(&idt_ptr);
 	asm volatile("sti");
 }

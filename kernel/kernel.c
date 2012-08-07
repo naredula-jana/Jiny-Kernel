@@ -31,7 +31,7 @@ unsigned long g_multiboot_mod_addr=0;
 unsigned long g_multiboot_mod_len=0;
 symb_table_t *g_symbol_table=0;
 unsigned long g_total_symbols=0;
-void idle_func();
+void idleTask_func();
 /* Check if MAGIC is valid and print the Multiboot information structure
    pointed by ADDR.  */
 void cmain() {  /* This is the first c function to be executed */
@@ -82,11 +82,10 @@ void cmain() {  /* This is the first c function to be executed */
 	sc_createKernelThread(shell_main, 0, "shell_main");
 	init_TestUdpStack();
 
-	idle_func();
-
+	idleTask_func();
 	return;
 }
-void idle_func(){
+void idleTask_func(){
 	while (1) {
 		if (g_debug_level == 1) {
 			//		ut_printf(" Inside the Idle Task \n");

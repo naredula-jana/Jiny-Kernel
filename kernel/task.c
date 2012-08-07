@@ -15,7 +15,7 @@
 #define MAGIC_CHAR 0xab
 #define MAGIC_LONG 0xabababababababab
 
-struct task_struct *g_current_task, *g_idle_task;
+struct task_struct *g_current_task,*g_idle_tasks[MAX_CPUS];
 struct mm_struct *g_kernel_mm = 0;
 
 static queue_t run_queue;
@@ -30,7 +30,7 @@ static struct task_struct *g_task_dead = 0; /* TODO : remove me later */
 
 #define is_kernelThread(task) (task->mm == g_kernel_mm)
 
-extern long *stack;
+extern long *g_idle_stack;
 void init_timer();
 static int free_mm(struct mm_struct *mm);
 static unsigned long push_to_userland();
@@ -674,6 +674,8 @@ __POP(rdi) __POP(rsi)
 #endif
 
 void init_tasking() {
+	int i;
+
 	g_kernel_mm = kmem_cache_alloc(mm_cachep, 0);
 	if (g_kernel_mm == 0)
 		return;
@@ -689,18 +691,21 @@ void init_tasking() {
 	g_kernel_mm->pgd = (unsigned char *) g_kernel_page_dir;
 	g_kernel_mm->fs.total = 3;
 
-	g_current_task = (struct task_struct *) &stack;
-	g_idle_task = (struct task_struct *) &stack;
-	g_idle_task->ticks = 0;
-	g_current_task->stats.ticks_consumed = 0;
-	g_idle_task->magic_numbers[0] = g_idle_task->magic_numbers[1] = MAGIC_LONG;
-	g_current_task->state = TASK_RUNNING;
-	g_current_task->pid = g_pid;
-	g_current_task->mm = g_kernel_mm;
+
+	for (i = 0; i < MAX_CPUS; i++) {
+		g_idle_tasks[i] = (struct task_struct *) (&g_idle_stack)+i;
+		g_idle_tasks[i]->ticks = 0;
+		g_idle_tasks[i]->magic_numbers[0] = g_idle_tasks[i]->magic_numbers[1] = MAGIC_LONG;
+		g_idle_tasks[i]->stats.ticks_consumed = 0;
+		g_idle_tasks[i]->state = TASK_RUNNING;
+		g_idle_tasks[i]->pid = g_pid;
+		g_idle_tasks[i]->mm = g_kernel_mm; /* TODO increse the corresposnding count */
+		list_add_tail(&g_idle_tasks[i]->task_link, &task_queue.head);
+		ut_strncpy(g_idle_tasks[i]->name, "idle", MAX_TASK_NAME);
+		g_pid++;
+	}
+	g_current_task = g_idle_tasks[0];
 	ar_archSetUserFS(0);
-	list_add_tail(&g_current_task->task_link, &task_queue.head);
-	ut_strncpy(g_current_task->name, "idle", MAX_TASK_NAME);
-	g_pid++;
 	init_timer();
 }
 static void delete_task(struct task_struct *task) {
@@ -711,11 +716,18 @@ static void delete_task(struct task_struct *task) {
 	free_mm(task->mm);
 	free_task_struct(task);
 }
-
+#if SMP
+/* getcpuid func is defined in smp code */
+#else
+int getcpuid(){
+	return 0;
+}
+#endif
 
 void sc_schedule() {
 	unsigned long intr_flags;
 	struct task_struct *prev, *next;
+	int cpuid=getcpuid();
 
 	if (!g_current_task) {
 		BUG();
@@ -743,7 +755,7 @@ void sc_schedule() {
 		prev->pending_signal = 0;
 	}
 	/* remove from runqueue based on state and get  the next task */
-	if (prev != g_idle_task) {
+	if (prev != g_idle_tasks[cpuid]) {
 		move_last_runqueue(prev);
 		switch (prev->state) {
 		case TASK_RUNNING:
@@ -751,12 +763,11 @@ void sc_schedule() {
 		case TASK_INTERRUPTIBLE:
 		default:
 			del_from_runqueue(prev);
-
 		}
 	}
 	next = get_from_runqueue(0);
 	if (next == 0)
-		next = g_idle_task;
+		next = g_idle_tasks[cpuid];
 	g_current_task = next;
 
 	/* handle the  dead task */

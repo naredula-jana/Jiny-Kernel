@@ -2,6 +2,8 @@
 
 #define ASM	1
 #include <multiboot.h>
+
+
 #define MSR_EFER 0xc0000080		/* extended feature register */
 #define _EFER_LME 8  /* Long mode enable */
 #define CR0_PG 0x80000000 /* Paging */	
@@ -50,7 +52,7 @@ multiboot_entry:
 	
 #	jmp 0x100024
 	/* Initialize the stack pointer.  */
-	movl	$(stack + TASK_SIZE-BOOT_SHIFT), %esp
+	movl	$(g_idle_stack + TASK_SIZE-BOOT_SHIFT), %esp
 #loop1:	jmp loop1
 	/* Reset EFLAGS.  */
 	pushl	$0
@@ -114,7 +116,7 @@ t1:
 /* Now enter the C main function...  */
 .code64
 start64:
-        movq $(stack + TASK_SIZE -16), %rsp
+        movq $(g_idle_stack + TASK_SIZE -16), %rsp
         movq kernel_jump_addr, %rax
         callq *%rax
 
@@ -129,7 +131,7 @@ halt_message:
 	.asciz	"Halted."
 
 #stack:
-	.comm	stack, TASK_SIZE
+	.comm	g_idle_stack, TASK_SIZE*MAX_CPUS
 #.globl kernel_jump_addr
 kernel_jump_addr:
         .quad 0x00000000000000

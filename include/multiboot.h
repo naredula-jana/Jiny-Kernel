@@ -18,6 +18,11 @@
 /* The size of our stack (16KB).  */
 /*#define TASK_SIZE 4*PAGE_SIZE */
 #define TASK_SIZE 4*(0x1000)
+#ifdef SMP
+#define MAX_CPUS 5
+#else
+#define MAX_CPUS 1
+#endif
 
 /* C symbol format. HAVE_ASM_USCORE is defined by configure.  */
 #ifdef HAVE_ASM_USCORE

@@ -31,10 +31,10 @@
 
 
 #define __START_KERNEL_map 0x40000000
-#define __KERNEL_CS 0x10
-#define __KERNEL_DS 0x18
+#define __KERNEL_CS 0x8
+#define __KERNEL_DS 0x10
 
-#define __KERNEL32_CS   0x38
+#define __KERNEL32_CS   0x30
 
 
 .data

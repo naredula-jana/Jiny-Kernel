@@ -7,7 +7,7 @@ VIRTIO_OBJ= drivers/virtio/virtio_ring.o drivers/virtio/virtio_pci.o drivers/vir
 MEMLEAK_OBJ=mm/memleak/memleak.o mm/memleak/os_dep.o mm/memleak/prio_tree.o  mm/memleak/memleak_hook.o
 OBJECTS=arch/$(ARCH_DIR)/boot.o arch/$(ARCH_DIR)/init.o arch/$(ARCH_DIR)/syscall.o arch/$(ARCH_DIR)/isr.o arch/$(ARCH_DIR)/descriptor_tables.o arch/$(ARCH_DIR)/pci.o arch/$(ARCH_DIR)/paging.o arch/$(ARCH_DIR)/interrupt.o drivers/display.o drivers/keyboard.o drivers/serial.o drivers/host_shm.o mm/memory.o mm/slab.o mm/mmap.o mm/pagecache.o fs/binfmt_elf.o fs/vfs.o fs/host_fs.o $(MEMLEAK_OBJ) $(VIRTIO_OBJ)
 #ifdef SMP
-OBJECTS += arch/$(ARCH_DIR)/smp/smp-imps.o arch/$(ARCH_DIR)/smp/trampoline_64.o arch/$(ARCH_DIR)/smp/head.S
+OBJECTS += arch/$(ARCH_DIR)/smp/smp-imps.o arch/$(ARCH_DIR)/smp/trampoline_64.o arch/$(ARCH_DIR)/smp/head.o
 #endif
 
 ifdef NETWORKING
@@ -48,6 +48,7 @@ clean:
 	make SOURCE_ROOT=$$PWD -C drivers/virtio/net clean
 	make SOURCE_ROOT=$$PWD -C fs clean
 	make SOURCE_ROOT=$$PWD -C arch/$(ARCH_DIR) clean
+	make SOURCE_ROOT=$$PWD -C arch/$(ARCH_DIR)/smp clean
 	make SOURCE_ROOT=$$PWD -C mm clean
 	make SOURCE_ROOT=$$PWD -C mm/memleak clean
 #	\rm $(LWIP_OBJ)

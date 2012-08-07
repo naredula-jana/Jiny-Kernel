@@ -116,16 +116,14 @@ unsigned char imps_apic_cpu_map[IMPS_MAX_CPUS];
 
 
 
-static inline void io_delay(void)
-  {
-          const unsigned short DELAY_PORT = 0x80;
-          asm volatile("outb %%al,%0" : : "dN" (DELAY_PORT));
-  }
-   static void udelay(int loops)
-   {
-           while (loops--)
-                   io_delay();     /* Approximately 1 us */
-   }
+static inline void io_delay(void) {
+	const unsigned short DELAY_PORT = 0x80;
+	asm volatile("outb %%al,%0" : : "dN" (DELAY_PORT));
+}
+static void udelay(int loops) {
+	while (loops--)
+		io_delay(); /* Approximately 1 us */
+}
 
 
 /*
@@ -169,30 +167,36 @@ send_ipi(unsigned int dst, unsigned int v)
 	return (to < 1000);
 }
 
-
+int getcpuid(){
+	int id;
+	id= APIC_ID(IMPS_LAPIC_READ(LAPIC_ID));
+	if (id>=MAX_CPUS || id<0) return 0;
+	return id;
+}
 /*
  *  Primary function for booting individual CPUs.
  *
  *  This must be modified to perform whatever OS-specific initialization
  *  that is required.
  */
+int child_id;
+extern void init_smp_gdt(int cpu);
 void smp_main(){
+int i;
+
+init_smp_gdt(1);
+   //for (i=0;i<5; i++)
+	//ut_printf("Inside................................. the SMP function:%d \n",i);
 	while(1);
-	ut_printf("Inside the SMF function \n");
 	return;
 }
-int TEST_BOOTED(int addr){
-	if (addr){
-       return 1;
-	}else
-		return 0;
-}
+
 static int
 boot_cpu(imps_processor *proc)
 {
-	static int  started_once=0;
 	int apicid = proc->apic_id, success = 1, to;
 	unsigned bootaddr, accept_status;
+	unsigned long stack;
 	unsigned bios_reset_vector = PHYS_TO_VIRTUAL(BIOS_RESET_VECTOR);
 
 	/*
@@ -203,12 +207,14 @@ boot_cpu(imps_processor *proc)
 	 * under the 1MB boundary.
 	 */
 
-if (started_once ==1) return 0;
 	extern void *trampoline_data;
+	extern char *g_idle_stack;
 	int *p;
 	bootaddr = (512-64)*1024;
-	memcpy((char *)__va(bootaddr), &trampoline_data, 0x512);// TODO
-	started_once=1;
+	memcpy((char *)__va(bootaddr), &trampoline_data, 0x512);
+    stack=__pa(&g_idle_stack + (proc->apic_id)*TASK_SIZE);
+    p=(char *)__va(bootaddr)+0x4f8;
+    *p=(int)stack;/* TODO : currently stack is hardcoded for second cpu , need to make configurable */
 	/*
 	 *  Generic CPU startup sequence starts here.
 	 */
@@ -554,6 +560,7 @@ imps_scan(unsigned start, unsigned length)
  *  This is the primary function to "force" SMP support, with
  *  the assumption that you have consecutively numbered APIC ids.
  */
+
 int
 imps_force(int ncpus)
 {
@@ -595,85 +602,4 @@ imps_force(int ncpus)
 }
 
 
-/*
- *  This is the primary function for probing for MPS compatible hardware
- *  and BIOS information.  Call this during the early stages of OS startup,
- *  before memory can be messed up.
- *
- *  The probe looks for the "MP Floating Pointer Structure" at locations
- *  listed at the top of page 4-2 of the spec.
- *
- *  Environment requirements from the OS to run:
- *
- *   (1) : A non-linear virtual to physical memory mapping is probably OK,
- *	     as (I think) the structures all fall within page boundaries,
- *	     but a linear mapping is recommended.  Currently assumes that
- *	     the mapping will remain identical over time (which should be
- *	     OK since it only accesses memory which shouldn't be munged
- *	     by the OS anyway).
- *   (2) : The OS only consumes memory which the BIOS says is OK to use,
- *	     and not any of the BIOS standard areas (the areas 0x400 to
- *	     0x600, the EBDA, 0xE0000 to 0xFFFFF, and unreported physical
- *	     RAM).  Sometimes a small amount of physical RAM is not
- *	     reported by the BIOS, to be used to store MPS and other
- *	     information.
- *   (3) : It must be possible to read the CMOS.
- *   (4) : There must be between 512K and 640K of lower memory (this is a
- *	     sanity check).
- *
- *  Function finished.
- */
-
-
-int
-imps_probe(void)
-{
-	/*
-	 *  Determine possible address of the EBDA
-	 */
-	unsigned ebda_addr = *((unsigned short *)
-			       PHYS_TO_VIRTUAL(EBDA_SEG_ADDR)) << 4;
-
-	/*
-	 *  Determine amount of installed lower memory (not *available*
-	 *  lower memory).
-	 *
-	 *  NOTE:  This should work reliably as long as we verify the
-	 *         machine is at least a system that could possibly have
-	 *         MPS compatibility to begin with.
-	 */
-	unsigned mem_lower = ((CMOS_READ_BYTE(CMOS_BASE_MEMORY+1) << 8)
-			      | CMOS_READ_BYTE(CMOS_BASE_MEMORY))       << 10;
-
-#ifdef IMPS_DEBUG
-	imps_enabled = 0;
-	imps_num_cpus = 1;
-#endif
-
-	/*
-	 *  Sanity check : if this isn't reasonable, it is almost impossibly
-	 *    unlikely to be an MPS compatible machine, so return failure.
-	 */
-	if (mem_lower < 512*1024 || mem_lower > 640*1024) {
-		return 0;
-	}
-
-	if (ebda_addr > mem_lower - 1024
-	 || ebda_addr + *((unsigned char *) PHYS_TO_VIRTUAL(ebda_addr))
-         * 1024 > mem_lower) {
-		ebda_addr = 0;
-	}
-
-	if (((ebda_addr && imps_scan(ebda_addr, 1024))
-	 || (!ebda_addr && imps_scan(mem_lower - 1024, 1024))
-	 || imps_scan(0xF0000, 0x10000)) && imps_enabled) {
-		return imps_num_cpus;
-	}
-
-	/*
-	 *  If no BIOS info on MPS hardware is found, then return failure.
-	 */
-
-	return 0;
-}
 
