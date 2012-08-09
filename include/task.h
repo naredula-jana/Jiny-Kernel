@@ -55,6 +55,7 @@ struct task_struct {
 	unsigned long pending_signal;	
 	unsigned long pid,ppid;
 	unsigned char name[MAX_TASK_NAME+1];
+	int cpu;
 	int counter;
 	long sleep_ticks;
 	unsigned long ticks;	
@@ -70,6 +71,8 @@ struct task_struct {
 	unsigned long magic_numbers[4]; /* already stack is default fill with magic numbers */
 }; 
 
-extern struct task_struct *g_current_task;
-//extern unsigned long fd_to_file(int fd);
+extern int getcpuid();
+extern struct task_struct *g_current_tasks[];
+#define g_current_task g_current_tasks[getcpuid()]
+
 #endif

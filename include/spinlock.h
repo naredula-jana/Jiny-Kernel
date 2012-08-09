@@ -7,7 +7,7 @@ typedef struct {
 #define __sti() __asm__ __volatile__ ("sti": : :"memory")
 #define __cli() __asm__ __volatile__ ("cli": : :"memory")
 
-
+#define __LOCK_PREFIX "lock "
 
 #if 1
 #define BITS_PER_LONG 64
@@ -28,15 +28,52 @@ typedef struct {
 #define save_flags(x) __save_flags(x)
 #define restore_flags(x) __restore_flags(x)
 
-#define SPIN_LOCK_UNLOCKED (spinlock_t) { 0 }
+
+#define __SPINLOCK_LOCKED   1
+#define __SPINLOCK_UNLOCKED 0
+#define SPIN_LOCK_UNLOCKED (spinlock_t) { __SPINLOCK_UNLOCKED }
+
+static inline void arch_spinlock_lock(spinlock_t *lock)
+{
+  __asm__ __volatile__(  "movl %2,%%eax\n"
+                         "1:" __LOCK_PREFIX "cmpxchgl %0, %1\n"
+                      //   "cmp %2, %%eax\n"
+                         "jnz 1b\n"
+                         :: "r"(__SPINLOCK_LOCKED),"m"(lock->lock), "rI"(__SPINLOCK_UNLOCKED)
+                         : "%rax", "memory" );
+}
+
+static inline void arch_spinlock_unlock(spinlock_t *lock)
+{
+  __asm__ __volatile__( __LOCK_PREFIX "xchgl %0, %1\n"
+                        :: "r"(__SPINLOCK_UNLOCKED), "m"( lock->lock )
+                        : "memory" );
+}
+#if 0
+static inline bool arch_spinlock_trylock(spinlock_t *lock)
+{
+  int ret = __SPINLOCK_UNLOCKED;
+  __asm__ volatile (__LOCK_PREFIX "cmpxchgl %2, %0\n\t"
+                    : "+m" (lock->lock), "=&a" (ret)
+                    : "Ir" (__SPINLOCK_LOCKED));
+
+  return !ret;
+}
+#endif
 
 
-#define spin_lock_init(x)       do { (x)->lock = 0; } while (0)
+#define spin_lock_init(x)       do { (x)->lock = __SPINLOCK_UNLOCKED; } while (0)
 #define spin_trylock(lock)      (!test_and_set_bit(0,(lock)))
 
-#define spin_lock(x)            do { (x)->lock = 1; } while (0)
-#define spin_unlock_wait(x)     do { } while (0)
-#define spin_unlock(x)          do { (x)->lock = 0; } while (0)
+#if 1
+#define spin_lock(x)            do { arch_spinlock_lock(x); } while (0)
+#define spin_unlock(x)          do { arch_spinlock_unlock(x); } while (0)
+#else
+#define spin_lock(x)            do { (x)->lock = __SPINLOCK_LOCKED; } while (0)
+#define spin_unlock(x)          do { (x)->lock = __SPINLOCK_UNLOCKED; } while (0)
+#endif
+
+//#define spin_unlock_wait(x)     do { } while (0)
 #define spin_lock_irq(x)        do { cli(); spin_lock(x); } while (0)
 #define spin_unlock_irq(x)      do { spin_unlock(x); sti(); } while (0)
 

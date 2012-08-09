@@ -15,7 +15,7 @@
 #define MAGIC_CHAR 0xab
 #define MAGIC_LONG 0xabababababababab
 
-struct task_struct *g_current_task,*g_idle_tasks[MAX_CPUS];
+struct task_struct *g_current_tasks[MAX_CPUS],*g_idle_tasks[MAX_CPUS];
 struct mm_struct *g_kernel_mm = 0;
 
 static queue_t run_queue;
@@ -531,6 +531,7 @@ unsigned long SYS_sc_clone(int(*fn)(void *), void *child_stack, int clone_flags,
 	p->mm = mm;
 	p->ticks = 0;
 	p->pending_signal = 0;
+	p->cpu = getcpuid();
 	if (g_current_task->mm != g_kernel_mm) { /* user level thread */
 		p->thread.userland.ip = fn;
 		p->thread.userland.sp = child_stack;
@@ -692,19 +693,21 @@ void init_tasking() {
 	g_kernel_mm->fs.total = 3;
 
 
-	for (i = 0; i < MAX_CPUS; i++) {
+	for (i = 0; i < 2; i++) { /* TODO : need to handle idle tasks for smp correctly */
 		g_idle_tasks[i] = (struct task_struct *) (&g_idle_stack)+i;
 		g_idle_tasks[i]->ticks = 0;
 		g_idle_tasks[i]->magic_numbers[0] = g_idle_tasks[i]->magic_numbers[1] = MAGIC_LONG;
 		g_idle_tasks[i]->stats.ticks_consumed = 0;
 		g_idle_tasks[i]->state = TASK_RUNNING;
 		g_idle_tasks[i]->pid = g_pid;
-		g_idle_tasks[i]->mm = g_kernel_mm; /* TODO increse the corresposnding count */
-		list_add_tail(&g_idle_tasks[i]->task_link, &task_queue.head);
+		g_idle_tasks[i]->cpu = i;
+		g_idle_tasks[i]->mm = g_kernel_mm; /* TODO increse the corresponding count */
+		g_current_tasks[i] = g_idle_tasks[i];
+		//list_add_tail(&g_idle_tasks[i]->task_link, &task_queue.head);
 		ut_strncpy(g_idle_tasks[i]->name, "idle", MAX_TASK_NAME);
 		g_pid++;
 	}
-	g_current_task = g_idle_tasks[0];
+
 	ar_archSetUserFS(0);
 	init_timer();
 }
@@ -716,7 +719,7 @@ static void delete_task(struct task_struct *task) {
 	free_mm(task->mm);
 	free_task_struct(task);
 }
-#if SMP
+#ifdef SMP
 /* getcpuid func is defined in smp code */
 #else
 int getcpuid(){
@@ -734,7 +737,7 @@ void sc_schedule() {
 		return;
 	}
 
-	if (g_current_task->magic_numbers[0] != MAGIC_LONG || g_current_task->magic_numbers[1] != MAGIC_LONG) /* safety check */
+	if (g_current_task->cpu!=cpuid || g_current_task->magic_numbers[0] != MAGIC_LONG || g_current_task->magic_numbers[1] != MAGIC_LONG) /* safety check */
 	{
 		DEBUG(" Task Stack got CORRUPTED task:%x :%x :%x \n",g_current_task,g_current_task->magic_numbers[0],g_current_task->magic_numbers[1]);
 		BUG();
@@ -751,6 +754,7 @@ void sc_schedule() {
 			ut_printf(" WARNING: kernel thread cannot be killed \n");
 		} else {
 			prev->state = TASK_DEAD;
+			BRK;
 		}
 		prev->pending_signal = 0;
 	}
@@ -771,7 +775,7 @@ void sc_schedule() {
 	g_current_task = next;
 
 	/* handle the  dead task */
-	if (g_task_dead) {
+	if (g_task_dead!=0) {
 		delete_task(g_task_dead);
 		g_task_dead = 0;
 	}
@@ -793,6 +797,9 @@ void sc_schedule() {
 	/* update the cpu state  and tss state for system calls */
 	ar_updateCpuState(next);
 	ar_setupTssStack((unsigned long) next + TASK_SIZE);
+	prev->cpu=0xffff;
+	next->cpu=cpuid;
+
 	/* finally switch the task */
 	switch_to(prev, next, prev);
 	spin_unlock_irqrestore(&sched_lock, intr_flags);
@@ -845,6 +852,7 @@ static void timer_callback(registers_t regs) {
 			}
 		}
 	}
+	smp_timerInterrupt();
 	do_softirq();
 }
 

@@ -143,7 +143,19 @@ get_checksum(unsigned start, int length)
 
 	return (sum&0xFF);
 }
+ int
+smp_timerInterrupt()  // TODO : test function
+{
+	 unsigned int dst;
+	 unsigned int v;
+	 return 1;
+dst=1;
+	 v=LAPIC_ICR_DS_ALLEX | 0x2d; //IRQ 13
+	int to, send_status;
 
+	IMPS_LAPIC_WRITE(LAPIC_ICR+0x10, (dst << 24));
+	IMPS_LAPIC_WRITE(LAPIC_ICR, v);
+}
 
 /*
  *  APIC ICR write and status check function.
@@ -166,11 +178,13 @@ send_ipi(unsigned int dst, unsigned int v)
 
 	return (to < 1000);
 }
-
+static int max_cpus=0;
 int getcpuid(){
 	int id;
+	if (max_cpus==0) return 0;
 	id= APIC_ID(IMPS_LAPIC_READ(LAPIC_ID));
-	if (id>=MAX_CPUS || id<0) return 0;
+	if (id>=MAX_CPUS || id<0 || id>max_cpus) return 0;
+
 	return id;
 }
 /*
@@ -181,13 +195,16 @@ int getcpuid(){
  */
 int child_id;
 extern void init_smp_gdt(int cpu);
+extern void idleTask_func();
 void smp_main(){
 int i;
 
 init_smp_gdt(1);
-   //for (i=0;i<5; i++)
-	//ut_printf("Inside................................. the SMP function:%d \n",i);
-	while(1);
+//while(1);
+   for (i=0;i<5; i++)
+	ut_printf("Inside................................. the SMP function:%d \n",i);
+	//while(1);
+   idleTask_func();
 	return;
 }
 
@@ -267,6 +284,8 @@ boot_cpu(imps_processor *proc)
 	 *  Generic CPU startup sequence ends here, the rest is cleanup.
 	 */
 
+
+
 	/* clear the APIC error register */
 	IMPS_LAPIC_WRITE(LAPIC_ESR, 0);
 	accept_status = IMPS_LAPIC_READ(LAPIC_ESR);
@@ -311,251 +330,6 @@ add_processor(imps_processor *proc)
 	}
 }
 
-
-static void
-add_bus(imps_bus *bus)
-{
-	char str[8];
-
-	memcpy(str, bus->bus_type, 6);
-	str[6] = 0;
-	KERNEL_PRINT(("  Bus id %d is %s\n", bus->id, str));
-
-	/*  XXXXX  add OS-specific code here */
-}
-
-static void
-add_ioapic(imps_ioapic *ioapic)
-{
-	KERNEL_PRINT(("  I/O APIC id %d ver %d, address: 0x%x  ",
-		      ioapic->id, ioapic->ver, ioapic->addr));
-	if (!(ioapic->flags & IMPS_FLAG_ENABLED)) {
-		KERNEL_PRINT(("DISABLED\n"));
-		return;
-	}
-	KERNEL_PRINT(("\n"));
-
-	/*  XXXXX  add OS-specific code here */
-}
-
-
-static void
-imps_read_config_table(unsigned start, int count)
-{
-	while (count-- > 0) {
-		switch (*((unsigned char *)start)) {
-		case IMPS_BCT_PROCESSOR:
-			add_processor((imps_processor *)start);
-			start += 12;	/* 20 total */
-			break;
-		case IMPS_BCT_BUS:
-			add_bus((imps_bus *)start);
-			break;
-		case IMPS_BCT_IOAPIC:
-			add_ioapic((imps_ioapic *)start);
-			break;
-#if 0	/*  XXXXX  uncomment this if "add_io_interrupt" is implemented */
-		case IMPS_BCT_IO_INTERRUPT:
-			add_io_interrupt((imps_interrupt *)start);
-			break;
-#endif
-#if 0	/*  XXXXX  uncomment this if "add_local_interrupt" is implemented */
-		case IMPS_BCT_LOCAL_INTERRUPT:
-			add_local_interupt((imps_interrupt *)start);
-			break;
-#endif
-		default:
-			break;
-		}
-		start += 8;
-	}
-}
-
-
-static int
-imps_bad_bios(imps_fps *fps_ptr)
-{
-	int sum;
-	imps_cth *local_cth_ptr
-		= (imps_cth *) PHYS_TO_VIRTUAL(fps_ptr->cth_ptr);
-
-	if (fps_ptr->feature_info[0] > IMPS_FPS_DEFAULT_MAX) {
-		KERNEL_PRINT(("    Invalid MP System Configuration type %d\n",
-			      fps_ptr->feature_info[0]));
-		return 1;
-	}
-
-	if (fps_ptr->cth_ptr) {
-		sum = get_checksum((unsigned)local_cth_ptr,
-                                   local_cth_ptr->base_length);
-		if (local_cth_ptr->sig != IMPS_CTH_SIGNATURE || sum) {
-			KERNEL_PRINT(("    Bad MP Config Table sig 0x%x and/or checksum 0x%x\n", (unsigned)(fps_ptr->cth_ptr), sum));
-			return 1;
-		}
-		if (local_cth_ptr->spec_rev != fps_ptr->spec_rev) {
-			KERNEL_PRINT(("    Bad MP Config Table sub-revision # %d\n", local_cth_ptr->spec_rev));
-			return 1;
-		}
-		if (local_cth_ptr->extended_length) {
-			sum = (get_checksum(((unsigned)local_cth_ptr)
-					    + local_cth_ptr->base_length,
-					    local_cth_ptr->extended_length)
-			       + local_cth_ptr->extended_checksum) & 0xFF;
-			if (sum) {
-				KERNEL_PRINT(("    Bad Extended MP Config Table checksum 0x%x\n", sum));
-				return 1;
-			}
-		}
-	} else if (!fps_ptr->feature_info[0]) {
-		KERNEL_PRINT(("    Missing configuration information\n"));
-		return 1;
-	}
-
-	return 0;
-}
-
-static void
-imps_read_bios(imps_fps *fps_ptr)
-{
-	int apicid;
-	unsigned cth_start, cth_count;
-	imps_cth *local_cth_ptr
-		= (imps_cth *)PHYS_TO_VIRTUAL(fps_ptr->cth_ptr);
-	char *str_ptr;
-
-	KERNEL_PRINT(("Intel MultiProcessor Spec 1.%d BIOS support detected\n",
-		      fps_ptr->spec_rev));
-
-	/*
-	 *  Do all checking of errors which would definitely
-	 *  lead to failure of the SMP boot here.
-	 */
-
-	if (imps_bad_bios(fps_ptr)) {
-		KERNEL_PRINT(("    Disabling MPS support\n"));
-		return;
-	}
-
-	if (fps_ptr->feature_info[1] & IMPS_FPS_IMCRP_BIT) {
-		str_ptr = "IMCR and PIC";
-	} else {
-		str_ptr = "Virtual Wire";
-	}
-	if (fps_ptr->cth_ptr) {
-		imps_lapic_addr = local_cth_ptr->lapic_addr;
-	} else {
-		imps_lapic_addr = LAPIC_ADDR_DEFAULT;
-	}
-	KERNEL_PRINT(("    APIC config: \"%s mode\"    Local APIC address: 0x%x\n",
-		      str_ptr, imps_lapic_addr));
-	if (imps_lapic_addr != (READ_MSR_LO(0x1b) & 0xFFFFF000)) {
-		KERNEL_PRINT(("Inconsistent Local APIC address, Disabling SMP support\n"));
-		return;
-	}
-	imps_lapic_addr = PHYS_TO_VIRTUAL(imps_lapic_addr);
-
-	/*
-	 *  Setup primary CPU.
-	 */
-	apicid = IMPS_LAPIC_READ(LAPIC_SPIV);
-	IMPS_LAPIC_WRITE(LAPIC_SPIV, apicid|LAPIC_SPIV_ENABLE_APIC);
-	apicid = APIC_ID(IMPS_LAPIC_READ(LAPIC_ID));
-	imps_cpu_apic_map[0] = apicid;
-	imps_apic_cpu_map[apicid] = 0;
-
-	if (fps_ptr->cth_ptr) {
-		char str1[16], str2[16];
-		memcpy(str1, local_cth_ptr->oem_id, 8);
-		str1[8] = 0;
-		memcpy(str2, local_cth_ptr->prod_id, 12);
-		str2[12] = 0;
-		KERNEL_PRINT(("  OEM id: %s  Product id: %s\n", str1, str2));
-		cth_start = ((unsigned) local_cth_ptr) + sizeof(imps_cth);
-		cth_count = local_cth_ptr->entry_count;
-	} else {
-		*((volatile unsigned *) IOAPIC_ADDR_DEFAULT) =  IOAPIC_ID;
-		defconfig.ioapic.id
-			= APIC_ID(*((volatile unsigned *)
-				    (IOAPIC_ADDR_DEFAULT+IOAPIC_RW)));
-		*((volatile unsigned *) IOAPIC_ADDR_DEFAULT) =  IOAPIC_VER;
-		defconfig.ioapic.ver
-			= APIC_VERSION(*((volatile unsigned *)
-					 (IOAPIC_ADDR_DEFAULT+IOAPIC_RW)));
-		defconfig.proc[apicid].flags
-		  = IMPS_FLAG_ENABLED|IMPS_CPUFLAG_BOOT;
-		defconfig.proc[!apicid].flags = IMPS_FLAG_ENABLED;
-		imps_num_cpus = 2;
-		if (fps_ptr->feature_info[0] == 1
-		 || fps_ptr->feature_info[0] == 5) {
-			memcpy(defconfig.bus[0].bus_type, "ISA   ", 6);
-		}
-		if (fps_ptr->feature_info[0] == 4
-		 || fps_ptr->feature_info[0] == 7) {
-			memcpy(defconfig.bus[0].bus_type, "MCA   ", 6);
-		}
-		if (fps_ptr->feature_info[0] > 4) {
-			defconfig.proc[0].apic_ver = 0x10;
-			defconfig.proc[1].apic_ver = 0x10;
-			defconfig.bus[1].type = IMPS_BCT_BUS;
-		}
-		if (fps_ptr->feature_info[0] == 2) {
-			defconfig.intin[2].type = 255;
-			defconfig.intin[13].type = 255;
-		}
-		if (fps_ptr->feature_info[0] == 7) {
-			defconfig.intin[0].type = 255;
-		}
-		cth_start = (unsigned) &defconfig;
-		cth_count = DEF_ENTRIES;
-	}
-	imps_read_config_table(cth_start, cth_count);
-
-	/* %%%%% ESB read extended entries here */
-
-	imps_enabled = 1;
-}
-
-
-/*
- *  Given a region to check, this actually looks for the "MP Floating
- *  Pointer Structure".  The return value indicates if the correct
- *  signature and checksum for a floating pointer structure of the
- *  appropriate spec revision was found.  If so, then do not search
- *  further.
- *
- *  NOTE:  The memory scan will always be in the bottom 1 MB.
- *
- *  This function presumes that "start" will always be aligned to a 16-bit
- *  boundary.
- *
- *  Function finished.
- */
-
-static int
-imps_scan(unsigned start, unsigned length)
-{
-	IMPS_DEBUG_PRINT("Scanning from 0x%x for %d bytes\n",
-			  start, length);
-
-	while (length > 0) {
-		imps_fps *fps_ptr = (imps_fps *) PHYS_TO_VIRTUAL(start);
-
-		if (fps_ptr->sig == IMPS_FPS_SIGNATURE
-		 && fps_ptr->length == 1
-		 && (fps_ptr->spec_rev == 1 || fps_ptr->spec_rev == 4)
-		 && !get_checksum(start, 16)) {
-			IMPS_DEBUG_PRINT(("Found MP Floating Structure Pointer at %x\n", start));
-			imps_read_bios(fps_ptr);
-			return 1;
-		}
-
-		length -= 16;
-		start += 16;
-	}
-
-	return 0;
-}
-
 /*
  *  This is the primary function to "force" SMP support, with
  *  the assumption that you have consecutively numbered APIC ids.
@@ -585,6 +359,7 @@ imps_force(int ncpus)
 	p.apic_ver = 0x10;
 	p.signature = p.features = 0;
 
+	if (ncpus>MAX_CPUS) ncpus=MAX_CPUS;
 	for (i = 0; i < ncpus; i++) {
 		if (apicid == i) {
 			p.flags = IMPS_FLAG_ENABLED | IMPS_CPUFLAG_BOOT;
@@ -594,9 +369,27 @@ imps_force(int ncpus)
 		p.apic_id = i;
 		add_processor(&p);
 	}
+	max_cpus=ncpus;
+
 	unsigned long *page_table;
 	page_table=__va(0x00102000); /* Refer the paging.c code this is work around for SMP */
 	*page_table=0;
+
+	//  outb(0x22,0x70);
+	 // outb(0x23,0x01); /* old port - 0x71,0x23 */
+
+	//cli();
+	//BRK;
+    int v= IMPS_LAPIC_READ(LAPIC_LVTT);
+    IMPS_LAPIC_WRITE(LAPIC_LVTT, v & ~(1<<16));
+
+	//IMPS_LAPIC_WRITE(LAPIC_LVTT, 0);
+
+	/* Set the divider to 1, no divider */
+//	IMPS_LAPIC_WRITE(LAPIC_TDCR, LAPIC_TDR_DIV_1);
+
+	/* Set the initial counter to 0xffffffff */
+	//IMPS_LAPIC_WRITE(LAPIC_TMICT, 0xffffffff);
 
 	return imps_num_cpus;
 }

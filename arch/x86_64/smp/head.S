@@ -126,7 +126,7 @@ smp_startup_64:
 
 
 	addq $(g_idle_stack + TASK_SIZE*2 -16), %rsp
-	movq	$smp_main+4, %rax
+	movq	$smp_main, %rax
 	jmp	*%rax
 
 	/* Enable PAE mode and PGE */

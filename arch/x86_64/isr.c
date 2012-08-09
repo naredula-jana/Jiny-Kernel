@@ -37,12 +37,13 @@ struct irq_handler_t {
 	struct {
 		long num_irqs;
 		long num_error;
-	} stat;
+	} stat[MAX_CPUS];
 };
 irq_cpustat_t irq_stat[NR_CPUS] ;
 struct irq_handler_t g_interrupt_handlers[256];
 
 extern void ar_pageFault(struct fault_ctx *ctx);
+extern int getcpuid();
 long fault_ip_g=0;
 long fault_error_g=0;
 long fault_num_g=0;
@@ -68,14 +69,16 @@ static void gpFault(struct fault_ctx *ctx)
 
 void init_handlers()
 {
-	int i;
+	int i,j;
 
 	for (i=0; i<256;i++)
 	{
 		g_interrupt_handlers[i].action=0;
 		g_interrupt_handlers[i].name=0;
-		g_interrupt_handlers[i].stat.num_irqs=0;
-		g_interrupt_handlers[i].stat.num_error=0;
+		for (j=0;j<MAX_CPUS;j++){
+		g_interrupt_handlers[i].stat[j].num_irqs=0;
+		g_interrupt_handlers[i].stat[j].num_error=0;
+		}
 	}
 	for (i=0; i<32;i++)
 		ar_registerInterrupt(i, gpFault,"gpfault");
@@ -86,14 +89,26 @@ void init_handlers()
 
 int ar_printIrqStat(char *arg1,char *arg2)
 {
-	int i;
+	int i,j;
 
 	ut_printf("irq_no : name : address: total_calls : errors\n");
-	for (i=0; i<256;i++)
-	{
-		if (g_interrupt_handlers[i].action==0 && g_interrupt_handlers[i].stat.num_error==0) continue;
-		if (i<32 && g_interrupt_handlers[i].stat.num_error==0 && g_interrupt_handlers[i].stat.num_irqs==0) continue;
-		ut_printf(" %d: %s  %x %d %d\n",i-32,g_interrupt_handlers[i].name,g_interrupt_handlers[i].action,g_interrupt_handlers[i].stat.num_irqs,g_interrupt_handlers[i].stat.num_error);
+	for (j = 0; j < 2; j++) {
+		ut_printf("CPU :%d \n",j);
+		for (i = 0; i < 256; i++) {
+
+			if (g_interrupt_handlers[i].action == 0
+					&& g_interrupt_handlers[i].stat[j].num_error == 0)
+				continue;
+			if (i < 32 && g_interrupt_handlers[i].stat[j].num_error == 0
+					&& g_interrupt_handlers[i].stat[j].num_irqs == 0)
+				continue;
+			ut_printf(" %d: %s  %x %d %d\n", i - 32,
+					g_interrupt_handlers[i].name,
+					g_interrupt_handlers[i].action,
+					g_interrupt_handlers[i].stat[j].num_irqs,
+					g_interrupt_handlers[i].stat[j].num_error);
+
+		}
 	}
 	return 1;
 }
@@ -141,11 +156,11 @@ void ar_faultHandler(void *p, unsigned int  int_no)
 	{
 		isr_t handler = g_interrupt_handlers[int_no].action;
 		handler(&ctx);
-		g_interrupt_handlers[int_no].stat.num_irqs++;
+		g_interrupt_handlers[int_no].stat[getcpuid()].num_irqs++;
 		if (int_no ==14 ) return ; /* return properly for page fault */
 	}else
 	{
-		g_interrupt_handlers[int_no].stat.num_error++;
+		g_interrupt_handlers[int_no].stat[getcpuid()].num_error++;
 		ut_printf("UNhandled FAULT ..: %d \n",int_no);
 	}
 	while(1);
@@ -179,10 +194,10 @@ void ar_irqHandler(void *p,unsigned int int_no)
 		{
 			handler();
 		}
-		g_interrupt_handlers[int_no].stat.num_irqs++;
+		g_interrupt_handlers[int_no].stat[getcpuid()].num_irqs++;
 	}else
 	{
-		g_interrupt_handlers[int_no].stat.num_error++;
+		g_interrupt_handlers[int_no].stat[getcpuid()].num_error++;
 		if (int_no != 32)	 {
 			//ut_printf("UNhandled interrupt ..: %d \n",int_no);
 
