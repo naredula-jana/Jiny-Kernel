@@ -17,7 +17,7 @@ static void host_shm_interrupt(registers_t regs)
 
 	p=(unsigned char *)HOST_SHM_CTL_ADDR+4;
        	*p=0; /* reset the irq by resetting the status  */
-	ret=sc_wakeUp(&g_hfs_waitqueue,NULL); /* wake all the waiting processes */	
+	ret=sc_wakeUp(&g_hfs_waitqueue); /* wake all the waiting processes */
 	ut_printf(" GOT HOST SHM INTERRUPT  :%x:  wakedup :%d \n",p,ret);
 }
 int init_host_shm(pci_dev_header_t *pci_hdr,pci_bar_t bars[], uint32_t len)

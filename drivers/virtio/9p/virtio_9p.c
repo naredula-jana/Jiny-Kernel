@@ -210,5 +210,5 @@ void virtio_9p_interrupt(registers_t regs) { // TODO: handling similar  type of 
 
 	//DEBUG("Recevid virtio interrupt \n");
 	isr = inb(p9_dev->pci_ioaddr + VIRTIO_PCI_ISR);
-	ret = sc_wakeUp(&p9_waitq, NULL); /* wake all the waiting processes */
+	ret = sc_wakeUp(&p9_waitq); /* wake all the waiting processes */
 }

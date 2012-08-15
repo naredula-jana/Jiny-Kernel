@@ -40,7 +40,8 @@ struct irq_handler_t {
 	} stat[MAX_CPUS];
 };
 irq_cpustat_t irq_stat[NR_CPUS] ;
-struct irq_handler_t g_interrupt_handlers[256];
+
+struct irq_handler_t g_interrupt_handlers[MAX_IRQS];
 
 extern void ar_pageFault(struct fault_ctx *ctx);
 extern int getcpuid();
@@ -71,13 +72,13 @@ void init_handlers()
 {
 	int i,j;
 
-	for (i=0; i<256;i++)
+	for (i=0; i<MAX_IRQS;i++)
 	{
 		g_interrupt_handlers[i].action=0;
 		g_interrupt_handlers[i].name=0;
-		for (j=0;j<MAX_CPUS;j++){
-		g_interrupt_handlers[i].stat[j].num_irqs=0;
-		g_interrupt_handlers[i].stat[j].num_error=0;
+		for (j = 0; j < MAX_CPUS; j++) {
+			g_interrupt_handlers[i].stat[j].num_irqs = 0;
+			g_interrupt_handlers[i].stat[j].num_error = 0;
 		}
 	}
 	for (i=0; i<32;i++)
@@ -92,10 +93,10 @@ int ar_printIrqStat(char *arg1,char *arg2)
 	int i,j;
 
 	ut_printf("irq_no : name : address: total_calls : errors\n");
-	for (j = 0; j < 2; j++) {
+	for (j = 0; (j < MAX_CPUS) && (j<getmaxcpus()); j++) {
 		ut_printf("CPU :%d \n",j);
-		for (i = 0; i < 256; i++) {
 
+		for (i = 0; i < MAX_IRQS; i++) {
 			if (g_interrupt_handlers[i].action == 0
 					&& g_interrupt_handlers[i].stat[j].num_error == 0)
 				continue;
@@ -166,7 +167,6 @@ void ar_faultHandler(void *p, unsigned int  int_no)
 	while(1);
 }
 extern void do_softirq();
-extern addr_t g_error_i,g_after_i,g_before_i;
 // This gets called from our ASM interrupt handler stub.
 void ar_irqHandler(void *p,unsigned int int_no)
 {
@@ -200,9 +200,11 @@ void ar_irqHandler(void *p,unsigned int int_no)
 		g_interrupt_handlers[int_no].stat[getcpuid()].num_error++;
 		if (int_no != 32)	 {
 			//ut_printf("UNhandled interrupt ..: %d \n",int_no);
-
 		}
 	}
+#ifdef SMP
+	local_apic_send_eoi();
+#endif
 }
 
 

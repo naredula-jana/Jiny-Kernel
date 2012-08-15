@@ -34,7 +34,7 @@ extern long *g_idle_stack;
 void init_timer();
 static int free_mm(struct mm_struct *mm);
 static unsigned long push_to_userland();
-
+static void _schedule();
 static struct task_struct *alloc_task_struct(void) {
 	return (struct task_struct *) mm_getFreePages(0, 2); /*WARNING: do not change the size it is related TASK_SIZE, 4*4k=16k page size */
 }
@@ -83,14 +83,6 @@ static inline struct task_struct *del_from_runqueue(struct task_struct * p) {
 	list_del(&p->run_link);
 	atomic_dec(&run_queue.count);
 	return p;
-}
-
-static inline void move_last_runqueue(struct task_struct * p) {
-	/* remove from list */
-	del_from_runqueue(p);
-
-	/* add back to list */
-	add_to_runqueue(p);
 }
 
 /******************************************  WAIT QUEUE *******************/
@@ -144,6 +136,7 @@ static int del_from_waitqueue(queue_t *waitqueue, struct task_struct *p) {
 	int ret = 0;
 	unsigned long flags;
 
+	if (p==0) return 0;
 	spin_lock_irqsave(&waitqueue->lock, flags);
 	list_for_each(pos, &waitqueue->head) {
 		task = list_entry(pos, struct task_struct, wait_queue);
@@ -161,9 +154,7 @@ static int del_from_waitqueue(queue_t *waitqueue, struct task_struct *p) {
 			goto last;
 		}
 	}
-
-	last:
-
+last:
 	spin_unlock_irqrestore(&waitqueue->lock, flags);
 	return ret;
 }
@@ -198,41 +189,37 @@ int sc_unregister_waitqueue(queue_t *waitqueue) {
 	}
 	return -1;
 }
-int sc_wakeUp(queue_t *waitqueue, struct task_struct *task) {
-	struct list_head *pos;
+int sc_wakeUp(queue_t *waitqueue ) {
 	int ret = 0;
+	struct task_struct *task;
 
 	unsigned long flags;
 	if (waitqueue == NULL)
 		waitqueue = &timer_queue;
-	if (task == NULL) {
-		while (waitqueue->head.next != &waitqueue->head) {
-			task = list_entry(waitqueue->head.next, struct task_struct, wait_queue);
-			spin_lock_irqsave(&sched_lock, flags);
-			if (del_from_waitqueue(waitqueue, task) == 1) {
-				task->state = TASK_RUNNING;
-				if (task->run_link.next == 0)
-					add_to_runqueue(task);
-				ret++;
-			}
-			spin_unlock_irqrestore(&sched_lock, flags);
-		}
-	} else {
-		spin_lock_irqsave(&sched_lock, flags);
+
+	spin_lock_irqsave(&sched_lock, flags);
+	while (waitqueue->head.next != &waitqueue->head) {
+		task = list_entry(waitqueue->head.next, struct task_struct, wait_queue);
 		if (del_from_waitqueue(waitqueue, task) == 1) {
 			task->state = TASK_RUNNING;
 			if (task->run_link.next == 0)
 				add_to_runqueue(task);
 			ret++;
 		}
-		spin_unlock_irqrestore(&sched_lock, flags);
 	}
+	spin_unlock_irqrestore(&sched_lock, flags);
+
 	return ret;
 }
 int sc_wait(queue_t *waitqueue, unsigned long ticks) {
+	unsigned long flags;
+
+	spin_lock_irqsave(&sched_lock, flags);
 	g_current_task->state = TASK_INTERRUPTIBLE;
 	add_to_waitqueue(waitqueue, g_current_task, ticks);
-	sc_schedule();
+	_schedule();
+	spin_unlock_irqrestore(&sched_lock, flags);
+
 	if (g_current_task->sleep_ticks <= 0)
 		return 0;
 	else
@@ -253,7 +240,7 @@ int sc_threadlist(char *arg1, char *arg2) {
 	struct task_struct *task;
 
 	spin_lock_irqsave(&sched_lock, flags);
-	ut_printf("pid task ticks mm pgd mm_count \n");
+	ut_printf("pid task ticks mm pgd mm_count cpu\n");
 	list_for_each(pos, &task_queue.head) {
 		task = list_entry(pos, struct task_struct, task_link);
 		if (is_kernelThread(task))
@@ -261,8 +248,8 @@ int sc_threadlist(char *arg1, char *arg2) {
 		else
 			ut_printf("(%d)", task->pid);
 
-		ut_printf(" %x %x %x %x %d %s %d stat(%d)\n", task, task->ticks, task->mm, task->mm->pgd, task->mm->count.counter, task->name, task->sleep_ticks,
-				task->stats.ticks_consumed);
+		ut_printf(" %x %x %x %x %d %s %d stat(%d) %d\n", task, task->ticks, task->mm, task->mm->pgd, task->mm->count.counter, task->name, task->sleep_ticks,
+				task->stats.ticks_consumed,task->cpu);
 	}
 	spin_unlock_irqrestore(&sched_lock, flags);
 	return 1;
@@ -548,6 +535,7 @@ unsigned long SYS_sc_clone(int(*fn)(void *), void *child_stack, int clone_flags,
 
 	/* link to queue */
 	g_pid++;
+	if (g_pid==0) g_pid++;
 	p->pid = g_pid;
 	p->ppid = g_current_task->pid;
 	p->run_link.next = 0;
@@ -576,7 +564,7 @@ int SYS_sc_exit(int status) {
 	SYSCALL_DEBUG("sys exit : status:%d \n",status);
 	ar_updateCpuState(g_current_task);
 	spin_lock_irqsave(&sched_lock, flags);
-
+while(1);
 	g_current_task->state = TASK_DEAD;
 
 	spin_unlock_irqrestore(&sched_lock, flags);
@@ -694,12 +682,12 @@ void init_tasking() {
 
 
 	for (i = 0; i < 2; i++) { /* TODO : need to handle idle tasks for smp correctly */
-		g_idle_tasks[i] = (struct task_struct *) (&g_idle_stack)+i;
+		g_idle_tasks[i] = (unsigned char *)(&g_idle_stack)+i*TASK_SIZE;
 		g_idle_tasks[i]->ticks = 0;
 		g_idle_tasks[i]->magic_numbers[0] = g_idle_tasks[i]->magic_numbers[1] = MAGIC_LONG;
 		g_idle_tasks[i]->stats.ticks_consumed = 0;
 		g_idle_tasks[i]->state = TASK_RUNNING;
-		g_idle_tasks[i]->pid = g_pid;
+		g_idle_tasks[i]->pid = 0;  /* only idle tasks will have id==0 */
 		g_idle_tasks[i]->cpu = i;
 		g_idle_tasks[i]->mm = g_kernel_mm; /* TODO increse the corresponding count */
 		g_current_tasks[i] = g_idle_tasks[i];
@@ -725,27 +713,36 @@ static void delete_task(struct task_struct *task) {
 int getcpuid(){
 	return 0;
 }
+int getmaxcpus(){
+	return 1;
+}
 #endif
 
 void sc_schedule() {
 	unsigned long intr_flags;
-	struct task_struct *prev, *next;
 	int cpuid=getcpuid();
 
 	if (!g_current_task) {
 		BUG();
 		return;
 	}
-
+//g_current_task->cpu!=cpuid ||
 	if (g_current_task->cpu!=cpuid || g_current_task->magic_numbers[0] != MAGIC_LONG || g_current_task->magic_numbers[1] != MAGIC_LONG) /* safety check */
 	{
 		DEBUG(" Task Stack got CORRUPTED task:%x :%x :%x \n",g_current_task,g_current_task->magic_numbers[0],g_current_task->magic_numbers[1]);
 		BUG();
 	}
+	spin_lock_irqsave(&sched_lock, intr_flags);
+    _schedule();
+	spin_unlock_irqrestore(&sched_lock, intr_flags);
+}
+
+static void _schedule() {
+	struct task_struct *prev, *next;
+	int cpuid=getcpuid();
+
 
 	g_current_task->ticks++;
-
-	spin_lock_irqsave(&sched_lock, intr_flags);
 	prev = g_current_task;
 
 	/* Handle any pending signal */
@@ -758,20 +755,14 @@ void sc_schedule() {
 		}
 		prev->pending_signal = 0;
 	}
-	/* remove from runqueue based on state and get  the next task */
-	if (prev != g_idle_tasks[cpuid]) {
-		move_last_runqueue(prev);
-		switch (prev->state) {
-		case TASK_RUNNING:
-			break;
-		case TASK_INTERRUPTIBLE:
-		default:
-			del_from_runqueue(prev);
-		}
-	}
-	next = get_from_runqueue(0);
-	if (next == 0)
+
+	next = del_from_runqueue(0);
+	if (next == 0 && (prev->state!=TASK_RUNNING))
 		next = g_idle_tasks[cpuid];
+
+	if (next ==0 ) /* by this point , we will always have some next */
+		next = prev;
+
 	g_current_task = next;
 
 	/* handle the  dead task */
@@ -785,7 +776,6 @@ void sc_schedule() {
 
 	/* if prev and next are same then return */
 	if (prev == next) {
-		spin_unlock_irqrestore(&sched_lock, intr_flags);
 		return;
 	}
 	/* if  prev and next are having same address space , then avoid tlb flush */
@@ -794,6 +784,9 @@ void sc_schedule() {
 	{
 		flush_tlb(next->mm->pgd);
 	}
+    if (prev->pid!=0 && prev->state==TASK_RUNNING){ /* some other cpu  can pickup this task , running task and idle task should not be in a run equeue even though there state is running */
+    	add_to_runqueue(prev);
+    }
 	/* update the cpu state  and tss state for system calls */
 	ar_updateCpuState(next);
 	ar_setupTssStack((unsigned long) next + TASK_SIZE);
@@ -802,7 +795,7 @@ void sc_schedule() {
 
 	/* finally switch the task */
 	switch_to(prev, next, prev);
-	spin_unlock_irqrestore(&sched_lock, intr_flags);
+
 }
 
 void do_softirq() {
@@ -812,14 +805,16 @@ void do_softirq() {
 	}
 }
 
-static void timer_callback(registers_t regs) {
+ void timer_callback(registers_t regs) {
 	int i;
+	unsigned long flags;
 
 	/* 1. increment timestamp */
 	g_jiffies++;
 	g_current_task->counter--;
 	g_current_task->stats.ticks_consumed++;
 
+	spin_lock_irqsave(&sched_lock, flags);
 	/*2. Update Timer wait queue */
 	if (timer_queue.head.next != &timer_queue.head) {
 		struct task_struct *task;
@@ -852,7 +847,7 @@ static void timer_callback(registers_t regs) {
 			}
 		}
 	}
-	smp_timerInterrupt();
+	spin_unlock_irqrestore(&sched_lock, flags);
 	do_softirq();
 }
 
@@ -876,5 +871,8 @@ void init_timer() {
 	// Send the frequency divisor.
 	outb(0x40, l);
 	outb(0x40, h);
+#ifdef SMP
+	broadcast_msg();
+#endif
 }
 

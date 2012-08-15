@@ -62,39 +62,30 @@ static int en_scan_to_ascii(unsigned char *buf, uint8_t scancode, uint8_t comb_f
 static unsigned char kb_buffer[MAX_BUF+1];
 static int current_pos=0;
 static int read_pos=0;
-struct task_struct *waiting_task=0;
 int keyboard_int=0;
-void dr_keyBoardBH() /* bottom half */
+static queue_t kb_waitq;
+static void dr_keyBoardBH() /* bottom half */
 {
-	//keyboard_int=0;
-	if (waiting_task != 0)
-	{
-		sc_wakeUp(0,waiting_task);
-		waiting_task=0;
-	}
+		sc_wakeUp(&kb_waitq);
 }
-unsigned char dr_kbGetchar()
-{
+unsigned char dr_kbGetchar() {
 	unsigned char c;
 
-	//if (waiting_task !=0) return 0;
-	while(current_pos ==0) 
-	{
-		waiting_task=g_current_task;
-		sc_sleep(2000); /* 20 seconds */
+	while (current_pos == 0) {
+		sc_wait(&kb_waitq, 100);
 	}
-	if (read_pos < current_pos)
-	{
-		c=kb_buffer[read_pos];
+//TODO: the below code need to be protected by spin lock if multiple reader are there
+	if (read_pos < current_pos) {
+		c = kb_buffer[read_pos];
 		read_pos++;
-		if (read_pos == current_pos) 
-		{
-			current_pos=0;
-			read_pos=0;
+		if (read_pos == current_pos) {
+			current_pos = 0;
+			read_pos = 0;
 		}
 		//printf(" got key :%x:\n",c);
 		return c;
-	} 
+	}
+
 	return 0;
 }
 int ar_addInputKey(unsigned char c)
@@ -130,6 +121,7 @@ static void keyboard_handler(registers_t regs)
 }
 int init_driver_keyboard()
 {
+	sc_register_waitqueue(&kb_waitq);
 	ar_registerInterrupt(33,keyboard_handler,"keyboard");
 	return 1;
 }

@@ -30,25 +30,13 @@
  *  ones defined.
  */
 
-#if 0
-#define KERNEL_PRINT(x)		/* some kind of print function */
-#define CMOS_WRITE_BYTE(x,y)	/* write unsigned char "y" at CMOS loc "x" */
-#define CMOS_READ_BYTE(x)	/* read unsigned char at CMOS loc "x" */
-#define PHYS_TO_VIRTUAL(x)	/* convert physical address "x" to virtual */
-#define VIRTUAL_TO_PHYS(x)	/* convert virtual address "x" to physical */
-#define UDELAY(x)		/* delay roughly at least "x" microsecs */
-#define TEST_BOOTED(x)		/* test bootaddr x to see if CPU started */
-#define READ_MSR_LO(x)		/* Read MSR low function */
-#endif
-
-
 /*
  *  Includes here
  */
 
 #define IMPS_DEBUG
 
-#include "apic.h"
+#include "smp-apic.h"
 #include "smp-imps.h"
 
 
@@ -120,7 +108,7 @@ static inline void io_delay(void) {
 	const unsigned short DELAY_PORT = 0x80;
 	asm volatile("outb %%al,%0" : : "dN" (DELAY_PORT));
 }
-static void udelay(int loops) {
+ void udelay(int loops) {
 	while (loops--)
 		io_delay(); /* Approximately 1 us */
 }
@@ -143,20 +131,6 @@ get_checksum(unsigned start, int length)
 
 	return (sum&0xFF);
 }
- int
-smp_timerInterrupt()  // TODO : test function
-{
-	 unsigned int dst;
-	 unsigned int v;
-	 return 1;
-dst=1;
-	 v=LAPIC_ICR_DS_ALLEX | 0x2d; //IRQ 13
-	int to, send_status;
-
-	IMPS_LAPIC_WRITE(LAPIC_ICR+0x10, (dst << 24));
-	IMPS_LAPIC_WRITE(LAPIC_ICR, v);
-}
-
 /*
  *  APIC ICR write and status check function.
  */
@@ -187,6 +161,24 @@ int getcpuid(){
 
 	return id;
 }
+int getmaxcpus(){
+	return max_cpus;
+}
+static inline  unsigned long interrupts_enable(void)
+{
+  unsigned long o;
+
+  __asm__ volatile (
+                    "pushfq\n"
+                    "popq %0\n"
+                    "sti\n"
+                    : "=r" (o)
+                    );
+
+  return o;
+}
+
+static int wait_cpus=1;
 /*
  *  Primary function for booting individual CPUs.
  *
@@ -196,15 +188,21 @@ int getcpuid(){
 int child_id;
 extern void init_smp_gdt(int cpu);
 extern void idleTask_func();
-void smp_main(){
-int i;
+void smp_main() {
+	int i;
 
-init_smp_gdt(1);
-//while(1);
-   for (i=0;i<5; i++)
-	ut_printf("Inside................................. the SMP function:%d \n",i);
-	//while(1);
-   idleTask_func();
+	while(wait_cpus==1) ; /* wait till boot cpu trigger */
+    cli(); /* disable interuupts */
+	init_smp_gdt(getcpuid());
+	child_id=getcpuid();
+	local_ap_apic_init();
+	__enable_apic();
+
+	interrupts_enable();
+
+	local_ap_apic_init(); /* TODO : Need to call this second time to get APIC enabled */
+
+	idleTask_func();
 	return;
 }
 
@@ -345,13 +343,13 @@ imps_force(int ncpus)
 
 	imps_lapic_addr = (READ_MSR_LO(0x1b) & 0xFFFFF000);
 	imps_lapic_addr = PHYS_TO_VIRTUAL(imps_lapic_addr);
-/* 0xfee00000*/
 	/*
 	 *  Setup primary CPU.
 	 */
 	apicid = IMPS_LAPIC_READ(LAPIC_SPIV);
 	IMPS_LAPIC_WRITE(LAPIC_SPIV, apicid|LAPIC_SPIV_ENABLE_APIC);
 	apicid = APIC_ID(IMPS_LAPIC_READ(LAPIC_ID));
+
 	imps_cpu_apic_map[0] = apicid;
 	imps_apic_cpu_map[apicid] = 0;
 
@@ -359,7 +357,11 @@ imps_force(int ncpus)
 	p.apic_ver = 0x10;
 	p.signature = p.features = 0;
 
+
+	local_apic_bsp_switch();
+	local_bsp_apic_init();
 	if (ncpus>MAX_CPUS) ncpus=MAX_CPUS;
+	max_cpus=1;
 	for (i = 0; i < ncpus; i++) {
 		if (apicid == i) {
 			p.flags = IMPS_FLAG_ENABLED | IMPS_CPUFLAG_BOOT;
@@ -370,26 +372,14 @@ imps_force(int ncpus)
 		add_processor(&p);
 	}
 	max_cpus=ncpus;
+	local_bsp_apic_init(); /* TODO : Need to call this twice to get APIC enabled */
 
 	unsigned long *page_table;
 	page_table=__va(0x00102000); /* Refer the paging.c code this is work around for SMP */
 	*page_table=0;
 
-	//  outb(0x22,0x70);
-	 // outb(0x23,0x01); /* old port - 0x71,0x23 */
+    wait_cpus = 0; /* from this point onwards  all non-boot cpus starts */
 
-	//cli();
-	//BRK;
-    int v= IMPS_LAPIC_READ(LAPIC_LVTT);
-    IMPS_LAPIC_WRITE(LAPIC_LVTT, v & ~(1<<16));
-
-	//IMPS_LAPIC_WRITE(LAPIC_LVTT, 0);
-
-	/* Set the divider to 1, no divider */
-//	IMPS_LAPIC_WRITE(LAPIC_TDCR, LAPIC_TDR_DIV_1);
-
-	/* Set the initial counter to 0xffffffff */
-	//IMPS_LAPIC_WRITE(LAPIC_TMICT, 0xffffffff);
 
 	return imps_num_cpus;
 }

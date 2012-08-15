@@ -22,7 +22,7 @@ struct iovec {
 /* scheduling */
 int sc_register_waitqueue(queue_t *waitqueue);
 int sc_unregister_waitqueue(queue_t *waitqueue);
-int sc_wakeUp(queue_t *waitqueue, struct task_struct * p);
+int sc_wakeUp(queue_t *waitqueue);
 int sc_wait(queue_t *waitqueue, unsigned long ticks);
 unsigned long  sc_sleep( long ticks); /* each tick is 100HZ or 10ms */
 unsigned long SYS_sc_fork();

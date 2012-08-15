@@ -144,7 +144,7 @@ void virtio_net_interrupt(registers_t regs) {
 	unsigned char isr;
 	isr = inb(net_dev->pci_ioaddr + VIRTIO_PCI_ISR);
 	if (netbh_started == 1){
-	    sc_wakeUp(&nbh_waitq, NULL);
+	    sc_wakeUp(&nbh_waitq);
 	    virtqueue_disable_cb(net_dev->vq[0]);
 	}
 }

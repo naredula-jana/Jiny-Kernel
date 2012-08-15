@@ -51,7 +51,7 @@ queue_t xb_waitq;
 static void xenbus_evtchn_handler(evtchn_port_t port, struct pt_regs *regs,
 		void *ign) {
 	int ret;
-	ret=sc_wakeUp(&xb_waitq, NULL); /* wake all the waiting processes */
+	ret=sc_wakeUp(&xb_waitq); /* wake all the waiting processes */
 	DEBUG(" Xenbus wait handler: Waking up the waiting process :%d \n",ret);
 }
 

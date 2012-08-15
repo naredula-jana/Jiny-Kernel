@@ -82,6 +82,10 @@ smp_startup_32:
 	/* Enable PAE mode */
 	xorl	%eax, %eax
 	btsl	$5, %eax
+		/* Enable PGE mode */
+	btsl    $7, %eax
+	/* enable osfxsr  for 128 bit media instructions */
+    btsl    $9, %eax
 	movl	%eax, %cr4
 
 	/* Setup early boot stage 4 level pagetables */
@@ -125,7 +129,7 @@ smp_startup_64:
 	 */
 
 
-	addq $(g_idle_stack + TASK_SIZE*2 -16), %rsp
+	movq $(g_idle_stack + TASK_SIZE*2 -16), %rsp
 	movq	$smp_main, %rax
 	jmp	*%rax
 

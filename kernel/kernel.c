@@ -80,16 +80,31 @@ void cmain() {  /* This is the first c function to be executed */
 	init_kernel(max_addr);
 	sti();
 	sc_createKernelThread(shell_main, 0, "shell_main");
-	init_TestUdpStack();
+//	init_TestUdpStack();
 
 	idleTask_func();
 	return;
 }
+int test123=1;
 void idleTask_func(){
 	while (1) {
 		if (g_debug_level == 1) {
 			//		ut_printf(" Inside the Idle Task \n");
 		}
 		__asm__("hlt");
+		if (getcpuid()==1){
+#ifdef SMP
+			broadcast_msg();
+#endif
+		}
+#if 1
+		if (getcpuid()==0 ){
+		loop:	cli();
+			if (test123==1)
+			   sti();
+			else
+				goto loop;
+		}
+#endif
 	}
 }

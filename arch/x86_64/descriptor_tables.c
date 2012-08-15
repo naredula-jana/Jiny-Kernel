@@ -13,13 +13,13 @@ static void gdt_set_gate(int32_t,addr_t,addr_t,uint8_t,uint8_t);
 static void idt_set_gate(int slot, uint8_t type, uint8_t dpl,
 		addr_t handler, int ist);
 
-#define CONFIG_NRCPUS 1
-gdt_entry_t gdt_entries[CONFIG_NRCPUS][9];
-gdt_ptr_t   gdt_ptr;
+
+static gdt_entry_t gdt_entries[MAX_CPUS][9];
+static gdt_ptr_t   gdt_ptr[MAX_CPUS];
 idt_ptr_t   idt_ptr;
-idt_entry_t idt_entries[256];
+idt_entry_t idt_entries[MAX_IRQS];
 struct cpu_state g_cpu_state[1];
-static tss_t tss[CONFIG_NRCPUS];
+static tss_t tss[MAX_CPUS];
 
 // Initialisation routine - zeroes all the interrupt service routines,
 // initialises the GDT and IDT.
@@ -62,6 +62,9 @@ static inline void gdtr_load(gdt_ptr_t *gdtr_reg)
 }
 static inline void tr_load(uint16_t s)
 {
+#ifdef SMP
+	if (getcpuid() != 0 )  return;  //TODO : later need find the solution for SMP
+#endif
 	asm volatile("ltr %0" : : "r" (s));
 }
 #define gdt_install_tss(tss_descr, dpl, base, limit, flags) \
@@ -99,7 +102,7 @@ static void tss_init(tss_t *tssp)
 	tssp->iomap_base = TSS_BASIC_SIZE;
 }
 
-void init_gdt(int cpu)
+static void init_gdt(int cpu)
 {
 	ut_memset(&gdt_entries[cpu][0], 0, sizeof(gdt_entries[cpu]));
 
@@ -126,16 +129,16 @@ void init_gdt(int cpu)
 	gdt_install_tss((tss_descr_t *)&gdt_entries[cpu][TSS_DESCR], SEG_DPL_KERNEL,
 			(uint64_t)&tss[cpu], TSS_DEFAULT_LIMIT, SEG_FLG_PRESENT);
 
-	gdt_ptr.limit = (sizeof(gdt_entries) / CONFIG_NRCPUS)-1;
-	gdt_ptr.base = (uint64_t)&gdt_entries[cpu][0];
+	gdt_ptr[cpu].limit = (sizeof(gdt_entries) / MAX_CPUS)-1;
+	gdt_ptr[cpu].base = (uint64_t)&gdt_entries[cpu][0];
 
-	gdtr_load(&gdt_ptr);
+	gdtr_load(&gdt_ptr[cpu]);
 	tr_load(GDT_SEL(TSS_DESCR));
 }
 
 int ar_archSetUserFS(unsigned long addr) /* TODO need to reimplement using LDT */
 {
-	int cpu = 0;
+	int cpu = getcpuid();
 
 	if (addr == 0) {
 		g_current_task->thread.userland.user_fs = 0;
@@ -145,10 +148,11 @@ int ar_archSetUserFS(unsigned long addr) /* TODO need to reimplement using LDT *
 		g_current_task->thread.userland.user_fs_base = addr;
 	}
 	ar_updateCpuState(g_current_task);
+	return 1;
 }
 int ar_updateCpuState(struct task_struct *p)
 {
-	int cpuid=0;
+	int cpuid=getcpuid();
 
 	g_cpu_state[cpuid].user_stack=p->thread.userland.user_stack;
 	g_cpu_state[cpuid].user_ds = p->thread.userland.user_ds;
@@ -159,7 +163,7 @@ int ar_updateCpuState(struct task_struct *p)
 	g_cpu_state[cpuid].kernel_stack = (unsigned long) p + TASK_SIZE;
 
 	seg_descr_setup(&gdt_entries[cpuid][FS_UDATA_DESCR], SEG_TYPE_DATA, SEG_DPL_USER, g_cpu_state[cpuid].user_fs_base, 0xfffff, SEG_FLG_PRESENT | SEG_FLG_64BIT | SEG_FLG_GRAN);
-	gdtr_load(&gdt_ptr);
+	gdtr_load(&gdt_ptr[cpuid]);
 	asm volatile("mov %0, %%fs":: "r"(g_cpu_state[cpuid].user_fs));
 	return 1;
 }
@@ -170,7 +174,7 @@ extern uint8_t ar_faultsTable[];
 #define SET_FAULT_GATE(irqnum)  \
 	idt_set_gate(irqnum, SEG_TYPE_INTR, SEG_DPL_KERNEL, \
 			(addr_t)&ar_faultsTable + (irqnum) * 0x10, 0);
-#define SET_IRQ_GATE(irqnum)                                        \
+#define SET_IRQ_GATE(irqnum)                \
 	idt_set_gate((irqnum) + 32, SEG_TYPE_INTR,            \
 			SEG_DPL_KERNEL,                                \
 			(addr_t)&ar_irqsTable + (irqnum) * 0x10, 0)
@@ -226,8 +230,13 @@ static void init_idt()
 	idtr_load(&idt_ptr);
 	asm volatile("sti");
 }
+#ifdef SMP
 void init_smp_gdt(int cpu){
-	gdtr_load(&gdt_ptr);
+	ut_memcpy(&gdt_entries[cpu][0], &gdt_entries[0][0], sizeof(gdt_entries[cpu]));
+	gdt_ptr[cpu].limit = (sizeof(gdt_entries) / MAX_CPUS)-1;
+	gdt_ptr[cpu].base = (uint64_t)&gdt_entries[cpu][0];
+	gdtr_load(&gdt_ptr[cpu]);
+
 	idtr_load(&idt_ptr);
-	asm volatile("sti");
 }
+#endif

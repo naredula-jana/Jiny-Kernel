@@ -58,12 +58,13 @@ int init_kernel(unsigned long end_addr)
 #ifdef SMP
 	ut_printf("Initializing SMP\n");
 
-	if ((ret=vm_mmap(0,__va(0xFee00000) ,0x8000,PROT_WRITE,MAP_FIXED,0xFee00000)) == 0) /* this is for SMP */
+	/* 0xfee00000 - 0xfef00000 for lapic */
+	if ((ret=vm_mmap(0,__va(0xFee00000) ,0x100000,PROT_WRITE,MAP_FIXED,0xFee00000)) == 0) /* this is for SMP */
 	{
 		ut_printf("ERROR : mmap fails for \n");
 		return 0;
 	}
-	//BRK;
+
 	ret=imps_force(2);
 	ut_printf(" smp force result:%d \n",ret);
 #endif

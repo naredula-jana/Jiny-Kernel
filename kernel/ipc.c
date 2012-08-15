@@ -76,7 +76,7 @@ void sys_sem_signal(sys_sem_t sem)
 
 	spin_lock_irqsave(&(sem->sem_lock), flags);
     sem->count++;
-    sc_wakeUp(&sem->wait_queue,NULL);
+    sc_wakeUp(&sem->wait_queue);
     spin_unlock_irqrestore(&(sem->sem_lock), flags);
 }
 

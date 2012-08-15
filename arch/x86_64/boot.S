@@ -130,8 +130,7 @@ loop:	hlt
 halt_message:
 	.asciz	"Halted."
 
-#stack:
-	.comm	g_idle_stack, TASK_SIZE*MAX_CPUS
+
 #.globl kernel_jump_addr
 kernel_jump_addr:
         .quad 0x00000000000000
@@ -191,3 +190,8 @@ level2_pg_table:
 temp_boot_pmds:
         .fill   492,8,0
 
+.org 0x4000  /* stacks for the idle tasks */
+/*g_idle_stack:
+        .fill   TASK_SIZE*MAX_CPUS,1,0*/
+#stack:
+	.comm	g_idle_stack, TASK_SIZE*MAX_CPUS

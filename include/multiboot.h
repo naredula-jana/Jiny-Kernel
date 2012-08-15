@@ -23,6 +23,7 @@
 #else
 #define MAX_CPUS 1
 #endif
+#define MAX_IRQS 256
 
 /* C symbol format. HAVE_ASM_USCORE is defined by configure.  */
 #ifdef HAVE_ASM_USCORE
