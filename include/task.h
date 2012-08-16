@@ -22,6 +22,7 @@ struct user_thread {
 struct thread_struct {
 	void *sp; /* kernel stack pointer when scheduling start */
 	void *ip; /* kernel ip when scheduling start */
+	int(*real_ip)(void *);
 	unsigned long argv;
 	struct user_thread userland;
 };

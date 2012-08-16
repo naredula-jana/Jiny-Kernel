@@ -34,7 +34,7 @@ extern long *g_idle_stack;
 void init_timer();
 static int free_mm(struct mm_struct *mm);
 static unsigned long push_to_userland();
-static void _schedule();
+static unsigned long _schedule(unsigned long flags);
 static struct task_struct *alloc_task_struct(void) {
 	return (struct task_struct *) mm_getFreePages(0, 2); /*WARNING: do not change the size it is related TASK_SIZE, 4*4k=16k page size */
 }
@@ -43,7 +43,10 @@ static void free_task_struct(struct task_struct *p) {
 	mm_putFreePages((unsigned long) p, 2);
 	return;
 }
-static inline void add_to_runqueue(struct task_struct * p) /* Add at the first */
+/************************************************
+  All the below function should be called with holding lock
+  *********************************************** */
+static inline void _add_to_runqueue(struct task_struct * p) /* Add at the first */
 {
 	if (p->magic_numbers[0] != MAGIC_LONG || p->magic_numbers[1] != MAGIC_LONG) /* safety check */
 	{
@@ -54,7 +57,7 @@ static inline void add_to_runqueue(struct task_struct * p) /* Add at the first *
 	atomic_inc(&run_queue.count);
 }
 
-static inline struct task_struct *get_from_runqueue() {
+static inline struct task_struct *_get_from_runqueue() {
 	struct task_struct *p;
 	struct list_head *node;
 
@@ -67,7 +70,7 @@ static inline struct task_struct *get_from_runqueue() {
 		BUG();
 	return p;
 }
-static inline struct task_struct *del_from_runqueue(struct task_struct * p) {
+static inline struct task_struct *_del_from_runqueue(struct task_struct * p) {
 	if (p == 0) {
 		struct list_head *node;
 
@@ -86,21 +89,20 @@ static inline struct task_struct *del_from_runqueue(struct task_struct * p) {
 }
 
 /******************************************  WAIT QUEUE *******************/
-void inline init_waitqueue(queue_t *waitqueue) {
+static void inline init_waitqueue(queue_t *waitqueue) {
 	INIT_LIST_HEAD(&(waitqueue->head));
-	waitqueue->lock = SPIN_LOCK_UNLOCKED;
+	waitqueue->lock = SPIN_LOCK_UNLOCKED; // currently unused, protected by sched lock
 	waitqueue->count.counter = 0;
 	return;
 }
 
-static void add_to_waitqueue(queue_t *waitqueue, struct task_struct * p, long ticks) {
+static void _add_to_waitqueue(queue_t *waitqueue, struct task_struct * p, long ticks) {
 
 	long cum_ticks, prev_cum_ticks;
 	struct list_head *pos, *prev_pos;
 	struct task_struct *task;
 	unsigned long flags;
 
-	spin_lock_irqsave(&waitqueue->lock, flags);
 	cum_ticks = 0;
 	prev_cum_ticks = 0;
 	if (waitqueue->head.next == &waitqueue->head) {
@@ -125,19 +127,19 @@ static void add_to_waitqueue(queue_t *waitqueue, struct task_struct * p, long ti
 		list_add_tail(&p->wait_queue, &waitqueue->head);
 	}
 
-	last: atomic_inc(&waitqueue->count);
-	spin_unlock_irqrestore(&waitqueue->lock, flags);
+last: atomic_inc(&waitqueue->count);
+
 }
 
 /* delete from the  wait queue */
-static int del_from_waitqueue(queue_t *waitqueue, struct task_struct *p) {
+static int _del_from_waitqueue(queue_t *waitqueue, struct task_struct *p) {
 	struct list_head *pos;
 	struct task_struct *task;
 	int ret = 0;
 	unsigned long flags;
 
-	if (p==0) return 0;
-	spin_lock_irqsave(&waitqueue->lock, flags);
+	if (p==0 || waitqueue==0) return 0;
+
 	list_for_each(pos, &waitqueue->head) {
 		task = list_entry(pos, struct task_struct, wait_queue);
 
@@ -150,12 +152,11 @@ static int del_from_waitqueue(queue_t *waitqueue, struct task_struct *p) {
 			p->sleep_ticks = 0;
 			atomic_dec(&waitqueue->count);
 			ret = 1;
-			list_del(&p->wait_queue);
-			goto last;
+			list_del(&p->wait_queue);//TODO crash happening */
+			return 1;
 		}
 	}
-last:
-	spin_unlock_irqrestore(&waitqueue->lock, flags);
+
 	return ret;
 }
 
@@ -200,10 +201,10 @@ int sc_wakeUp(queue_t *waitqueue ) {
 	spin_lock_irqsave(&sched_lock, flags);
 	while (waitqueue->head.next != &waitqueue->head) {
 		task = list_entry(waitqueue->head.next, struct task_struct, wait_queue);
-		if (del_from_waitqueue(waitqueue, task) == 1) {
+		if (_del_from_waitqueue(waitqueue, task) == 1) {
 			task->state = TASK_RUNNING;
 			if (task->run_link.next == 0)
-				add_to_runqueue(task);
+				_add_to_runqueue(task);
 			ret++;
 		}
 	}
@@ -216,8 +217,8 @@ int sc_wait(queue_t *waitqueue, unsigned long ticks) {
 
 	spin_lock_irqsave(&sched_lock, flags);
 	g_current_task->state = TASK_INTERRUPTIBLE;
-	add_to_waitqueue(waitqueue, g_current_task, ticks);
-	_schedule();
+	_add_to_waitqueue(waitqueue, g_current_task, ticks);
+	flags=_schedule(flags);
 	spin_unlock_irqrestore(&sched_lock, flags);
 
 	if (g_current_task->sleep_ticks <= 0)
@@ -229,9 +230,13 @@ unsigned long sc_sleep(long ticks) /* each tick is 100HZ or 10ms */
 /* TODO : return number ticks elapsed  instead of 1*/
 /* TODO : when multiple user level thread sleep it is not returning in correct time , it may be because the idle thread halting*/
 {
-	add_to_waitqueue(&timer_queue, g_current_task, ticks);
+	unsigned long flags;
+
+	spin_lock_irqsave(&sched_lock, flags);
+	_add_to_waitqueue(&timer_queue, g_current_task, ticks);
 	g_current_task->state = TASK_INTERRUPTIBLE;
-	sc_schedule();
+	flags=_schedule(flags);
+	spin_unlock_irqrestore(&sched_lock, flags);
 	return 1;
 }
 int sc_threadlist(char *arg1, char *arg2) {
@@ -479,12 +484,17 @@ unsigned long sc_createKernelThread(int(*fn)(void *), unsigned char *args, unsig
 		task = list_entry(pos, struct task_struct, task_link);
 		if (task->pid == pid) {
 			ut_strncpy(task->name, thread_name, MAX_TASK_NAME);
-			break;
+			goto last;
 		}
 	}
+last:
 	spin_unlock_irqrestore(&sched_lock, flags);
 
 	return pid;
+}
+static void schedule_secondHalf(){
+	spin_unlock_irqrestore(&sched_lock, g_current_task->flags);
+	g_current_task->thread.real_ip(0);
 }
 unsigned long SYS_sc_clone(int(*fn)(void *), void *child_stack, int clone_flags, void *args) {
 	struct task_struct *p;
@@ -526,10 +536,12 @@ unsigned long SYS_sc_clone(int(*fn)(void *), void *child_stack, int clone_flags,
 		p->thread.userland.argv = 0; /* TODO */
 		p->thread.ip = (void *) push_to_userland;
 	} else { /* kernel level thread */
-		p->thread.ip = (void *) fn;
+		p->thread.ip = (void *) schedule_secondHalf;
+		save_flags(p->flags);
 		p->thread.argv = args;
+		p->thread.real_ip =fn;
 	}
-	p->thread.sp = (addr_t) p + (addr_t) TASK_SIZE;
+	p->thread.sp = (addr_t) p + (addr_t) TASK_SIZE - (addr_t)160; /* 160 bytes are left at the bottom of the stack */
 	p->state = TASK_RUNNING;
 	ut_strncpy(p->name, g_current_task->name, MAX_TASK_NAME);
 
@@ -551,8 +563,9 @@ unsigned long SYS_sc_clone(int(*fn)(void *), void *child_stack, int clone_flags,
 
 	spin_lock_irqsave(&sched_lock, flags);
 	list_add_tail(&p->task_link, &task_queue.head);
-	add_to_runqueue(p);
+	_add_to_runqueue(p);
 	spin_unlock_irqrestore(&sched_lock, flags);
+
 	return p->pid;
 }
 unsigned long SYS_sc_fork() {
@@ -563,10 +576,9 @@ int SYS_sc_exit(int status) {
 	unsigned long flags;
 	SYSCALL_DEBUG("sys exit : status:%d \n",status);
 	ar_updateCpuState(g_current_task);
-	spin_lock_irqsave(&sched_lock, flags);
-while(1);
-	g_current_task->state = TASK_DEAD;
 
+	spin_lock_irqsave(&sched_lock, flags);
+	g_current_task->state = TASK_DEAD;
 	spin_unlock_irqrestore(&sched_lock, flags);
 
 	sc_schedule();
@@ -578,6 +590,7 @@ int SYS_sc_kill(unsigned long pid, unsigned long signal) {
 	struct task_struct *task;
 
 	SYSCALL_DEBUG("kill pid:%d signal:%d \n",pid,signal);
+
 	spin_lock_irqsave(&sched_lock, flags);
 	list_for_each(pos, &task_queue.head) {
 		task = list_entry(pos, struct task_struct, task_link);
@@ -629,13 +642,11 @@ __POP(rdi) __POP(rsi)
 				"movq %[next_sp],%%rsp\n\t"        /* restore ESP   */ \
 				"movq $1f,%[prev_ip]\n\t"  /* save    EIP   */     \
 				"pushq %[next_ip]\n\t"     /* restore EIP   */     \
-				"sti\n\t" \
 				"jmp __switch_to\n"        /* regparm call  */     \
 				"1:\t"                                             \
 				"popq %%rbp\n\t"           /* restore EBP   */     \
 				RESTORE_CONTEXT \
-				"popfq\n\t"                  /* restore flags */     \
-				"sti\n"  \
+				"popfq\n"                  /* restore flags */     \
 				\
 				/* output parameters */                            \
 				: [prev_sp] "=m" (prev->thread.sp),                \
@@ -668,10 +679,14 @@ void init_tasking() {
 	g_kernel_mm = kmem_cache_alloc(mm_cachep, 0);
 	if (g_kernel_mm == 0)
 		return;
+	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
+		wait_queues[i] = 0;
+	}
 
 	INIT_LIST_HEAD(&(run_queue.head));
 	INIT_LIST_HEAD(&(task_queue.head));
-	init_waitqueue(&timer_queue);
+	sc_register_waitqueue(&timer_queue);
+
 	run_queue.count.counter = 0;
 	task_queue.count.counter = 0;
 
@@ -732,12 +747,13 @@ void sc_schedule() {
 		DEBUG(" Task Stack got CORRUPTED task:%x :%x :%x \n",g_current_task,g_current_task->magic_numbers[0],g_current_task->magic_numbers[1]);
 		BUG();
 	}
+
 	spin_lock_irqsave(&sched_lock, intr_flags);
-    _schedule();
+	intr_flags=_schedule(intr_flags);
 	spin_unlock_irqrestore(&sched_lock, intr_flags);
 }
 
-static void _schedule() {
+static unsigned long  _schedule(unsigned long flags) {
 	struct task_struct *prev, *next;
 	int cpuid=getcpuid();
 
@@ -756,7 +772,7 @@ static void _schedule() {
 		prev->pending_signal = 0;
 	}
 
-	next = del_from_runqueue(0);
+	next = _del_from_runqueue(0);
 	if (next == 0 && (prev->state!=TASK_RUNNING))
 		next = g_idle_tasks[cpuid];
 
@@ -764,6 +780,9 @@ static void _schedule() {
 		next = prev;
 
 	g_current_task = next;
+	if (g_current_tasks[0]==g_current_tasks[1]){
+		while(1);
+	}
 
 	/* handle the  dead task */
 	if (g_task_dead!=0) {
@@ -776,7 +795,7 @@ static void _schedule() {
 
 	/* if prev and next are same then return */
 	if (prev == next) {
-		return;
+		return flags;
 	}
 	/* if  prev and next are having same address space , then avoid tlb flush */
 	next->counter = 5; /* 50 ms time slice */
@@ -785,7 +804,7 @@ static void _schedule() {
 		flush_tlb(next->mm->pgd);
 	}
     if (prev->pid!=0 && prev->state==TASK_RUNNING){ /* some other cpu  can pickup this task , running task and idle task should not be in a run equeue even though there state is running */
-    	add_to_runqueue(prev);
+    	_add_to_runqueue(prev);
     }
 	/* update the cpu state  and tss state for system calls */
 	ar_updateCpuState(next);
@@ -793,13 +812,14 @@ static void _schedule() {
 	prev->cpu=0xffff;
 	next->cpu=cpuid;
 
+	prev->flags = flags;
 	/* finally switch the task */
 	switch_to(prev, next, prev);
-
+	/* from the next statement onwards should not use any stack variables, new threads launched will not able see next statements*/
+	return g_current_task->flags;
 }
 
 void do_softirq() {
-	//	asm volatile("sti");
 	if (g_current_task->counter <= 0) {
 		sc_schedule();
 	}
@@ -810,40 +830,30 @@ void do_softirq() {
 	unsigned long flags;
 
 	/* 1. increment timestamp */
-	g_jiffies++;
+	if (getcpuid()==0){
+	    g_jiffies++;
+	}
 	g_current_task->counter--;
 	g_current_task->stats.ticks_consumed++;
 
 	spin_lock_irqsave(&sched_lock, flags);
-	/*2. Update Timer wait queue */
-	if (timer_queue.head.next != &timer_queue.head) {
-		struct task_struct *task;
-		task = list_entry(timer_queue.head.next, struct task_struct, wait_queue);
-		task->sleep_ticks--;
-		if (task->sleep_ticks <= 0) {
-			del_from_waitqueue(&timer_queue, task);
-			task->state = TASK_RUNNING;
-			if (task->run_link.next == 0)
-				add_to_runqueue(task);
-		}
-	}
 
-	/* 3. Rest of wait queues */
+	/* 2. Test of wait queues for any expiry. time queue is one of the wait queue  */
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
 		if (wait_queues[i] == 0)
 			continue;
-		if (wait_queues[i]->head.next != &wait_queues[i]->head) {
+		if (wait_queues[i]->head.next != &(wait_queues[i]->head)) {
 			struct task_struct *task;
 			task = list_entry(wait_queues[i]->head.next, struct task_struct, wait_queue);
 
 			task->sleep_ticks--;
 			if (task->sleep_ticks <= 0) {
-				del_from_waitqueue(wait_queues[i], task);
+				_del_from_waitqueue(wait_queues[i], task);
 				task->state = TASK_RUNNING;
 				if (task->run_link.next == 0)
-					add_to_runqueue(task);
+					_add_to_runqueue(task);
 				else
-					ut_printf(" BUG identified in wait queue \n");
+					BUG();
 			}
 		}
 	}
@@ -871,8 +881,6 @@ void init_timer() {
 	// Send the frequency divisor.
 	outb(0x40, l);
 	outb(0x40, h);
-#ifdef SMP
-	broadcast_msg();
-#endif
+
 }
 

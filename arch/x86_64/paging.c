@@ -395,15 +395,11 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 	unsigned char user=0;
 
 
-	if (addr > KERNEL_ADDR_START ) /* then it is kernel address */
-	{
-		mm=g_kernel_mm;
-		if (g_current_task->mm != mm) user=1; /* this is case where user thread running in kernel */
-	}else
-	{
-		mm=g_current_task->mm;
-		user=1;
-	}
+//	if (addr > KERNEL_ADDR_START ) /* then it is kernel address */
+
+	mm=g_kernel_mm;
+	if (g_current_task->mm != mm) user=1; /* this is case where user thread running in kernel */
+
 	if (mm==0 || mm->pgd == 0) BUG();
 
 	vma=vm_findVma(mm,(addr & PAGE_MASK),8); /* length changed to just 8 bytes at maximum , instead of entire page*/
