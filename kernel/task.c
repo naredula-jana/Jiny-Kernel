@@ -741,7 +741,7 @@ void sc_schedule() {
 		BUG();
 		return;
 	}
-//g_current_task->cpu!=cpuid ||
+
 	if (g_current_task->cpu!=cpuid || g_current_task->magic_numbers[0] != MAGIC_LONG || g_current_task->magic_numbers[1] != MAGIC_LONG) /* safety check */
 	{
 		DEBUG(" Task Stack got CORRUPTED task:%x :%x :%x \n",g_current_task,g_current_task->magic_numbers[0],g_current_task->magic_numbers[1]);

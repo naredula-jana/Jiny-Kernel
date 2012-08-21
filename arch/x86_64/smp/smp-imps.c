@@ -152,17 +152,17 @@ send_ipi(unsigned int dst, unsigned int v)
 
 	return (to < 1000);
 }
-static int max_cpus=0;
+
 int getcpuid(){
 	int id;
-	if (max_cpus==0) return 0;
-	id= APIC_ID(IMPS_LAPIC_READ(LAPIC_ID));
-	if (id>=MAX_CPUS || id<0 || id>max_cpus) return 0;
+	if (imps_num_cpus==1) return 0;
+	id= APIC_ID(IMPS_LAPIC_READ(LAPIC_ID)); /* id is 0 based */
+	if (id>=MAX_CPUS || id<0 || id>=imps_num_cpus) return 0;
 
 	return id;
 }
 int getmaxcpus(){
-	return max_cpus;
+	return imps_num_cpus;
 }
 static inline  unsigned long interrupts_enable(void)
 {
@@ -312,16 +312,14 @@ add_processor(imps_processor *proc)
 		      apicid, proc->apic_ver);
 	if (!(proc->flags & IMPS_FLAG_ENABLED)) {
 		KERNEL_PRINT(("DISABLED\n"));
-		return;
+		return 0;
 	}
 	if (proc->flags & (IMPS_CPUFLAG_BOOT)) {
 		KERNEL_PRINT("#0  BootStrap Processor (BSP)\n");
-		return;
+		return 0;
 	}
 	if (boot_cpu(proc)) {
-
 		/*  XXXXX  add OS-specific setup for secondary CPUs here */
-
 		imps_cpu_apic_map[imps_num_cpus] = apicid;
 		imps_apic_cpu_map[apicid] = imps_num_cpus;
 		imps_num_cpus++;
@@ -361,7 +359,7 @@ imps_force(int ncpus)
 	local_apic_bsp_switch();
 	local_bsp_apic_init();
 	if (ncpus>MAX_CPUS) ncpus=MAX_CPUS;
-	max_cpus=1;
+;
 	for (i = 0; i < ncpus; i++) {
 		if (apicid == i) {
 			p.flags = IMPS_FLAG_ENABLED | IMPS_CPUFLAG_BOOT;
@@ -371,7 +369,7 @@ imps_force(int ncpus)
 		p.apic_id = i;
 		add_processor(&p);
 	}
-	max_cpus=ncpus;
+
 	local_bsp_apic_init(); /* TODO : Need to call this twice to get APIC enabled */
 
 	unsigned long *page_table;

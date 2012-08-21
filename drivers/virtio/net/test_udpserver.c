@@ -98,44 +98,46 @@ static int process_pkt(unsigned char *c, unsigned long len) {
 }
 int netbh_started=0;
 int max_cont_recv=0;
+
 void net_BH() {
 	unsigned long addr, *len;
 	int ret;
-	int recv=0;
-    int from_sleep=1;
-	netbh_started=1;
+	int recv = 0;
+	int from_sleep = 1;
+	netbh_started = 1;
 
 	while (1) {
 		//sti();
 		len = 0;
 		addr = virtio_removeFromQueue(net_dev->vq[0], &len);
 		if (addr == 0) {
-			if (recv > 0)
-			{
+			if (recv > 0) {
 				//virtqueue_kick(net_dev->vq[0]);
-				recv=0;
+				recv = 0;
 			}
 			recv--;
-			virtqueue_enable_cb(net_dev->vq[0]);
+			virtqueue_enable_cb(net_dev->vq[0]); // enable interrupts as the queue is empty, so interrupt will be recieved for the first packet
 
-#if 0
-if (recv < -3){
-			//if (from_sleep==1)
-			  //   sc_wait(&nbh_waitq, 100);
-			//else
-				sc_wait(&nbh_waitq, 100);
-}
+#if 1
+			if (recv < -3) {
+				//if (from_sleep==1)
+				//   sc_wait(&nbh_waitq, 100);
+				//else
+				sc_wait(&nbh_waitq, 10000);
+			}
 #endif
-			from_sleep=1;
+			from_sleep = 1;
 			continue;
-		}else{
-			if (recv <= 0) recv=0;
+		} else {
+			if (recv <= 0)
+				recv = 0;
 		}
 		recv++;
-		if (recv > max_cont_recv) max_cont_recv=recv;
-		if (from_sleep==1){
-		//	virtqueue_disable_cb(net_dev->vq[0]);
-			from_sleep=0;
+		if (recv > max_cont_recv)
+			max_cont_recv = recv;
+		if (from_sleep == 1) {
+			//	virtqueue_disable_cb(net_dev->vq[0]);
+			from_sleep = 0;
 		}
 		//c = addr;
 		//DEBUG("%d: new NEW ISR:%d :%x addd:%x len:%x c:%x:%x:%x:%x  c+10:%x:%x:%x:%x\n", i, index, isr, addr, len, c[0], c[1], c[2], c[3], c[10], c[11], c[12], c[13]);
@@ -146,13 +148,18 @@ if (recv < -3){
 			mm_putFreePages(addr, 0);
 		}
 		addBufToQueue(net_dev->vq[0], 0, 4096);
-	//	if ((recv % 10) ==0)
+		//	if ((recv % 10) ==0)
 		virtqueue_kick(net_dev->vq[0]);
 	}
 }
 
 void init_TestUdpStack() {
 
+	net_dev = init_netfront(0, mac, 0);
+	if (net_dev ==0){
+		ut_printf(" Fail to initialize the UDP stack \n");
+		return;
+	}
 #ifdef WITH_BOTTOM_HALF
 	int i,ret;
 
@@ -160,5 +167,5 @@ void init_TestUdpStack() {
 	ret=sc_createKernelThread(net_BH,0,"net_rx");
 #endif
 
-	net_dev = init_netfront(0, mac, 0);
+
 }

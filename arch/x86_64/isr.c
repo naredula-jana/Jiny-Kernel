@@ -195,6 +195,9 @@ void ar_irqHandler(void *p,unsigned int int_no)
 			handler();
 		}
 		g_interrupt_handlers[int_no].stat[getcpuid()].num_irqs++;
+#ifdef SMP
+	local_apic_send_eoi();
+#endif
 	}else
 	{
 		g_interrupt_handlers[int_no].stat[getcpuid()].num_error++;
@@ -202,9 +205,7 @@ void ar_irqHandler(void *p,unsigned int int_no)
 			//ut_printf("UNhandled interrupt ..: %d \n",int_no);
 		}
 	}
-#ifdef SMP
-	local_apic_send_eoi();
-#endif
+
 }
 
 

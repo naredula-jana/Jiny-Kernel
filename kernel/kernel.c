@@ -69,7 +69,7 @@ void cmain() {  /* This is the first c function to be executed */
 
 		}
 	}
-	//BRK;
+
 	if (mbi->mods_count > 0) {
 		multiboot_mod_t *mod;
 
@@ -80,7 +80,6 @@ void cmain() {  /* This is the first c function to be executed */
 	init_kernel(max_addr);
 	sti();
 	sc_createKernelThread(shell_main, 0, "shell_main");
-//	init_TestUdpStack();
 
 	idleTask_func();
 	return;

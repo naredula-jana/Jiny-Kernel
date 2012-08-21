@@ -46,14 +46,11 @@ int init_kernel(unsigned long end_addr)
 	init_syscall();
 	init_tasking();
 
-	ut_printf("Initalising: PCI.. \n");
-	init_pci();
 
-#ifdef NETWORKING
-//	init_LwipTcpIpStack();
-#endif
 
-	kmemleak_init();
+
+
+//	kmemleak_init();
 
 #ifdef SMP
 	ut_printf("Initializing SMP\n");
@@ -68,6 +65,15 @@ int init_kernel(unsigned long end_addr)
 	ret=imps_force(2);
 	ut_printf(" smp force result:%d \n",ret);
 #endif
+
+	ut_printf("Initalising: PCI.. \n");
+	init_pci();
+
+#ifdef NETWORKING
+//	init_LwipTcpIpStack();
+#endif
+	init_TestUdpStack();
+
 	ut_printf("Initalising: VFS.. \n");
 	init_vfs();
 //	ar_registerInterrupt(128,syscall_handler);

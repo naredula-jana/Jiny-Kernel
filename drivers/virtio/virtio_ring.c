@@ -547,4 +547,13 @@ unsigned int virtqueue_get_vring_size(struct virtqueue *_vq)
 
 	return vq->vring.num;
 }
+/**********************************************************************************/
+unsigned char virtio_get_status(virtio_dev_t *dev) {
+	uint16_t addr = dev->pci_ioaddr + VIRTIO_PCI_STATUS;
+	return inb(addr);
+}
+void virtio_set_status(virtio_dev_t *dev, unsigned char status) {
+	uint16_t addr = dev->pci_ioaddr + VIRTIO_PCI_STATUS;
+	outb(addr, status);
+}
 

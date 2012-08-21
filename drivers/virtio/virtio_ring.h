@@ -160,22 +160,5 @@ static inline int vring_need_event(__u16 event_idx, __u16 new_idx, __u16 old)
 	return (__u16)(new_idx - event_idx - 1) < (__u16)(new_idx - old);
 }
 
-#ifdef __KERNEL__
-#include <linux/irqreturn.h>
-struct virtio_device;
-struct virtqueue;
 
-struct virtqueue *vring_new_virtqueue(unsigned int num,
-				      unsigned int vring_align,
-				      struct virtio_device *vdev,
-				      void *pages,
-				      void (*notify)(struct virtqueue *vq),
-				      void (*callback)(struct virtqueue *vq),
-				      const char *name);
-void vring_del_virtqueue(struct virtqueue *vq);
-/* Filter out transport-specific feature bits. */
-void vring_transport_features(struct virtio_device *vdev);
-
-irqreturn_t vring_interrupt(int irq, void *_vq);
-#endif /* __KERNEL__ */
 #endif /* _LINUX_VIRTIO_RING_H */

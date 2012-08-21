@@ -11,16 +11,7 @@
 #include "virtio_net.h"
 
 static virtio_dev_t *net_dev = 0;
-
-static unsigned char vp_get_status(virtio_dev_t *dev) {
-	uint16_t addr = dev->pci_ioaddr + VIRTIO_PCI_STATUS;
-	return inb(addr);
-}
-static void vp_set_status(virtio_dev_t *dev, unsigned char status) {
-	uint16_t addr = dev->pci_ioaddr + VIRTIO_PCI_STATUS;
-	outb(addr, status);
-}
- int addBufToQueue(struct virtqueue *vq, unsigned char *buf,
+int addBufToQueue(struct virtqueue *vq, unsigned char *buf,
 		unsigned long len) {
 	struct scatterlist sg[2];
 
@@ -50,7 +41,6 @@ static void vp_set_status(virtio_dev_t *dev, unsigned char status) {
 
 	return 1;
 }
-
 int init_virtio_net_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev) {
 	unsigned long addr;
 	unsigned long features;
@@ -58,19 +48,14 @@ int init_virtio_net_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev) {
 
 	net_dev = dev;
 
-	vp_set_status(dev, vp_get_status(dev) + VIRTIO_CONFIG_S_ACKNOWLEDGE);
-	DEBUG("Initializing VIRTIO PCI NET status :%x :  \n", vp_get_status(dev));
+	virtio_set_status(dev, virtio_get_status(dev) + VIRTIO_CONFIG_S_ACKNOWLEDGE);
+	DEBUG("Initializing VIRTIO PCI NET status :%x :  \n", virtio_get_status(dev));
 
-	vp_set_status(dev, vp_get_status(dev) + VIRTIO_CONFIG_S_DRIVER);
+	virtio_set_status(dev, virtio_get_status(dev) + VIRTIO_CONFIG_S_DRIVER);
 
 	addr = dev->pci_ioaddr + VIRTIO_PCI_HOST_FEATURES;
 	features = inl(addr);
 	DEBUG(" driver Initialising VIRTIO PCI NET hostfeatures :%x:\n", features);
-
-	/*addr = dev->pci_ioaddr + VIRTIO_PCI_GUEST_FEATURES;
-	 features = 0x710;
-	 outl(addr, features);*/
-	DEBUG(" driver Initialising VIRTIO PCI NET GUESTfeatures :%x:\n", features);
 
 	addr = dev->pci_ioaddr + 20;
 	DEBUG(
@@ -82,7 +67,7 @@ int init_virtio_net_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev) {
 	virtqueue_disable_cb(dev->vq[1]); /* disable interrupts on sending side */
 
 
-	vp_set_status(dev, vp_get_status(dev) + VIRTIO_CONFIG_S_DRIVER_OK);
+	virtio_set_status(dev, virtio_get_status(dev) + VIRTIO_CONFIG_S_DRIVER_OK);
 	DEBUG(" NEW Initialising.. VIRTIO PCI COMPLETED with driver ok :%x \n");
 
 	for (i = 0; i < 120; i++) /* add buffers to recv q */
@@ -97,58 +82,19 @@ static int s_i = 0;
 static int s_r = 0;
 int stop_queueing_bh=0;
 
-#if 0
-void virtio_net_interrupt(registers_t regs) {
-	unsigned int len;
-	unsigned long addr;
-	unsigned char *c;
-	unsigned char isr;
-	static int i = 0;
-	virtio_dev_t *dev = net_dev;
 
-	/* reset the irq by resetting the status  */
-	isr = inb(dev->pci_ioaddr + VIRTIO_PCI_ISR);
-
-	s_i++;
-	i = 0;
-	while (i < 10) { /* receive queue */
-		len = 0;
-		if (stop_queueing_bh>0) break;
-		addr = virtio_removeFromQueue(dev->vq[0], &len);
-		if (addr == 0) {
-			break;
-		}
-		c = addr;
-		//DEBUG("%d: new NEW ISR:%d :%x addd:%x len:%x c:%x:%x:%x:%x  c+10:%x:%x:%x:%x\n", i, index, isr, addr, len, c[0], c[1], c[2], c[3], c[10], c[11], c[12], c[13]);
-
-		addBufToQueue(dev->vq[0], 0, 4096);/* TODO hardcoded 4096*/
-		virtqueue_kick(dev->vq[0]);
-		if (dev->rx_func != 0) {
-			dev->rx_func(c, len);
-		} else {
-			mm_putFreePages(c, 0);
-		}
-		i++;
-	}
-
-	if (i > 0) {
-		s_r++;
-		//virtqueue_kick(dev->vq[0]);
-	}
-}
-#else
 extern queue_t nbh_waitq;
 extern int netbh_started;
 void virtio_net_interrupt(registers_t regs) {
 	/* reset the irq by resetting the status  */
 	unsigned char isr;
-	isr = inb(net_dev->pci_ioaddr + VIRTIO_PCI_ISR);
+	//isr = inb(net_dev->pci_ioaddr + VIRTIO_PCI_ISR);  this is called from generic handler
 	if (netbh_started == 1){
 	    sc_wakeUp(&nbh_waitq);
 	    virtqueue_disable_cb(net_dev->vq[0]);
 	}
 }
-#endif
+
 
 int netfront_xmit(virtio_dev_t *dev, unsigned char* data, int len) {
 
@@ -188,7 +134,6 @@ void *init_netfront(void (*net_rx)(unsigned char* data, int len),
 			rawmac[j] = net_dev->mac[j];
 	}
 
-	net_dev->rx_func = net_rx;
 	return net_dev;
 }
 
