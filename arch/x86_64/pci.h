@@ -58,7 +58,9 @@ typedef struct __pci_addr_t {
 } pci_addr_t;
 
 typedef struct __pci_bar_t {
+	int type;
 	uint32_t addr;
 	uint32_t len;
+	char *name;
 }pci_bar_t;
 

@@ -164,7 +164,14 @@ static int vring_add_indirect(struct vring_virtqueue *vq,
 
 	return head;
 }
-
+extern int netbh_state;
+void print_vq(struct virtqueue *_vq){
+	long diff;
+	struct vring_virtqueue *vq = to_vvq(_vq);
+	diff=vq->vring.used->idx-vq->vring.avail->idx;
+	if (diff < 0) diff=diff*(-1);
+	ut_printf(" num_free:%d  free_head:%d used:%x avail:%x diff:%d [%d]\n",vq->num_free,vq->free_head,vq->vring.used->idx,vq->vring.avail->idx,diff,netbh_state);
+}
 int virtqueue_add_buf_gfp(struct virtqueue *_vq,
 			  struct scatterlist sg[],
 			  unsigned int out,
@@ -193,8 +200,12 @@ int virtqueue_add_buf_gfp(struct virtqueue *_vq,
 	BUG_ON(out + in == 0);
 
 	if (vq->num_free < out + in) {
-		pr_debug("Can't add buf len %i - avail = %i\n",
-			 out + in, vq->num_free);
+#if 0
+		pr_debug("Can't add buf len %i - avail = %i  in:%d vringnum:%d\n",
+			 out + in, vq->num_free, in,  vq->vring.num);
+		print_vq(_vq);
+	//	while(1);
+#endif
 		/* FIXME: for historical reasons, we force a notify here if
 		 * there are outgoing parts to the buffer.  Presumably the
 		 * host should service the ring ASAP. */
@@ -202,6 +213,8 @@ int virtqueue_add_buf_gfp(struct virtqueue *_vq,
 			vq->notify(&vq->vq);
 		END_USE(vq);
 		return -ENOSPC;
+	}else{
+		//print_vq(_vq);
 	}
 
 	/* We're about to use some buffers from the free list. */

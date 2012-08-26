@@ -15,7 +15,8 @@
 #define MAGIC_CHAR 0xab
 #define MAGIC_LONG 0xabababababababab
 
-struct task_struct *g_current_tasks[MAX_CPUS],*g_idle_tasks[MAX_CPUS];
+struct task_struct *g_current_tasks[MAX_CPUS];
+struct task_struct *g_idle_tasks[MAX_CPUS];
 struct mm_struct *g_kernel_mm = 0;
 
 static queue_t run_queue;
@@ -50,7 +51,7 @@ static inline void _add_to_runqueue(struct task_struct * p) /* Add at the first 
 {
 	if (p->magic_numbers[0] != MAGIC_LONG || p->magic_numbers[1] != MAGIC_LONG) /* safety check */
 	{
-		DEBUG(" Task Stack got CORRUPTED task:%x :%x :%x \n",p,p->magic_numbers[0],p->magic_numbers[1]);
+		DEBUG(" Task Stack Got CORRUPTED task:%x :%x :%x \n",p,p->magic_numbers[0],p->magic_numbers[1]);
 		BUG();
 	}
 	list_add_tail(&p->run_link, &run_queue.head);
@@ -243,6 +244,7 @@ int sc_threadlist(char *arg1, char *arg2) {
 	unsigned long flags;
 	struct list_head *pos;
 	struct task_struct *task;
+	int i;
 
 	spin_lock_irqsave(&sched_lock, flags);
 	ut_printf("pid task ticks mm pgd mm_count cpu\n");
@@ -255,6 +257,12 @@ int sc_threadlist(char *arg1, char *arg2) {
 
 		ut_printf(" %x %x %x %x %d %s %d stat(%d) %d\n", task, task->ticks, task->mm, task->mm->pgd, task->mm->count.counter, task->name, task->sleep_ticks,
 				task->stats.ticks_consumed,task->cpu);
+	}
+	for (i=0; i<getmaxcpus(); i++){
+		if (g_current_tasks[i]==g_idle_tasks[i])
+			ut_printf("%d : <idle>\n",i);
+		else
+			ut_printf("%d : %s\n",i,g_current_tasks[i]->name);
 	}
 	spin_unlock_irqrestore(&sched_lock, flags);
 	return 1;
@@ -334,7 +342,6 @@ static unsigned long setup_userstack(unsigned char **argv, unsigned char **env, 
 	} else {
 		goto error;
 	}
-
 
 	*stack_len = PAGE_SIZE - (p - stack);
 	*t_argc = total_args;
@@ -675,6 +682,7 @@ __POP(rdi) __POP(rsi)
 
 void init_tasking() {
 	int i;
+	unsigned long task_addr;
 
 	g_kernel_mm = kmem_cache_alloc(mm_cachep, 0);
 	if (g_kernel_mm == 0)
@@ -695,9 +703,10 @@ void init_tasking() {
 	g_kernel_mm->pgd = (unsigned char *) g_kernel_page_dir;
 	g_kernel_mm->fs.total = 3;
 
-
+    task_addr=(unsigned long )((unsigned long )(&g_idle_stack)+TASK_SIZE) & (~((unsigned long )(TASK_SIZE-1)));
+    ut_printf(" Task Addr start :%x  stack:%x current:%x\n",task_addr,&task_addr,g_current_task);
 	for (i = 0; i < 2; i++) { /* TODO : need to handle idle tasks for smp correctly */
-		g_idle_tasks[i] = (unsigned char *)(&g_idle_stack)+i*TASK_SIZE;
+		g_idle_tasks[i] = (unsigned char *)(task_addr)+i*TASK_SIZE;
 		g_idle_tasks[i]->ticks = 0;
 		g_idle_tasks[i]->magic_numbers[0] = g_idle_tasks[i]->magic_numbers[1] = MAGIC_LONG;
 		g_idle_tasks[i]->stats.ticks_consumed = 0;
@@ -711,6 +720,8 @@ void init_tasking() {
 		g_pid++;
 	}
 
+    g_current_task->cpu=0;
+	//while(1);
 	ar_archSetUserFS(0);
 	init_timer();
 }
@@ -779,7 +790,8 @@ static unsigned long  _schedule(unsigned long flags) {
 	if (next ==0 ) /* by this point , we will always have some next */
 		next = prev;
 
-	g_current_task = next;
+//	g_current_task = next;
+	g_current_tasks[cpuid] = next;
 	if (g_current_tasks[0]==g_current_tasks[1]){
 		while(1);
 	}

@@ -10,20 +10,26 @@
 #include "../virtio_pci.h"
 #include "virtio_net.h"
 
+int test_virtio_nob=0;
 static virtio_dev_t *net_dev = 0;
+void print_virtio_net(){
+	print_vq(net_dev->vq[0]);
+	print_vq(net_dev->vq[1]);
+}
 int addBufToQueue(struct virtqueue *vq, unsigned char *buf,
 		unsigned long len) {
 	struct scatterlist sg[2];
+	int ret;
 
 	if (buf == 0) {
 		buf = mm_getFreePages(0, 0);
 		ut_memset(buf,0,sizeof(struct virtio_net_hdr));
-
-		if (1){ /* TODO: this is introduced to burn some cpu cycles, otherwise throughput drops drastically  from 1.6G to 500M */
+#if 1
+		if (test_virtio_nob==1){ /* TODO: this is introduced to burn some cpu cycles, otherwise throughput drops drastically  from 1.6G to 500M , with vhost this is not a issue*/
 			unsigned long buf1=mm_getFreePages(MEM_CLEAR, 0);
 			mm_putFreePages(buf1, 0);
 		}
-
+#endif
 		len = 4096; /* page size */
 	}
 	sg[0].page_link = buf;
@@ -34,12 +40,12 @@ int addBufToQueue(struct virtqueue *vq, unsigned char *buf,
 	sg[1].offset = 0;
 	//DEBUG(" scatter gather-0: %x:%x sg-1 :%x:%x \n",sg[0].page_link,__pa(sg[0].page_link),sg[1].page_link,__pa(sg[1].page_link));
 	if (vq->qType == 1) {
-		virtqueue_add_buf_gfp(vq, sg, 0, 2, sg[0].page_link, 0);/* recv q*/
+		ret=virtqueue_add_buf_gfp(vq, sg, 0, 2, sg[0].page_link, 0);/* recv q*/
 	} else {
-		virtqueue_add_buf_gfp(vq, sg, 2, 0, sg[0].page_link, 0);/* send q */
+		ret=virtqueue_add_buf_gfp(vq, sg, 2, 0, sg[0].page_link, 0);/* send q */
 	}
 
-	return 1;
+	return ret;
 }
 int init_virtio_net_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev) {
 	unsigned long addr;
@@ -95,21 +101,31 @@ void virtio_net_interrupt(registers_t regs) {
 	}
 }
 
-
+int virtio_send_errors=0;
 int netfront_xmit(virtio_dev_t *dev, unsigned char* data, int len) {
-
-	int i;
+static int send_pkts=0;
+	int i,ret;
 	if (dev == 0)
 		return 0;
 
 	unsigned long addr;
 
 	addr = data;
-	addBufToQueue(dev->vq[1], addr, len);
+	ret=-ENOSPC;
+
+	ret=addBufToQueue(dev->vq[1], addr, len);
+	send_pkts++;
+    if (ret == -ENOSPC){
+    	mm_putFreePages(addr, 0);
+    	virtio_send_errors++;
+    }
+
+	send_pkts=0;
 	virtqueue_kick(dev->vq[1]);
+	//}
 #if 1
 	i = 0;
-	while (i < 3) {
+	while (i < 50) {
 		i++;
 		addr = virtio_removeFromQueue(dev->vq[1], &len);
 		if (addr) {

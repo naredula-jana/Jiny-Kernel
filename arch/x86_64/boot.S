@@ -116,7 +116,10 @@ t1:
 /* Now enter the C main function...  */
 .code64
 start64:
-        movq $(g_idle_stack + TASK_SIZE -16), %rsp
+        movq $(g_idle_stack + TASK_SIZE*2 -16), %rax
+        and $0xffffffffffffc000 ,%rax
+        sub $16 ,%rax
+        movq %rax, %rsp
         movq kernel_jump_addr, %rax
         callq *%rax
 
@@ -194,4 +197,4 @@ temp_boot_pmds:
 /*g_idle_stack:
         .fill   TASK_SIZE*MAX_CPUS,1,0*/
 #stack:
-	.comm	g_idle_stack, TASK_SIZE*MAX_CPUS
+	.comm	g_idle_stack, TASK_SIZE*(MAX_CPUS+1)

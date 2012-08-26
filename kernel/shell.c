@@ -47,6 +47,8 @@ extern int xen_readcmd(char *arg1,char *arg2);
 extern int xen_writecmd(char *arg1,char *arg2);
 extern int p9_cmd(char *arg1,char *arg2);
 extern int ut_logFlush(char *arg1, char *arg2);
+static int sh_virtio(char *arg1,char *arg2);
+extern int print_pci(char *arg1 , char *arg2);
 int scan_pagecache(char *arg1 , char *arg2);
 commands_t cmd_list[]=
 {
@@ -73,6 +75,7 @@ commands_t cmd_list[]=
 	{"maps      ","Memory map areas","maps",vm_printMmaps},
 	{"ls        ","ls","ls",fs_printInodes},
 	{"pc        ","page cache stats","pc",pc_stats},
+	{"pci        ","pci resource","pci",print_pci},
 	{"scan        ","scan page cache ","scan",scan_pagecache},
 	{"mem        ","memstat","mem",mm_printFreeAreas},
 	{"mmap <file> <addr>","mmap file","mmap",sh_mmap},
@@ -82,6 +85,7 @@ commands_t cmd_list[]=
 	{"del <file>","flush file-remove from page cache       ","del",sh_del},
 	{"cp <f1> <f2>","copy f1 f2       ","cp",sh_cp},
 	{"sync <f1>","sync f1       ","sync",sh_sync},
+	{"virtio stat ","v","v",sh_virtio},
 	{"t1 ","t1 file","t1",sh_test1},
 	{0,0,0,0}
 };
@@ -137,7 +141,11 @@ static int sh_test3(char *arg1,char *arg2)
 	return 1;
 }
 #endif
-
+static int sh_virtio(char *arg1,char *arg2){
+	print_virtio_net();
+	sc_threadlist(0,0);
+	print_udpserver();
+}
 static char buf[26024];
 static int sh_mmap(char *arg1,char *arg2)
 {

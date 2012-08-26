@@ -74,6 +74,17 @@ struct task_struct {
 
 extern int getcpuid();
 extern struct task_struct *g_current_tasks[];
+#if 0
 #define g_current_task g_current_tasks[getcpuid()]
+#else
+static inline struct task_struct *current_task(void)
+{
+	unsigned long addr,p;
+	addr = &p;
+	addr=addr & (~(TASK_SIZE-1));
 
+    return (struct task_struct *)addr;
+}
+#define g_current_task current_task()
+#endif
 #endif

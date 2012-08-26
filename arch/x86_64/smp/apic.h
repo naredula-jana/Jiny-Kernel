@@ -397,5 +397,8 @@ int apic_broadcast_ipi_vector(uint8_t vector);
 int local_ap_apic_init(void);
 
 #endif /* CONFIG_SMP */
-
+static void inline outb(uint16_t port,uint8_t vl)
+{
+  __asm__ volatile ("outb %0, %1\n" : : "a" (vl), "Nd" (port));
+}
 #endif

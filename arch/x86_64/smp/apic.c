@@ -385,7 +385,7 @@ static uint32_t delay_loop;
 void local_apic_timer_calibrate(uint32_t hz)
 {
   uint32_t x1,x2;
-
+  int debug_slow=1; /* TODO: this is only for debug purpose, normally it should be 1 */
   local_apic_timer_disable();
 
   kprintf("Calibrating lapic delay_loop ...");
@@ -402,7 +402,7 @@ void local_apic_timer_calibrate(uint32_t hz)
 
   x1=local_apic->timer_ccr.count; /*get current counter*/
   //atom_usleep(1000000/hz); /*delay*/
-  udelay(1000000/hz);
+  udelay(debug_slow*4000000/hz);
   x2=local_apic->timer_ccr.count; /*again get current counter to see difference*/
 
   delay_loop=x1-x2;

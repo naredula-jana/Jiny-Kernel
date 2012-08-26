@@ -46,10 +46,6 @@ int init_kernel(unsigned long end_addr)
 	init_syscall();
 	init_tasking();
 
-
-
-
-
 //	kmemleak_init();
 
 #ifdef SMP

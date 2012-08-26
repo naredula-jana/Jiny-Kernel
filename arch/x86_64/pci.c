@@ -1,7 +1,8 @@
 #define DEBUG_ENABLE 1
 #include "pci.h"
 void init_pci();
-uint8_t inb(uint16_t port)
+#if 0
+uint8_t inline inb(uint16_t port)
 { 
   uint8_t vl; 
     
@@ -10,12 +11,12 @@ uint8_t inb(uint16_t port)
   return vl;
 } 
 /* put byte value to io port */
-void outb(uint16_t port,uint8_t vl)
+void inline outb(uint16_t port,uint8_t vl)
 {
   __asm__ volatile ("outb %0, %1\n" : : "a" (vl), "Nd" (port));
 } 
 /* read 16 bit value from io port */
-uint16_t inw(uint16_t port)
+uint16_t inline inw(uint16_t port)
 { 
   uint16_t vl;
   
@@ -25,13 +26,13 @@ uint16_t inw(uint16_t port)
 } 
     
 /* put 16 bit value to io port */
-void outw(uint16_t port,uint16_t vl)
+void inline outw(uint16_t port,uint16_t vl)
 {   
   __asm__ volatile ("outw %0, %1\n" : : "a" (vl), "Nd" (port));
 } 
     
 /* read 32 bit value from io port */
-uint32_t inl(uint16_t port)
+uint32_t inline inl(uint16_t port)
 { 
   uint32_t vl;
 
@@ -39,12 +40,13 @@ uint32_t inl(uint16_t port)
 
   return vl;
 } 
-  
 /* put 32 bit value to io port */
-void outl(uint16_t port,uint32_t vl)
+void inline outl(uint16_t port,uint32_t vl)
 {
 	__asm__ volatile ("outl %0, %1\n" : : "a" (vl), "Nd" (port));
 }
+#endif
+
 static int pci_write(pci_addr_t *d, uint16_t pos, uint8_t len, void *buf)
 {
 	uint16_t port;
@@ -178,22 +180,36 @@ static int get_bar(pci_addr_t *addr, int barno, uint32_t *start, uint32_t *len)
 }
 #define XEN_PLATFORM_VENDOR_ID 0x5853
 #define XEN_PLATFORM_DEVICE_ID 0x0001
+#define MAX_PCI_BARS 100
+static pci_bar_t pci_bars[MAX_PCI_BARS];
+static int bar_count=0;
+int print_pci(char *arg1 , char *arg2){
+	int i;
+	for (i=0; i<bar_count; i++){
+		if (pci_bars[i].addr==0 ) return;
+		ut_printf("name:%s  addr:%x len:%d\n",pci_bars[i].name,pci_bars[i].addr,pci_bars[i].len);
+	}
+	return 1;
+}
 static int read_dev_conf(uint8_t bus , uint8_t dev,uint8_t func)
 {
 	pci_dev_header_t header;
 	pci_addr_t addr;
-	pci_bar_t bars[5];
+	//pci_bar_t bars[5];
 	int ret;
 	//int consumed = 0; //number of read BARs
 	//int produced = 0; //number of filled resources;
 	//int max_bar;
-	int i;
+	int i,count_start;
+
 
 	addr.bus=bus;
 	addr.device=dev;
 	addr.function=func;
 	header.vendor_id=0;
 	header.device_id=0;
+	pci_bars[bar_count].addr=0;
+	count_start=bar_count;
 	ret = pci_generic_read(&addr, 0, sizeof(header), &header);
 
 	if(ret != 0) {
@@ -205,22 +221,30 @@ static int read_dev_conf(uint8_t bus , uint8_t dev,uint8_t func)
 		DEBUG("   base addr :%i :%i :%i :%i \n",header.base_address_registers[0],header.base_address_registers[1],header.base_address_registers[2],header.base_address_registers[3]);
 		for(i=0; i<5;i++)
 		{
-			get_bar(&addr,i,&bars[i].addr,&bars[i].len); 
-			if (bars[i].addr != 0)
+			get_bar(&addr,i,&pci_bars[bar_count].addr,&pci_bars[bar_count].len);
+			if (pci_bars[bar_count].addr != 0)
 			{
-				bars[i].len= (~bars[i].len)+1;
+				pci_bars[bar_count].len= (~pci_bars[bar_count].len)+1;
+				pci_bars[bar_count].name="";
+				bar_count++;
+			}else
+			{
+				break;
 			}
 		}
-		if (header.vendor_id == 0x1af4 && header.device_id==0x1110)
-			init_host_shm(&header,bars,3);
+		if (header.vendor_id == 0x1af4 && header.device_id==0x1110){
+			init_host_shm(&header,&pci_bars[count_start],3);
+		}
 #ifdef XEN
-		if (header.vendor_id == XEN_PLATFORM_VENDOR_ID  && header.device_id == XEN_PLATFORM_DEVICE_ID)
-			init_xen_pci(&header,bars,3);
+		else if (header.vendor_id == XEN_PLATFORM_VENDOR_ID  && header.device_id == XEN_PLATFORM_DEVICE_ID){
+			init_xen_pci(&header,&pci_bars[count_start],3);
+		}
 #endif
 #ifdef VIRTIO
 #define VIRTIO_PCI_VENDOR_ID 0x1af4
-		if (header.vendor_id == VIRTIO_PCI_VENDOR_ID  && (header.device_id >= 0x1000 && header.device_id <= 0x103f) )
-			init_virtio_pci(&header,bars,3);
+		else if (header.vendor_id == VIRTIO_PCI_VENDOR_ID  && (header.device_id >= 0x1000 && header.device_id <= 0x103f) ){
+			init_virtio_pci(&header,&pci_bars[count_start],3);
+		}
 #endif
 	}
 	return 1;

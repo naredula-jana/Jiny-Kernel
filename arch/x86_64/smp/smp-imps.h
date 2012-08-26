@@ -225,7 +225,7 @@ int imps_force(int ncpus);
 
 
 
-
+#if 0
 static inline unsigned char
 inb (unsigned short port)
 {
@@ -238,6 +238,8 @@ outb (unsigned short port, unsigned char val)
 {
   __asm __volatile ("outb %0,%1"::"a" (val), "d" (port));
 }
+#endif
+
 static inline void
 cmos_write_byte (int loc, int val)
 {

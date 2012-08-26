@@ -35,7 +35,7 @@
  */
 
 #define IMPS_DEBUG
-
+#include "task.h"
 #include "smp-apic.h"
 #include "smp-imps.h"
 
@@ -156,7 +156,11 @@ send_ipi(unsigned int dst, unsigned int v)
 int getcpuid(){
 	int id;
 	if (imps_num_cpus==1) return 0;
+#if 1
+	id = g_current_task->cpu;
+#else
 	id= APIC_ID(IMPS_LAPIC_READ(LAPIC_ID)); /* id is 0 based */
+#endif
 	if (id>=MAX_CPUS || id<0 || id>=imps_num_cpus) return 0;
 
 	return id;
@@ -192,7 +196,7 @@ void smp_main() {
 	int i;
 
 	while(wait_cpus==1) ; /* wait till boot cpu trigger */
-    cli(); /* disable interuupts */
+    cli(); /* disable interrupts */
 	init_smp_gdt(getcpuid());
 	child_id=getcpuid();
 	local_ap_apic_init();
@@ -308,7 +312,7 @@ add_processor(imps_processor *proc)
 {
 	int apicid = proc->apic_id;
 
-	KERNEL_PRINT("  Processor [APIC id %d ver %d]:  ",
+	KERNEL_PRINT("Processor [APIC id %d ver %d]:  ",
 		      apicid, proc->apic_ver);
 	if (!(proc->flags & IMPS_FLAG_ENABLED)) {
 		KERNEL_PRINT(("DISABLED\n"));
@@ -359,7 +363,7 @@ imps_force(int ncpus)
 	local_apic_bsp_switch();
 	local_bsp_apic_init();
 	if (ncpus>MAX_CPUS) ncpus=MAX_CPUS;
-;
+
 	for (i = 0; i < ncpus; i++) {
 		if (apicid == i) {
 			p.flags = IMPS_FLAG_ENABLED | IMPS_CPUFLAG_BOOT;

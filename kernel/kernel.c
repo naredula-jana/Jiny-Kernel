@@ -99,6 +99,7 @@ void idleTask_func() {
 			//		ut_printf(" Inside the Idle Task \n");
 		}
 		__asm__("hlt");
+		sc_schedule();
 
 #if 0
 	//	cli();

@@ -10,7 +10,7 @@
 int sfd;
 int recv_stop=0;
 struct sockaddr_in server,client;
-int send_pkts,recv_pkts,pkt_size,total_pkts;
+unsigned long send_pkts,recv_pkts,pkt_size,total_pkts;
 void recv_func() {
 	char buf[1424] = "";
 	int l;
@@ -60,7 +60,7 @@ unsigned long wait_till(unsigned long ts){
   delay((ts-t));
   return ts;
 }
-
+int duration=30;
 send_func(){
 	int i;
 	char buf[1424]="";
@@ -68,7 +68,7 @@ send_func(){
 	unsigned long start_time,end_time,time_per_pkt,target_t,curr_t;/* time in milliseconds */
 
 	start_time= mtime();
-	end_time=start_time+10*1000000;  /* 10 seconds */
+	end_time=start_time+duration*1000000;  /* 30 seconds */
 
 	time_per_pkt=(end_time-start_time)/total_pkts;
 	target_t=start_time;
@@ -112,5 +112,5 @@ main(int argc, char *argv[])
     send_func();
     recv_stop=1;
 	pthread_join(recv_thread, NULL);
-	printf("pktsize:%d send:%d recved:%d  loss:%d Bit rate:%d Mbps\n",pkt_size,send_pkts,recv_pkts,(send_pkts-recv_pkts),(recv_pkts*pkt_size*8)/1000000);
+	printf("NEW pktsize:%d send:%d recved:%d  loss:%d SBit rate:%d Mbps Rbir rate:%d\n",pkt_size,send_pkts,recv_pkts,(send_pkts-recv_pkts),(send_pkts*pkt_size*8)/(duration*1000000),(recv_pkts*pkt_size*8)/(duration*1000000));
 } 

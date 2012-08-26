@@ -11,6 +11,7 @@
 #include "virtio_net.h"
 
 #define WITH_BOTTOM_HALF 1
+//#define SEND_BH 1
 typedef unsigned int u32;
 
 u16 ip_sum_calc(u16 len_ip_header, unsigned char buff[]) {
@@ -97,44 +98,82 @@ static int process_pkt(unsigned char *c, unsigned long len) {
 	}
 }
 int netbh_started=0;
-int max_cont_recv=0;
+static int max_cont_recv=0;
+static int stat_recv = 0;
+static int went_sleep=0;
+static int stat_sleep=0;
+static int recv_count=0;
+int udp_mode=1;
+int netbh_state=0;
+extern int virtio_send_errors;
+void print_udpserver(){
+	ut_printf("New recv:%d max_recv:%d wsleep:%d sleep:%d total recv:%d snd_err:%d\n",stat_recv,max_cont_recv,went_sleep,stat_sleep,recv_count,virtio_send_errors);
+}
+#define MAX_QUEUE_SIZE 200
+static struct {
+	  unsigned long addr;
+	  int len;}sendq[MAX_QUEUE_SIZE];
 
+static int put_index=0;
+static int recv_index=0;
+void send_net_BH() {
+	int i;
+
+	for (i = 0; i < MAX_QUEUE_SIZE; i++) {
+		sendq[i].addr = 0;
+	}
+	while (1) {
+		if (sendq[recv_index].addr == 0)
+			continue;
+		netfront_xmit(net_dev, sendq[recv_index].addr, sendq[recv_index].len);
+		sendq[recv_index].addr=0;
+		recv_index++;
+		if (recv_index >= MAX_QUEUE_SIZE)
+			recv_index = 0;
+	}
+}
 void net_BH() {
 	unsigned long addr, *len;
-	int ret;
-	int recv = 0;
+	int ret,i;
+	int consumed_pkts=0;
+
 	int from_sleep = 1;
 	netbh_started = 1;
 
 	while (1) {
 		//sti();
 		len = 0;
+		netbh_state=100;
 		addr = virtio_removeFromQueue(net_dev->vq[0], &len);
 		if (addr == 0) {
-			if (recv > 0) {
+			sti();
+			netbh_state=200;
+			if (stat_recv > 0) {
 				//virtqueue_kick(net_dev->vq[0]);
-				recv = 0;
+				went_sleep++;
 			}
-			recv--;
+			//recv--;
+			stat_recv=0;
 			virtqueue_enable_cb(net_dev->vq[0]); // enable interrupts as the queue is empty, so interrupt will be recieved for the first packet
 
 #if 1
-			if (recv < -3) {
-				//if (from_sleep==1)
-				//   sc_wait(&nbh_waitq, 100);
-				//else
-				sc_wait(&nbh_waitq, 10000);
+			if (1) {
+				netbh_state=202;
+				stat_sleep++;
+				sc_wait(&nbh_waitq, 2);
+				netbh_state=203;
 			}
 #endif
 			from_sleep = 1;
 			continue;
 		} else {
-			if (recv <= 0)
-				recv = 0;
+			cli();
+			if (stat_recv <= 0)
+				stat_recv = 0;
 		}
-		recv++;
-		if (recv > max_cont_recv)
-			max_cont_recv = recv;
+		stat_recv++;
+		if (stat_recv > max_cont_recv)
+			max_cont_recv = stat_recv;
 		if (from_sleep == 1) {
 			//	virtqueue_disable_cb(net_dev->vq[0]);
 			from_sleep = 0;
@@ -143,13 +182,50 @@ void net_BH() {
 		//DEBUG("%d: new NEW ISR:%d :%x addd:%x len:%x c:%x:%x:%x:%x  c+10:%x:%x:%x:%x\n", i, index, isr, addr, len, c[0], c[1], c[2], c[3], c[10], c[11], c[12], c[13]);
 
 		if (process_pkt(addr, len) == 1) {
-			netfront_xmit(net_dev, addr, len);
+			recv_count++;
+			netbh_state=301;
+			if (udp_mode == 1){
+#if SEND_BH
+				if (sendq[put_index].addr == 0) {
+					sendq[put_index].len = len;
+					sendq[put_index].addr = addr;
+					put_index++;
+					if (put_index >= MAX_QUEUE_SIZE)
+						put_index = 0;
+				} else {
+					mm_putFreePages(addr, 0);
+				}
+#else
+				netfront_xmit(net_dev, addr, len);
+#endif
+			} else {
+				mm_putFreePages(addr, 0);
+			}
+			netbh_state=320;
 		} else {
 			mm_putFreePages(addr, 0);
 		}
+
+#if 1
+		netbh_state = 403;
 		addBufToQueue(net_dev->vq[0], 0, 4096);
-		//	if ((recv % 10) ==0)
+		if ((recv_count%10) ==0)
+		{
+			netbh_state = 404;
 		virtqueue_kick(net_dev->vq[0]);
+		}
+#else
+		consumed_pkts++;
+		if (consumed_pkts > 150) {
+			netbh_state = 402;
+			for (i = 0; i < 50; i++) {
+				addBufToQueue(net_dev->vq[0], 0, 4096);
+				consumed_pkts--;
+			}
+			//	if ((recv % 10) ==0)
+			virtqueue_kick(net_dev->vq[0]);
+		}
+#endif
 	}
 }
 
@@ -165,6 +241,9 @@ void init_TestUdpStack() {
 
 	sc_register_waitqueue(&nbh_waitq);
 	ret=sc_createKernelThread(net_BH,0,"net_rx");
+#ifdef SEND_BH
+	ret=sc_createKernelThread(send_net_BH,0,"net_send_bh");
+#endif
 #endif
 
 
