@@ -1,3 +1,13 @@
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ *   x86_64/isr.c
+ *   Author: Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
+ *
+ */
 #include "task.h"
 #include "common.h"
 #include "isr.h"
@@ -168,11 +178,32 @@ void ar_faultHandler(void *p, unsigned int  int_no)
 }
 extern void do_softirq();
 // This gets called from our ASM interrupt handler stub.
+#define I8259_PIC_MASTER    0x20
+#define I8259_PIC_SLAVE     0xA0
+#define PIC_EOI             0x20
+#if 0
+static void i8259a_mask_irq(unsigned int irq)
+{
+  uint8_t mask;
+
+  if(irq < 0x08) {
+    mask = inb(I8259_PIC_MASTER + 1);
+    mask |= (1 << irq);
+    outb(I8259_PIC_MASTER + 1, mask);
+  }
+  else { /*located in PIC1*/
+    mask = inb(I8259_PIC_SLAVE + 1);
+    mask |= (1 << (irq-0x08));
+    outb(I8259_PIC_SLAVE + 1, mask);
+  }
+}
+#endif
 void ar_irqHandler(void *p,unsigned int int_no)
 {
 	//if (g_error_i ==0) g_after_i=g_before_i;
 	// Send an EOI (end of interrupt) signal to the PICs.
 	// If this interrupt involved the slave. 
+#if 1
 	if (int_no >= 40)
 	{
 		// Send reset signal to slave.
@@ -180,7 +211,7 @@ void ar_irqHandler(void *p,unsigned int int_no)
 	}
 	// Send reset signal to master. (As well as slave, if necessary).
 	outb(0x20, 0x20);
-
+#endif
 	if (g_interrupt_handlers[int_no].action != 0)
 	{
 		isr_t handler = g_interrupt_handlers[int_no].action;
@@ -204,8 +235,11 @@ void ar_irqHandler(void *p,unsigned int int_no)
 		if (int_no != 32)	 {
 			//ut_printf("UNhandled interrupt ..: %d \n",int_no);
 		}
+#ifdef SMP
+	local_apic_send_eoi();
+#endif
 	}
-
+	//do_softirq();
 }
 
 

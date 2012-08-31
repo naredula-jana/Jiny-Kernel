@@ -1,3 +1,13 @@
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ *   x86_64/pci.c
+ *   Author: Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
+ *
+ */
 #define DEBUG_ENABLE 1
 #include "pci.h"
 void init_pci();
@@ -191,11 +201,54 @@ int print_pci(char *arg1 , char *arg2){
 	}
 	return 1;
 }
+/***********************
+ * TODO : to implement MSI need to read the capabilities
+ */
+#if 0
+static int read_capabilities(pci_addr_t *addr,int *cap_id, int *cap_flags)
+{
+  int pos, ret;
+
+  pos = _get_cap_list_start(dev);
+
+  if(1) {
+   /* if(cap_num >= PCI_MAX_CAP) {
+      break;
+    }*/
+
+    ret = pci_read(addr, pos, 1, &pos);
+
+    if(pos < 0x40) {
+      break;
+    }
+
+    ret += pci_read(addr, pos + PCI_CAP_ID_OFFSET, 1, cap_id);
+    if(cap_id == 0xff) {
+      break;
+    }
+
+    ret += pci_read(addr, pos + PCI_CAP_FLAGS_OFFSET, 2,
+                    cap_flags);
+
+    if(ret != 0) {
+      ret = -1;
+      break;
+    }
+
+   // pos += PCI_CAP_NEXT_OFFSET;
+   // cap_num++;
+    return 1;
+  }
+ // dev->num_caps = cap_num;
+  return 0;
+}
+#endif
+
 static int read_dev_conf(uint8_t bus , uint8_t dev,uint8_t func)
 {
 	pci_dev_header_t header;
 	pci_addr_t addr;
-	//pci_bar_t bars[5];
+
 	int ret;
 	//int consumed = 0; //number of read BARs
 	//int produced = 0; //number of filled resources;
@@ -215,6 +268,7 @@ static int read_dev_conf(uint8_t bus , uint8_t dev,uint8_t func)
 	if(ret != 0) {
 		return -1;
 	}
+
 	if (header.vendor_id != 0xffff)
 	{
 		DEBUG(" PCI bus:%d devic:%d func:%d  vendor:%x devices:%x int:%x:%x baser:%i \n",bus,dev,func,header.vendor_id,header.device_id,header.interrupt_line,header.interrupt_pin,header.base_address_registers[0]);
@@ -232,6 +286,7 @@ static int read_dev_conf(uint8_t bus , uint8_t dev,uint8_t func)
 				break;
 			}
 		}
+		//read_capabilities(&addr,&msi)
 		if (header.vendor_id == 0x1af4 && header.device_id==0x1110){
 			init_host_shm(&header,&pci_bars[count_start],3);
 		}

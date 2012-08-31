@@ -90,14 +90,18 @@ int stop_queueing_bh=0;
 
 
 extern queue_t nbh_waitq;
-extern int netbh_started;
+extern int netbh_started,netbh_flag;
 void virtio_net_interrupt(registers_t regs) {
 	/* reset the irq by resetting the status  */
 	unsigned char isr;
 	//isr = inb(net_dev->pci_ioaddr + VIRTIO_PCI_ISR);  this is called from generic handler
 	if (netbh_started == 1){
-	    sc_wakeUp(&nbh_waitq);
+
 	    virtqueue_disable_cb(net_dev->vq[0]);
+	    virtqueue_disable_cb(net_dev->vq[1]); // TODO: testing to desiable pending interrupt
+
+	    sc_wakeUp(&nbh_waitq);
+	    netbh_flag=1;
 	}
 }
 

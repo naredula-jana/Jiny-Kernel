@@ -88,7 +88,7 @@ send_func(){
 main(int argc, char *argv[]) 
 { 
 	pthread_t recv_thread;  /* thread variables */
-
+unsigned long sbps,rbps;
 	sfd=socket(AF_INET,SOCK_DGRAM,0); 
 	bzero(&server,sizeof(server)); 
 	server.sin_family=AF_INET; 
@@ -112,5 +112,7 @@ main(int argc, char *argv[])
     send_func();
     recv_stop=1;
 	pthread_join(recv_thread, NULL);
-	printf("NEW pktsize:%d send:%d recved:%d  loss:%d SBit rate:%d Mbps Rbir rate:%d\n",pkt_size,send_pkts,recv_pkts,(send_pkts-recv_pkts),(send_pkts*pkt_size*8)/(duration*1000000),(recv_pkts*pkt_size*8)/(duration*1000000));
+	sbps=(send_pkts*pkt_size*8)/(duration*1000000);
+	rbps=(recv_pkts*pkt_size*8)/(duration*1000000);
+	printf("NEW pktsize:%d send:%d recved:%d  loss:%d SBit rate:%d Mbps Rbir rate:%d\n",pkt_size,send_pkts,recv_pkts,(send_pkts-recv_pkts),sbps,rbps);
 } 

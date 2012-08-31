@@ -3,7 +3,7 @@
 #include "task.h"
 char codes[128] = {
         /*0    1    2    3    4    5    6    7    8    9    A    B    C    D    E    F*/  
-  /*0*/   0,  27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=','\b', '\t',
+  /*0*/   0,  27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '_', '=','\b', '\t',
   /*1*/ 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']',  10,   0, 'a', 's',
   /*2*/ 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';','\'', '`',   0, '\\', 'z', 'x', 'c', 'v',
   /*3*/ 'b', 'n', 'm', ',', '.', '/',   0,   0,   0, ' ',   0,   0,   0,   0,   0,   0,
@@ -24,7 +24,7 @@ char s_codes[128] = {
   /*6*/   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
   /*7*/   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 };
-
+static unsigned char lastkey=0;
 static int en_scan_to_ascii(unsigned char *buf, uint8_t scancode, uint8_t comb_flags, uint8_t state_flags)
 {
 
@@ -43,11 +43,12 @@ static int en_scan_to_ascii(unsigned char *buf, uint8_t scancode, uint8_t comb_f
 		*buf=1;
 		return 1;
 	}
-	if (scancode ==80 ) /* lowArrow */
+	if (scancode==80 ) /* lowArrow */
 	{
 		*buf=2;
 		return 1;
 	}
+
 	if(codes[scancode]) {
 		*buf = (comb_flags & SHIFT_MASK) ? s_codes[scancode] : codes[scancode];
 		/*  if(state_flags & CAPS_MASK && isalpha(*buf)) {
@@ -69,6 +70,7 @@ static void dr_keyBoardBH() /* bottom half */
 		sc_wakeUp(&kb_waitq);
 }
 unsigned char dr_kbGetchar() {
+
 	unsigned char c;
 
 	while (current_pos == 0) {
@@ -82,7 +84,7 @@ unsigned char dr_kbGetchar() {
 			current_pos = 0;
 			read_pos = 0;
 		}
-		//printf(" got key :%x:\n",c);
+
 		return c;
 	}
 

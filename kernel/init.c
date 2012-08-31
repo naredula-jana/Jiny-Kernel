@@ -62,8 +62,10 @@ int init_kernel(unsigned long end_addr)
 	ut_printf(" smp force result:%d \n",ret);
 #endif
 
+	cli();  /* disable interrupt incase if it is enabled while apic is started */
 	ut_printf("Initalising: PCI.. \n");
 	init_pci();
+	sti();
 
 #ifdef NETWORKING
 //	init_LwipTcpIpStack();
@@ -73,6 +75,7 @@ int init_kernel(unsigned long end_addr)
 	ut_printf("Initalising: VFS.. \n");
 	init_vfs();
 //	ar_registerInterrupt(128,syscall_handler);
+
 	ut_printf("Initialization completed \n");
 
 	return 1 ;

@@ -20,6 +20,8 @@
  *
  * eza/amd64/apic.c: implements local APIC support driver.
  *
+ * Modified by Naredula Janardhana Reddy while porting to Jiny
+ *
  */
 
 #include "apic.h"
@@ -381,11 +383,11 @@ static void __local_apic_timer_calibrate(uint32_t x)
   local_apic->timer_dcr.reg=timer_dcr.reg;
 }
 static uint32_t delay_loop;
-#if 1
+int g_conf_clock_scale=1;
+
 void local_apic_timer_calibrate(uint32_t hz)
 {
   uint32_t x1,x2;
-  int debug_slow=1; /* TODO: this is only for debug purpose, normally it should be 1 */
   local_apic_timer_disable();
 
   kprintf("Calibrating lapic delay_loop ...");
@@ -402,7 +404,7 @@ void local_apic_timer_calibrate(uint32_t hz)
 
   x1=local_apic->timer_ccr.count; /*get current counter*/
   //atom_usleep(1000000/hz); /*delay*/
-  udelay(debug_slow*4000000/hz);
+  udelay(g_conf_clock_scale*4000000/hz);
   x2=local_apic->timer_ccr.count; /*again get current counter to see difference*/
 
   delay_loop=x1-x2;
@@ -427,7 +429,7 @@ void apic_timer_hack(void)
 {
   local_apic->timer_icr.count=delay_loop;
 }
-#endif
+
 #define I8254_BASE  0x40
 void i8254_suspend(void)
 {
@@ -474,6 +476,7 @@ void local_apic_timer_ap_init(uint8_t vector)
   lvt_timer.mask=0x0;
   local_apic->lvt_timer.reg=lvt_timer.reg;
 }
+extern unsigned char imps_cpu_apic_map[];
 int apic_send_ipi_vector(int cpu, uint8_t vector)
 {
     int ret = 0;
@@ -491,7 +494,7 @@ int apic_send_ipi_vector(int cpu, uint8_t vector)
   icr1.trigger=TRIG_EDGE; /* trigger mode -> edge */
   icr1.shorthand=SHORTHAND_NIL;
   icr1.vector=vector;
-    icr2.dest = local_apic_ids[cpu];
+    icr2.dest = imps_cpu_apic_map[cpu];
     local_apic->icr2.reg=icr2.reg;
   local_apic->icr1.reg=icr1.reg;
 
@@ -562,7 +565,7 @@ int local_bsp_apic_init(void)
 {
 	__map_apic_page();
 
-#if 1
+#if 0
 	uint32_t *p;
 	p=imps_lapic_addr;
 	p=p+0x320;

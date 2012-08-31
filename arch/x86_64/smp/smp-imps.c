@@ -209,7 +209,9 @@ void smp_main() {
 	idleTask_func();
 	return;
 }
-
+int test_ipi_intr(int cpu){  /* TODO test func */
+	send_ipi(1,LAPIC_ICR_TM_LEVEL | LAPIC_ICR_LEVELASSERT|5);
+}
 static int
 boot_cpu(imps_processor *proc)
 {

@@ -10,6 +10,30 @@
   ((p) & 0xFC)
 
 
+/* Capability lists */
+
+#define PCI_CAP_LIST_ID     0   /* Capability ID */
+#define  PCI_CAP_ID_PM      0x01    /* Power Management */
+#define  PCI_CAP_ID_AGP     0x02    /* Accelerated Graphics Port */
+#define  PCI_CAP_ID_VPD     0x03    /* Vital Product Data */
+#define  PCI_CAP_ID_SLOTID  0x04    /* Slot Identification */
+#define  PCI_CAP_ID_MSI     0x05    /* Message Signalled Interrupts */
+#define  PCI_CAP_ID_CHSWP   0x06    /* CompactPCI HotSwap */
+#define  PCI_CAP_ID_PCIX    0x07    /* PCI-X */
+#define  PCI_CAP_ID_HT      0x08    /* HyperTransport */
+#define  PCI_CAP_ID_VNDR    0x09    /* Vendor specific */
+#define  PCI_CAP_ID_DBG     0x0A    /* Debug port */
+#define  PCI_CAP_ID_CCRC    0x0B    /* CompactPCI Central Resource Control */
+#define  PCI_CAP_ID_SHPC    0x0C    /* PCI Standard Hot-Plug Controller */
+#define  PCI_CAP_ID_SSVID   0x0D    /* Bridge subsystem vendor/device ID */
+#define  PCI_CAP_ID_AGP3    0x0E    /* AGP Target PCI-PCI bridge */
+#define  PCI_CAP_ID_EXP     0x10    /* PCI Express */
+#define  PCI_CAP_ID_MSIX    0x11    /* MSI-X */
+#define PCI_CAP_LIST_NEXT   1   /* Next capability in the list */
+#define PCI_CAP_FLAGS       2   /* Capability defined flags (16 bits) */
+#define PCI_CAP_SIZEOF      4
+
+
 #define PCI_BAR_0       0x10
 typedef struct __pci_dev_header_t {
 

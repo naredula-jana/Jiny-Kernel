@@ -1,3 +1,13 @@
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ *   include/task.h
+ *   Author: Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
+ *
+ */
 #ifndef TASK_H
 #define TASK_H
 
@@ -72,6 +82,7 @@ struct task_struct {
 	unsigned long magic_numbers[4]; /* already stack is default fill with magic numbers */
 }; 
 
+#define IPI_INTERRUPT 200
 extern int getcpuid();
 extern struct task_struct *g_current_tasks[];
 #if 0

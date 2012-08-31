@@ -210,6 +210,15 @@ int sc_wakeUp(queue_t *waitqueue ) {
 		}
 	}
 	spin_unlock_irqrestore(&sched_lock, flags);
+	if (ret>0){/* wakeup any other idle cpus to serve the runqueue  */
+		int i;
+		for (i=0; i<getmaxcpus(); i++){
+			if (g_current_task->cpu != i && g_current_tasks[i]==g_idle_tasks[i]){
+				apic_send_ipi_vector(i,IPI_INTERRUPT);
+				return ret;
+			}
+		}
+	}
 
 	return ret;
 }
@@ -679,7 +688,9 @@ __POP(rdi) __POP(rsi)
 	} while (0)                      
 #else
 #endif
+void ipi_interrupt(){ /* Do nothing, this is just wake up the core when it is executing HLT instruction  */
 
+}
 void init_tasking() {
 	int i;
 	unsigned long task_addr;
@@ -724,6 +735,7 @@ void init_tasking() {
 	//while(1);
 	ar_archSetUserFS(0);
 	init_timer();
+	ar_registerInterrupt(IPI_INTERRUPT, &ipi_interrupt, "IPI");
 }
 static void delete_task(struct task_struct *task) {
 	if (task->wait_queue.next != 0) {
@@ -792,9 +804,11 @@ static unsigned long  _schedule(unsigned long flags) {
 
 //	g_current_task = next;
 	g_current_tasks[cpuid] = next;
+#ifdef SMP
 	if (g_current_tasks[0]==g_current_tasks[1]){
 		while(1);
 	}
+#endif
 
 	/* handle the  dead task */
 	if (g_task_dead!=0) {
@@ -837,7 +851,7 @@ void do_softirq() {
 	}
 }
 
- void timer_callback(registers_t regs) {
+void timer_callback(registers_t regs) {
 	int i;
 	unsigned long flags;
 
@@ -893,6 +907,5 @@ void init_timer() {
 	// Send the frequency divisor.
 	outb(0x40, l);
 	outb(0x40, h);
-
 }
 

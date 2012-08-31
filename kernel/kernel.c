@@ -84,14 +84,6 @@ void cmain() {  /* This is the first c function to be executed */
 	idleTask_func();
 	return;
 }
-#if 0
-int test123=1;
-int te1=0;
-int te2=0;
-int cr=0;
-int fails=0;
-static spinlock_t test_lock = SPIN_LOCK_UNLOCKED;
-#endif
 
 void idleTask_func() {
 	while (1) {
@@ -100,51 +92,5 @@ void idleTask_func() {
 		}
 		__asm__("hlt");
 		sc_schedule();
-
-#if 0
-	//	cli();
-		unsigned long intr_flags;
-		int i;
-		ar_flushTlbGlobal();
-
-		spin_lock_irqsave(&test_lock, intr_flags);
-	//	arch_spinlock_lock(&test_lock);
-		for (i = 0; i < 500000; i++)
-			cr++;
-		if (cr>500002){
-             fails++;
-		}
-
-		if (1) {
-
-			if (getcpuid() == 0) {
-				test123 = 0;
-				te1++;
-			} else {
-				test123 = 1;
-				te2++;
-			}
-			for (i = 0; i < 10000; i++) {
-				if (getcpuid() == 0) {
-					if (test123 == 1) {
-						ut_printf("SPIN LOCK not working-boot\n");
-						while (1)
-							;
-					}
-				} else {
-
-					if (test123 == 0) {
-						ut_printf("SPIN LOCK not working\n");
-						while (1)
-							;
-					}
-				}
-			}
-
-		}
-		cr = 0;
-		spin_unlock_irqrestore(&test_lock, intr_flags);
-	//	arch_spinlock_unlock(&test_lock);
-#endif
 	}
 }

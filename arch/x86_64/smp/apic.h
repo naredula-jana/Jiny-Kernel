@@ -25,10 +25,7 @@
 #ifndef __ARCH_APIC_H__
 #define __ARCH_APIC_H__
 
-#if 0
-#include <config.h>
-#include <eza/arch/types.h>
-#endif
+
 
 typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;

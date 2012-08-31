@@ -49,10 +49,50 @@ extern int p9_cmd(char *arg1,char *arg2);
 extern int ut_logFlush(char *arg1, char *arg2);
 static int sh_virtio(char *arg1,char *arg2);
 extern int print_pci(char *arg1 , char *arg2);
+int conf_set(char *arg1 , char *arg2);
 int scan_pagecache(char *arg1 , char *arg2);
+typedef struct {
+	char *conf_name;
+	int  *conf_variable;
+	char *description;
+} confs_t;
+extern int g_conf_clock_scale,g_conf_netbh_poll,g_conf_udp_respond;
+confs_t confs_list[]=
+{
+		{"clock_scale",&g_conf_clock_scale,"default=1"},
+		{"netbh_poll",&g_conf_netbh_poll,"default=0, to poll=1"},
+		{"udp_respond",&g_conf_udp_respond,"default=0, to respond=1"},
+		{0,0,0} /* DO not Remove this entry */
+};
+int conf_set(char *arg1, char *arg2) {
+	int i;
+	if (arg1 == 0 || arg2 == 0) {
+		for (i = 0; confs_list[i].conf_name != 0; i++) {
+			if (confs_list[i].conf_variable != 0)
+				ut_printf("%s=%d {%s}\n", confs_list[i].conf_name,
+						*confs_list[i].conf_variable,
+						confs_list[i].description);
+		}
+	} else {
+		int val=ut_atoi(arg2);
+		for (i = 0; confs_list[i].conf_name != 0; i++) {
+					if (confs_list[i].conf_variable == 0)  continue;
+					if (ut_strcmp(arg1,confs_list[i].conf_name)==0){
+						*confs_list[i].conf_variable=val;
+						ut_printf("Successfully updated the config variable\n");
+						return;
+					}
+		}
+		ut_printf("ERROR: config variable not updated\n");
+	}
+
+
+	return;
+}
 commands_t cmd_list[]=
 {
 	{"help      ","Print Help Menu","help",print_help},
+	{"set  <var> <value>","set config variables","set",conf_set},
 	{"c <prog>  ","Create test thread","c",sh_create},
 	{"e   ","exit thread","e",sh_exit},
 	{"d   ","toggle debug","d",sh_debug},
