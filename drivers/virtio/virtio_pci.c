@@ -27,7 +27,7 @@ void virtio_memb_interrupt(registers_t regs);
 typedef struct virtio_pciDevices {
 	const char *name;
 	int pciSubId;
-	int (*init)(pci_dev_header_t *pci_hdr, virtio_dev_t *dev);
+	int (*init)(pci_dev_header_t *pci_hdr, virtio_dev_t *dev,uint32_t msi_vector);
 	void (*isr)(registers_t regs);
 };
 static struct virtio_pciDevices pciDevices[] = {
@@ -36,7 +36,7 @@ static struct virtio_pciDevices pciDevices[] = {
 		{ .name = "virtio-memballon", .pciSubId = 5, .init = init_virtio_memballoon_pci, .isr = virtio_memb_interrupt, },
 		{ .name = 0, .pciSubId = 0, .init =0, .isr = 0, }};
 
-int init_virtio_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len) {
+int init_virtio_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len,uint32_t msi_vector) {
 	uint32_t ret, i;
 	unsigned long features;
 
@@ -64,7 +64,7 @@ int init_virtio_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len) {
 
 	for (i = 0; pciDevices[i].pciSubId!=0; i++) {
 		if (pciDevices[i].pciSubId == pci_hdr->subsys_id) {
-			pciDevices[i].init(pci_hdr, &virtio_devices[virtio_dev_count]);
+			pciDevices[i].init(pci_hdr, &virtio_devices[virtio_dev_count],msi_vector);
 			virtio_devices[virtio_dev_count].type = pci_hdr->subsys_id;
             bars[0].name=bars[1].name=pciDevices[i].name;
 			if (pci_hdr->interrupt_line > 0) {
@@ -135,7 +135,7 @@ static void callback(struct virtqueue *vq) {
 int virtio_createQueue(uint16_t index, virtio_dev_t *dev, int qType) {
 	int size;
 	uint16_t num;
-	struct virtio_pci_vq_info *info;
+	//struct virtio_pci_vq_info *info;
 	unsigned long queue;
 
 	outw(dev->pci_ioaddr + VIRTIO_PCI_QUEUE_SEL, index);
@@ -155,11 +155,12 @@ int virtio_createQueue(uint16_t index, virtio_dev_t *dev, int qType) {
 	DEBUG("Creating PAGES order: %d size:%d  \n",get_order(size),size);
 	//vring_size(num);
 	queue = mm_getFreePages(MEM_CLEAR, get_order(size));
-	if (info == 0)
-		return 0;
+	/*if (info == 0)
+		return 0;*/
 
 	/* activate the queue */
 	outl(dev->pci_ioaddr + VIRTIO_PCI_QUEUE_PFN, __pa(queue) >> VIRTIO_PCI_QUEUE_ADDR_SHIFT);
+
 
 	/* create the vring */
 	dev->vq[index] = vring_new_virtqueue(num, VIRTIO_PCI_VRING_ALIGN, dev, queue, &notify, &callback, "VIRTQUEUE");

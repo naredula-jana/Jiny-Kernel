@@ -138,16 +138,9 @@ irq_entry_point:
 2:		
         popq %rax
 
-
-        /*mov $0x10 ,%eax
-        cmp $0x10,%eax
-3:
-        je 3b*/
-
-
 		  /* Make sure IF is set after returning from interrupt context. */
         orq $(1 << 9),HW_INTERRUPT_CTX_RFLAGS_OFFT(%rsp) 
-	sti
+	    sti
 /*	callq do_softirq   this call desctorys EAX  */
         iretq    /* ; pops 5 things at once: CS, EIP, EFLAGS, SS, and ESP */
 

@@ -211,7 +211,11 @@ void ar_irqHandler(void *p,unsigned int int_no)
 	}
 	// Send reset signal to master. (As well as slave, if necessary).
 	outb(0x20, 0x20);
+#else
+	int isr_status= read_apic_isr(int_no);
 #endif
+	//int isr_status= read_apic_isr(int_no);
+
 	if (g_interrupt_handlers[int_no].action != 0)
 	{
 		isr_t handler = g_interrupt_handlers[int_no].action;
@@ -226,6 +230,8 @@ void ar_irqHandler(void *p,unsigned int int_no)
 			handler();
 		}
 		g_interrupt_handlers[int_no].stat[getcpuid()].num_irqs++;
+
+
 #ifdef SMP
 	local_apic_send_eoi();
 #endif

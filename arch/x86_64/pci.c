@@ -10,52 +10,11 @@
  */
 #define DEBUG_ENABLE 1
 #include "pci.h"
+#include "common.h"
+#include "mm.h"
+#include "task.h"
 void init_pci();
-#if 0
-uint8_t inline inb(uint16_t port)
-{ 
-  uint8_t vl; 
-    
-  __asm__ volatile ("inb %1, %0\n" : "=a" (vl) : "d" (port));
-    
-  return vl;
-} 
-/* put byte value to io port */
-void inline outb(uint16_t port,uint8_t vl)
-{
-  __asm__ volatile ("outb %0, %1\n" : : "a" (vl), "Nd" (port));
-} 
-/* read 16 bit value from io port */
-uint16_t inline inw(uint16_t port)
-{ 
-  uint16_t vl;
-  
-  __asm__ volatile ("inw %1, %0\n" : "=a" (vl) : "d" (port));
-    
-  return vl;
-} 
-    
-/* put 16 bit value to io port */
-void inline outw(uint16_t port,uint16_t vl)
-{   
-  __asm__ volatile ("outw %0, %1\n" : : "a" (vl), "Nd" (port));
-} 
-    
-/* read 32 bit value from io port */
-uint32_t inline inl(uint16_t port)
-{ 
-  uint32_t vl;
 
-  __asm__ volatile ("inl %1, %0\n" : "=a" (vl) : "d" (port));
-
-  return vl;
-} 
-/* put 32 bit value to io port */
-void inline outl(uint16_t port,uint32_t vl)
-{
-	__asm__ volatile ("outl %0, %1\n" : : "a" (vl), "Nd" (port));
-}
-#endif
 
 static int pci_write(pci_addr_t *d, uint16_t pos, uint8_t len, void *buf)
 {
@@ -204,43 +163,142 @@ int print_pci(char *arg1 , char *arg2){
 /***********************
  * TODO : to implement MSI need to read the capabilities
  */
+#if 1
+struct msix_table {
+	uint32_t lower_addr;
+	uint32_t upper_add;
+	uint32_t data;
+	uint32_t control;
+};
+struct pcicfg_msix {
+    uint16_t	msix_ctrl;	/* Message Control */
+    uint16_t	msix_msgnum;	/* Number of messages */
+    uint8_t	msix_location;	/* Offset of MSI-X capability registers. */
+    uint8_t	msix_table_bar;	/* BAR containing vector table. */
+    uint8_t	msix_pba_bar;	/* BAR containing PBA. */
+    uint32_t	msix_table_offset;
+    uint32_t	msix_pba_offset;
+    int		msix_alloc;	/* Number of allocated vectors. */
+    int		msix_table_len;	/* Length of virtual table. */
+    unsigned long msix_table_res; /* mmio address */
+    struct msix_table *msix_table;
+
 #if 0
-static int read_capabilities(pci_addr_t *addr,int *cap_id, int *cap_flags)
+    struct msix_table_entry *msix_table; /* Virtual table. */
+    struct msix_vector *msix_vectors;	/* Array of allocated vectors. */
+    struct resource *msix_table_res;	/* Resource containing vector table. */
+    struct resource *msix_pba_res;	/* Resource containing PBA. */
+#endif
+};
+#define	PCIR_MSIX_CTRL		0x2
+#define	PCIR_MSIX_TABLE		0x4
+#define	PCIR_MSIX_PBA		0x8
+
+#define	PCIM_MSIXCTRL_MSIX_ENABLE	0x8000
+#define	PCIM_MSIXCTRL_FUNCTION_MASK	0x4000
+#define	PCIM_MSIXCTRL_TABLE_SIZE	0x07FF
+#define	PCIM_MSIX_BIR_MASK		0x7
+
+#define	PCIR_BARS	0x10
+#define	PCIR_BAR(x)		(PCIR_BARS + (x) * 4)
+
+
+#define	FIRST_MSI_INT	256
+#define	NUM_MSI_INTS	512
+
+#define MSI_VECTORS_START 60
+#define LAPIC_BASE    0xfee00000
+void
+pci_msix_update_interrupts(struct pcicfg_msix *msix, int mask)
 {
-  int pos, ret;
+	uint32_t offset;
+	unsigned long address;
+	uint32_t data;
 
-  pos = _get_cap_list_start(dev);
+	int i;
+	if (mask == 1) {
+		for (i = 0; i < msix->msix_msgnum; i++) {
+			if (!(msix->msix_table[i].control & 0x1))
+				msix->msix_table[i].control = msix->msix_table[i].control
+						| 0x1;
+		}
+		return;
+	}
+#if 0
+	for (i = 0; i < msix->msix_msgnum; i++) {
+		address = LAPIC_BASE;
+		msix->msix_table[i].upper_add = address >> 32;
+		msix->msix_table[i].lower_addr = address & 0xffffffff;
+		msix->msix_table[i].data = MSI_VECTORS_START + i;
+		msix->msix_table[i].control = 0;
+	}
+	return;
+#endif
+	uint32_t *msix_table;
+	msix_table =  __va(msix->msix_table_res);
+    for (i=0; i<msix->msix_msgnum; i++){
+    	//msix_table =msix_table + (i)*16;
 
-  if(1) {
-   /* if(cap_num >= PCI_MAX_CAP) {
-      break;
-    }*/
-
-    ret = pci_read(addr, pos, 1, &pos);
-
-    if(pos < 0x40) {
-      break;
+    	address = LAPIC_BASE;
+    	data=MSI_VECTORS_START+i;
+    	*msix_table = address & 0xffffffff;
+    	msix_table++;
+    	*msix_table = address >> 32;
+    	msix_table++;
+    	data=MSI_VECTORS_START+i;
+    //	*msix_table = 0x4000|data; //message Data
+    	*msix_table = data; //message Data
+     	msix_table++;
+    	*msix_table = 0; // vector control
+     	msix_table++;
     }
+#if 0
+	offset = msix->msix_table_offset + index * 16;
+	bus_write_4(msix->msix_table_res, offset, address & 0xffffffff);
+	bus_write_4(msix->msix_table_res, offset + 4, address >> 32);
+	bus_write_4(msix->msix_table_res, offset + 8, data);
 
-    ret += pci_read(addr, pos + PCI_CAP_ID_OFFSET, 1, cap_id);
-    if(cap_id == 0xff) {
-      break;
-    }
+	/* Enable MSI -> HT mapping. */
+	pci_ht_map_msi(dev, address);
+#endif
+}
+struct pcicfg_msix msix;
+static int read_msi(pci_addr_t *addr,uint8_t pos,int bar_start) {
+	uint32_t  ret;
+	uint16_t buf;
+	uint32_t val;
+	uint32_t bar_offset;
+	int i;
 
-    ret += pci_read(addr, pos + PCI_CAP_FLAGS_OFFSET, 2,
-                    cap_flags);
+	ret = pci_read(addr, pos, 2, &buf);
+	ret = pci_read(addr, pos+PCIR_MSIX_CTRL, 2, &msix.msix_ctrl);
 
-    if(ret != 0) {
-      ret = -1;
-      break;
-    }
+	msix.msix_msgnum = (msix.msix_ctrl & PCIM_MSIXCTRL_TABLE_SIZE) + 1;
 
-   // pos += PCI_CAP_NEXT_OFFSET;
-   // cap_num++;
-    return 1;
-  }
- // dev->num_caps = cap_num;
-  return 0;
+	ret = pci_read(addr, pos+PCIR_MSIX_TABLE, 4, &bar_offset);
+	msix.msix_table_bar = PCIR_BAR(bar_offset & PCIM_MSIX_BIR_MASK);
+	msix.msix_table_res = pci_bars[bar_start+bar_offset].addr;
+	msix.msix_table = __va(msix.msix_table_res);
+	if ((ret=vm_mmap(0,__va(msix.msix_table_res) ,0x1000,PROT_WRITE,MAP_FIXED,msix.msix_table_res)) == 0) /* this is for SMP */
+	{
+		ut_printf("ERROR : PCI mmap fails for \n");
+		return 0;
+	}
+	ret = pci_read(addr, pos+PCIR_MSIX_PBA, 4, &val);
+	msix.msix_pba_bar = PCIR_BAR(val & PCIM_MSIX_BIR_MASK);
+
+	pci_msix_update_interrupts(&msix,1); /* first mask interrupt */
+
+	ut_printf("msixctrl:%x \n",msix.msix_ctrl);
+	msix.msix_ctrl = msix.msix_ctrl | 0x8000; // enable msix
+	pci_write(addr, pos+PCIR_MSIX_CTRL, 2, &msix.msix_ctrl);
+
+	pci_msix_update_interrupts(&msix,0);
+
+	msix.msix_ctrl = msix.msix_ctrl | 0x8000; // enable msix
+	pci_write(addr, pos+PCIR_MSIX_CTRL, 2, &msix.msix_ctrl);
+
+	ut_printf("MSIX Configured bytes  :%x  :%x val=%x \n",ret,buf,val);
 }
 #endif
 
@@ -248,13 +306,8 @@ static int read_dev_conf(uint8_t bus , uint8_t dev,uint8_t func)
 {
 	pci_dev_header_t header;
 	pci_addr_t addr;
-
 	int ret;
-	//int consumed = 0; //number of read BARs
-	//int produced = 0; //number of filled resources;
-	//int max_bar;
 	int i,count_start;
-
 
 	addr.bus=bus;
 	addr.device=dev;
@@ -286,7 +339,11 @@ static int read_dev_conf(uint8_t bus , uint8_t dev,uint8_t func)
 				break;
 			}
 		}
-		//read_capabilities(&addr,&msi)
+#ifdef MSI
+		if (header.capabilities_pointer != 0) {
+			read_msi(&addr, header.capabilities_pointer, count_start);
+		}
+#endif
 		if (header.vendor_id == 0x1af4 && header.device_id==0x1110){
 			init_host_shm(&header,&pci_bars[count_start],3);
 		}
@@ -298,7 +355,15 @@ static int read_dev_conf(uint8_t bus , uint8_t dev,uint8_t func)
 #ifdef VIRTIO
 #define VIRTIO_PCI_VENDOR_ID 0x1af4
 		else if (header.vendor_id == VIRTIO_PCI_VENDOR_ID  && (header.device_id >= 0x1000 && header.device_id <= 0x103f) ){
-			init_virtio_pci(&header,&pci_bars[count_start],3);
+			int msi_vector =0;
+			if (header.capabilities_pointer !=0){ // msi enabled
+#ifdef MSI
+				msi_vector=MSI_VECTORS_START;
+#endif
+			}
+			init_virtio_pci(&header,&pci_bars[count_start],3,msi_vector);
+
+
 		}
 #endif
 	}
@@ -311,8 +376,8 @@ void init_pci()
 	if (pci_initialised == 1) return;
 	pci_initialised=1;
 	DEBUG(" Scanning PCI devices info started \n");
-	for (i = 0; i < 5; i++) {
-		for (j = 0; j < 5; j++)
+	for (i = 0; i < 32 ; i++) {
+		for (j = 0; j < 32; j++)
 			read_dev_conf(i, j, 0);
 	}
 	DEBUG(" Scanning PCI devices info Ended \n");

@@ -77,7 +77,20 @@ static void __set_lvt_lint_vector(uint32_t lint_num,uint32_t vector)
     local_apic->lvt_lint1.reg=lvt_lint.reg;
   }
 }
-
+int read_apic_isr(int isr){
+	int i=isr/32;
+	if (local_apic==0){
+		if (isr >= 40)
+		{
+			// Send reset signal to slave.
+			outb(0xA0, 0x20);
+		}
+		// Send reset signal to master. (As well as slave, if necessary).
+		outb(0x20, 0x20);
+		return 0;
+	}
+	return local_apic->isr[i].bits;
+}
  void __enable_apic(void)
 {
   apic_svr_t svr=local_apic->svr;
@@ -155,10 +168,15 @@ static int __local_apic_chkerr(void)
 	     i++;
 	      //while(1);
 	      kprintf("[LA] Illegal register address.\n"); }
+  if (i>0){
+	  while(1);
+  }
 
   return i;
 }
-
+int local_apic_chkerr(){
+	__local_apic_chkerr();
+}
 uint32_t get_apic_version(void)
 {
 	if (local_apic==0)  while(1);
@@ -229,8 +247,20 @@ static inline void enable_l_apic_in_msr()
 		    :"%rax","%rcx","%rdx"
 		    );
 }
+void test_enable_apicisr() {
+	uint32_t v;
+	int i = 0, l;
 
+	/* clear bits for interrupts - can be filled up to other os */
+	for (i = 7; i >= 0; i--) {
+		v = local_apic->isr[i].bits;
+		ut_printf("value i:%x value:%x\n", i, v);
 
+		for (l = 31; l >= 0; l--)
+			if (v & (1 << l))
+				local_apic_send_eoi();
+	}
+}
 extern void io_apic_disable_all(void);
 extern void io_apic_bsp_init(void);
 extern void io_apic_enable_irq(uint32_t virq);
@@ -238,7 +268,7 @@ extern void io_apic_enable_all();
 #define bool char
 static int __local_apic_init(bool msgout)
 {
-	uint32_t v;
+  uint32_t v;
   int i=0,l;
   apic_lvt_lint_t lvt_lint;
   apic_icr1_t icr1;
@@ -257,7 +287,7 @@ static int __local_apic_init(bool msgout)
 
   v=get_apic_version();
 	if (msgout)
-		kprintf("[HW] APIC version: %d\n",v);
+		kprintf("[HW] APIC version: %d apic id:%x\n",v,get_local_apic_id());
 
   /* first we're need to clear APIC to avoid magical results */
   __local_apic_clear();
@@ -383,7 +413,7 @@ static void __local_apic_timer_calibrate(uint32_t x)
   local_apic->timer_dcr.reg=timer_dcr.reg;
 }
 static uint32_t delay_loop;
-int g_conf_clock_scale=1;
+int g_conf_clock_scale=1; //default is 1
 
 void local_apic_timer_calibrate(uint32_t hz)
 {

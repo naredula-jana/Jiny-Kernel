@@ -25,7 +25,7 @@ static void vp_set_status(virtio_dev_t *dev, unsigned char status) {
 	outb(addr, status);
 }
 
-int init_virtio_9p_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev) {
+int init_virtio_9p_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev,uint32_t msi_vector) {
 	unsigned long addr;
 	unsigned long features;
 

@@ -37,7 +37,7 @@ u16 ip_sum_calc(u16 len_ip_header, unsigned char buff[]) {
 }
 static unsigned char mac[10];
 static virtio_dev_t *net_dev = 0;
-int dummy_pkt_scan = 0;
+int dummy_pkt_scan = 1;
 queue_t nbh_waitq;
 static int process_pkt(unsigned char *c, unsigned long len) {
 	unsigned char ip[5], port[3], tc;
@@ -94,10 +94,10 @@ static int process_pkt(unsigned char *c, unsigned long len) {
 		c[46] = port[0];
 		c[47] = port[1];
 
-		if (dummy_pkt_scan == 1) {
+		if (dummy_pkt_scan == 0) {
 			int cksum = 0;
 			int i;
-			for (i = 0; i < 2000 && i < len; i++)
+			for (i = 0; i < 1000 && i < len; i++)
 				cksum = cksum + c[i];
 		}
 		return 1;
@@ -163,21 +163,22 @@ void net_BH() {
 		addr = virtio_removeFromQueue(net_dev->vq[0], &len);
 		if (addr == 0) {
 			netbh_state = 200;
-
+			sti();
 			if (g_conf_netbh_poll == 0) {
-				sti();
 				netbh_state = 202;
 				stat_sleep++;
 				virtqueue_enable_cb(net_dev->vq[0]); // enable interrupts as the queue is empty, so interrupt will be recieved for the first packet
 				if (netbh_flag != 0)
 					continue;
 				sc_wait(&nbh_waitq, 2);
+				//__asm__("hlt");
+				//sc_schedule();
 				if (g_current_task->cpu < 9)
 					stat_netcpus[g_current_task->cpu]++;
 				virtqueue_disable_cb(net_dev->vq[0]);
 				netbh_state = 203;
 			} else {
-				cli();
+			//	cli();
 			}
 			if (stat_recv > 0) {
 				went_sleep++;
@@ -199,8 +200,9 @@ void net_BH() {
 		//c = addr;
 		//DEBUG("%d: new NEW ISR:%d :%x addd:%x len:%x c:%x:%x:%x:%x  c+10:%x:%x:%x:%x\n", i, index, isr, addr, len, c[0], c[1], c[2], c[3], c[10], c[11], c[12], c[13]);
 
+		recv_count++;
 		if (process_pkt(addr, len) == 1) {
-			recv_count++;
+
 			netbh_state = 301;
 			if (g_conf_udp_respond == 1) {
 #if SEND_BH
@@ -217,7 +219,31 @@ void net_BH() {
 				netfront_xmit(net_dev, addr, len);
 #endif
 			} else {
+#if 0
+                #define TEMP_QUEUE_SIZE 800
+				static unsigned long q[TEMP_QUEUE_SIZE];
+				static int init_done=0;
+				static int begin=0;
+				static int end=0;
+				if (init_done==0){
+					int i;
+					for(i=0; i<TEMP_QUEUE_SIZE-1; i++){
+						q[i]=mm_getFreePages(0, 0);
+					}
+					begin=0;
+					end=TEMP_QUEUE_SIZE-1;
+					q[end]=0;
+					init_done=1;
+				}
+				q[end]=addr;
+				mm_putFreePages(q[begin],0);
+				begin++;
+				end++;
+				if (begin>=TEMP_QUEUE_SIZE) begin=0;
+				if (end>=TEMP_QUEUE_SIZE) end=0;
+#else
 				mm_putFreePages(addr, 0);
+#endif
 			}
 			netbh_state = 320;
 		} else {
@@ -227,10 +253,9 @@ void net_BH() {
 #if 1
 		netbh_state = 403;
 		addBufToQueue(net_dev->vq[0], 0, 4096);
-		if ((recv_count % 10) == 0) {
-			netbh_state = 404;
-			virtqueue_kick(net_dev->vq[0]);
-		}
+		netbh_state = 404;
+		virtqueue_kick(net_dev->vq[0]);
+
 #else
 		consumed_pkts++;
 		if (consumed_pkts > 150) {

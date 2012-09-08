@@ -47,7 +47,8 @@ int addBufToQueue(struct virtqueue *vq, unsigned char *buf,
 
 	return ret;
 }
-int init_virtio_net_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev) {
+void virtio_interrupt(registers_t regs);
+int init_virtio_net_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev,uint32_t msi_vector) {
 	unsigned long addr;
 	unsigned long features;
 	int i;
@@ -65,18 +66,29 @@ int init_virtio_net_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev) {
 
 	addr = dev->pci_ioaddr + 20;
 	DEBUG(
-			" MAC address : %x :%x :%x :%x :%x :%x status: %x:%x  :\n", inb(addr), inb(addr+1), inb(addr+2), inb(addr+3), inb(addr+4), inb(addr+5), inb(addr+6), inb(addr+7));
+			"pioaddr:%x MAC address : %x :%x :%x :%x :%x :%x status: %x:%x  :\n", addr,inb(addr), inb(addr+1), inb(addr+2), inb(addr+3), inb(addr+4), inb(addr+5), inb(addr+6), inb(addr+7));
 	for (i = 0; i < 6; i++)
 		dev->mac[i] = inb(addr + i);
 	virtio_createQueue(0, dev, 1);
+	if (msi_vector > 0){
+		 outw(dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR,0);
+	}
 	virtio_createQueue(1, dev, 2);
+	if (msi_vector > 0){
+		 outw(dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR,1);
+	}
 	virtqueue_disable_cb(dev->vq[1]); /* disable interrupts on sending side */
+    if (msi_vector>0){
+    	for (i=0; i<3; i++)
+    	ar_registerInterrupt(msi_vector+i, virtio_interrupt, "virtio_net_msi");
+
+    }
 
 
 	virtio_set_status(dev, virtio_get_status(dev) + VIRTIO_CONFIG_S_DRIVER_OK);
 	DEBUG(" NEW Initialising.. VIRTIO PCI COMPLETED with driver ok :%x \n");
 
-	for (i = 0; i < 120; i++) /* add buffers to recv q */
+	for (i = 0; i <120 ; i++) /* add buffers to recv q */
 		addBufToQueue(dev->vq[0], 0, 4096);
 
 	inb(dev->pci_ioaddr + VIRTIO_PCI_ISR);

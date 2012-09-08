@@ -103,7 +103,14 @@ unsigned long sbps,rbps;
 
 	pkt_size=atoi(argv[2]);
 	total_pkts=atoi(argv[3]);
-
+int newMaxBuff=0;
+int len=sizeof(newMaxBuff);
+getsockopt(sfd, SOL_SOCKET, SO_SNDBUF, &newMaxBuff, &len);
+printf("sock buf size :%d \n",newMaxBuff);
+newMaxBuff=1024000;
+setsockopt(sfd, SOL_SOCKET, SO_SNDBUF, &newMaxBuff, sizeof(newMaxBuff));
+getsockopt(sfd, SOL_SOCKET, SO_SNDBUF, &newMaxBuff, &len);
+printf("New sock buf size :%d \n",newMaxBuff);
 	if (pkt_size<28) {
 		printf(" ERROR: packet size should be atleast 28 \n");
 		return 0;

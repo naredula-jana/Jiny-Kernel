@@ -86,7 +86,7 @@ int conf_set(char *arg1, char *arg2) {
 		ut_printf("ERROR: config variable not updated\n");
 	}
 
-
+	test_enable_apicisr();
 	return;
 }
 commands_t cmd_list[]=

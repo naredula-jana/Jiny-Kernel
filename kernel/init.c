@@ -65,7 +65,6 @@ int init_kernel(unsigned long end_addr)
 	cli();  /* disable interrupt incase if it is enabled while apic is started */
 	ut_printf("Initalising: PCI.. \n");
 	init_pci();
-	sti();
 
 #ifdef NETWORKING
 //	init_LwipTcpIpStack();

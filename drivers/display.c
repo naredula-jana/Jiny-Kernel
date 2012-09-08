@@ -126,7 +126,7 @@ static void scroll() {
 	}
 	refresh_screen();
 }
-int g_serial_output = 0;
+int g_serial_output = 1;
 
 unsigned char g_dmesg[MAX_DMESG_LOG];
 unsigned long g_dmesg_index = 0;
@@ -161,9 +161,18 @@ void ut_putchar(int c) {
 
 	if (g_serial_output == 1) {
 		char buf[5];
-		buf[0] = (char) c;
-		buf[1] = '\0';
-		dr_serialWrite(buf, 1);
+		if (c == '\n') {
+			buf[0] = '\r';
+			buf[1] = '\0';
+			dr_serialWrite(buf, 1);
+			buf[0] = '\n';
+			buf[1] = '\0';
+			dr_serialWrite(buf, 1);
+		} else {
+			buf[0] = (char) c;
+			buf[1] = '\0';
+			dr_serialWrite(buf, 1);
+		}
 		return;
 	}
 
