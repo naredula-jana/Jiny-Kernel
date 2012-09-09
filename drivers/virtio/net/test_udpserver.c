@@ -163,7 +163,8 @@ void net_BH() {
 		addr = virtio_removeFromQueue(net_dev->vq[0], &len);
 		if (addr == 0) {
 			netbh_state = 200;
-			sti();
+			if (g_conf_netbh_poll<2)
+			   sti();
 			if (g_conf_netbh_poll == 0) {
 				netbh_state = 202;
 				stat_sleep++;
@@ -178,7 +179,7 @@ void net_BH() {
 				virtqueue_disable_cb(net_dev->vq[0]);
 				netbh_state = 203;
 			} else {
-			//	cli();
+				cli();
 			}
 			if (stat_recv > 0) {
 				went_sleep++;

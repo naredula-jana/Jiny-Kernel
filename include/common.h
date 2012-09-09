@@ -2,7 +2,7 @@
 #define __COMMON_H__
 
 #define VIRTIO 1
-#define MEMLEAK_TOOL 1
+
 
 #include "spinlock.h"
 #include "atomic.h"

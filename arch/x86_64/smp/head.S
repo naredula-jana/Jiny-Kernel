@@ -129,7 +129,7 @@ smp_startup_64:
 	 */
 
 
-	movq $(g_idle_stack + TASK_SIZE*2 -16), %rsp
+//	movq $(g_idle_stack + TASK_SIZE*2 -16), %rsp
 	movq	$smp_main, %rax
 	jmp	*%rax
 

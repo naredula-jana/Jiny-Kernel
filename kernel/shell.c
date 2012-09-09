@@ -56,10 +56,11 @@ typedef struct {
 	int  *conf_variable;
 	char *description;
 } confs_t;
-extern int g_conf_clock_scale,g_conf_netbh_poll,g_conf_udp_respond;
+extern int g_conf_clock_scale,g_conf_netbh_poll,g_conf_udp_respond,g_conf_serial_line;
 confs_t confs_list[]=
 {
 		{"clock_scale",&g_conf_clock_scale,"default=1"},
+		{"serial_line",&g_conf_serial_line,"default=1 1=enable 0=disable"},
 		{"netbh_poll",&g_conf_netbh_poll,"default=0, to poll=1"},
 		{"udp_respond",&g_conf_udp_respond,"default=0, to respond=1"},
 		{0,0,0} /* DO not Remove this entry */
@@ -86,7 +87,6 @@ int conf_set(char *arg1, char *arg2) {
 		ut_printf("ERROR: config variable not updated\n");
 	}
 
-	test_enable_apicisr();
 	return;
 }
 commands_t cmd_list[]=

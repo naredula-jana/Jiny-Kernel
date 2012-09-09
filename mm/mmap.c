@@ -42,7 +42,7 @@ static int vma_link(struct mm_struct *mm, struct vm_area_struct *vma) {
 		return 1;
 	}
 	while (tmp) {
-		if (vma->vm_start > tmp->vm_end) {
+		if (vma->vm_start >= tmp->vm_end) {
 			tmp_next = tmp->vm_next;
 			if (tmp_next != 0) {
 				if (vma->vm_end < tmp_next->vm_start) {
@@ -120,6 +120,7 @@ long SYS_vm_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsi
 unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long pgoff) {
 	struct mm_struct *mm = g_current_task->mm;
 	struct vm_area_struct *vma;
+	int ret;
 
 	DEBUG(" mmap : file:%x addr:%x len:%x pgoff:%x flags:%x \n",file,addr,len,pgoff,flags);
 	vma = vm_findVma(mm, addr, len);
@@ -154,7 +155,7 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, 
 		}
 
 	}
-	vma_link(mm, vma);
+	ret=vma_link(mm, vma);
 	return vma->vm_start;
 }
 

@@ -167,7 +167,7 @@ static int __local_apic_chkerr(void)
   if (esr.reg_illegal_addr){
 	     i++;
 	      //while(1);
-	      kprintf("[LA] Illegal register address.\n"); }
+	      kprintf("APIC: ERROR Illegal register address.\n"); }
   if (i>0){
 	  while(1);
   }
@@ -247,6 +247,7 @@ static inline void enable_l_apic_in_msr()
 		    :"%rax","%rcx","%rdx"
 		    );
 }
+#if 0
 void test_enable_apicisr() {
 	uint32_t v;
 	int i = 0, l;
@@ -261,6 +262,7 @@ void test_enable_apicisr() {
 				local_apic_send_eoi();
 	}
 }
+#endif
 extern void io_apic_disable_all(void);
 extern void io_apic_bsp_init(void);
 extern void io_apic_enable_irq(uint32_t virq);
@@ -274,7 +276,7 @@ static int __local_apic_init(bool msgout)
   apic_icr1_t icr1;
 
 	if (msgout) {
-		kprintf("[LW] Checking APIC is present ... ");
+		kprintf("APIC: Checking APIC is present ... ");
 		if(__local_apic_check()<0) {
 			kprintf("FAIL\n");
 			return -1;
@@ -287,7 +289,7 @@ static int __local_apic_init(bool msgout)
 
   v=get_apic_version();
 	if (msgout)
-		kprintf("[HW] APIC version: %d apic id:%x\n",v,get_local_apic_id());
+		kprintf("APIC: APIC version: %d apic id:%x\n",v,get_local_apic_id());
 
   /* first we're need to clear APIC to avoid magical results */
   __local_apic_clear();
@@ -371,11 +373,11 @@ static void __unmask_extint(void)
 
 void local_apic_bsp_switch(void)
 {
-  kprintf("[LW] Leaving PIC mode to APIC mode ... ");
+  kprintf("APIC: Leaving PIC mode to APIC mode ... ");
   outb(0x22,0x70);
   outb(0x23,0x01); /* old port - 0x71,0x23 */
 
-  kprintf("OK\n");
+  kprintf("APIC: OK\n");
 }
 
 /* APIC timer implementation */
@@ -420,15 +422,15 @@ void local_apic_timer_calibrate(uint32_t hz)
   uint32_t x1,x2;
   local_apic_timer_disable();
 
-  kprintf("Calibrating lapic delay_loop ...");
+  kprintf("APIC: Calibrating lapic delay_loop ...");
 
   x1=local_apic->timer_ccr.count; /*get current counter*/
   local_apic->timer_icr.count=0xffffffff; /*fillful initial counter */
 
-  kprintf("ccr %ld\n",local_apic->timer_ccr.count);
+  kprintf("APIC: ccr %ld\n",local_apic->timer_ccr.count);
 
   while(local_apic->timer_icr.count==x1) /* wait while cycle will be end */ {
-        kprintf("%ld\n",local_apic->timer_icr.count);
+        kprintf("APIC: %ld\n",local_apic->timer_icr.count);
     
   }
 
@@ -441,7 +443,7 @@ void local_apic_timer_calibrate(uint32_t hz)
   //delay_loop=11931;
   //delay_loop=67489;
   //delay_loop=600;
-  kprintf("delay loop: %d \n",delay_loop);
+  kprintf("APIC: delay loop: %d \n",delay_loop);
 
   /*ok, let's write a difference to icr*/
   local_apic->timer_icr.count=delay_loop; /* <-- this will tell us how much ticks we're really need */
@@ -563,18 +565,6 @@ void broadcast_msg(){
 }
 int enable_ioapic(){
 	uint32_t *p;
-#if 0
-	p=imps_lapic_addr;
-	p=p+0x320;
-	*p=0x10000 ; //disable local timer interrupts
-	p=imps_lapic_addr;
-	p=p+0x350;
-	*p=0x8700 ; //enable normal  external interrupts
-
-	p=imps_lapic_addr;
-	p=p+0xF0;
-	*p=0x10F ; //enable apic and set supuriousvector to 15
-#endif
 	local_apic_timer_ap_init(LOCAL_TIMER_CPU_IRQ_VEC);
 	return 1;
 }
@@ -594,21 +584,6 @@ int local_ap_apic_init(void)
 int local_bsp_apic_init(void)
 {
 	__map_apic_page();
-
-#if 0
-	uint32_t *p;
-	p=imps_lapic_addr;
-	p=p+0x320;
-	*p=0x10000 ; //disable local timer interrupts
-	p=imps_lapic_addr;
-	p=p+0x350;
-	*p=0x8700 ; //enable normal  external interrupts
-
-	p=imps_lapic_addr;
-	p=p+0xF0;
-	*p=0x10F ; //enable apic and set supuriousvector to 15
-#endif
-
 
 	if (__local_apic_init(true)){
 		 //return -1;

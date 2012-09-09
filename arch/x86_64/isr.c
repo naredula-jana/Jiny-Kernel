@@ -100,27 +100,28 @@ void init_handlers()
 
 int ar_printIrqStat(char *arg1,char *arg2)
 {
-	int i,j;
+	int i, j;
 
 	ut_printf("irq_no : name : address: total_calls : errors\n");
-	for (j = 0; (j < MAX_CPUS) && (j<getmaxcpus()); j++) {
-		ut_printf("CPU :%d \n",j);
-
-		for (i = 0; i < MAX_IRQS; i++) {
-			if (g_interrupt_handlers[i].action == 0
-					&& g_interrupt_handlers[i].stat[j].num_error == 0)
-				continue;
-			if (i < 32 && g_interrupt_handlers[i].stat[j].num_error == 0
-					&& g_interrupt_handlers[i].stat[j].num_irqs == 0)
-				continue;
-			ut_printf(" %d: %s  %x %d %d\n", i - 32,
-					g_interrupt_handlers[i].name,
-					g_interrupt_handlers[i].action,
-					g_interrupt_handlers[i].stat[j].num_irqs,
-					g_interrupt_handlers[i].stat[j].num_error);
-
-		}
+	ut_printf("         ");
+	for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
+		ut_printf("CPU%d        ", j);
 	}
+	ut_printf("\n");
+	for (i = 0; i < MAX_IRQS; i++) {
+		if (g_interrupt_handlers[i].action == 0
+				&& g_interrupt_handlers[i].stat[j].num_error == 0)
+			continue;
+		if (i < 32 && g_interrupt_handlers[i].stat[j].num_error == 0
+				&& g_interrupt_handlers[i].stat[j].num_irqs == 0)
+			continue;
+		ut_printf(" %3d: ",i);
+		for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
+			ut_printf("[%8d %3d] ",g_interrupt_handlers[i].stat[j].num_irqs,g_interrupt_handlers[i].stat[j].num_error);
+		}
+		ut_printf(":%s \n",g_interrupt_handlers[i].name);
+	}
+
 	return 1;
 }
 
@@ -200,21 +201,16 @@ static void i8259a_mask_irq(unsigned int irq)
 #endif
 void ar_irqHandler(void *p,unsigned int int_no)
 {
-	//if (g_error_i ==0) g_after_i=g_before_i;
-	// Send an EOI (end of interrupt) signal to the PICs.
-	// If this interrupt involved the slave. 
-#if 1
-	if (int_no >= 40)
-	{
-		// Send reset signal to slave.
-		outb(0xA0, 0x20);
+	if (int_no > 100) { // APIC or MSI based interrupts
+		int isr_status= read_apic_isr(int_no);
+	} else {
+		if (int_no >= 40) {
+			// Send reset signal to slave.
+			outb(0xA0, 0x20);
+		}
+		// Send reset signal to master. (As well as slave, if necessary).
+		outb(0x20, 0x20);
 	}
-	// Send reset signal to master. (As well as slave, if necessary).
-	outb(0x20, 0x20);
-#else
-	int isr_status= read_apic_isr(int_no);
-#endif
-	//int isr_status= read_apic_isr(int_no);
 
 	if (g_interrupt_handlers[int_no].action != 0)
 	{

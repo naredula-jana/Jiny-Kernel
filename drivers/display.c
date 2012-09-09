@@ -126,7 +126,7 @@ static void scroll() {
 	}
 	refresh_screen();
 }
-int g_serial_output = 1;
+int g_conf_serial_line = 1;
 
 unsigned char g_dmesg[MAX_DMESG_LOG];
 unsigned long g_dmesg_index = 0;
@@ -159,7 +159,7 @@ void ut_putchar(int c) {
 	g_dmesg_index++;
 	g_dmesg[g_dmesg_index % MAX_DMESG_LOG] = (unsigned char) c;
 
-	if (g_serial_output == 1) {
+	if (g_conf_serial_line == 1) {
 		char buf[5];
 		if (c == '\n') {
 			buf[0] = '\r';
@@ -216,27 +216,30 @@ void ut_printf(const char *format, ...) {
 	spin_lock_irqsave(&display_lock, flags);
 	va_list vl;
 	va_start(vl,format);
-
+#if 0
 	ut_snprintf(buf,35,"%d:",g_jiffies);  // print timestamp before line
 	p=&buf[0];
 	while (*p)
 		ut_putchar(*p++);
+#endif
 
 	arg++;
 	i = 0;
 	while ((c = *format++) != 0) {
+		int number_len=0;
 		if (c != '%')
 			ut_putchar(c);
 		else {
-
-
 			c = *format++;
+			if (c>'0' && c<='9'){
+				number_len=c-'0';
+				c = *format++;
+			}
 			switch (c) {
 			case 'd':
 			case 'u':
 			case 'x':
 			case 'i':
-
 				if (c == 'i') {
 					val = va_arg(vl,unsigned int);
 					c = 'x';
@@ -244,6 +247,7 @@ void ut_printf(const char *format, ...) {
 					val = va_arg(vl,long);
 
 				itoa(buf, 39, c, val);
+
 				i++;
 				p = buf;
 				goto string;
@@ -254,7 +258,17 @@ void ut_printf(const char *format, ...) {
 				if (!p)
 					p = "(null)";
 
-				string: while (*p)
+	string:
+	            if (number_len != 0) {
+					int num_len;
+					for (num_len = 0; num_len < number_len; num_len++) {
+						if (p[num_len] == '\0') {
+							p[num_len] = ' ';
+							p[num_len + 1] = '\0';
+						}
+					}
+				}
+				while (*p)
 					ut_putchar(*p++);
 				break;
 

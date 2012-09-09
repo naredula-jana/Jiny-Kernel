@@ -13,6 +13,7 @@
 
 static queue_t p9_waitq;
 static virtio_dev_t *p9_dev=0;
+void virtio_9p_interrupt(registers_t regs);
 static int virtio_addToP9Queue(struct virtqueue *vq, unsigned long buf,
 		unsigned long out_len, unsigned long in_len);
 
@@ -36,12 +37,16 @@ int init_virtio_9p_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev,uint32_t msi
 
 	addr = dev->pci_ioaddr + VIRTIO_PCI_HOST_FEATURES;
 	features = inl(addr);
-	DEBUG(" driver Initialising VIRTIO PCI 9P hostfeatures :%x:\n",features);
+	DEBUG(" driver Initializing VIRTIO PCI 9P hostfeatures :%x:\n",features);
 
 	virtio_createQueue(0, dev, 2);
-
+	if (msi_vector > 0){
+		 outw(dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR,0);
+		 outw(dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR,0xffff);
+		 ar_registerInterrupt(msi_vector, virtio_9p_interrupt, "virtio_p9_msi");
+	}
 	vp_set_status(dev, vp_get_status(dev) + VIRTIO_CONFIG_S_DRIVER_OK);
-	DEBUG(" NEW Initialising.9P INPUT  VIRTIO PCI COMPLETED with driver ok :%x \n",vp_get_status(dev));
+	DEBUG(" NEW Initializing.9P INPUT  VIRTIO PCI COMPLETED with driver ok :%x \n",vp_get_status(dev));
 	inb(dev->pci_ioaddr + VIRTIO_PCI_ISR);
 
 	sc_register_waitqueue(&p9_waitq);
@@ -208,7 +213,7 @@ void virtio_9p_interrupt(registers_t regs) { // TODO: handling similar  type of 
 	unsigned char isr;
 	int ret;
 
-	//DEBUG("Recevid virtio interrupt \n");
-	isr = inb(p9_dev->pci_ioaddr + VIRTIO_PCI_ISR);
+	if (p9_dev->msi==0)
+	  isr = inb(p9_dev->pci_ioaddr + VIRTIO_PCI_ISR);
 	ret = sc_wakeUp(&p9_waitq); /* wake all the waiting processes */
 }

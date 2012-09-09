@@ -119,8 +119,8 @@ typedef struct {
 	int type;
 	unsigned long pci_ioaddr, pci_iolen;
 	unsigned long pci_mmio;
-//	unsigned long pci_mmio_alloc;
 	unsigned long pci_mmiolen;
+	int msi;
 	struct virtqueue *vq[5];
 	unsigned char mac[7];
 	//void(*rx_func)(unsigned char* data, int len);

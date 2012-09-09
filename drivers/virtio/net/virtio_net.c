@@ -12,6 +12,7 @@
 
 int test_virtio_nob=0;
 static virtio_dev_t *net_dev = 0;
+void virtio_net_interrupt(registers_t regs);
 void print_virtio_net(){
 	print_vq(net_dev->vq[0]);
 	print_vq(net_dev->vq[1]);
@@ -63,8 +64,11 @@ int init_virtio_net_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev,uint32_t ms
 	addr = dev->pci_ioaddr + VIRTIO_PCI_HOST_FEATURES;
 	features = inl(addr);
 	DEBUG(" driver Initialising VIRTIO PCI NET hostfeatures :%x:\n", features);
-
-	addr = dev->pci_ioaddr + 20;
+	if (msi_vector == 0) {
+		addr = dev->pci_ioaddr + 20;
+	} else {
+		addr = dev->pci_ioaddr + 24;
+	}
 	DEBUG(
 			"pioaddr:%x MAC address : %x :%x :%x :%x :%x :%x status: %x:%x  :\n", addr,inb(addr), inb(addr+1), inb(addr+2), inb(addr+3), inb(addr+4), inb(addr+5), inb(addr+6), inb(addr+7));
 	for (i = 0; i < 6; i++)
@@ -76,11 +80,12 @@ int init_virtio_net_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev,uint32_t ms
 	virtio_createQueue(1, dev, 2);
 	if (msi_vector > 0){
 		 outw(dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR,1);
+		 outw(dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR,0xffff);
 	}
 	virtqueue_disable_cb(dev->vq[1]); /* disable interrupts on sending side */
     if (msi_vector>0){
     	for (i=0; i<3; i++)
-    	ar_registerInterrupt(msi_vector+i, virtio_interrupt, "virtio_net_msi");
+    	     ar_registerInterrupt(msi_vector+i, virtio_net_interrupt, "virt_net_msi");
 
     }
 
@@ -106,11 +111,12 @@ extern int netbh_started,netbh_flag;
 void virtio_net_interrupt(registers_t regs) {
 	/* reset the irq by resetting the status  */
 	unsigned char isr;
-	//isr = inb(net_dev->pci_ioaddr + VIRTIO_PCI_ISR);  this is called from generic handler
-	if (netbh_started == 1){
 
+	if (net_dev->msi==0)
+	  isr = inb(net_dev->pci_ioaddr + VIRTIO_PCI_ISR);
+
+	if (netbh_started == 1){
 	    virtqueue_disable_cb(net_dev->vq[0]);
-	    virtqueue_disable_cb(net_dev->vq[1]); // TODO: testing to desiable pending interrupt
 
 	    sc_wakeUp(&nbh_waitq);
 	    netbh_flag=1;

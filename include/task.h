@@ -84,6 +84,7 @@ struct task_struct {
 
 #define IPI_INTERRUPT 200
 extern int getcpuid();
+extern struct task_struct *g_idle_tasks[];
 extern struct task_struct *g_current_tasks[];
 #if 0
 #define g_current_task g_current_tasks[getcpuid()]

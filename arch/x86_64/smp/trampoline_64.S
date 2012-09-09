@@ -51,7 +51,7 @@ r_base = .
 
 	movl	$0xA5A5A5A5, trampoline_data - r_base
 				# write marker for master knows we're running
-
+    movl	trampoline_data - r_base+0x504, %esp
 	lidt	idt_48 - r_base	# load idt with 0, 0
 	lgdt	gdt_48 - r_base	# load gdt with whatever is appropriate
 
@@ -70,7 +70,7 @@ gdt_48:
 	.short	__KERNEL32_CS + 7	# gdt limit
 	.long	cpu_gdt_table-__START_KERNEL_map
 
-.org 0x506
+.org 0x504
 stack_addr:
     .long 0
 

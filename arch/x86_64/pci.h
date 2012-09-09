@@ -87,4 +87,7 @@ typedef struct __pci_bar_t {
 	uint32_t len;
 	char *name;
 }pci_bar_t;
+int pci_read(pci_addr_t *d, uint16_t pos, uint8_t len, void *buf);
+int pci_write(pci_addr_t *d, uint16_t pos, uint8_t len, void *buf);
+
 

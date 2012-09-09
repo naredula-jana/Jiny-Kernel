@@ -52,8 +52,6 @@ int init_virtio_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len,ui
 		virtio_devices[virtio_dev_count].pci_iolen = bars[0].len;
 		virtio_devices[virtio_dev_count].pci_mmio = bars[1].addr;
 		virtio_devices[virtio_dev_count].pci_mmiolen = bars[1].len;
-
-		//virtio_devices[virtio_dev_count].rx_func = 0;
 	} else {
 		ut_printf(" ERROR in initializing VIRTIO PCI driver %x : %x \n",bars[0].addr,bars[1].addr);
 		return 0;
@@ -66,12 +64,8 @@ int init_virtio_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len,ui
 		if (pciDevices[i].pciSubId == pci_hdr->subsys_id) {
 			pciDevices[i].init(pci_hdr, &virtio_devices[virtio_dev_count],msi_vector);
 			virtio_devices[virtio_dev_count].type = pci_hdr->subsys_id;
+			virtio_devices[virtio_dev_count].msi = msi_vector;
             bars[0].name=bars[1].name=pciDevices[i].name;
-			if (pci_hdr->interrupt_line > 0) {
-				DEBUG(" virtio Interrupt number : %i  :%s\n", pci_hdr->interrupt_line,pciDevices[i].name);
-			//	ar_registerInterrupt(32 + pci_hdr->interrupt_line, pciDevices[i].isr, pciDevices[i].name);
-
-			}
 			virtio_devices[virtio_dev_count].isr = pciDevices[i].isr;
 			virtio_dev_count++;
 			return 1;
@@ -87,7 +81,6 @@ void virtio_interrupt(registers_t regs) {
 		unsigned char isr;
 
 		isr = inb(virtio_devices[i].pci_ioaddr + VIRTIO_PCI_ISR);
-	//	outb(virtio_devices[i].pci_ioaddr + VIRTIO_PCI_STATUS,0);
 		if ((isr != 0) && (virtio_devices[i].isr!=0)) {
 			virtio_devices[i].isr(regs);
 		}

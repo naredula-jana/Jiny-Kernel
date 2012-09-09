@@ -716,7 +716,7 @@ void init_tasking() {
 
     task_addr=(unsigned long )((unsigned long )(&g_idle_stack)+TASK_SIZE) & (~((unsigned long )(TASK_SIZE-1)));
     ut_printf(" Task Addr start :%x  stack:%x current:%x\n",task_addr,&task_addr,g_current_task);
-	for (i = 0; i < 2; i++) { /* TODO : need to handle idle tasks for smp correctly */
+	for (i = 0; i < MAX_CPUS; i++) {
 		g_idle_tasks[i] = (unsigned char *)(task_addr)+i*TASK_SIZE;
 		g_idle_tasks[i]->ticks = 0;
 		g_idle_tasks[i]->magic_numbers[0] = g_idle_tasks[i]->magic_numbers[1] = MAGIC_LONG;
@@ -726,7 +726,6 @@ void init_tasking() {
 		g_idle_tasks[i]->cpu = i;
 		g_idle_tasks[i]->mm = g_kernel_mm; /* TODO increse the corresponding count */
 		g_current_tasks[i] = g_idle_tasks[i];
-		//list_add_tail(&g_idle_tasks[i]->task_link, &task_queue.head);
 		ut_strncpy(g_idle_tasks[i]->name, "idle", MAX_TASK_NAME);
 		g_pid++;
 	}
