@@ -43,8 +43,10 @@ struct stat {
 	struct timespec st_ctime; /* time of last status change */
 	long int __unused[3];
 };
+typedef long int __time_t;
+long int SYS_time(__time_t *time);
 unsigned long SYS_fs_fstat(int fd, void *buf);
-unsigned long SYS_fs_stat(const char *path, struct stat *buf);
+int SYS_fs_stat(const char *path, struct stat *buf);
 unsigned long SYS_fs_fstat(int fd, void *buf);
 unsigned long SYS_fs_dup2(int fd1, int fd2);
 unsigned long SYS_rt_sigaction();
@@ -118,7 +120,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 190 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 195 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 200 */
-{ snull }, { SYS_futex }, { snull }, { snull }, { snull }, /* 205 */
+{ SYS_time }, { SYS_futex }, { snull }, { snull }, { snull }, /* 205 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 210 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 215 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 220 */
@@ -208,6 +210,13 @@ unsigned long snull(unsigned long *args)
 	return 1;
 }
 
+long int SYS_time(__time_t *time){
+	SYSCALL_DEBUG("time :%x \n",time);
+	if (time==0) return 0;
+	*time = g_jiffies;
+	return *time;
+}
+
 /*****************************************
  TODO : Below are hardcoded system calls , need to make generic *
  ******************************************/
@@ -258,7 +267,7 @@ unsigned long SYS_ioctl(int d, int request, unsigned long *addr){
 	return 0;
 }
 
-unsigned long SYS_fs_stat(const char *path, struct stat *buf)
+int SYS_fs_stat(const char *path, struct stat *buf)
 {
 	struct file *fp;
 	struct fileStat fstat;
@@ -270,11 +279,20 @@ unsigned long SYS_fs_stat(const char *path, struct stat *buf)
 	fp=fs_open(path,0,0);
 	if ( fp==0 ) return -1;
 	ret = fs_stat(fp, &fstat);
+	ut_memset(buf,0,sizeof(struct stat));
 	buf->st_size = fstat.st_size ;
 	buf->st_ino = fstat.inode_no ;
-/* TODO : fill the rest of the feilds from fstat */
+    buf->st_blksize = 4096;
+    buf->st_blocks = 8;
+    buf->st_nlink = 49;
+    buf->st_mtime.tv_nsec = fstat.mtime;
+    buf->st_atime.tv_nsec = fstat.atime;
+    buf->st_mode = fstat.mode;
+
+/* TODO : fill the rest of the fields from fstat */
 
     fs_close(fp);
+    ut_printf(" st_size: %d st_ino:%d mode:%x \n",buf->st_size,buf->st_ino, buf->st_mode);
 	return ret;
 }
 unsigned long SYS_fs_dup2(int fd1, int fd2)

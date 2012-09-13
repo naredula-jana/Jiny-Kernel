@@ -394,11 +394,12 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 	unsigned int index;
 	unsigned char user=0;
 
-
-//	if (addr > KERNEL_ADDR_START ) /* then it is kernel address */
-
 	mm=g_kernel_mm;
-	if (g_current_task->mm != mm) user=1; /* this is case where user thread running in kernel */
+	if (g_current_task->mm != mm){
+		/* this is case where user thread running in kernel */
+		 user=1;
+		 mm = g_current_task->mm;
+	}
 
 	if (mm==0 || mm->pgd == 0) BUG();
 
@@ -503,7 +504,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 	}
 	if (p==0) BUG();
 	pl1=(pl1+(L1_INDEX(addr)));
-	if (addr > KERNEL_ADDR_START ) /* then it is kernel address */
+	if (addr > KERNEL_ADDR_START && user==0) /* then it is kernel address */
 		mk_pte(__va(pl1),((addr_t)p>>12),1,0,1);/* global=on, user=off rw=on*/
 	else	
 		mk_pte(__va(pl1),((addr_t)p>>12), 0, 1, writeFlag); /* global=off, user=on rw=flag from vma*/

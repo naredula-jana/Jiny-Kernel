@@ -27,7 +27,7 @@ void virtio_memb_interrupt(registers_t regs);
 typedef struct virtio_pciDevices {
 	const char *name;
 	int pciSubId;
-	int (*init)(pci_dev_header_t *pci_hdr, virtio_dev_t *dev,uint32_t msi_vector);
+	int (*init)(pci_dev_header_t *pci_hdr, virtio_dev_t *dev,uint32_t *msi_vector);
 	void (*isr)(registers_t regs);
 };
 static struct virtio_pciDevices pciDevices[] = {
@@ -36,7 +36,7 @@ static struct virtio_pciDevices pciDevices[] = {
 		{ .name = "virtio-memballon", .pciSubId = 5, .init = init_virtio_memballoon_pci, .isr = virtio_memb_interrupt, },
 		{ .name = 0, .pciSubId = 0, .init =0, .isr = 0, }};
 
-int init_virtio_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len,uint32_t msi_vector) {
+int init_virtio_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len,uint32_t *msi_vector) {
 	uint32_t ret, i;
 	unsigned long features;
 
@@ -64,7 +64,7 @@ int init_virtio_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len,ui
 		if (pciDevices[i].pciSubId == pci_hdr->subsys_id) {
 			pciDevices[i].init(pci_hdr, &virtio_devices[virtio_dev_count],msi_vector);
 			virtio_devices[virtio_dev_count].type = pci_hdr->subsys_id;
-			virtio_devices[virtio_dev_count].msi = msi_vector;
+			virtio_devices[virtio_dev_count].msi = *msi_vector;
             bars[0].name=bars[1].name=pciDevices[i].name;
 			virtio_devices[virtio_dev_count].isr = pciDevices[i].isr;
 			virtio_dev_count++;
@@ -120,7 +120,19 @@ static void notify(struct virtqueue *vq) {
 	 * signal the other end */
 	outw(dev->pci_ioaddr + VIRTIO_PCI_QUEUE_NOTIFY, index);
 }
-
+void display_virtiofeatures(unsigned long feature, struct virtio_feature_desc *desc) {
+	int i,j,bit;
+	for (i = 0; i < 32; i++) {
+		bit = (feature >> i) & (0x1);
+		if (bit) {
+			for (j = 0; ( desc[j].name != NULL); j++) {
+				if (desc[j].feature_bit == i)
+					ut_printf("%s,", desc[j].name);
+			}
+		}
+	}
+	ut_printf("\n");
+}
 static void callback(struct virtqueue *vq) {
 	DEBUG("  VIRTIO CALLBACK in VIRT queue :%x\n",vq);
 }

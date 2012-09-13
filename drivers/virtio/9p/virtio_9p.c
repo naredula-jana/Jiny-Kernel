@@ -26,7 +26,7 @@ static void vp_set_status(virtio_dev_t *dev, unsigned char status) {
 	outb(addr, status);
 }
 
-int init_virtio_9p_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev,uint32_t msi_vector) {
+int init_virtio_9p_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev,uint32_t *msi_vector) {
 	unsigned long addr;
 	unsigned long features;
 
@@ -40,10 +40,13 @@ int init_virtio_9p_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev,uint32_t msi
 	DEBUG(" driver Initializing VIRTIO PCI 9P hostfeatures :%x:\n",features);
 
 	virtio_createQueue(0, dev, 2);
-	if (msi_vector > 0){
+	if (*msi_vector > 0){
+		*msi_vector =0 ; // disable msi , since p9 is not working MSI
+#if 0
 		 outw(dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR,0);
 		 outw(dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR,0xffff);
 		 ar_registerInterrupt(msi_vector, virtio_9p_interrupt, "virtio_p9_msi");
+#endif
 	}
 	vp_set_status(dev, vp_get_status(dev) + VIRTIO_CONFIG_S_DRIVER_OK);
 	DEBUG(" NEW Initializing.9P INPUT  VIRTIO PCI COMPLETED with driver ok :%x \n",vp_get_status(dev));
@@ -97,15 +100,16 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 		in = 1;
 	}
 	virtqueue_add_buf_gfp(p9_dev->vq[0], sg, out, in, sg[0].page_link, 0);
+	virtqueue_enable_cb(p9_dev->vq[0]);
 	virtqueue_kick(p9_dev->vq[0]);
 
-	sc_wait(&p9_waitq, 100);
+	sc_wait(&p9_waitq, 5);
 	unsigned int len;
 	len = 0;
 	i=0;
 	addr=0;
 	while (i < 3 && addr == 0) {
-		addr = virtio_removeFromQueue(p9_dev->vq[0], &len); /* TODO : here sometime returns zero because of some race condition */
+		addr = virtio_removeFromQueue(p9_dev->vq[0], &len); /* TODO : here sometime returns zero because of some race condition, the packet is not recevied */
 		i++;
 		if (addr == 0) {
 			ut_printf(" RACE CONDITIOn so sleeping for while \n");

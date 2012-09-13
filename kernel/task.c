@@ -430,6 +430,7 @@ struct user_regs {
 extern void enter_userspace();
 static unsigned long push_to_userland() {
 	struct user_regs *p;
+	int cpuid=getcpuid();
 	DEBUG(" from PUSH113_TO_USERLAND \n");
 	/* From here onwards DO NOT  call any function that consumes stack */
 	asm("cli");
@@ -457,9 +458,9 @@ static unsigned long push_to_userland() {
 	p->isf.cs = GDT_SEL(UCODE_DESCR) | SEG_DPL_USER;
 	p->isf.ss = GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
 
-	g_cpu_state[0].user_fs = 0;
-	g_cpu_state[0].user_gs = 0;
-	g_cpu_state[0].user_fs_base = 0;
+	g_cpu_state[cpuid].user_fs = 0;
+	g_cpu_state[cpuid].user_gs = 0;
+	g_cpu_state[cpuid].user_fs_base = 0;
 
 	enter_userspace();
 }

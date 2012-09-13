@@ -51,6 +51,7 @@ static int sh_virtio(char *arg1,char *arg2);
 extern int print_pci(char *arg1 , char *arg2);
 int conf_set(char *arg1 , char *arg2);
 int scan_pagecache(char *arg1 , char *arg2);
+static int load_test1(char *arg1,char *arg2);
 typedef struct {
 	char *conf_name;
 	int  *conf_variable;
@@ -111,7 +112,6 @@ commands_t cmd_list[]=
 	{"logflush ","Flush the log","logflush",ut_logFlush},
 	{"kill <pid> ","kill process","kill",sh_kill},
 	{"cls       ","clear screen ","cls",ut_cls},
-	{"mp        ","Memory free areas","mp",mm_printFreeAreas},
 	{"maps      ","Memory map areas","maps",vm_printMmaps},
 	{"ls        ","ls","ls",fs_printInodes},
 	{"pc        ","page cache stats","pc",pc_stats},
@@ -148,39 +148,8 @@ static inline void write_cr0(uint64_t val)
 	__asm__ volatile ("movq %0, %%cr0 \n" 
 			:: "r" (val));          
 }
-#define CR0_AM 0x00040000 /* Alignment mask */
-#if 0
-static int sh_test2(char *arg1,char *arg2)
-{
-	uint64_t *p,val;
-	p=0x103000;
-	val=0x281;
-	ut_printf("Before writing table \n");
-	*p=val;
-	flush_tlb(0x101000);
-	ut_printf("After writing table \n");
-	return 1;
-}
-static int sh_test3(char *arg1,char *arg2)
-{
-	uint64_t val;
-	/*	ut_printf(" Before wait hfs: %d \n",g_jiffies);
-		sc_wait(&g_hfs_waitqueue,1000);
-		ut_printf(" After wait hfs: %d \n",g_jiffies);*/
-	ut_printf(" BEFefore making write protect \n");
 
-	val = read_cr0();
-	val &= ~CR0_AM; /* Disable alignment-check */
-	/*
-	 * Set write protect bit in order to protect
-	 * write access to read-only pages from supervisor mode
-	 */
-	val |= CR0_WP;
-	write_cr0(val);
-	ut_printf(" after making write protect \n");
-	return 1;
-}
-#endif
+
 static int sh_virtio(char *arg1,char *arg2){
 	print_virtio_net();
 	sc_threadlist(0,0);

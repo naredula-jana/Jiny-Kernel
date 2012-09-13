@@ -16,7 +16,7 @@ static struct virtio_balloon_config {
 
 static virtio_dev_t *memb_dev = 0;
 
-int init_virtio_memballoon_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev,uint32_t msi_vector) {
+int init_virtio_memballoon_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev,uint32_t *msi_vector) {
 	unsigned long addr;
 	unsigned long features;
 	int i;

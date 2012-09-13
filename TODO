@@ -14,7 +14,6 @@ fixes:
 
 ------------------------------
 p9 :
-  - unhandled interrupt-15
   - fseek, closing fids, 
   - interpreting qid 
 

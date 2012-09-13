@@ -94,22 +94,22 @@ fault_entry_point:
         swapgs
 2:
         SAVE_GPRS
-	movq %rsp, %rdi /* contains the context : first argument */
+	    movq %rsp, %rdi /* contains the context : first argument */
         movq %rax, %rsi /* fault number : second argument */
         callq ar_faultHandler
-	RESTORE_GPRS
+	    RESTORE_GPRS
 
-	cmpq $GDT_SEL(KCODE_DESCR), 16 + INT_STACK_FRAME_CS_OFFT(%rsp)
+	    cmpq $GDT_SEL(KCODE_DESCR), 16 + INT_STACK_FRAME_CS_OFFT(%rsp)
         je 4f
 
         RESTORE_USER_SEGMENT_REGISTERS
         swapgs
 4:
         popq %rax
-	addq $8, %rsp  /*  error code on th stack */
+	    addq $8, %rsp  /*  error code on th stack */
 		  /* Make sure IF is set after returning from interrupt context.  */
         orq $(1 << 9),HW_INTERRUPT_CTX_RFLAGS_OFFT(%rsp) 
-	sti
+	    sti
         iretq
 
 irq_entry_point:
@@ -122,12 +122,12 @@ irq_entry_point:
 
 1:
         SAVE_GPRS
-	movq %rsp, %rdi /* contains the context : first argument */
+	    movq %rsp, %rdi /* contains the context : first argument */
         movq %rax, %rsi  /* contains interrupts number */
         callq ar_irqHandler
-	RESTORE_GPRS
+	    RESTORE_GPRS
 		
-	cmpq $GDT_SEL(KCODE_DESCR), 8 + INT_STACK_FRAME_CS_OFFT(%rsp)
+	    cmpq $GDT_SEL(KCODE_DESCR), 8 + INT_STACK_FRAME_CS_OFFT(%rsp)
         je 2f
 
         RESTORE_USER_SEGMENT_REGISTERS

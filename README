@@ -14,9 +14,9 @@ JINY KERNEL 0.1  (JINY : Jana's tINY  toy kernel)
 ------------------------------------------
 
 The goals of the project are:
-	1) It should be monalitic kernel with a small footprint: To keep kernel size small. This is done by writing paravirtualised drivers  if it not running on the bare metal. To begin with, file system is implemented  with a paravirtualised driver.
+	1) It should be monalitic kernel with a small footprint. 
 	2) powerful command line and debug environment.
-	3) Higly modularise:  To define well defined interface between modules , so as any module can be replaced by keeping the interface same. (see include/interface.h for more details.
+	3) Higly modularise:  To define well defined interface between subsystems , so as any subsystems can be replaced by keeping the interface same. (see include/interface.h for more details.
 	4) virtualization features like virtio,xen para drivers, hot cpu plugin, hot mem plugin, hot network plugin.
 	5) Running linux compiled Busy box application on top of jiny as it is. (partially completed).
 
@@ -26,7 +26,7 @@ Feature Currently Available:
 Page Cache : 
    - LRU and MRU based (based on the research/published paper)
    
-currently supported File System : 
+File System : 
    - 9p
    - Host based file system based on ivshm(Inter Vm Shared Memory) 
    
@@ -35,6 +35,9 @@ Virtualization:
     - KVM : virtio + P9
     - KVM : virtio + Network (test server with udp stack(tcp/ip))
     - KVM : virtio + memory ballooning
+      
+SMP :
+   - APIC,MSIX
    
 Networking:
    - XEN: TCP/IP stack(from LWIP) integrated with XEN paravirtualised Network driver .
@@ -42,9 +45,7 @@ Networking:
 User level :
    - user app(ring-3) can run in user mode without libc and without shared libs.
    - small user app compiled with libc statically can RUN sucessfully.
-SMP :
-   - basic with 2 cpus's
-   - APIC 
+
     
 TODO Features:
   - cpu-hotplug

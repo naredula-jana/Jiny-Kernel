@@ -247,22 +247,7 @@ static inline void enable_l_apic_in_msr()
 		    :"%rax","%rcx","%rdx"
 		    );
 }
-#if 0
-void test_enable_apicisr() {
-	uint32_t v;
-	int i = 0, l;
 
-	/* clear bits for interrupts - can be filled up to other os */
-	for (i = 7; i >= 0; i--) {
-		v = local_apic->isr[i].bits;
-		ut_printf("value i:%x value:%x\n", i, v);
-
-		for (l = 31; l >= 0; l--)
-			if (v & (1 << l))
-				local_apic_send_eoi();
-	}
-}
-#endif
 extern void io_apic_disable_all(void);
 extern void io_apic_bsp_init(void);
 extern void io_apic_enable_irq(uint32_t virq);

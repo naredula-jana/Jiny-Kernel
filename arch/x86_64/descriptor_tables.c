@@ -18,7 +18,7 @@ static gdt_entry_t gdt_entries[MAX_CPUS][9];
 static gdt_ptr_t   gdt_ptr[MAX_CPUS];
 idt_ptr_t   idt_ptr;
 idt_entry_t idt_entries[MAX_IRQS];
-struct cpu_state g_cpu_state[1];
+struct cpu_state g_cpu_state[MAX_CPUS];
 static tss_t tss[MAX_CPUS];
 
 // Initialisation routine - zeroes all the interrupt service routines,

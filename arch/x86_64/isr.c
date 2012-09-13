@@ -102,7 +102,6 @@ int ar_printIrqStat(char *arg1,char *arg2)
 {
 	int i, j;
 
-	ut_printf("irq_no : name : address: total_calls : errors\n");
 	ut_printf("         ");
 	for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
 		ut_printf("CPU%d        ", j);

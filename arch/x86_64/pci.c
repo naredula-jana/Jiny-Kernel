@@ -201,7 +201,7 @@ static int read_dev_conf(uint8_t bus , uint8_t dev,uint8_t func)
 		}
 
 #ifdef MSI
-		if (header.capabilities_pointer != 0) {
+		if (header.capabilities_pointer != 0 && header.device_id != 0x1009) { // do not msix for p9
 			msi_vector=read_msi(&addr, header.capabilities_pointer, &pci_bars[count_start],i);
 		}
 #endif
@@ -217,7 +217,12 @@ static int read_dev_conf(uint8_t bus , uint8_t dev,uint8_t func)
 #ifdef VIRTIO
 #define VIRTIO_PCI_VENDOR_ID 0x1af4
 		else if (header.vendor_id == VIRTIO_PCI_VENDOR_ID  && (header.device_id >= 0x1000 && header.device_id <= 0x103f) ){
-			init_virtio_pci(&header,&pci_bars[count_start],i,msi_vector);
+			int msi_enabled = msi_vector;
+
+			init_virtio_pci(&header,&pci_bars[count_start],i,&msi_vector);
+			if (msi_enabled && msi_vector == 0) {
+				//disable_msix(&addr,i); NOT working
+			}
 		}
 #endif
 	}

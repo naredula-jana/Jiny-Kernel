@@ -126,4 +126,10 @@ typedef struct {
 	//void(*rx_func)(unsigned char* data, int len);
 	void (*isr)(registers_t regs);
 }virtio_dev_t;
+
+struct virtio_feature_desc {
+	int feature_bit;
+	char *name;
+};
+void display_virtiofeatures(unsigned long feature, struct virtio_feature_desc *desc);
 #endif
