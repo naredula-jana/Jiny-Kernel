@@ -249,7 +249,7 @@ unsigned long sc_sleep(long ticks) /* each tick is 100HZ or 10ms */
 	spin_unlock_irqrestore(&sched_lock, flags);
 	return 1;
 }
-int sc_threadlist(char *arg1, char *arg2) {
+int Jcmd_threadlist_stat(char *arg1, char *arg2) {
 	unsigned long flags;
 	struct list_head *pos;
 	struct task_struct *task;
@@ -403,7 +403,7 @@ unsigned long SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned 
 	}
 	mm_putFreePages(tmp_stack, 0);
 	ut_strncpy(g_current_task->name, file, MAX_TASK_NAME);
-	vm_printMmaps(0, 0);
+	Jcmd_vmaps_stat(0, 0);
 
 	g_current_task->thread.userland.ip = main_func;
 	g_current_task->thread.userland.sp = t_argv;
@@ -431,7 +431,7 @@ extern void enter_userspace();
 static unsigned long push_to_userland() {
 	struct user_regs *p;
 	int cpuid=getcpuid();
-	DEBUG(" from PUSH113_TO_USERLAND \n");
+	DEBUG(" from PUSH113_TO_USERLAND :%d\n",cpuid);
 	/* From here onwards DO NOT  call any function that consumes stack */
 	asm("cli");
 	asm("movq %%rsp,%0" : "=m" (p));

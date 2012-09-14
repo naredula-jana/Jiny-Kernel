@@ -98,7 +98,7 @@ void init_handlers()
 	ar_registerInterrupt(13, gpFault,"gpfault");
 }
 
-int ar_printIrqStat(char *arg1,char *arg2)
+int Jcmd_irq_stat(char *arg1,char *arg2)
 {
 	int i, j;
 

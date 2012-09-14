@@ -126,18 +126,16 @@ int read_msi(pci_addr_t *addr, uint8_t pos, pci_bar_t bars[],
 
 	pci_msix_update_interrupts(&msix, 1); /* first mask interrupt */
 
-	DEBUG("msixctrl:%x \n", msix.msix_ctrl);
 	msix.msix_ctrl = msix.msix_ctrl | 0x8000; // enable msix
 	pci_write(addr, pos + PCIR_MSIX_CTRL, 2, &msix.msix_ctrl);
-
 	pci_msix_update_interrupts(&msix, 0);
-
 	msix.msix_ctrl = msix.msix_ctrl | 0x8000; // enable msix
 	pci_write(addr, pos + PCIR_MSIX_CTRL, 2, &msix.msix_ctrl);
 
-	DEBUG("MSIX Configured ISR vector:%d  numvector:%d\n", msix.isr_vector,msix.msix_msgnum);
+	DEBUG("MSIX Configured ISR vector:%d  numvector:%d ctrl:%x\n", msix.isr_vector,msix.msix_msgnum,msix.msix_ctrl);
 	return msix.isr_vector;
 }
+
 int disable_msix(pci_addr_t *addr, uint8_t pos){
 	uint16_t msix_ctrl;
 	int ret;

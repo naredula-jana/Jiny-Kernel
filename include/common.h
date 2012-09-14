@@ -17,16 +17,16 @@
 #define POW2(n) (1 << (n))
 
 
-extern int g_syscall_debug;
-extern unsigned long g_debug_level;
+extern int g_conf_syscall_debug;
+extern int g_conf_debug_level;
 #define SYSCALL_DEBUG(x...) do { \
-	if (g_syscall_debug==1)	{ut_printf("SYSCALL(uip: %x) ",g_cpu_state[0].user_ip); ut_printf(x);} \
+	if (g_conf_syscall_debug==1)	{ut_printf("SYSCALL(uip: %x) ",g_cpu_state[0].user_ip); ut_printf(x);} \
 } while (0) 
 
  //#define DEBUG_ENABLE 1
 #ifdef DEBUG_ENABLE 
 #define DEBUG(x...) do { \
-	if ( g_debug_level==1)	ut_printf(x); \
+	if ( g_conf_debug_level==1)	ut_printf(x); \
 } while (0) 
 #else
 #define DEBUG(x...) do { \
@@ -36,9 +36,12 @@ extern unsigned long g_debug_level;
 extern int brk_pnt;
 #define BRK while(brk_pnt==0)
 
+
 #define MAX_SYMBOLLEN 40
-#define TYPE_TEXT 0
-#define TYPE_DATA 1
+#define SYMBOL_TEXT 0
+#define SYMBOL_DATA 1
+#define SYMBOL_CMD 10
+#define SYMBOL_CONF 12
 typedef struct {
 	addr_t address;
 	char type;

@@ -22,137 +22,79 @@ typedef struct {
 #define MAX_COMMANDS 500
 static int sh_create(char *arg1,char *arg2);
 static int sh_exit(char *arg1,char *arg2);
-static int sh_syscalldebug(char *arg1,char *arg2);
-static int sh_debug(char *arg1,char *arg2);
 static int print_help(char *arg1,char *arg2);
-static int sh_cat(char *arg1,char *arg2);
+static int Jcmd_cat(char *arg1,char *arg2);
 static int sh_cp(char *arg1,char *arg2);
 static int sh_kill(char *arg1,char *arg2);
 static int sh_alloc_mem(char *arg1,char *arg2);
 static int sh_free_mem(char *arg1,char *arg2);
 static int sh_sync(char *arg1,char *arg2);
 static int sh_del(char *arg1,char *arg2);
-int ar_printIrqStat(char *arg1,char *arg2);
+
 static int sh_test1(char *arg1,char *arg2);
-static int  test_hostshm(char *arg1,char *arg2);
-void ut_cls();
-
-void test_proc();
-
-int test_prod(char *arg1,char *arg2 );
-int test_cons(char *arg1,char *arg2 );
 static int sh_mmap(char *arg1,char *arg2);
-extern int xen_time(char *arg1,char *arg2);
-extern int xen_readcmd(char *arg1,char *arg2);
-extern int xen_writecmd(char *arg1,char *arg2);
 extern int p9_cmd(char *arg1,char *arg2);
-extern int ut_logFlush(char *arg1, char *arg2);
+extern int Jcmd_logflush(char *arg1, char *arg2);
 static int sh_virtio(char *arg1,char *arg2);
-extern int print_pci(char *arg1 , char *arg2);
+
 int conf_set(char *arg1 , char *arg2);
 int scan_pagecache(char *arg1 , char *arg2);
 static int load_test1(char *arg1,char *arg2);
-typedef struct {
-	char *conf_name;
-	int  *conf_variable;
-	char *description;
-} confs_t;
-extern int g_conf_clock_scale,g_conf_netbh_poll,g_conf_udp_respond,g_conf_serial_line;
-confs_t confs_list[]=
-{
-		{"clock_scale",&g_conf_clock_scale,"default=1"},
-		{"serial_line",&g_conf_serial_line,"default=1 1=enable 0=disable"},
-		{"netbh_poll",&g_conf_netbh_poll,"default=0, to poll=1"},
-		{"udp_respond",&g_conf_udp_respond,"default=0, to respond=1"},
-		{0,0,0} /* DO not Remove this entry */
-};
-int conf_set(char *arg1, char *arg2) {
-	int i;
-	if (arg1 == 0 || arg2 == 0) {
-		for (i = 0; confs_list[i].conf_name != 0; i++) {
-			if (confs_list[i].conf_variable != 0)
-				ut_printf("%s=%d {%s}\n", confs_list[i].conf_name,
-						*confs_list[i].conf_variable,
-						confs_list[i].description);
-		}
-	} else {
-		int val=ut_atoi(arg2);
-		for (i = 0; confs_list[i].conf_name != 0; i++) {
-					if (confs_list[i].conf_variable == 0)  continue;
-					if (ut_strcmp(arg1,confs_list[i].conf_name)==0){
-						*confs_list[i].conf_variable=val;
-						ut_printf("Successfully updated the config variable\n");
-						return;
-					}
-		}
-		ut_printf("ERROR: config variable not updated\n");
-	}
 
-	return;
+
+
+int g_conf_debug_level=1;
+
+int conf_set(char *arg1, char *arg2) {
+	int i,ret;
+
+    if (arg1==0){
+    	ut_printf("Conf variables:\n");
+    	display_symbols(SYMBOL_CONF);
+    }else{
+    	ret=execute_symbol(SYMBOL_CONF,arg1,arg2);
+    }
+	return ret;
+}
+
+int cmd(char *arg1, char *arg2) {
+	int i,ret;
+
+    if (arg1==0){
+    	ut_printf("Command list:\n");
+    	ret=display_symbols(SYMBOL_CMD);
+    }else{
+    	ret=execute_symbol(SYMBOL_CMD,arg1,arg2);
+    }
+    if (ret==0) ut_printf("Not Found: %s\n",arg1);
+	return ret;
 }
 commands_t cmd_list[]=
 {
 	{"help      ","Print Help Menu","help",print_help},
 	{"set  <var> <value>","set config variables","set",conf_set},
+	{"cmd  <cmd> <arg1> <arg2>","execute commands","cmd",cmd},
 	{"c <prog>  ","Create test thread","c",sh_create},
-	{"e   ","exit thread","e",sh_exit},
-	{"d   ","toggle debug","d",sh_debug},
-	{"s   ","toggle SYSCALL debug","s",sh_syscalldebug},
-	{"i         ","Print IRQ stats","i",ar_printIrqStat},
-	{"t         ","Print thread list","t",sc_threadlist},
-#ifdef XEN
-	{"tp        ","test produce","tp",test_prod},
-	{"tc        ","test consume","tc",test_cons},
-
-	{"xw         ","xen write","xw",xen_writecmd},
-	{"xr         ","xen read time","xr",xen_readcmd},
-	{"x        ","Print time","x",xen_time},
-#endif
 	{"p9 ","9p commands","p9",p9_cmd},
-	{"logflush ","Flush the log","logflush",ut_logFlush},
 	{"kill <pid> ","kill process","kill",sh_kill},
-	{"cls       ","clear screen ","cls",ut_cls},
-	{"maps      ","Memory map areas","maps",vm_printMmaps},
-	{"ls        ","ls","ls",fs_printInodes},
-	{"pc        ","page cache stats","pc",pc_stats},
-	{"pci        ","pci resource","pci",print_pci},
 	{"scan        ","scan page cache ","scan",scan_pagecache},
 	{"mem        ","memstat","mem",mm_printFreeAreas},
 	{"mmap <file> <addr>","mmap file","mmap",sh_mmap},
 	{"amem <order>","mem allocate ","amem",sh_alloc_mem},
 	{"fmem <address>","mem allocate ","fmem",sh_free_mem},
-	{"cat <file>","Cat file       ","cat",sh_cat},
 	{"del <file>","flush file-remove from page cache       ","del",sh_del},
 	{"cp <f1> <f2>","copy f1 f2       ","cp",sh_cp},
 	{"sync <f1>","sync f1       ","sync",sh_sync},
 	{"virtio stat ","v","v",sh_virtio},
 	{"t1 ","t1 file","t1",sh_test1},
-	{0,0,0,0}
+	{0,0,0,cmd} /* at last check for command */
 };
 
 extern void ut_putchar (int c); 
 
-
-extern struct wait_struct g_hfs_waitqueue;
-#define CR0_WP 0x00010000 /* Write protect */
-static inline uint64_t read_cr0(void)       
-{                                             
-	uint64_t ret;                               
-	__asm__ volatile ("movq %%cr0, %0\n"   
-			: "=r" (ret));            
-	return ret;                                 
-}
-
-static inline void write_cr0(uint64_t val)  
-{                                             
-	__asm__ volatile ("movq %0, %%cr0 \n" 
-			:: "r" (val));          
-}
-
-
 static int sh_virtio(char *arg1,char *arg2){
 	print_virtio_net();
-	sc_threadlist(0,0);
+//	sc_threadlist(0,0);
 	print_udpserver();
 }
 static char buf[26024];
@@ -282,7 +224,7 @@ static int sh_sync(char *arg1,char *arg2)
 	ut_printf("after syncing \n");
 	return 0;
 }
-static int sh_cat(char *arg1,char *arg2)
+static int Jcmd_cat(char *arg1,char *arg2)
 {
 	struct file *fp;
 	int i,ret;
@@ -345,7 +287,7 @@ static int sh_free_mem(char *arg1,char *arg2)
 }
 static unsigned char tmp_arg2[100];
 static unsigned char *envs[]={"HOSTNAME=jana", "USER=jana", "HOME=/home/jana", "PWD=/home/jana", 0};
-static int load_test1(char *arg1,char *arg2)
+static int exec_thread(char *arg1,char *arg2)
 {
 //	char *argv[]={"First argument","second argument",0};
 	char *argv[]={0};
@@ -378,36 +320,11 @@ static int sh_create(char *arg1,char *arg2)
 	int ret;
 	char *arg[5];
 
-	tmp_arg2[0]='\0';
-	ut_printf("test FORKING before : %s \n",arg1);
-	ut_strcpy(tmp_arg2,arg2);
-	ret=sc_createKernelThread(load_test1,arg1,"test");
-	ut_printf(" Parent process : pid: %d  \n",ret);
+	ret=sc_createKernelThread(exec_thread,arg1,"test");
+
 	return 1;
 }
-unsigned long g_debug_level=1;
-int g_test_exit=0;
-static int sh_exit(char *arg1,char *arg2)
-{
-	if (g_test_exit == 1) g_test_exit=0;
-	else g_test_exit=1;
-	ut_printf(" Textexit :%d\n",g_test_exit);
-	return 1;
-}
-static int sh_debug(char *arg1,char *arg2)
-{
-	if (g_debug_level == 1) g_debug_level=0;
-	else g_debug_level=1;
-	ut_printf(" debug level :%d\n",g_debug_level);
-	return 1;
-}
-static int sh_syscalldebug(char *arg1,char *arg2)
-{
-	if (g_syscall_debug == 1) g_syscall_debug=0;
-	else g_syscall_debug=1;
-	ut_printf(" debug level :%d\n",g_syscall_debug);
-	return 1;
-}
+
 static int print_help(char *arg1,char *arg2)
 {
 	int i;
@@ -415,7 +332,7 @@ static int print_help(char *arg1,char *arg2)
 	for (i=0; i<MAX_COMMANDS; i++)
 	{
 		if (cmd_list[i].usage == 0) break;
-		ut_printf(" %s %s \n",cmd_list[i].usage,cmd_list[i].help);
+		ut_printf("%9s %s \n",cmd_list[i].usage,cmd_list[i].help);
 	}	
 
 	return 1;
@@ -504,7 +421,13 @@ static int process_command(int cmd,char *p)
 	symbls=0;
 	for (i=0; i<MAX_COMMANDS; i++)
 	{
-		if (cmd_list[i].usage == 0) break;
+		if (cmd_list[i].usage == 0){
+			if (cmd_list[i].func!=0){
+				ret=cmd_list[i].func(token[0],token[1]);
+				ret=0;
+			}
+			break;
+		}
 		ret=ut_strcmp(token[0],cmd_list[i].command_name);
 		if (ret==0)
 		{
@@ -526,35 +449,7 @@ static int process_command(int cmd,char *p)
 	p[0]='\0';		
 	return 0;
 }
-#if 0
-static int process_symbol(int cmd,char *p)
-{
-	int i,ret,symbls;
 
-	symbls=0;
-	for (i=0; i< g_total_symbols; i++)
-	{
-		ret=ut_strcmp(p,g_symbol_table[i].name);
-		if (ret==0)
-		{
-			ut_printf(" %s : %x  type:%d \n",p,g_symbol_table[i].address,g_symbol_table[i].type);
-			return 0;
-		}else if (ret==2 && cmd==CMD_FILLVAR) /* if p is having some subsets in symbol table */
-		{
-			symbls++;
-			if (symbls==1) ut_printf("\n");
-			ut_printf("%s ",g_symbol_table[i].name);	
-		}
-	}
-	if (cmd==CMD_FILLVAR && symbls>0)
-	{
-		ut_printf("\n");		
-		return 1;	
-	}else
-		ut_printf("Not found :%s: \n",p);
-	return 0;
-}
-#endif
 static int get_cmd(unsigned char *line)
 {
 	int i;

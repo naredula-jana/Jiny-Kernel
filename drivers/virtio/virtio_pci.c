@@ -153,7 +153,7 @@ int virtio_createQueue(uint16_t index, virtio_dev_t *dev, int qType) {
 	}
 
 	uint32_t pfn = inl(dev->pci_ioaddr + VIRTIO_PCI_QUEUE_PFN);
-	DEBUG(" pfn-%d : %x \n",index,pfn);
+//	DEBUG(" pfn-%d : %x \n",index,pfn);
 
 	size = PAGE_ALIGN(vring_size(num, VIRTIO_PCI_VRING_ALIGN));
 

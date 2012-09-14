@@ -51,6 +51,7 @@ clean:
 	make SOURCE_ROOT=$$PWD -C arch/$(ARCH_DIR)/smp clean
 	make SOURCE_ROOT=$$PWD -C mm clean
 	make SOURCE_ROOT=$$PWD -C mm/memleak clean
+	\rm bin/mod_file
 #	\rm $(LWIP_OBJ)
 
 LWC     := $(shell find /opt_src/lwip/ -type f -name '*.c')

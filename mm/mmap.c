@@ -72,7 +72,7 @@ static int vma_link(struct mm_struct *mm, struct vm_area_struct *vma) {
 
 /************************** API function *****************/
 
-int vm_printMmaps(char *arg1, char *arg2) {
+int Jcmd_vmaps_stat(char *arg1, char *arg2) {
 	struct mm_struct *mm;
 	struct vm_area_struct *vma;
 
@@ -86,9 +86,9 @@ int vm_printMmaps(char *arg1, char *arg2) {
 
 		inode = vma->vm_inode;
 		if (inode == NULL) {
-			DEBUG(" [ %x - %x ] - (+%x)\n", vma->vm_start, vma->vm_end, vma->vm_private_data);
+			ut_printf(" [ %x - %x ] - (+%x)\n", vma->vm_start, vma->vm_end, vma->vm_private_data);
 		} else {
-			DEBUG(" [ %x - %x ] - %s(+%x)\n", vma->vm_start, vma->vm_end, inode->filename, vma->vm_private_data);
+			ut_printf(" [ %x - %x ] - %s(+%x)\n", vma->vm_start, vma->vm_end, inode->filename, vma->vm_private_data);
 		}
 		vma = vma->vm_next;
 	}
@@ -189,7 +189,7 @@ unsigned long SYS_vm_brk(unsigned long addr) {
 	if (vma == 0)
 		BUG();
 	vma->vm_end = addr;
-	vm_printMmaps(0, 0);
+	Jcmd_vmaps_stat(0, 0);
 	return addr;
 }
 

@@ -30,7 +30,7 @@ unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int flags,void *
 int SYS_sc_exit(int status);
 int SYS_sc_kill(unsigned long pid,unsigned long signal);
 unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned char **env);
-int sc_threadlist( char *arg1,char *arg2);
+int Jcmd_threadlist_stat( char *arg1,char *arg2);
 unsigned long sc_createKernelThread(int (*fn)(void *),unsigned char *argv,unsigned char *name);
 void sc_schedule();
 
@@ -51,7 +51,7 @@ void mm_free (const void *objp);
 #define ut_malloc(x) mm_malloc(x,0)
 
 /* vm */
-int vm_printMmaps(char *arg1,char *arg2);
+int Jcmd_vmaps_stat(char *arg1,char *arg2);
 struct vm_area_struct *vm_findVma(struct mm_struct *mm,unsigned long addr, unsigned long len);
 long SYS_vm_mmap(unsigned long fd, unsigned long addr, unsigned long len,unsigned long prot, unsigned long flags, unsigned long pgoff);
 unsigned long SYS_vm_brk(unsigned long addr);
@@ -63,7 +63,7 @@ int vm_munmap(struct mm_struct *mm, unsigned long addr, unsigned long len);
 
 /* page cache */
 int pc_init(unsigned char *start_addr,unsigned long len);
-int pc_stats(char *arg1,char *arg2);
+int Jcmd_pagecache_stat(char *arg1,char *arg2);
 int pc_pageDirted(struct page *p);
 int pc_pagecleaned(struct page *page);
 struct page *pc_getInodePage(struct inode *inode,unsigned long offset);
@@ -77,7 +77,7 @@ page_struct_t *pc_getFreePage();
 unsigned long fs_registerFileSystem(struct filesystem *fs);
 struct inode *fs_getInode(char *filename);
 unsigned long fs_putInode(struct inode *inode);
-int fs_printInodes(char *arg1,char *arg2);
+int Jcmd_ls(char *arg1,char *arg2);
 unsigned long fs_open(char *filename,int mode,int flags);
 struct page *fs_genericRead(struct inode *inode,unsigned long offset);
 ssize_t fs_read(struct file *fp ,unsigned char *buff ,unsigned long len);

@@ -151,7 +151,7 @@ static int get_bar(pci_addr_t *addr, int barno, uint32_t *start, uint32_t *len)
 #define MAX_PCI_BARS 100
 static pci_bar_t pci_bars[MAX_PCI_BARS];
 static int bar_count=0;
-int print_pci(char *arg1 , char *arg2){
+int Jcmd_pci_stat(char *arg1 , char *arg2){
 	int i;
 	for (i=0; i<bar_count; i++){
 		if (pci_bars[i].addr==0 ) return;

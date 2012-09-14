@@ -43,7 +43,7 @@ int init_kernel(unsigned long end_addr)
 	mm_cachep = kmem_cache_create("mm_struct",sizeof(struct mm_struct), 0,0,NULL,NULL);
 
 	ut_printf("Initalising: syscall,tasks.. \n");
-	init_syscall();
+	init_syscall(0); /* init cpu calls for boot cpu */
 	init_tasking();
 #ifdef MEMLEAK_TOOL
 	kmemleak_init();
@@ -74,6 +74,7 @@ int init_kernel(unsigned long end_addr)
 	init_vfs();
 //	ar_registerInterrupt(128,syscall_handler);
 
+	init_symbol_table();
 	ut_printf("Initialization completed \n");
 
 	return 1 ;

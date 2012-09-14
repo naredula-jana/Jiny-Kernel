@@ -63,7 +63,7 @@ static inline void gdtr_load(gdt_ptr_t *gdtr_reg)
 static inline void tr_load(uint16_t s)
 {
 #ifdef SMP
-	if (getcpuid() != 0 )  return;  //TODO : later need find the solution for SMP
+	//if (getcpuid() != 0 )  return;  //TODO : later need find the solution for SMP
 #endif
 	asm volatile("ltr %0" : : "r" (s));
 }
@@ -80,8 +80,8 @@ static void __install_tss(struct tss_descr *descr, int type, uint8_t dpl,
 }
 void ar_setupTssStack(unsigned long stack)
 {
-	int cpu;
-	cpu=0;
+	int cpu=getcpuid();
+
 	tss[cpu].rsp0=stack;
 	gdt_install_tss((tss_descr_t *)&gdt_entries[cpu][TSS_DESCR], SEG_DPL_KERNEL,
 			(uint64_t)&tss[cpu], TSS_DEFAULT_LIMIT, SEG_FLG_PRESENT);
@@ -232,10 +232,15 @@ static void init_idt()
 }
 #ifdef SMP
 void init_smp_gdt(int cpu){
+#if 0
 	ut_memcpy(&gdt_entries[cpu][0], &gdt_entries[0][0], sizeof(gdt_entries[cpu]));
 	gdt_ptr[cpu].limit = (sizeof(gdt_entries) / MAX_CPUS)-1;
 	gdt_ptr[cpu].base = (uint64_t)&gdt_entries[cpu][0];
 	gdtr_load(&gdt_ptr[cpu]);
+	tr_load(GDT_SEL(TSS_DESCR));
+#else
+	init_gdt(cpu);
+#endif
 
 	idtr_load(&idt_ptr);
 }

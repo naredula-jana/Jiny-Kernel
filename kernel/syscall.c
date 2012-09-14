@@ -15,7 +15,7 @@
 unsigned long SYS_printf(unsigned long *args);
 
 unsigned long SYS_fork();
-int g_syscall_debug=1;
+int g_conf_syscall_debug=1;
 long SYS_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags,unsigned long fd, unsigned long off);
 unsigned long snull(unsigned long *args);
 unsigned long SYS_uname(unsigned long *args);

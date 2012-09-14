@@ -13,20 +13,7 @@
 #include "common.h"
 #include "interface.h"
 extern unsigned long stack,placement_address;
-static void print_symbol(addr_t addr)
-{
-	int i;
-	for (i=0; i< g_total_symbols; i++)
-	{
-		if ((addr>=g_symbol_table[i].address) && (addr<g_symbol_table[i+1].address))
-		{
-			ut_printf("   :%s + %x\n",g_symbol_table[i].name,(addr-g_symbol_table[i].address));
-			return ;
-		}
-	}
-	ut_printf("   :%x \n",addr);
-	return;
-}
+
 void ut_showTrace(unsigned long *stack_top)
 {
 	unsigned long addr;

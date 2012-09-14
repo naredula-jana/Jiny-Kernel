@@ -253,7 +253,7 @@ static int list_count(struct list_head *head)
 	return i;
 }
 
-int pc_stats(char *arg1,char *arg2)
+int Jcmd_pagecache_stat(char *arg1,char *arg2)
 {
 	ut_printf(" Total Pages : %d \n",pc_totalpages);
 	ut_printf(" FREE List        : %d %d \n",free_list.count.counter,list_count(&free_list.head));

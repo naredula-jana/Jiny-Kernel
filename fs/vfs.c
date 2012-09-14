@@ -53,7 +53,7 @@ static int inode_init(struct inode *inode, char *filename, struct filesystem *vf
 
 /*************************** API functions ************************/
 
-int fs_printInodes(char *arg1, char *arg2) {
+int Jcmd_ls(char *arg1, char *arg2) {
 	struct inode *tmp_inode;
 	struct list_head *p;
 

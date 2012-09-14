@@ -178,25 +178,25 @@ int wait_non_bootcpus = 1;
  *  This must be modified to perform whatever OS-specific initialization
  *  that is required.
  */
-int child_id;
+
 extern void init_smp_gdt(int cpu);
 extern void idleTask_func();
 void smp_main() {
 	int i;
-
+    int cpuid;
 	while (wait_non_bootcpus == 1)
 		; /* wait till boot cpu trigger */
 	cli();
 	/* disable interrupts */
-	init_smp_gdt(getcpuid());
-	child_id = getcpuid();
+	cpuid=getcpuid();
+	init_smp_gdt(cpuid);
 	local_ap_apic_init();
 	__enable_apic();
-
+	init_syscall(cpuid);
 	interrupts_enable();
 
 	local_ap_apic_init(); /* TODO : Need to call this second time to get APIC enabled */
-
+    ut_printf("SMP cpu id:%d \n",cpuid);
 	idleTask_func();
 	return;
 }

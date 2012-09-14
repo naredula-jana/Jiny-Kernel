@@ -130,7 +130,7 @@ int g_conf_serial_line = 1;
 
 unsigned char g_dmesg[MAX_DMESG_LOG];
 unsigned long g_dmesg_index = 0;
-int ut_logFlush(char *arg1, char *arg2) {
+int Jcmd_logflush(char *arg1, char *arg2) {
 	static int init = 0;
 	static unsigned long start_offset=0;
 	static unsigned long fd;
@@ -173,7 +173,7 @@ void ut_putchar(int c) {
 			buf[1] = '\0';
 			dr_serialWrite(buf, 1);
 		}
-		return;
+//		return;
 	}
 
 	video_g = (unsigned char *) VIDEO;
