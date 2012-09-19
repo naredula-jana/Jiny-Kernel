@@ -3,14 +3,15 @@
 
 #define VIRTIO 1
 
-
-#include "spinlock.h"
+#include "types.h"
 #include "atomic.h"
 #include "list.h"
 #include "isr.h"
 #include "descriptor_tables.h"
-//#include "types.h"
 #include "multiboot.h"
+#include "task.h"
+#include "spinlock.h"
+
 #ifndef NULL
 #define NULL ((void *) 0)
 #endif
@@ -85,9 +86,7 @@ do {                                                           \
 static uint8_t __attribute__((always_inline))  inb(uint16_t port)
 {
   uint8_t vl;
-
   __asm__ volatile ("inb %1, %0\n" : "=a" (vl) : "d" (port));
-
   return vl;
 }
 /* put byte value to io port */
@@ -99,9 +98,7 @@ static void __attribute__((always_inline)) outb(uint16_t port,uint8_t vl)
 static uint16_t __attribute__((always_inline))  inw(uint16_t port)
 {
   uint16_t vl;
-
   __asm__ volatile ("inw %1, %0\n" : "=a" (vl) : "d" (port));
-
   return vl;
 }
 
@@ -115,9 +112,7 @@ static void __attribute__((always_inline)) outw(uint16_t port,uint16_t vl)
 static uint32_t __attribute__((always_inline)) inl(uint16_t port)
 {
   uint32_t vl;
-
   __asm__ volatile ("inl %1, %0\n" : "=a" (vl) : "d" (port));
-
   return vl;
 }
 /* put 32 bit value to io port */
@@ -125,8 +120,6 @@ static void __attribute__((always_inline)) outl(uint16_t port,uint32_t vl)
 {
 	__asm__ volatile ("outl %0, %1\n" : : "a" (vl), "Nd" (port));
 }
-
-
 
 
 // Enables registration of callbacks for interrupts or IRQs.

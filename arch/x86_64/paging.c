@@ -1,10 +1,11 @@
 //#define DEBUG_ENABLE 1
-#include "task.h"
-#include "mm.h"
+//#include "task.h"
+//#include "mm.h"
+#include "common.h"
 #include "paging.h"
 #include "isr.h"
 #include "interface.h"
-#include "common.h"
+
 
 // The kernel's page directory
 addr_t g_kernel_page_dir=0;

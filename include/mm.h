@@ -1,7 +1,7 @@
 #ifndef __MM_H__
 #define __MM_H__
 
-#include "common.h"
+//#include "common.h"
 #include "paging.h"
 #include "bitops.h"
 #include "../util/host_fs/filecache_schema.h"

@@ -19,11 +19,8 @@
  */
 #define __atomic_fool_gcc(x) (*(volatile struct { int a[100]; } *)x)
 
-#ifdef __SMP__
 typedef struct { volatile int counter; } atomic_t;
-#else
-typedef struct { int counter; } atomic_t;
-#endif
+
 
 #define ATOMIC_INIT(i)	{ (i) }
 

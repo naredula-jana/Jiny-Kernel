@@ -11,7 +11,7 @@
 #ifndef TASK_H
 #define TASK_H
 
-#include "common.h"
+//#include "common.h"
 #include "mm.h"
 
 
@@ -43,11 +43,11 @@ struct fs_struct {
 };
 
 struct mm_struct {
-        struct vm_area_struct *mmap;           /* list of VMAs */
-        unsigned long pgd; 
-        atomic_t count;                      /* How many references to "struct mm_struct" (users count as 1) */
+	struct vm_area_struct *mmap; /* list of VMAs */
+	unsigned long pgd;
+	atomic_t count; /* How many references to "struct mm_struct" (users count as 1) */
 	struct fs_struct fs;
-	unsigned long brk_addr,brk_len;
+	unsigned long brk_addr, brk_len;
 	unsigned long anonymous_addr;
 };
 typedef struct queue{

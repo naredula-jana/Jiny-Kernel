@@ -28,6 +28,6 @@ typedef unsigned long int       uint64_t;
 __extension__
 typedef unsigned long long int  uint64_t;
 #endif
-//typedef unsigned long long uint64_t;
+
 
 #endif

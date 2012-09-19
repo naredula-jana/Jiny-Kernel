@@ -9,7 +9,8 @@
  *
  */
 #define DEBUG_ENABLE 1
-#include "task.h"
+#include "common.h"
+//#include "task.h"
 #include "interface.h"
 #include "descriptor_tables.h"
 #define MAGIC_CHAR 0xab
@@ -259,10 +260,11 @@ unsigned long sc_sleep(long ticks) /* each tick is 100HZ or 10ms */
 	unsigned long flags;
 
 	spin_lock_irqsave(&sched_lock, flags);
-	_add_to_waitqueue(&timer_queue, g_current_task, ticks);
 	g_current_task->state = TASK_INTERRUPTIBLE;
-	flags=_schedule(flags);
+	_add_to_waitqueue(&timer_queue, g_current_task, ticks);
 	spin_unlock_irqrestore(&sched_lock, flags);
+
+	sc_schedule();
 	return 1;
 }
 int Jcmd_threadlist_stat(char *arg1, char *arg2) {
@@ -296,7 +298,7 @@ int Jcmd_threadlist_stat(char *arg1, char *arg2) {
 		if (g_current_tasks[i]==g_idle_tasks[i])
 			ut_printf("%d : <idle>\n",i);
 		else
-			ut_printf("%d : %s\n",i,g_current_tasks[i]->name);
+			ut_printf("%d : %s(%d)\n",i,g_current_tasks[i]->name,g_current_tasks[i]->pid);
 	}
 	spin_unlock_irqrestore(&sched_lock, flags);
 	return 1;
@@ -760,12 +762,13 @@ void init_tasking() {
 	}
 
     g_current_task->cpu=0;
-	//while(1);
+
 	ar_archSetUserFS(0);
-	init_timer();
+//	init_timer(); //currently apic timer is in use
 	ar_registerInterrupt(IPI_INTERRUPT, &ipi_interrupt, "IPI");
 }
 static void _delete_task(struct task_struct *task) {
+	if (task ==0) return;
 	list_del(&task->wait_queue);
 	list_del(&task->run_link);
 	list_del(&task->task_link);
@@ -801,12 +804,23 @@ void sc_schedule() {
 
 	spin_lock_irqsave(&sched_lock, intr_flags);
 	intr_flags=_schedule(intr_flags);
-	/* handle the  dead task */
-	if (g_task_dead!=0) {
-		_delete_task(g_task_dead);
-		g_task_dead = 0;
-	}
 	spin_unlock_irqrestore(&sched_lock, intr_flags);
+
+	if (1)
+	{
+		struct task_struct *task=0;
+		spin_lock_irqsave(&sched_lock, intr_flags);
+		if (g_task_dead!=0) {
+			task=g_task_dead;
+			g_task_dead=0;
+		}else{
+			task=0;
+		}
+		spin_unlock_irqrestore(&sched_lock, intr_flags);
+		if (task != 0){
+			_delete_task(task);
+		}
+	}
 }
 void sc_check_signal() {
 
@@ -924,25 +938,4 @@ void timer_callback(registers_t regs) {
 	do_softirq();
 }
 
-void init_timer() {
-	addr_t frequency = 100;
-	// Firstly, register our timer callback.
-	ar_registerInterrupt(32, &timer_callback, "timer_callback");
-
-	// The value we send to the PIT is the value to divide it's input clock
-	// (1193180 Hz) by, to get our required frequency. Important to note is
-	// that the divisor must be small enough to fit into 16-bits.
-	addr_t divisor = 1193180 / frequency;
-
-	// Send the command byte.
-	outb(0x43, 0x36);
-
-	// Divisor has to be sent byte-wise, so split here into upper/lower bytes.
-	uint8_t l = (uint8_t) (divisor & 0xFF);
-	uint8_t h = (uint8_t) ((divisor >> 8) & 0xFF);
-
-	// Send the frequency divisor.
-	outb(0x40, l);
-	outb(0x40, h);
-}
 
