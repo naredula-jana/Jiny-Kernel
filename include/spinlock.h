@@ -1,6 +1,6 @@
 #ifndef __ASM_SPINLOCK_H
 #define __ASM_SPINLOCK_H
-//#define SPINLOCK_DEBUG 1
+#define SPINLOCK_DEBUG 1
 
 
 typedef struct {

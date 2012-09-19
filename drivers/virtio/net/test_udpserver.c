@@ -148,6 +148,7 @@ void send_net_BH() {
 			recv_index = 0;
 	}
 }
+
 void net_BH() {
 	unsigned long addr, *len;
 	int ret, i;
@@ -157,6 +158,7 @@ void net_BH() {
 	netbh_started = 1;
 	stat_netcpus[0] = stat_netcpus[1] = 0;
 	while (1) {
+
 		len = 0;
 		netbh_state = 100;
 		netbh_flag = 0;
@@ -282,7 +284,7 @@ void init_TestUdpStack() {
 #ifdef WITH_BOTTOM_HALF
 	int i, ret;
 
-	sc_register_waitqueue(&nbh_waitq);
+	sc_register_waitqueue(&nbh_waitq,"net_bh");
 	ret = sc_createKernelThread(net_BH, 0, "net_rx");
 #ifdef SEND_BH
 	ret=sc_createKernelThread(send_net_BH,0,"net_send_bh");

@@ -42,7 +42,7 @@ int sem_alloc(struct semaphore *sem,uint8_t count)
 
 	  sem->count = count;
 	  sem->sem_lock = SPIN_LOCK_UNLOCKED;
-	  ret = sc_register_waitqueue(&sem->wait_queue);
+	  ret = sc_register_waitqueue(&sem->wait_queue,"semaphore");
 	  return ret;
 }
 

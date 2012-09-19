@@ -12,7 +12,7 @@
 
 
 static queue_t p9_waitq;
-static virtio_dev_t *p9_dev=0;
+virtio_dev_t *p9_dev=0;
 void virtio_9p_interrupt(registers_t regs);
 static int virtio_addToP9Queue(struct virtqueue *vq, unsigned long buf,
 		unsigned long out_len, unsigned long in_len);
@@ -52,7 +52,7 @@ int init_virtio_9p_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev,uint32_t *ms
 	DEBUG(" NEW Initializing.9P INPUT  VIRTIO PCI COMPLETED with driver ok :%x \n",vp_get_status(dev));
 	inb(dev->pci_ioaddr + VIRTIO_PCI_ISR);
 
-	sc_register_waitqueue(&p9_waitq);
+	sc_register_waitqueue(&p9_waitq,"p9");
 	p9_dev = dev;
 	return 1;
 }
@@ -147,72 +147,7 @@ int p9_read_rpc(p9_client_t *client, const char *fmt, ...) {
 	}
 	return ret;
 }
-static 	unsigned char buf[1100];
-int p9_cmd(char *arg1, char *arg2) {
 
-	unsigned long rfp, wfp;
-	int i, wret, ret;
-	fileStat_t stat;
-
-	//if (arg2 != 0) {
-#if 1
-		rfp = fs_open(arg1, O_RDONLY, 0);
-		if (rfp == 0) {
-			DEBUG("ERROR Cannot open readfile:%s\n",arg1);
-			return 0;
-		}
-		fs_stat(rfp,&stat);
-		DEBUG("length of the file :%x(%d)\n",stat.st_size);
-		return 1;
-		//wfp = fs_open("testdir", O_CREAT | O_DIRECTORY, 0);
-		wfp = fs_open(arg2, O_CREAT | O_WRONLY, 0);
-		if (wfp == 0) {
-			DEBUG("ERROR Cannot open writefile:%s\n",arg2);
-			return 0;
-		}
-		for (i = 0; i < 20; i++) {
-			ret = fs_read(rfp, buf, 1000);
-			if (ret > 0) {
-				wret = fs_write(wfp, buf, ret);
-				if (wret > 0) {
-					DEBUG("cp wret :%d ret:%d \n",wret,ret);
-					fs_fdatasync(wfp);
-				} else {
-					DEBUG("Fail to write\n");
-					return 0;
-				}
-			} else
-				return 1;
-		}
-#else
-		if (0) {
-	} else {
-		unsigned long fp;
-
-		//fp = fs_open(arg1,  O_WRONLY, 0);
-		//fs_remove(fp);
-		//return 1;
-
-		fp = fs_open(arg1, O_CREAT | O_WRONLY, 0);
-		ut_strcpy(buf, "ABCjanardhana reddy abc 123451111111111");
-		ret = fs_write(fp, buf, 99);
-		buf[10] = 0;
-		DEBUG("Before fdatasync \n");
-		fs_fdatasync(fp);
-		DEBUG(" WRITE len :%d data:%s:",ret,buf);
-
-		fp = fs_open(arg1, 0, 0);
-		if (fp == 0) {
-			DEBUG("Fail to open the file :%s \n",arg1);
-			return 0;
-		}
-		ret = fs_read(fp, buf, 99);
-		buf[15] = '\0';
-		DEBUG(" READ len :%d data:%s:",ret,buf);
-	}
-#endif
-	return 1;
-}
 void virtio_9p_interrupt(registers_t regs) { // TODO: handling similar  type of interrupt generating while serving P9 interrupt.
 	unsigned char isr;
 	int ret;

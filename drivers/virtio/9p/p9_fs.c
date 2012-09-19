@@ -184,7 +184,7 @@ static uint32_t p9_walk(unsigned char *filename, int flags, unsigned char **crea
 static uint32_t p9_read(uint32_t fid, uint64_t offset, unsigned char *data, uint32_t data_len) {
 	unsigned long addr;
 	int ret;
-	uint32_t read_len;
+	uint32_t read_len=0;
 
 	client.type = P9_TYPE_TREAD;
 	client.user_data = data;
@@ -201,7 +201,7 @@ static uint32_t p9_read(uint32_t fid, uint64_t offset, unsigned char *data, uint
 static uint32_t p9_write(uint32_t fid, uint64_t offset, unsigned char *data, uint32_t data_len) {
 	unsigned long addr;
 	int ret;
-	uint32_t write_len;
+	uint32_t write_len=0;
 	unsigned char *rd;
 
 	client.type = P9_TYPE_TWRITE;
@@ -291,7 +291,7 @@ static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
 
 	return ret;
 }
-void update_size(struct inode *inode,uint64_t offset, int len ) {
+static void update_size(struct inode *inode,uint64_t offset, int len ) {
 	if (inode !=0 && len > 0) {
 		if (inode->file_size < (offset+len))
 			inode->file_size = offset+len;
@@ -299,13 +299,14 @@ void update_size(struct inode *inode,uint64_t offset, int len ) {
 	return ;
 }
 struct filesystem p9_fs;
+extern void *p9_dev;
 /* This is central switch where the call from vfs routed to the p9 functions */
 static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, unsigned char *data, int data_len, int flags, int mode) {
 	uint32_t fid;
 	unsigned char *createFilename;
 	int ret = -1 ;
 
-	if (inode == 0)
+	if (inode == 0 || p9_dev == 0)
 		return ret;
 
 	mutexLock(client.lock);

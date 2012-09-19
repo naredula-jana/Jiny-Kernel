@@ -173,8 +173,8 @@ void ut_putchar(int c) {
 			buf[1] = '\0';
 			dr_serialWrite(buf, 1);
 		}
-//		return;
 	}
+    if (!is_kernelThread(g_current_task)) return; //if it is user level thread do not print
 
 	video_g = (unsigned char *) VIDEO;
 	spin_lock_irqsave(&putchar_lock, flags);
@@ -212,6 +212,7 @@ void ut_printf(const char *format, ...) {
 	int i;
 	char buf[40];
 	char *p;
+
 
 	spin_lock_irqsave(&display_lock, flags);
 	va_list vl;
@@ -280,4 +281,5 @@ void ut_printf(const char *format, ...) {
 	}
 	va_end(vl);
 	spin_unlock_irqrestore(&display_lock, flags);
+
 }

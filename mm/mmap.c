@@ -189,7 +189,7 @@ unsigned long SYS_vm_brk(unsigned long addr) {
 	if (vma == 0)
 		BUG();
 	vma->vm_end = addr;
-	Jcmd_vmaps_stat(0, 0);
+	//Jcmd_vmaps_stat(0, 0);
 	return addr;
 }
 

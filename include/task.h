@@ -33,7 +33,7 @@ struct thread_struct {
 	void *sp; /* kernel stack pointer when scheduling start */
 	void *ip; /* kernel ip when scheduling start */
 	int(*real_ip)(void *);
-	unsigned long argv;
+	unsigned char **argv;
 	struct user_thread userland;
 };
 #define MAX_FDS 100
@@ -52,8 +52,7 @@ struct mm_struct {
 };
 typedef struct queue{
 	struct list_head head;
-	atomic_t count;
-	spinlock_t lock; /* newly added */
+	char *name;
 }queue_t;
 
 // This structure defines a 'task' - a process.
@@ -72,16 +71,18 @@ struct task_struct {
 	unsigned long ticks;	
 	struct thread_struct thread;
 	struct mm_struct *mm;
+
 	struct list_head run_link; /* run queue */
 	struct list_head task_link; /* task queue */
 	struct list_head wait_queue; /* wait queue */
+
 	struct {
 		unsigned long ticks_consumed;
 	} stats;
 
 	unsigned long magic_numbers[4]; /* already stack is default fill with magic numbers */
 }; 
-
+#define is_kernelThread(task) (task->mm == g_kernel_mm)
 #define IPI_INTERRUPT 200
 extern int getcpuid();
 extern struct task_struct *g_idle_tasks[];
@@ -98,5 +99,6 @@ static inline struct task_struct *current_task(void)
     return (struct task_struct *)addr;
 }
 #define g_current_task current_task()
+
 #endif
 #endif

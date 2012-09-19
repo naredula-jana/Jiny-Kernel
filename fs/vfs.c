@@ -143,7 +143,7 @@ error:
 	return 0;
 }
 unsigned long fs_open(char *filename, int flags, int mode) {
-	if (vfs_fs == 0)
+	if (vfs_fs == 0 || filename==0)
 		return 0;
 	return vfsOpen(filename, flags, mode);
 }
@@ -320,10 +320,14 @@ static ssize_t vfswrite(struct file *filep, unsigned char *buff, unsigned long l
 }
 ssize_t SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
 	struct file *file;
+	int i;
 
-	//SYSCALL_DEBUG("write fd:%d buff:%x len:%x \n",fd,buff,len);
+	SYSCALL_DEBUG("write fd:%d buff:%x len:%x \n",fd,buff,len);
 	if (fd == 1 || fd ==2) { /* TODO: remove the fd==2 later , this is only for testing */
-		ut_printf("%s", buff);/* TODO need to terminate the buf with \0  */
+		for (i=0; i<len; i++){
+			ut_putchar(buff[i]);
+		}
+		//ut_printf("%s", buff);/* TODO need to terminate the buf with \0  */
 		return len;
 	}
 
@@ -352,7 +356,6 @@ struct page *fs_genericRead(struct inode *inode, unsigned long offset) {
 		}
 		page->offset = OFFSET_ALIGN(offset);
 
-		//tret = p9Request(REQUEST_READ, inode, to_ptr(page), PC_PAGESIZE, 0);
 		tret = inode->vfs->read(inode, page->offset, pcPageToPtr(page), PC_PAGESIZE);
 
 		if (tret > 0) {
@@ -496,7 +499,7 @@ unsigned long fs_fadvise(struct inode *inode, unsigned long offset,
 		unsigned long len, int advise) {
 	struct page *page;
 	struct list_head *p;
-
+	//TODO : implementing other advise types
 	if (advise == POSIX_FADV_DONTNEED && len == 0) {
 		while (1) /* delete all the pages in the inode */
 		{

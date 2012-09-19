@@ -124,7 +124,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 210 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 215 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 220 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 225 */
+{ SYS_fs_fadvise }, { snull }, { snull }, { snull }, { snull }, /* 225 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 230  */
 { SYS_exit_group }, { snull }, { snull }, { snull }, { snull }, /* 235 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 240 */
@@ -295,6 +295,7 @@ int SYS_fs_stat(const char *path, struct stat *buf)
     ut_printf(" st_size: %d st_ino:%d mode:%x \n",buf->st_size,buf->st_ino, buf->st_mode);
 	return ret;
 }
+
 unsigned long SYS_fs_dup2(int fd1, int fd2)
 {
 	SYSCALL_DEBUG("dup2(hardcoded)  fd1:%x fd2:%x \n",fd1,fd2);
@@ -339,7 +340,7 @@ unsigned long SYS_getcwd(unsigned char *buf, int len) {
 }
 unsigned long SYS_exit_group(){
 	SYSCALL_DEBUG("exit_group :\n");
-	SYS_sc_exit(1);
+	SYS_sc_exit(103);
 	return 0;
 }
 

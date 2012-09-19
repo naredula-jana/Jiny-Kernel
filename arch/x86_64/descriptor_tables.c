@@ -152,8 +152,7 @@ int ar_archSetUserFS(unsigned long addr) /* TODO need to reimplement using LDT *
 }
 int ar_updateCpuState(struct task_struct *p)
 {
-	int cpuid=getcpuid();
-
+	int cpuid=p->cpu;
 	g_cpu_state[cpuid].user_stack=p->thread.userland.user_stack;
 	g_cpu_state[cpuid].user_ds = p->thread.userland.user_ds;
 	g_cpu_state[cpuid].user_es = p->thread.userland.user_es;

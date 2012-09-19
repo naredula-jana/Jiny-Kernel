@@ -56,7 +56,7 @@
 
 
 enum {
-POSIX_FADV_DONTNEED=1
+POSIX_FADV_DONTNEED=4
 };
 
 enum {

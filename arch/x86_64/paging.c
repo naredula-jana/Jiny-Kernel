@@ -186,7 +186,7 @@ void ar_pageFault(struct fault_ctx *ctx) {
 	}
 	if (g_current_task->mm != g_kernel_mm) /* user level thread */
 	{
-		SYS_sc_exit(1);
+		SYS_sc_exit(101);
 		return;
 	}
 	BUG();
@@ -408,8 +408,8 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 	{
 		if ( user == 1)
 		{
-			DEBUG("ERROR: Segmenttaion Fault addr:%x \n",addr);
-			SYS_sc_exit(1);
+			ut_printf("ERROR: user program Segmentaion Fault addr:%x  ip:%x \n",addr,faulting_ip);
+			SYS_sc_exit(102);
 			return 1;
 		}
 		BUG();

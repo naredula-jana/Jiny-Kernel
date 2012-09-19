@@ -33,8 +33,6 @@ static int sh_del(char *arg1,char *arg2);
 
 static int sh_test1(char *arg1,char *arg2);
 static int sh_mmap(char *arg1,char *arg2);
-extern int p9_cmd(char *arg1,char *arg2);
-extern int Jcmd_logflush(char *arg1, char *arg2);
 static int sh_virtio(char *arg1,char *arg2);
 
 int conf_set(char *arg1 , char *arg2);
@@ -75,7 +73,6 @@ commands_t cmd_list[]=
 	{"set  <var> <value>","set config variables","set",conf_set},
 	{"cmd  <cmd> <arg1> <arg2>","execute commands","cmd",cmd},
 	{"c <prog>  ","Create test thread","c",sh_create},
-	{"p9 ","9p commands","p9",p9_cmd},
 	{"kill <pid> ","kill process","kill",sh_kill},
 	{"scan        ","scan page cache ","scan",scan_pagecache},
 	{"mem        ","memstat","mem",mm_printFreeAreas},
@@ -148,16 +145,17 @@ static int sh_cp(char *arg1,char *arg2)
 }
 static int sh_del(char *arg1,char *arg2)
 {
-	struct file *wfp;
+	int fd;
 	int i,ret,wret;
 
-	wfp=fs_open(arg1,0,0);
-	if (wfp==0)
+	fd=SYS_fs_open(arg1,0,0);
+	if (fd==0)
 	{
 		ut_printf(" Error opening file :%s: \n",arg1);
 		return 0;
 	}
-	fs_fadvise(wfp,0,0,POSIX_FADV_DONTNEED);
+	SYS_fs_fadvise(fd,0,0,POSIX_FADV_DONTNEED);
+	SYS_fs_close(fd);
 	ut_printf("after del \n");
 	return 0;
 }
@@ -228,6 +226,8 @@ static int Jcmd_cat(char *arg1,char *arg2)
 {
 	struct file *fp;
 	int i,ret;
+
+	if (arg1==0) return;
 	fp=fs_open(arg1,0,0);
 	ut_printf("filename :%s: \n",arg1);
 	if (fp ==0)
@@ -285,7 +285,7 @@ static int sh_free_mem(char *arg1,char *arg2)
 	ut_printf(" free addr  %s :%x  order:%x\n",arg1,addr,order);
 	return 1;	
 }
-static unsigned char tmp_arg2[100];
+static unsigned char *tmp_arg[100]; /* TODO :   need to find some permanent solution to pass the arguments */
 static unsigned char *envs[]={"HOSTNAME=jana", "USER=jana", "HOME=/home/jana", "PWD=/home/jana", 0};
 static int exec_thread(char *arg1,char *arg2)
 {
@@ -295,21 +295,22 @@ static int exec_thread(char *arg1,char *arg2)
 	{
 		char *arg[5];
 		arg[0]=arg1;
-		arg[1]=0;
-        //	SYS_sc_execve("/home/njana/jiny/test/test3",argv,0);
-        	SYS_sc_execve(arg1,arg,envs);
+		arg[1]=arg2;
+		arg[2]=0;
+
+        SYS_sc_execve(arg1,arg,envs);
 	}else
 	{
 		char name[100];
 		char *arg[5];
+
 		ut_strcpy(name,g_current_task->thread.argv);
-		arg[0]=name;
-		if (tmp_arg2[0]=='\0')
-		    arg[1]=0;
-		else
-		    arg[1]=tmp_arg2;
-		arg[2]=0;
-        SYS_sc_execve(g_current_task->thread.argv,arg,envs);
+		arg[0]=g_current_task->thread.argv[0];
+		arg[1]=g_current_task->thread.argv[1];
+		arg[2]=g_current_task->thread.argv[2];
+		arg[3]=0;
+	//	BRK;
+        SYS_sc_execve(g_current_task->thread.argv[0],arg,envs);
 	}
 	ut_printf(" ERROR: COntrol Never Reaches\n");
 	return 1;
@@ -320,7 +321,10 @@ static int sh_create(char *arg1,char *arg2)
 	int ret;
 	char *arg[5];
 
-	ret=sc_createKernelThread(exec_thread,arg1,"test");
+	tmp_arg[0]=arg1;
+	tmp_arg[1]=arg2;
+	tmp_arg[2]=0;
+	ret=sc_createKernelThread(exec_thread,&tmp_arg,arg1);
 
 	return 1;
 }

@@ -8,8 +8,8 @@ main()
 	int fp,wp;
 	unsigned long ret;
 
-	fp=open("/home/njana/test",0);
-	wp=open("/home/njana/ooo",1);
+	fp=open("input",0);
+	wp=open("output",1);
 	printf(" NEW Read file :%x outfile: %x \n",fp,wp);
 	if (fp != 0)
 	{

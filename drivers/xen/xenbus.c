@@ -61,7 +61,7 @@ void init_xenbus(unsigned long xenstore_phyaddr, uint32_t evtchannel) {
 	int err;
 	DEBUG("Initialising xenbus\n");
 
-	sc_register_waitqueue(&xb_waitq);
+	sc_register_waitqueue(&xb_waitq,"xen");
 #define HOST_XEN_STORE_ADDR 0xe3000000
 	xenstore_buf = HOST_XEN_STORE_ADDR;
 	store_evtchannel = evtchannel;

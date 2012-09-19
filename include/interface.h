@@ -20,8 +20,8 @@ struct iovec {
  *
  */
 /* scheduling */
-int sc_register_waitqueue(queue_t *waitqueue);
-int sc_unregister_waitqueue(queue_t *waitqueue);
+extern int sc_register_waitqueue(queue_t *waitqueue, char *name);
+extern int sc_unregister_waitqueue(queue_t *waitqueue);
 int sc_wakeUp(queue_t *waitqueue);
 int sc_wait(queue_t *waitqueue, unsigned long ticks);
 unsigned long  sc_sleep( long ticks); /* each tick is 100HZ or 10ms */
@@ -29,7 +29,7 @@ unsigned long SYS_sc_fork();
 unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int flags,void *args);
 int SYS_sc_exit(int status);
 int SYS_sc_kill(unsigned long pid,unsigned long signal);
-unsigned long SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned char **env);
+void SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned char **env);
 int Jcmd_threadlist_stat( char *arg1,char *arg2);
 unsigned long sc_createKernelThread(int (*fn)(void *),unsigned char *argv,unsigned char *name);
 void sc_schedule();

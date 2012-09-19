@@ -29,7 +29,7 @@ unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles pe
 
 static struct task_struct *g_task_dead = 0; /* TODO : remove me later */
 
-#define is_kernelThread(task) (task->mm == g_kernel_mm)
+
 
 extern long *g_idle_stack;
 void init_timer();
@@ -47,15 +47,26 @@ static void free_task_struct(struct task_struct *p) {
 /************************************************
   All the below function should be called with holding lock
   *********************************************** */
-static inline void _add_to_runqueue(struct task_struct * p) /* Add at the first */
+static inline int _add_to_runqueue(struct task_struct * p) /* Add at the first */
 {
 	if (p->magic_numbers[0] != MAGIC_LONG || p->magic_numbers[1] != MAGIC_LONG) /* safety check */
 	{
-		DEBUG(" Task Stack Got CORRUPTED task:%x :%x :%x \n",p,p->magic_numbers[0],p->magic_numbers[1]);
+		DEBUG(
+				" Task Stack Got CORRUPTED task:%x :%x :%x \n", p, p->magic_numbers[0], p->magic_numbers[1]);
 		BUG();
 	}
-	list_add_tail(&p->run_link, &run_queue.head);
-	atomic_inc(&run_queue.count);
+	if (p->run_link.next == 0 && p->cpu == 0xffff) { /* Avoid adding self adding in to runqueue */
+		list_add_tail(&p->run_link, &run_queue.head);
+		return 1;
+	}
+#if 0
+	if (g_current_tasks[0] == p || g_current_tasks[1] == p) //SAFE CHECK
+	{
+		BUG();
+	}
+#endif
+	//BUG();
+	return 0;
 }
 
 static inline struct task_struct *_get_from_runqueue() {
@@ -85,15 +96,13 @@ static inline struct task_struct *_del_from_runqueue(struct task_struct * p) {
 			BUG();
 	}
 	list_del(&p->run_link);
-	atomic_dec(&run_queue.count);
 	return p;
 }
 
 /******************************************  WAIT QUEUE *******************/
-static void inline init_waitqueue(queue_t *waitqueue) {
+static void inline init_waitqueue(queue_t *waitqueue, char *name) {
 	INIT_LIST_HEAD(&(waitqueue->head));
-	waitqueue->lock = SPIN_LOCK_UNLOCKED; // currently unused, protected by sched lock
-	waitqueue->count.counter = 0;
+	waitqueue->name = name;
 	return;
 }
 
@@ -128,7 +137,7 @@ static void _add_to_waitqueue(queue_t *waitqueue, struct task_struct * p, long t
 		list_add_tail(&p->wait_queue, &waitqueue->head);
 	}
 
-last: atomic_inc(&waitqueue->count);
+last: ;
 
 }
 
@@ -151,7 +160,6 @@ static int _del_from_waitqueue(queue_t *waitqueue, struct task_struct *p) {
 				task->sleep_ticks = task->sleep_ticks + p->sleep_ticks;
 			}
 			p->sleep_ticks = 0;
-			atomic_dec(&waitqueue->count);
 			ret = 1;
 			list_del(&p->wait_queue);//TODO crash happening */
 			return 1;
@@ -164,31 +172,39 @@ static int _del_from_waitqueue(queue_t *waitqueue, struct task_struct *p) {
 #define MAX_WAIT_QUEUES 50
 static queue_t *wait_queues[MAX_WAIT_QUEUES]; /* TODO : this need to be locked */
 int stat_wq_count = 0;
-int sc_register_waitqueue(queue_t *waitqueue) {
+int sc_register_waitqueue(queue_t *waitqueue, char *name) {
 	int i;
+	unsigned long flags;
 
+	spin_lock_irqsave(&sched_lock, flags);
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
 		if (wait_queues[i] == 0) {
-			init_waitqueue(waitqueue);
+			init_waitqueue(waitqueue, name);
 			wait_queues[i] = waitqueue;
 			stat_wq_count++;
-			return 0;
+			goto last;
 		}
 	}
+last:
+    spin_unlock_irqrestore(&sched_lock, flags);
 	return -1;
 }
 /* TODO It should be called from all the places where sc_register_waitqueue is called, currently it is unregister is called only from few places*/
 int sc_unregister_waitqueue(queue_t *waitqueue) {
 	int i;
+	unsigned long flags;
 
+	spin_lock_irqsave(&sched_lock, flags);
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
 		if (wait_queues[i] == waitqueue) {
 			/*TODO:  remove the tasks present in the queue */
 			wait_queues[i] = 0;
 			stat_wq_count--;
-			return 0;
+			goto last;
 		}
 	}
+last:
+    spin_unlock_irqrestore(&sched_lock, flags);
 	return -1;
 }
 int sc_wakeUp(queue_t *waitqueue ) {
@@ -204,7 +220,7 @@ int sc_wakeUp(queue_t *waitqueue ) {
 		task = list_entry(waitqueue->head.next, struct task_struct, wait_queue);
 		if (_del_from_waitqueue(waitqueue, task) == 1) {
 			task->state = TASK_RUNNING;
-			if (task->run_link.next == 0)
+			if (task->run_link.next == 0 )
 				_add_to_runqueue(task);
 			ret++;
 		}
@@ -228,9 +244,9 @@ int sc_wait(queue_t *waitqueue, unsigned long ticks) {
 	spin_lock_irqsave(&sched_lock, flags);
 	g_current_task->state = TASK_INTERRUPTIBLE;
 	_add_to_waitqueue(waitqueue, g_current_task, ticks);
-	flags=_schedule(flags);
 	spin_unlock_irqrestore(&sched_lock, flags);
 
+	sc_schedule();
 	if (g_current_task->sleep_ticks <= 0)
 		return 0;
 	else
@@ -255,8 +271,8 @@ int Jcmd_threadlist_stat(char *arg1, char *arg2) {
 	struct task_struct *task;
 	int i;
 
+	ut_printf("pid state task ticks mm pgd mm_count cpu\n");
 	spin_lock_irqsave(&sched_lock, flags);
-	ut_printf("pid task ticks mm pgd mm_count cpu\n");
 	list_for_each(pos, &task_queue.head) {
 		task = list_entry(pos, struct task_struct, task_link);
 		if (is_kernelThread(task))
@@ -264,8 +280,17 @@ int Jcmd_threadlist_stat(char *arg1, char *arg2) {
 		else
 			ut_printf("(%d)", task->pid);
 
-		ut_printf(" %x %x %x %x %d %s %d stat(%d) %d\n", task, task->ticks, task->mm, task->mm->pgd, task->mm->count.counter, task->name, task->sleep_ticks,
+		ut_printf("%d %x %x %x %x %d %s %d stat(%d) %d\n",task->state, task, task->ticks, task->mm, task->mm->pgd, task->mm->count.counter, task->name, task->sleep_ticks,
 				task->stats.ticks_consumed,task->cpu);
+	}
+	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
+		if (wait_queues[i] == 0) continue;
+		ut_printf(" %s: ",wait_queues[i]->name);
+		list_for_each(pos, &wait_queues[i]->head) {
+			task = list_entry(pos, struct task_struct, wait_queue);
+			ut_printf(" %d(%s),",task->pid,task->name);
+		}
+		ut_printf("\n");
 	}
 	for (i=0; i<getmaxcpus(); i++){
 		if (g_current_tasks[i]==g_idle_tasks[i])
@@ -360,9 +385,9 @@ static unsigned long setup_userstack(unsigned char **argv, unsigned char **env, 
 	error: mm_putFreePages(stack, 0);
 	return 0;
 }
-unsigned long SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **env) {
+void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **env) {
 	struct file *fp;
-	struct mm_struct *mm;
+	struct mm_struct *mm,*old_mm;
 	unsigned long main_func;
 	struct user_regs *p;
 	unsigned long *tmp;
@@ -374,10 +399,10 @@ unsigned long SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned 
 	t_argv = 0;
 	tmp_stack = setup_userstack(argv, env, &stack_len, &t_argc, &t_argv, &tmp_aux);
 	if (tmp_stack == 0) {
-		return 0;
+		return;
 	}
 	/* delete old vm and create a new one */
-	free_mm(g_current_task->mm);
+
 	mm = kmem_cache_alloc(mm_cachep, 0);
 	if (mm == 0)
 		BUG();
@@ -387,23 +412,25 @@ unsigned long SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned 
 	mm->mmap = 0;
 	mm->fs.total = 3;
 	ar_pageTableCopy(g_kernel_mm, mm); /* every process page table should have soft links to kernel page table */
+	old_mm=g_current_task->mm;
 	g_current_task->mm = mm;
+	free_mm(old_mm);
 	flush_tlb(mm->pgd);
 
 	/* populate vm with vmaps */
 	fp = fs_open(file, 0, 0);
 	if (fp == 0) {
 		ut_printf("Error :execve Failed to open the file :%s\n", file);
-		return 0;
+		return;
 	}
 	main_func = fs_loadElfLibrary(fp, tmp_stack + (PAGE_SIZE - stack_len), stack_len, tmp_aux);
 	if (main_func == 0) {
 		mm_putFreePages(tmp_stack, 0);
-		return 0;
+		return ;
 	}
 	mm_putFreePages(tmp_stack, 0);
 	ut_strncpy(g_current_task->name, file, MAX_TASK_NAME);
-	Jcmd_vmaps_stat(0, 0);
+	//Jcmd_vmaps_stat(0, 0);
 
 	g_current_task->thread.userland.ip = main_func;
 	g_current_task->thread.userland.sp = t_argv;
@@ -551,6 +578,7 @@ unsigned long SYS_sc_clone(int(*fn)(void *), void *child_stack, int clone_flags,
 		p->thread.userland.sp = child_stack;
 		p->thread.userland.argc = 0;/* TODO */
 		p->thread.userland.argv = 0; /* TODO */
+		BRK;// TODO need to add the unlock to push_to_userland
 		p->thread.ip = (void *) push_to_userland;
 	} else { /* kernel level thread */
 		p->thread.ip = (void *) schedule_secondHalf;
@@ -566,6 +594,7 @@ unsigned long SYS_sc_clone(int(*fn)(void *), void *child_stack, int clone_flags,
 	g_pid++;
 	if (g_pid==0) g_pid++;
 	p->pid = g_pid;
+	p->cpu =0xffff;
 	p->ppid = g_current_task->pid;
 	p->run_link.next = 0;
 	p->run_link.prev = 0;
@@ -580,7 +609,9 @@ unsigned long SYS_sc_clone(int(*fn)(void *), void *child_stack, int clone_flags,
 
 	spin_lock_irqsave(&sched_lock, flags);
 	list_add_tail(&p->task_link, &task_queue.head);
-	_add_to_runqueue(p);
+	if (_add_to_runqueue(p)==0) {
+		BUG();
+	}
 	spin_unlock_irqrestore(&sched_lock, flags);
 
 	return p->pid;
@@ -705,10 +736,7 @@ void init_tasking() {
 
 	INIT_LIST_HEAD(&(run_queue.head));
 	INIT_LIST_HEAD(&(task_queue.head));
-	sc_register_waitqueue(&timer_queue);
-
-	run_queue.count.counter = 0;
-	task_queue.count.counter = 0;
+	sc_register_waitqueue(&timer_queue,"timer");
 
 	atomic_set(&g_kernel_mm->count,1);
 	g_kernel_mm->mmap = 0x0;
@@ -737,11 +765,11 @@ void init_tasking() {
 	init_timer();
 	ar_registerInterrupt(IPI_INTERRUPT, &ipi_interrupt, "IPI");
 }
-static void delete_task(struct task_struct *task) {
-	if (task->wait_queue.next != 0) {
-		list_del(&task->wait_queue); /* TODO : count in the queue struct is not hanoured */
-	}
+static void _delete_task(struct task_struct *task) {
+	list_del(&task->wait_queue);
+	list_del(&task->run_link);
 	list_del(&task->task_link);
+
 	free_mm(task->mm);
 	free_task_struct(task);
 }
@@ -773,7 +801,26 @@ void sc_schedule() {
 
 	spin_lock_irqsave(&sched_lock, intr_flags);
 	intr_flags=_schedule(intr_flags);
+	/* handle the  dead task */
+	if (g_task_dead!=0) {
+		_delete_task(g_task_dead);
+		g_task_dead = 0;
+	}
 	spin_unlock_irqrestore(&sched_lock, intr_flags);
+}
+void sc_check_signal() {
+
+	/* Handle any pending signal */
+	if (g_current_task->pending_signal == 0) {
+		return;
+	}
+	if (is_kernelThread(g_current_task)) {
+		ut_printf(" WARNING: kernel thread cannot be killed \n");
+	} else {
+		g_current_task->state = TASK_DEAD;
+	}
+	g_current_task->pending_signal = 0;
+    sc_schedule();
 }
 
 static unsigned long  _schedule(unsigned long flags) {
@@ -784,17 +831,6 @@ static unsigned long  _schedule(unsigned long flags) {
 	g_current_task->ticks++;
 	prev = g_current_task;
 
-	/* Handle any pending signal */
-	if (prev->pending_signal != 0) {
-		if (is_kernelThread(prev)) {
-			ut_printf(" WARNING: kernel thread cannot be killed \n");
-		} else {
-			prev->state = TASK_DEAD;
-			BRK;
-		}
-		prev->pending_signal = 0;
-	}
-
 	next = _del_from_runqueue(0);
 	if (next == 0 && (prev->state!=TASK_RUNNING))
 		next = g_idle_tasks[cpuid];
@@ -802,22 +838,14 @@ static unsigned long  _schedule(unsigned long flags) {
 	if (next ==0 ) /* by this point , we will always have some next */
 		next = prev;
 
-//	g_current_task = next;
 	g_current_tasks[cpuid] = next;
-#ifdef SMP
+#ifdef SMP   // SAFE Check
 	if (g_current_tasks[0]==g_current_tasks[1]){
 		while(1);
 	}
 #endif
 
-	/* handle the  dead task */
-	if (g_task_dead!=0) {
-		delete_task(g_task_dead);
-		g_task_dead = 0;
-	}
-	if (prev->state == TASK_DEAD) {
-		g_task_dead = prev;
-	}
+
 
 	/* if prev and next are same then return */
 	if (prev == next) {
@@ -829,16 +857,25 @@ static unsigned long  _schedule(unsigned long flags) {
 	{
 		flush_tlb(next->mm->pgd);
 	}
-    if (prev->pid!=0 && prev->state==TASK_RUNNING){ /* some other cpu  can pickup this task , running task and idle task should not be in a run equeue even though there state is running */
-    	_add_to_runqueue(prev);
+	if (prev->state == TASK_DEAD) {
+		if (g_task_dead != NULL){
+			BUG();
+		}
+		g_task_dead = prev;
+	}else if (prev->pid!=0 && prev->state==TASK_RUNNING){ /* some other cpu  can pickup this task , running task and idle task should not be in a run equeue even though there state is running */
+		if (prev->run_link.next != 0){ /* Prev should not be on the runqueue */
+			BUG();
+		}
+		list_add_tail(&prev->run_link, &run_queue.head);
     }
+	next->cpu=cpuid; /* get cpuid based on this */
 	/* update the cpu state  and tss state for system calls */
 	ar_updateCpuState(next);
 	ar_setupTssStack((unsigned long) next + TASK_SIZE);
-	prev->cpu=0xffff;
-	next->cpu=cpuid;
+
 
 	prev->flags = flags;
+	prev->cpu=0xffff;
 	/* finally switch the task */
 	switch_to(prev, next, prev);
 	/* from the next statement onwards should not use any stack variables, new threads launched will not able see next statements*/

@@ -30,8 +30,7 @@ int init_kernel(unsigned long end_addr)
 	ut_printf("Initialising: ISR descriptors.. \n");
 	init_descriptor_tables();
 
-	ut_printf("Initialising: keyboard and serial.. \n");
-	init_driver_keyboard();
+	ut_printf("Initialising: serial\n");
 	init_serial();
 
 	ut_printf("Initialising: MEMORY physical memory highest addrss:%x \n",end_addr);
@@ -45,6 +44,10 @@ int init_kernel(unsigned long end_addr)
 	ut_printf("Initalising: syscall,tasks.. \n");
 	init_syscall(0); /* init cpu calls for boot cpu */
 	init_tasking();
+
+	ut_printf("Initialising: keyboard \n");
+	init_driver_keyboard(); /* this should be done after wait queues in init_tasking */
+
 #ifdef MEMLEAK_TOOL
 	kmemleak_init();
 #endif

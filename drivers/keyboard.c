@@ -123,7 +123,7 @@ static void keyboard_handler(registers_t regs)
 }
 int init_driver_keyboard()
 {
-	sc_register_waitqueue(&kb_waitq);
+	sc_register_waitqueue(&kb_waitq,"keyboard");
 	ar_registerInterrupt(33,keyboard_handler,"keyboard");
 	return 1;
 }
