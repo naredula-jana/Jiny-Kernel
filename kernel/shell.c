@@ -325,7 +325,7 @@ static int sh_create(char *arg1,char *arg2)
 	tmp_arg[1]=arg2;
 	tmp_arg[2]=0;
 	ret=sc_createKernelThread(exec_thread,&tmp_arg,arg1);
-
+BRK;
 	return 1;
 }
 

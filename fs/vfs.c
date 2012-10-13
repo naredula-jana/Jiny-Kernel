@@ -75,7 +75,7 @@ struct inode *fs_getInode(char *filename) {
 	spin_lock_irqsave(&g_inode_lock, flags);
 	list_for_each(p, &inode_list) {
 		ret_inode = list_entry(p, struct inode, inode_link);
-		if (ut_strcmp(filename, ret_inode->filename) == 0) {
+		if (ut_strcmp((unsigned char *)filename, ret_inode->filename) == 0) {
 			atomic_inc(&ret_inode->count);
 			spin_unlock_irqrestore(&g_inode_lock, flags);
 			goto last;
@@ -142,7 +142,7 @@ error:
 	}
 	return 0;
 }
-unsigned long fs_open(char *filename, int flags, int mode) {
+unsigned long fs_open(unsigned char *filename, int flags, int mode) {
 	if (vfs_fs == 0 || filename==0)
 		return 0;
 	return vfsOpen(filename, flags, mode);
@@ -151,22 +151,32 @@ unsigned long fs_open(char *filename, int flags, int mode) {
 unsigned long SYS_fs_open(char *filename, int mode, int flags) {
 	struct file *filep;
 	int total;
+	int i;
 
-	SYSCALL_DEBUG("open : filename :%s: mode:%x flags:%x \n",filename,mode,flags);
-	if (ut_strcmp(filename,"/dev/tty") == 0){
+	SYSCALL_DEBUG("open : filename :%s: mode:%x flags:%x \n", filename, mode, flags);
+	if (ut_strcmp((unsigned char *)filename, "/dev/tty") == 0) {
 		return 1;
 	}
-	filep = fs_open(filename, mode, flags);
+	filep = fs_open((unsigned char *)filename, mode, flags);
 	total = g_current_task->mm->fs.total;
 	if (filep != 0 && total < MAX_FDS) {
-		g_current_task->mm->fs.filep[total] = filep;
-		g_current_task->mm->fs.total++;
-		SYSCALL_DEBUG(" return value: %d \n",total);
-		return total;
-	} else {
-		if (filep != 0)
-			fs_close(filep);
+		for (i = 2; i < MAX_FDS; i++) {
+			if (g_current_task->mm->fs.filep[i] == 0) {
+				break;
+			}
+		}
+		if (i == MAX_FDS)
+			goto last;
+		g_current_task->mm->fs.filep[i] = filep;
+		if (i > total)
+			g_current_task->mm->fs.total = i;
+		SYSCALL_DEBUG(" return value: %d \n", i);
+		return i;
 	}
+last:
+	if (filep != 0)
+		fs_close(filep);
+
 	return -1;
 }
 
@@ -424,7 +434,16 @@ ssize_t fs_read(struct file *file, unsigned char *buff, unsigned long len) {
 ssize_t SYS_fs_read(unsigned long fd, unsigned char *buff, unsigned long len) {
 	struct file *file;
 
-	SYSCALL_DEBUG("read fd:%d buff:%x len:%x \n",fd,buff,len);
+//	SYSCALL_DEBUG("read fd:%d buff:%x len:%x \n",fd,buff,len);
+	if (fd ==0 ){
+		if (buff==0 || len==0) return 0;
+		buff[0]=dr_kbGetchar();
+		if (buff[0]==0xd) buff[0]='\n';
+		buff[1]='\0';
+    ut_printf("%s",buff);
+	//	SYSCALL_DEBUG("read char :%s: %x:\n",buff,buff[0]);
+		return 1;
+	}
 	file = fd_to_file(fd);
 	if ((file==0) || (vfs_fs == 0) || (vfs_fs->read==0))
 		return 0;
@@ -459,6 +478,7 @@ unsigned long SYS_fs_close(unsigned long fd) {
 	file = fd_to_file(fd);
 	if (file == 0)
 		return 0;
+	g_current_task->mm->fs.filep[fd]=0;
 	return fs_close(file);
 }
 static int vfsRemove(struct file *filep)
@@ -537,7 +557,6 @@ void init_vfs() {
 			NULL, NULL);
 	slab_inodep = kmem_cache_create("inode_struct", sizeof(struct inode), 0, 0,
 			NULL, NULL);
-	//init_hostFs();
-	p9_initFs();
+
 	return;
 }

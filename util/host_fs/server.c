@@ -13,7 +13,7 @@
 #include <netdb.h>
 #include <sys/un.h>
 #include <pthread.h>
-fileCache_t *filecache;
+//#define DEBUG 1
 unsigned char *start_addr;
 #define MAX_FDS 50
 unsigned long write_one=1;
@@ -24,20 +24,45 @@ struct {
 } connections[MAX_FDS];
 int curr_index=0;
 int guestos_fd=-1;
+int guestos_fd2=-1;
+int my_pos=0;
 
+
+#define SHM_SERVER
+#include "../../drivers/hostshm/shm_queue.h"
+#include "../../drivers/hostshm/shm_queue.c"
+#ifdef DEBUG
+void printf(const char *format, ...) {
+
+}
+#endif
+#include "qemu_interface.c"
 void init_interrupt()
 {
 	struct sockaddr_un un;
 	sock_fd=socket(PF_FILE, SOCK_STREAM|SOCK_CLOEXEC, 0);
 	memset(&un, 0, sizeof(un));
 	un.sun_family = AF_UNIX;
-	snprintf(un.sun_path, sizeof(un.sun_path), "/tmp/jana" );
+	snprintf(un.sun_path, sizeof(un.sun_path), "/tmp/ivshmem_socket" );
 	if (connect(sock_fd, (struct sockaddr*) &un, sizeof(un)) < 0) {
 		return -1;
 	}    
 	return 1;  
 }
-
+//#define NULL 0
+int sleepms(int msecs) {
+	struct timeval timeout;
+	if (msecs == 0) {
+		return 0;
+	}
+	timeout.tv_sec = msecs / 1000; /* in secs */
+	timeout.tv_usec = (msecs % 1000) * 1000; /* in micro secs */
+	if ((select(0,NULL,NULL,NULL,&timeout))==-1) {
+		perror(" select failed\n");
+		return -1;
+	}
+	return 0;
+} /* sleepms()*/
 int recv_msg()
 {
 	struct msghdr msg;
@@ -118,9 +143,22 @@ int recv_msg()
 		{
 			if (connections[2].fd != -1)
 			{
+
 				for (i=1; i<3;i++)
-					if (connections[i].position != connections[0].position) 
+					if (connections[i].position != connections[0].position) {
+						printf("Guest os FD for interrupt : fd:%d position:%d \n",connections[i].fd,connections[0].position);
 						guestos_fd=dup(connections[i].fd);	
+						my_pos=connections[0].position;
+
+						guestos_fd2=dup(connections[2].fd);
+
+#if 0
+						guestos_fd2=dup(connections[2].fd);
+						system("sleep 10");
+						printf("generating interrupt on :%d...\n",guestos_fd2);
+						write(guestos_fd2 ,&write_one,8);
+#endif
+					}
 			}
 		}
 	}
@@ -129,26 +167,18 @@ int recv_msg()
 int send_interrupt()
 {
 	int ret=0;
-
+#if 0
+	send_vm_irq();
+	return 1;
+#endif
 	if (guestos_fd == -1 ) ret= -1;
 	else if (write(guestos_fd ,&write_one,8)==8) ret= 1;
 	else ret= -2;
 	printf("Send interrupt fd:%d ret :%d \n",guestos_fd,ret);
+	write(guestos_fd2 ,&write_one,8);
 	return ret;
 }
-int init_filecache()
-{
-	int i;
 
-	if (filecache->magic_number!=FS_MAGIC)	
-	{
-		return 0;
-	}
-	if (filecache->version!=FS_VERSION) return 0;
-	if (filecache->state!=STATE_VALID) return 0;
-	printf(" Initalzed the File cache \n");
-	return 1;
-}
 int init()
 {
 	int fd;
@@ -164,37 +194,35 @@ int init()
 	if(p==0) 
 		return 0;
 	start_addr=p;
-	filecache=p;	
-	while(init_filecache()==0)
-	{
-		system("sleep 3");
-	}
+
+
 	return 1;
 }
-int open_file(int c)
+int open_file(Request_t *recv_req,Request_t *send_req)
 {
 	int fd,ret;
 	unsigned char *p;
 	struct stat stat;
-
-	printf("open the file :%s: flags:%d \n",filecache->requests[c].filename,filecache->requests[c].flags);   
-	if (filecache->requests[c].flags == FLAG_CREATE)  
-		fd=open(filecache->requests[c].filename,O_WRONLY|O_CREAT|O_EXCL, 0644);
+#if 1
+	printf("open the file :%s: flags:\n",recv_req->filename);
+	if (recv_req->flags == FLAG_CREATE)
+		fd=open(recv_req->filename,O_WRONLY|O_CREAT|O_EXCL, 0644);
 	else
-		fd=open(filecache->requests[c].filename,O_RDONLY);
+		fd=open(recv_req->filename,O_RDONLY);
 	if (fd > 0)
 	{
+		send_req->response_len=0;
 		ret=fstat(fd,&stat);
 		if (ret ==0)
 		{
-			filecache->requests[c].response_len=stat.st_size;
-			filecache->requests[c].mtime_sec=stat.st_mtim.tv_sec;
-			filecache->requests[c].mtime_nsec=stat.st_mtim.tv_nsec;
-		}
-		else
-			filecache->requests[c].response_len=0;
 
-		printf("open file :%s: len:%d: offset:%x :\n",filecache->requests[c].filename,ret,filecache->requests[c].shm_offset);
+			send_req->response_len=stat.st_size;
+			send_req->mtime_sec=stat.st_mtim.tv_sec;
+			send_req->mtime_nsec=stat.st_mtim.tv_nsec;
+		}
+
+
+		printf("open file :%s: len:%d:  :\n",recv_req->filename,send_req->response_len);
 
 		ret=RESPONSE_DONE;
 	}else
@@ -203,53 +231,57 @@ int open_file(int c)
 		ret=RESPONSE_FAILED;
 	}
 	close(fd);	
-	filecache->requests[c].response=ret;
+	send_req->response=ret;
+#endif
 	send_interrupt();
 	return ret;
 }
-int rw_file(int c)
+int rw_file(Request_t *recv_req,Request_t *send_req)
 {
 	int fd,ret;
 	unsigned char *p;
-
-	printf("RW the file :%s: \n",filecache->requests[c].filename);	
-	if (filecache->requests[c].type == REQUEST_READ)
-		fd=open(filecache->requests[c].filename,O_RDONLY);
+#if 1
+	printf("RW the file :%s: \n",recv_req->filename);
+	if (recv_req->type == REQUEST_READ)
+		fd=open(recv_req->filename,O_RDONLY);
 	else
-		fd=open(filecache->requests[c].filename,O_WRONLY);
+		fd=open(recv_req->filename,O_WRONLY);
 	if (fd > 0)
 	{
-		lseek(fd,filecache->requests[c].file_offset,SEEK_SET);
-		printf(" file offset :%d \n",filecache->requests[c].file_offset);
-		p=start_addr;
-		p=p+(filecache->requests[c].shm_offset);
-		if (filecache->requests[c].type == REQUEST_READ)
-			ret=read(fd,p,filecache->requests[c].request_len);
+		lseek(fd,recv_req->file_offset,SEEK_SET);
+		printf(" file offset :%d \n",recv_req->file_offset);
+
+		if (recv_req->type == REQUEST_READ)
+			ret=read(fd,send_req->data,recv_req->request_len);
 		else
-			ret=write(fd,p,filecache->requests[c].request_len);
-		filecache->requests[c].response_len=ret;
-		printf("New  Reading the file :%s: len:%d:  p :%x pagecache:%x offset:%x :\n",filecache->requests[c].filename,ret,p,filecache,filecache->requests[c].shm_offset);
+			ret=write(fd,recv_req->data,recv_req->request_len);
+		send_req->response_len=ret;
+		printf("New  Reading the file :%s: len:%d:  offset:%x :\n",recv_req->filename,ret,recv_req->file_offset);
 		ret=RESPONSE_DONE;
 	}else
 	{
 		printf(" Response failed \n");
 		ret=RESPONSE_FAILED;
 	}
-	filecache->requests[c].response=ret;
+	send_req->response=ret;
+#endif
 	send_interrupt();
 	if (fd > 0)
 		close(fd);
 	return ret;
 }
-int process_request(int c)
+
+int process_request(Request_t *recv_req,Request_t *send_req)
 {
-	printf(" Processing the request : %d \n",c);
-	switch (filecache->requests[c].type)
+
+	switch (recv_req->type)
 	{
-		case REQUEST_OPEN : open_file(c); break;
+		case REQUEST_OPEN : open_file(recv_req,send_req); break;
 		case REQUEST_READ : 
-		case REQUEST_WRITE : rw_file(c); break;
+		case REQUEST_WRITE : rw_file(recv_req,send_req); break;
+		default:  printf("unable to process the request\n");break;
 	}
+	send_req->guestos_pos =my_pos;
 	return ;	
 }
 void recv_thread(void *arg)
@@ -259,32 +291,71 @@ void recv_thread(void *arg)
 		recv_msg();
 	}
 }
-main()
-{
-	pthread_t thread_id;
-	int i;
-	int requests,ret;
-	if (init() == 0) return;
+int sleep_on_fd() {
+	fd_set rfds;
+	struct timeval tv;
 
-	pthread_create(&thread_id,NULL,recv_thread,0);
-	printf(" .. Ready to Process \n");
-	while(1)
-	{
-		requests=0;
-		for (i=0; i<filecache->request_highindex; i++)
-		{
-			if (filecache->requests[i].state==STATE_VALID && filecache->requests[i].response==RESPONSE_NONE )
-			{
-				process_request(i);
-				requests++;
-			}	
-		}		
-		if (requests == 0)
-		{
-			usleep(20000);
-		//	system("sleep 1");
-		}
+	int retval;
+	if (guestos_fd2 == -1)
+		return;
+	/* Watch on guest os fd. */
+	FD_ZERO(&rfds);
+	FD_SET(guestos_fd2, &rfds);
+
+	/* Wait up to five seconds. */
+	tv.tv_sec = 7;
+	tv.tv_usec = 0;
+
+	retval = select(guestos_fd2 + 1, &rfds, NULL, NULL, &tv);
+	if (retval == 1) {
+		unsigned char buf[200];
+		read(guestos_fd2, buf, 100);
 	}
+	/* Don't rely on the value of tv now! */
+	return retval;
+}
+main() {
+	pthread_t thread_id1, thread_id2;
+	int i;
+	int requests, ret;
+	struct server_queue *sq;
+	struct buf_desc rbufd, sbufd;
+	int served = 0;
+
+	init();
+	sq = server_attach_shmqueue(start_addr, SHM_SIZE);
+	if (sq == 0) {
+		printf("Fail to attach the shm \n");
+	}
+	//pthread_create(&thread_id1,NULL,qemu_thread,0);
+	pthread_create(&thread_id2, NULL, recv_thread, 0);
+	printf(" .. Ready to Process \n");
+	while (1) {
+		int *p1, *p2;
+		Request_t *recv_req, *send_req;
+		if (server_get_buf(sq, &rbufd, SEND) == 0) {
+			sleep_on_fd();
+			//sleepms(50);
+			continue;
+		}
+
+		while (server_get_buf(sq, &sbufd, RECV) == 0) {
+			sleepms(10);
+			printf("Waiting for empty buffer to send  \n");
+			continue;
+		}
+		p1 = rbufd.buf;
+		p2 = sbufd.buf;
+		served++;
+		recv_req = p1;
+		send_req = p2;
+		printf("Recvied :%d  p2:%d served:%d\n", *p1, *p2, served);
+		process_request(recv_req, send_req);
+
+		server_put_buf(sq, &rbufd);
+		server_put_buf(sq, &sbufd);
+	}
+
 }
 
 

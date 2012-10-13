@@ -39,10 +39,13 @@ typedef struct {
 	unsigned long request_len;
 	unsigned long shm_offset ; /* offset from the begining of shared memory */
 
+	int guestos_pos;
+
 	unsigned char response;	
 	unsigned long response_len;
 	unsigned long mtime_sec;
 	unsigned long mtime_nsec;
+	unsigned char data[PC_PAGESIZE];
 }Request_t;
 	
 typedef struct {

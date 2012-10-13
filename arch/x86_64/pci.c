@@ -196,18 +196,18 @@ static int read_dev_conf(uint8_t bus , uint8_t dev,uint8_t func)
 				bar_count++;
 			}else
 			{
-				break;
+				//break;
 			}
 		}
 
 #ifdef MSI
-		if (header.capabilities_pointer != 0 && header.device_id != 0x1009) { // do not msix for p9
+		if (header.capabilities_pointer != 0 && header.device_id != 0x1009  ) { // do not msix for p9
 			msi_vector=read_msi(&addr, header.capabilities_pointer, &pci_bars[count_start],i);
 		}
 #endif
 
 		if (header.vendor_id == 0x1af4 && header.device_id==0x1110){
-			init_host_shm(&header,&pci_bars[count_start],i);
+			init_host_shm(&header,&pci_bars[count_start],i,&msi_vector);
 		}
 #ifdef XEN
 		else if (header.vendor_id == XEN_PLATFORM_VENDOR_ID  && header.device_id == XEN_PLATFORM_DEVICE_ID){

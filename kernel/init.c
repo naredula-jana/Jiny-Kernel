@@ -35,6 +35,7 @@ int init_kernel(unsigned long end_addr)
 
 	ut_printf("Initialising: MEMORY physical memory highest addrss:%x \n",end_addr);
 	init_memory(end_addr);
+	//BRK;
 	kmem_cache_init();
 	kmem_cache_sizes_init();
 	/* SLAB cache for vm_area_struct structures */

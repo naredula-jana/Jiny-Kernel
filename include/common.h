@@ -83,19 +83,19 @@ do {                                                           \
 
 
 
-static uint8_t __attribute__((always_inline))  inb(uint16_t port)
+static uint8_t __attribute__((always_inline,used))  inb(uint16_t port)
 {
   uint8_t vl;
   __asm__ volatile ("inb %1, %0\n" : "=a" (vl) : "d" (port));
   return vl;
 }
 /* put byte value to io port */
-static void __attribute__((always_inline)) outb(uint16_t port,uint8_t vl)
+static void __attribute__((always_inline,used)) outb(uint16_t port,uint8_t vl)
 {
   __asm__ volatile ("outb %0, %1\n" : : "a" (vl), "Nd" (port));
 }
 /* read 16 bit value from io port */
-static uint16_t __attribute__((always_inline))  inw(uint16_t port)
+static uint16_t __attribute__((always_inline,used))  inw(uint16_t port)
 {
   uint16_t vl;
   __asm__ volatile ("inw %1, %0\n" : "=a" (vl) : "d" (port));
@@ -103,20 +103,20 @@ static uint16_t __attribute__((always_inline))  inw(uint16_t port)
 }
 
 /* put 16 bit value to io port */
-static void __attribute__((always_inline)) outw(uint16_t port,uint16_t vl)
+static void __attribute__((always_inline,used)) outw(uint16_t port,uint16_t vl)
 {
   __asm__ volatile ("outw %0, %1\n" : : "a" (vl), "Nd" (port));
 }
 
 /* read 32 bit value from io port */
-static uint32_t __attribute__((always_inline)) inl(uint16_t port)
+static uint32_t __attribute__((always_inline,used)) inl(uint16_t port)
 {
   uint32_t vl;
   __asm__ volatile ("inl %1, %0\n" : "=a" (vl) : "d" (port));
   return vl;
 }
 /* put 32 bit value to io port */
-static void __attribute__((always_inline)) outl(uint16_t port,uint32_t vl)
+static void __attribute__((always_inline,used)) outl(uint16_t port,uint32_t vl)
 {
 	__asm__ volatile ("outl %0, %1\n" : : "a" (vl), "Nd" (port));
 }

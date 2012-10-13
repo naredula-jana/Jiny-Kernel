@@ -78,7 +78,7 @@ unsigned long fs_registerFileSystem(struct filesystem *fs);
 struct inode *fs_getInode(char *filename);
 unsigned long fs_putInode(struct inode *inode);
 int Jcmd_ls(char *arg1,char *arg2);
-unsigned long fs_open(char *filename,int mode,int flags);
+unsigned long fs_open(unsigned char *filename,int mode,int flags);
 struct page *fs_genericRead(struct inode *inode,unsigned long offset);
 ssize_t fs_read(struct file *fp ,unsigned char *buff ,unsigned long len);
 unsigned long fs_fadvise(struct inode *inode,unsigned long offset, unsigned long len,int advise);

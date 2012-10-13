@@ -53,7 +53,7 @@ void cmain() {  /* This is the first c function to be executed */
 	mbi = __va(mbi);
 	ut_printf("mbi: %x mem_lower = %x(%d)KB , mem_upper=%x(%d)KB mod count:%d addr:%x mmaplen:%d mmpaddr:%x Flags:%x\n", mbi, mbi->mem_lower, mbi->mem_lower, mbi->mem_upper, mbi->mem_upper,
 			mbi->mods_count, mbi->mods_addr, mbi->mmap_length, mbi->mmap_addr, mbi->flags);
-	ut_printf("mbi: syms[0]:%x syms[1]:%x  syms[2]:%x syms[3]:%x \n",mbi->syms[0],mbi->syms[1],mbi->syms[2],mbi->syms[3]);
+	ut_printf("mbi: syms[0]:%x syms[1]:%x  syms[2]:%x syms[3]:%x cmdline:%x\n",mbi->syms[0],mbi->syms[1],mbi->syms[2],mbi->syms[3],mbi->cmdline);
 
 	/* Are mmap_* valid?  */
 	if (CHECK_FLAG (mbi->flags, 6)) {

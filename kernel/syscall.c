@@ -216,17 +216,17 @@ long int SYS_time(__time_t *time){
 	*time = g_jiffies;
 	return *time;
 }
-
+#define TEMP_UID 500
 /*****************************************
  TODO : Below are hardcoded system calls , need to make generic *
  ******************************************/
 unsigned long SYS_getuid() {
 	SYSCALL_DEBUG("getuid(Hardcoded) :\n");
-	return 500;
+	return TEMP_UID;
 }
 unsigned long SYS_getgid() {
 	SYSCALL_DEBUG("getgid(Hardcoded) :\n");
-	return 500;
+	return TEMP_UID;
 }
 unsigned long SYS_setuid(unsigned long uid) {
 	SYSCALL_DEBUG("setuid(Hardcoded) :%x(%d)\n",uid,uid);
@@ -272,12 +272,15 @@ int SYS_fs_stat(const char *path, struct stat *buf)
 	struct file *fp;
 	struct fileStat fstat;
 	int i,ret;
-	SYSCALL_DEBUG("stat( ppath:%x buf:%x size:%d\n",path,buf,sizeof(struct stat));
+	SYSCALL_DEBUG("stat( ppath:%x(%s) buf:%x size:%d\n",path,path,buf,sizeof(struct stat));
 //return -1;
 	if (path==0 || buf==0) return -1;
 
 	fp=fs_open(path,0,0);
-	if ( fp==0 ) return -1;
+	if ( fp==0 ){
+
+		return -1;
+	}
 	ret = fs_stat(fp, &fstat);
 	ut_memset(buf,0,sizeof(struct stat));
 	buf->st_size = fstat.st_size ;
@@ -285,14 +288,25 @@ int SYS_fs_stat(const char *path, struct stat *buf)
     buf->st_blksize = 4096;
     buf->st_blocks = 8;
     buf->st_nlink = 49;
+    buf->st_mtime.tv_sec =  fstat.mtime/1000000;
     buf->st_mtime.tv_nsec = fstat.mtime;
+    buf->st_atime.tv_sec = fstat.atime/1000000;
     buf->st_atime.tv_nsec = fstat.atime;
     buf->st_mode = fstat.mode;
 
 /* TODO : fill the rest of the fields from fstat */
+   buf->st_gid = TEMP_UID;
+   buf->st_uid = TEMP_UID;
 
     fs_close(fp);
-    ut_printf(" st_size: %d st_ino:%d mode:%x \n",buf->st_size,buf->st_ino, buf->st_mode);
+    /*
+     *stat(".", {st_dev=makedev(8, 6), st_ino=5381699, st_mode=S_IFDIR|0775, st_nlink=4,
+     *          st_uid=500, st_gid=500, st_blksize=4096, st_blocks=8, st_size=4096, st_atime=2012/09/29-23:41:20,
+     *          st_mtime=2012/09/16-11:29:50, st_ctime=2012/09/16-11:29:50}) = 0
+     *
+     */
+    SYSCALL_DEBUG(" stat END : st_size: %d st_ino:%d mode:%x uid:%x gid:%x blksize:%x\n",
+    		buf->st_size,buf->st_ino, buf->st_mode, buf->st_uid, buf->st_gid, buf->st_blksize );
 	return ret;
 }
 

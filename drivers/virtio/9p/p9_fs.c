@@ -48,6 +48,7 @@ static int p9ClientInit() {
 	client.next_free_fid = client.root_fid+1;
 	return 1;
 }
+
 static int p9_open(uint32_t fid, unsigned char *filename, int flags, int arg_mode) {
 	unsigned long addr;
 	uint8_t mode_b;
@@ -83,7 +84,7 @@ static int p9_open(uint32_t fid, unsigned char *filename, int flags, int arg_mod
 		ret = p9_read_rpc(&client, "");
 		ret = 1;
 	}
-	return ret;;
+	return ret;
 }
 
 
@@ -272,6 +273,7 @@ static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
 	uint32_t dummyd;
 	uint16_t dummyw;
 	uint8_t dummyb;
+	unsigned char type;
 
 	client.type = P9_TYPE_TSTAT;
 	client.user_data = 0;
@@ -282,8 +284,14 @@ static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
 		//"wwdbdqdddqssss?sddd"
 		//Q=bdq
 		//"wwdQdddqsssssddd"
-		ret = p9_read_rpc(&client, "wwwdbdqdddq",&dummyw,&dummyw,&dummyw,&dummyd,&dummyb,&dummyd,&stat->inode_no,&stat->mode,&stat->atime,&stat->mtime,&stat->st_size);
+		ret = p9_read_rpc(&client, "wwwdbdqdddq",&dummyw,&dummyw,&dummyw,&dummyd,&type,&dummyd,&stat->inode_no,&stat->mode,&stat->atime,&stat->mtime,&stat->st_size);
 		//DEBUG("stats length :%x \n",stat->st_size);
+		// ut_printf(" file mode :%x %x\n",stat->mode,type);
+		if (type ==0){ /* Regular file */
+			stat->mode = stat->mode | 0x8000 ;
+		}else{ /* directory */
+			stat->mode = stat->mode | 0x4000 ;
+		}
 		if (client.recv_type == P9_TYPE_RSTAT) {
 			ret = 1;
 		}
@@ -352,7 +360,7 @@ static int p9Lseek(struct file *filep, unsigned long offset, int whence) {
 	return 1;
 }
 
-static int p9Fdatasync(struct file *filep) {
+static int p9Fdatasync(struct inode *inodep) {
 
 	return 1;
 }

@@ -54,6 +54,7 @@ int init_virtio_9p_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev,uint32_t *ms
 
 	sc_register_waitqueue(&p9_waitq,"p9");
 	p9_dev = dev;
+	p9_initFs();
 	return 1;
 }
 unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The call will be blocked till the reply is receivied */
@@ -99,11 +100,11 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 		sg[1].offset = 0;
 		in = 1;
 	}
-	virtqueue_add_buf_gfp(p9_dev->vq[0], sg, out, in, sg[0].page_link, 0);
 	virtqueue_enable_cb(p9_dev->vq[0]);
+	virtqueue_add_buf_gfp(p9_dev->vq[0], sg, out, in, sg[0].page_link, 0);
 	virtqueue_kick(p9_dev->vq[0]);
 
-	sc_wait(&p9_waitq, 5);
+	sc_wait(&p9_waitq, 50);
 	unsigned int len;
 	len = 0;
 	i=0;
@@ -112,7 +113,7 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 		addr = virtio_removeFromQueue(p9_dev->vq[0], &len); /* TODO : here sometime returns zero because of some race condition, the packet is not recevied */
 		i++;
 		if (addr == 0) {
-			ut_printf(" RACE CONDITIOn so sleeping for while \n");
+			ut_printf(" RACE CONDITION in P9 so sleeping for while \n");
 			sc_sleep(300);
 		}
 	}

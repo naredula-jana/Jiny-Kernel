@@ -547,7 +547,7 @@ unsigned long SYS_sc_clone(int(*fn)(void *), void *child_stack, int clone_flags,
 	struct mm_struct *mm;
 	unsigned long flags;
 
-	//	SYSCALL_DEBUG("clone fn:%x child_stack:%x flags:%x args:%x \n",fn,child_stack,clone_flags,args);
+	SYSCALL_DEBUG("clone fn:%x child_stack:%x flags:%x args:%x \n",fn,child_stack,clone_flags,args);
 	/* Initialize the stack  */
 	p = alloc_task_struct();
 	if (p == 0)
@@ -560,12 +560,15 @@ unsigned long SYS_sc_clone(int(*fn)(void *), void *child_stack, int clone_flags,
 		atomic_inc(&mm->count);
 		DEBUG("clone  CLONE_VM the mm :%x counter:%x \n",mm,mm->count.counter);
 	} else {
+		int i;
 		mm = kmem_cache_alloc(mm_cachep, 0);
 		if (mm == 0)
 			BUG();
 		atomic_set(&mm->count,1);
 		DEBUG("clone  the mm :%x counter:%x \n",mm,mm->count.counter);
 		mm->pgd = 0;
+		for (i=0; i<MAX_FDS;i++)
+			mm->fs.filep[i]=0;
 		mm->fs.total = 3;
 		ar_pageTableCopy(g_current_task->mm, mm);
 		mm->mmap = 0;

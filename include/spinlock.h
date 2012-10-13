@@ -4,15 +4,18 @@
 #include "task.h"
 typedef struct {
         volatile unsigned int lock;
+        unsigned long stat_count;
 #ifdef SPINLOCK_DEBUG
-#define MAX_SPIN_LOG 300
+#define MAX_SPIN_LOG 100
         unsigned long stat_locks;
         unsigned long stat_unlocks;
+        unsigned long contention;
         unsigned int log_length;
         struct {
             int line;
             unsigned int process_id;
             unsigned int cpuid;
+            unsigned long spins;
         }log[MAX_SPIN_LOG];
 #endif
 } spinlock_t;
@@ -45,22 +48,27 @@ typedef struct {
 #endif
 
 static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
-	__asm__ __volatile__( "mov  %0,%%edx\n"
-			"spin: mov   %1, %%eax\n"
+	__asm__ __volatile__( "movq $0,%%rbx\n"
+			"mov  %0,%%edx\n"
+			"spin:addq $1,%%rbx\n"
+			"mov   %1, %%eax\n"
 			"test %%eax, %%eax\n"
 			"jnz  spin\n"
 			"lock cmpxchg %%edx, %1 \n"
 			"test  %%eax, %%eax\n"
 			"jnz  spin\n"
-			:: "r"(__SPINLOCK_LOCKED),"m"(lock->lock), "rI"(__SPINLOCK_UNLOCKED)
-			: "%rax", "memory" );
+			"mov %%rbx, %3\n"
+			:: "r"(__SPINLOCK_LOCKED),"m"(lock->lock), "rI"(__SPINLOCK_UNLOCKED),"m"(lock->stat_count)
+			: "%rax","%rbx", "memory" );
 #ifdef SPINLOCK_DEBUG
 	lock->stat_locks++;
 	if (lock->log_length >= MAX_SPIN_LOG) lock->log_length=0;
 	lock->log[lock->log_length].line = line ;
 	lock->log[lock->log_length].process_id = g_current_task->pid ;
 	lock->log[lock->log_length].cpuid = g_current_task->cpu ;
+	lock->log[lock->log_length].spins = 1 + (lock->stat_count/10) ;
 	lock->log_length++;
+	lock->contention=lock->contention+(lock->stat_count/10);
 #endif
 }
 
@@ -72,6 +80,7 @@ static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 	lock->log[lock->log_length].line = line ;
 	lock->log[lock->log_length].process_id = g_current_task->pid ;
 	lock->log[lock->log_length].cpuid = g_current_task->cpu ;
+	lock->log[lock->log_length].spins = 0 ;
 	lock->log_length++;
 #endif
 

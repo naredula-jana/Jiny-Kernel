@@ -66,3 +66,5 @@ The expensive (paranoid) way is to read back the MSR_GS_BASE value
 	xorl %ebx,%ebx
 1:	ret
 ---------------------------------------------------------
+
+1) keyboard ownership between sheell and userlevel threads
