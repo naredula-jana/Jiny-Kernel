@@ -1,6 +1,6 @@
 #define DEBUG_ENABLE 1
 #include "common.h"
-#include "pci.h"
+#include "device.h"
 #include "mm.h"
 #include "vfs.h"
 #include "task.h"
@@ -12,7 +12,7 @@
 
 int test_virtio_nob = 0;
 static virtio_dev_t *net_dev = 0;
-void virtio_net_interrupt(registers_t regs);
+static void virtio_net_interrupt(registers_t regs);
 static struct virtio_feature_desc vtnet_feature_desc[] = {
     { VIRTIO_NET_F_CSUM,        "TxChecksum"    },
     { VIRTIO_NET_F_GUEST_CSUM,  "RxChecksum"    },
@@ -70,67 +70,91 @@ int addBufToQueue(struct virtqueue *vq, unsigned char *buf, unsigned long len) {
 	return ret;
 }
 
-int init_virtio_net_pci(pci_dev_header_t *pci_hdr, virtio_dev_t *dev,
-		uint32_t *msi_vector) {
+static int probe_virtio_net_pci(device_t *dev) {
+	if (dev->pci_hdr.device_id == VIRTIO_PCI_NET_DEVICE_ID){
+		return 1;
+	}
+	return 0;
+}
+
+static int attach_virtio_net_pci(device_t *pci_dev) {
 	unsigned long addr;
 	unsigned long features;
 	int i;
+	pci_dev_header_t *pci_hdr = &pci_dev->pci_hdr;
+	virtio_dev_t *virtio_dev = (virtio_dev_t *)pci_dev->private_data;
+	uint32_t msi_vector;
+  //  static init_net_pci=0;
 
-	net_dev = dev;
+   // if (init_net_pci==1) return 0;
+   // init_net_pci=1;
+	net_dev = virtio_dev; /* TODO need to remove, this works only with one device */
 
-	virtio_set_status(dev,
-			virtio_get_status(dev) + VIRTIO_CONFIG_S_ACKNOWLEDGE);
-	DEBUG("VirtioNet: Initializing VIRTIO PCI NET status :%x :  \n", virtio_get_status(dev));
+	virtio_set_status(virtio_dev,
+			virtio_get_status(virtio_dev) + VIRTIO_CONFIG_S_ACKNOWLEDGE);
+	DEBUG("VirtioNet: Initializing VIRTIO PCI NET status :%x :  \n", virtio_get_status(virtio_dev));
 
-	virtio_set_status(dev, virtio_get_status(dev) + VIRTIO_CONFIG_S_DRIVER);
+	virtio_set_status(virtio_dev, virtio_get_status(virtio_dev) + VIRTIO_CONFIG_S_DRIVER);
 
-	addr = dev->pci_ioaddr + VIRTIO_PCI_HOST_FEATURES;
+	addr = virtio_dev->pci_ioaddr + VIRTIO_PCI_HOST_FEATURES;
 	features = inl(addr);
 	DEBUG("VirtioNet:  hostfeatures :%x:\n", features);
 	display_virtiofeatures(features,vtnet_feature_desc);
-	if (*msi_vector == 0) {
-		addr = dev->pci_ioaddr + 20;
+
+	if (pci_hdr->capabilities_pointer != 0) {
+		msi_vector = read_msi(pci_dev);
+		if (msi_vector > 0)
+			enable_msix(pci_dev);
 	} else {
-		addr = dev->pci_ioaddr + 24;
+		msi_vector = 0;
+	}
+
+
+	if (msi_vector == 0) {
+		addr = virtio_dev->pci_ioaddr + 20;
+	} else {
+		addr = virtio_dev->pci_ioaddr + 24;
 	}
 	DEBUG("VirtioNet:  pioaddr:%x MAC address : %x :%x :%x :%x :%x :%x status: %x:%x  :\n", addr, inb(addr), inb(addr+1), inb(addr+2), inb(addr+3), inb(addr+4), inb(addr+5), inb(addr+6), inb(addr+7));
 	for (i = 0; i < 6; i++)
-		dev->mac[i] = inb(addr + i);
-	virtio_createQueue(0, dev, 1);
-	if (*msi_vector > 0) {
-		outw(dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 0);
+		virtio_dev->mac[i] = inb(addr + i);
+	virtio_createQueue(0, virtio_dev, 1);
+	if (msi_vector > 0) {
+		outw(virtio_dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 0);
 	}
-	virtio_createQueue(1, dev, 2);
-	if (*msi_vector > 0) {
-		outw(dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 1);
-		outw(dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 0xffff);
+	virtio_createQueue(1, virtio_dev, 2);
+	if (msi_vector > 0) {
+		outw(virtio_dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 1);
+		outw(virtio_dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 0xffff);
 	}
-	virtqueue_disable_cb(dev->vq[1]); /* disable interrupts on sending side */
-	if (*msi_vector > 0) {
+	virtqueue_disable_cb(virtio_dev->vq[1]); /* disable interrupts on sending side */
+	if (msi_vector > 0) {
 		for (i = 0; i < 3; i++)
-			ar_registerInterrupt(*msi_vector + i, virtio_net_interrupt,
-					"virt_net_msi");
-
+			ar_registerInterrupt(msi_vector + i, virtio_net_interrupt,"virt_net_msi");
 	}
 
-	virtio_set_status(dev, virtio_get_status(dev) + VIRTIO_CONFIG_S_DRIVER_OK);
+	virtio_set_status(virtio_dev, virtio_get_status(virtio_dev) + VIRTIO_CONFIG_S_DRIVER_OK);
 	DEBUG("VirtioNet:  Initilization Completed \n");
 
 	for (i = 0; i < 120; i++) /* add buffers to recv q */
-		addBufToQueue(dev->vq[0], 0, 4096);
+		addBufToQueue(virtio_dev->vq[0], 0, 4096);
 
-	inb(dev->pci_ioaddr + VIRTIO_PCI_ISR);
-	virtqueue_kick(dev->vq[0]);
+	inb(virtio_dev->pci_ioaddr + VIRTIO_PCI_ISR);
+	virtqueue_kick(virtio_dev->vq[0]);
 
+	init_TestUdpStack();
+    return 1;
 }
-
+static int dettach_virtio_net_pci(device_t *pci_dev) {
+return 0;
+}
 static int s_i = 0;
 static int s_r = 0;
 int stop_queueing_bh = 0;
 
 extern queue_t nbh_waitq;
 extern int netbh_started, netbh_flag;
-void virtio_net_interrupt(registers_t regs) {
+static void virtio_net_interrupt(registers_t regs) {
 	/* reset the irq by resetting the status  */
 	unsigned char isr;
 
@@ -202,5 +226,5 @@ int shutdown_netfront(void *dev) {
 }
 
 
-
+DEFINE_DRIVER(virtio_net_pci, virtio_pci, probe_virtio_net_pci, attach_virtio_net_pci, dettach_virtio_net_pci);
 

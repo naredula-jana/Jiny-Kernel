@@ -1,3 +1,6 @@
+#ifndef __PCI_H__
+#define __PCI_H__
+
 #include "common.h"
 #define PCI_CONFIG_ADDRESS 0xCF8
 #define PCI_CONFIG_DATA 0xCFC
@@ -87,7 +90,57 @@ typedef struct __pci_bar_t {
 	uint32_t len;
 	char *name;
 }pci_bar_t;
+
+
+
+#define	PCIR_MSIX_CTRL		0x2
+#define	PCIR_MSIX_TABLE		0x4
+#define	PCIR_MSIX_PBA		0x8
+
+#define	PCIM_MSIXCTRL_MSIX_ENABLE	0x8000
+#define	PCIM_MSIXCTRL_FUNCTION_MASK	0x4000
+#define	PCIM_MSIXCTRL_TABLE_SIZE	0x07FF
+#define	PCIM_MSIX_BIR_MASK		0x7
+
+#define	PCIR_BARS	0x10
+#define	PCIR_BAR(x)		(PCIR_BARS + (x) * 4)
+
+#define	FIRST_MSI_INT	256
+#define	NUM_MSI_INTS	512
+/***************** MSIX ********************************/
+struct msix_table {
+	uint32_t lower_addr;
+	uint32_t upper_add;
+	uint32_t data;
+	uint32_t control;
+};
+struct pcicfg_msix {
+	uint16_t msix_ctrl; /* Message Control id */
+	uint16_t msix_msgnum; /* total Number of messages */
+	uint8_t msix_location; /* Offset of MSI-X capability registers. */
+	uint8_t msix_table_bar; /* BAR containing vector table. */
+	uint8_t msix_pba_bar; /* BAR containing PBA. */
+	uint32_t msix_table_offset;
+	uint32_t msix_pba_offset;
+	int msix_alloc; /* Number of allocated vectors. */
+	int msix_table_len; /* Length of virtual table. */
+	unsigned long msix_table_res; /* mmio address */
+	struct msix_table *msix_table;
+	int isr_vector;
+};
+
 int pci_read(pci_addr_t *d, uint16_t pos, uint8_t len, void *buf);
 int pci_write(pci_addr_t *d, uint16_t pos, uint8_t len, void *buf);
 
+#define VIRTIO_PCI_VENDOR_ID 0x1af4
+#define  VIRTIO_PCI_NET_DEVICE_ID 0x1000
+#define VIRTIO_PCI_9P_DEVICE_ID 0x1009
 
+#define XEN_PLATFORM_VENDOR_ID 0x5853
+#define XEN_PLATFORM_DEVICE_ID 0x0001
+
+void init_pci_device(uint16_t vendor_id, uint16_t device_id, int msi_enabled , int *(init)(pci_dev_header_t pci,pci_bar_t bars[], uint32_t len,uint32_t *msi_vector));
+int init_virtio_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len,uint32_t *msi_vector);
+
+
+#endif

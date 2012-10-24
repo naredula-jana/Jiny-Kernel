@@ -1,6 +1,8 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
+
+
 #define VIRTIO 1
 
 #include "types.h"
@@ -137,4 +139,6 @@ void kfree (const void *objp);
 extern addr_t g_jiffies;
 
 #define MAX_DMESG_LOG 30000
+
+
 #endif

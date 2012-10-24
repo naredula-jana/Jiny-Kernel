@@ -9,6 +9,7 @@
 *
 */
 #include "common.h"
+#include "pci.h"
 #include "mm.h"
 #include "task.h"
 /* Forward declarations.  */
@@ -67,12 +68,14 @@ int init_kernel(unsigned long end_addr)
 
 	cli();  /* disable interrupt incase if it is enabled while apic is started */
 	ut_printf("Initalising: PCI.. \n");
-	init_pci();
+	//init_pci();
+
+	//init_pci_device(VIRTIO_PCI_VENDOR_ID,0,1,init_virtio_pci);
 
 #ifdef NETWORKING
 //	init_LwipTcpIpStack();
 #endif
-	init_TestUdpStack();
+//	init_TestUdpStack();
 
 	ut_printf("Initalising: VFS.. \n");
 	init_vfs();

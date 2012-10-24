@@ -156,8 +156,10 @@ void ut_putchar(int c) {
 	unsigned char *ptr;
 	unsigned long flags;
 
+	spin_lock_irqsave(&putchar_lock, flags);
 	g_dmesg_index++;
 	g_dmesg[g_dmesg_index % MAX_DMESG_LOG] = (unsigned char) c;
+	spin_unlock_irqrestore(&putchar_lock, flags);
 
 	if (g_conf_serial_line == 1) {
 		char buf[5];
@@ -204,7 +206,7 @@ void ut_putchar(int c) {
 		goto newline;
 	spin_unlock_irqrestore(&putchar_lock, flags);
 }
-static spinlock_t display_lock = SPIN_LOCK_UNLOCKED;
+
 void ut_printf(const char *format, ...) {
 	char **arg = (char **) &format;
 	int c;
@@ -213,8 +215,6 @@ void ut_printf(const char *format, ...) {
 	char buf[40];
 	char *p;
 
-
-	spin_lock_irqsave(&display_lock, flags);
 	va_list vl;
 	va_start(vl,format);
 #if 0
@@ -280,6 +280,4 @@ void ut_printf(const char *format, ...) {
 		}
 	}
 	va_end(vl);
-	spin_unlock_irqrestore(&display_lock, flags);
-
 }

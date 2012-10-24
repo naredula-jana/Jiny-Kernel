@@ -9,7 +9,7 @@
  *
  */
 #define DEBUG_ENABLE 1
-#include "pci.h"
+#include "device.h"
 #include "common.h"
 #include "mm.h"
 #include "task.h"
@@ -146,66 +146,48 @@ static int get_bar(pci_addr_t *addr, int barno, uint32_t *start, uint32_t *len)
 	DEBUG("   barno:%d start :%i len:%i \n",barno,*start,*len);
 	return 0;
 }
-#define XEN_PLATFORM_VENDOR_ID 0x5853
-#define XEN_PLATFORM_DEVICE_ID 0x0001
-#define MAX_PCI_BARS 100
-static pci_bar_t pci_bars[MAX_PCI_BARS];
-static int bar_count=0;
-int Jcmd_pci_stat(char *arg1 , char *arg2){
-	int i;
-	for (i=0; i<bar_count; i++){
-		if (pci_bars[i].addr==0 ) return;
-		ut_printf("name:%s  addr:%x len:%d\n",pci_bars[i].name,pci_bars[i].addr,pci_bars[i].len);
-	}
-	return 1;
-}
 
-#define MSI 1
-static int read_dev_conf(uint8_t bus , uint8_t dev,uint8_t func)
+static int read_dev_conf(uint8_t bus , uint8_t dev_no,uint8_t func ,device_t *dev)
 {
-	pci_dev_header_t header;
-	pci_addr_t addr;
+	pci_bar_t *pci_bars=&dev->pci_bars[0];
+	int bar_count=0;
+	pci_dev_header_t *header=&dev->pci_hdr;
+	pci_addr_t *addr=&dev->pci_addr;
 	int ret;
 	int i,count_start;
 	int msi_vector =0;
 
-	addr.bus=bus;
-	addr.device=dev;
-	addr.function=func;
-	header.vendor_id=0;
-	header.device_id=0;
+	addr->bus=bus;
+	addr->device=dev_no;
+	addr->function=func;
+	header->vendor_id=0;
+	header->device_id=0;
 	pci_bars[bar_count].addr=0;
 	count_start=bar_count;
-	ret = pci_generic_read(&addr, 0, sizeof(header), &header);
-	//BRK;
+	ret = pci_generic_read(addr, 0, sizeof(pci_dev_header_t), header);
+
 	if(ret != 0) {
-		return -1;
+		return 0;
 	}
 
-	if (header.vendor_id != 0xffff)
+	if (header->vendor_id != 0xffff && header->vendor_id == dev->pci_hdr.vendor_id && header->device_id == dev->pci_hdr.device_id)
 	{
-		DEBUG(" PCI bus:%d devic:%d func:%d  vendor:%x devices:%x int:%x:%x baser:%i \n",bus,dev,func,header.vendor_id,header.device_id,header.interrupt_line,header.interrupt_pin,header.base_address_registers[0]);
-		DEBUG("   base addr :%i :%i :%i :%i \n",header.base_address_registers[0],header.base_address_registers[1],header.base_address_registers[2],header.base_address_registers[3]);
+		DEBUG(" PCI bus:%d devic:%d func:%d  vendor:%x devices:%x int:%x:%x baser:%i \n",bus,dev,func,header->vendor_id,header->device_id,header->interrupt_line,header->interrupt_pin,header->base_address_registers[0]);
+		DEBUG("   base addr :%i :%i :%i :%i \n",header->base_address_registers[0],header->base_address_registers[1],header->base_address_registers[2],header->base_address_registers[3]);
 		for(i=0; i<5;i++)
 		{
-			get_bar(&addr,i,&pci_bars[bar_count].addr,&pci_bars[bar_count].len);
+			get_bar(addr,i,&pci_bars[bar_count].addr,&pci_bars[bar_count].len);
 			if (pci_bars[bar_count].addr != 0)
 			{
 				pci_bars[bar_count].len= (~pci_bars[bar_count].len)+1;
 				pci_bars[bar_count].name="";
 				bar_count++;
-			}else
-			{
-				//break;
 			}
 		}
+		dev->pci_bar_count=bar_count;
+		return 1;
 
-#ifdef MSI
-		if (header.capabilities_pointer != 0 && header.device_id != 0x1009  ) { // do not msix for p9
-			msi_vector=read_msi(&addr, header.capabilities_pointer, &pci_bars[count_start],i);
-		}
-#endif
-
+#if 0
 		if (header.vendor_id == 0x1af4 && header.device_id==0x1110){
 			init_host_shm(&header,&pci_bars[count_start],i,&msi_vector);
 		}
@@ -219,27 +201,21 @@ static int read_dev_conf(uint8_t bus , uint8_t dev,uint8_t func)
 		else if (header.vendor_id == VIRTIO_PCI_VENDOR_ID  && (header.device_id >= 0x1000 && header.device_id <= 0x103f) ){
 			int msi_enabled = msi_vector;
 
-			init_virtio_pci(&header,&pci_bars[count_start],i,&msi_vector);
-			if (msi_enabled && msi_vector == 0) {
-				//disable_msix(&addr,i); NOT working
-			}
+			return init_virtio_pci(&header,&pci_bars[count_start],i,&msi_vector);
 		}
 #endif
+#endif
 	}
-	return 1;
+	return 0;
 }
-static int pci_initialised=0;
-void init_pci()
+
+int read_pci_info(device_t *dev)
 {
 	int i,j;
-	if (pci_initialised == 1) return;
-	pci_initialised=1;
-	DEBUG(" Scanning PCI devices info started \n");
-	for (i = 0; i < 32 ; i++) {
-		for (j = 0; j < 32; j++)
-			read_dev_conf(i, j, 0);
-	}
-	DEBUG(" Scanning PCI devices info Ended \n");
 
-	return ;
+	DEBUG(" Scanning PCI devices for vendor:%d device:%d \n",dev->pci_hdr.vendor_id, dev->pci_hdr.device_id);
+
+    read_dev_conf(dev->pci_addr.bus, dev->pci_addr.device, dev->pci_addr.function, dev);
 }
+
+

@@ -9,6 +9,7 @@
 *
 */
 #include "common.h"
+#include "device.h"
 #include "task.h"
 #include "vfs.h"
 #include "interface.h"
@@ -34,12 +35,11 @@ static int sh_del(char *arg1,char *arg2);
 static int sh_test1(char *arg1,char *arg2);
 static int sh_mmap(char *arg1,char *arg2);
 static int sh_virtio(char *arg1,char *arg2);
+static int sh_pci(char *arg1,char *arg2);
 
 int conf_set(char *arg1 , char *arg2);
 int scan_pagecache(char *arg1 , char *arg2);
 static int load_test1(char *arg1,char *arg2);
-
-
 
 int g_conf_debug_level=1;
 
@@ -69,7 +69,7 @@ int cmd(char *arg1, char *arg2) {
 }
 commands_t cmd_list[]=
 {
-	{"help      ","Print Help Menu","help",print_help},
+	{"help      ","HELP MENU","help",print_help},
 	{"set  <var> <value>","set config variables","set",conf_set},
 	{"cmd  <cmd> <arg1> <arg2>","execute commands","cmd",cmd},
 	{"c <prog>  ","Create test thread","c",sh_create},
@@ -82,6 +82,7 @@ commands_t cmd_list[]=
 	{"del <file>","flush file-remove from page cache       ","del",sh_del},
 	{"cp <f1> <f2>","copy f1 f2       ","cp",sh_cp},
 	{"sync <f1>","sync f1       ","sync",sh_sync},
+	{"sd ","start pci device       ","sd",sh_pci},
 	{"virtio stat ","v","v",sh_virtio},
 	{"t1 ","t1 file","t1",sh_test1},
 	{0,0,0,cmd} /* at last check for command */
@@ -142,6 +143,13 @@ static int sh_cp(char *arg1,char *arg2)
 		i++;
 	}
 	return 0;
+}
+static int sh_pci(char *arg1,char *arg2){
+	device_t dev;
+	//list_pci();
+
+	init_devClasses();
+//	attach_virtio_pci(&dev);
 }
 static int sh_del(char *arg1,char *arg2)
 {
@@ -325,14 +333,14 @@ static int sh_create(char *arg1,char *arg2)
 	tmp_arg[1]=arg2;
 	tmp_arg[2]=0;
 	ret=sc_createKernelThread(exec_thread,&tmp_arg,arg1);
-BRK;
+
 	return 1;
 }
 
 static int print_help(char *arg1,char *arg2)
 {
 	int i;
-	ut_printf("JINY 0.6 Stacksize:%x  \n",TASK_SIZE);
+	ut_printf("JINY 1.0 Stacksize:%x  \n",TASK_SIZE);
 	for (i=0; i<MAX_COMMANDS; i++)
 	{
 		if (cmd_list[i].usage == 0) break;

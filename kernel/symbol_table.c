@@ -45,6 +45,14 @@ int init_symbol_table() {
 			continue;
 		}
 
+		ut_strcpy(sym, g_symbol_table[i].name);
+		sym[12] = '\0'; /* Jcmd_ */
+		ut_strcpy(dst, "deviceClass_");
+		if (ut_strcmp(sym, dst) == 0) {
+            add_deviceClass(g_symbol_table[i].address);
+			continue;
+		}
+
 	}
 	ut_printf(
 			"Symbol Intilization:  confs:%d stats:%d cmds:%d  totalsymbols:%d \n",

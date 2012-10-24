@@ -275,7 +275,8 @@ void net_BH() {
 }
 
 void init_TestUdpStack() {
-
+static int init=0;
+    if (init ==1) return ;
 	net_dev = init_netfront(0, mac, 0);
 	if (net_dev == 0) {
 		ut_printf(" Fail to initialize the UDP stack \n");
@@ -284,6 +285,7 @@ void init_TestUdpStack() {
 #ifdef WITH_BOTTOM_HALF
 	int i, ret;
 
+	init=1;
 	sc_register_waitqueue(&nbh_waitq,"net_bh");
 	ret = sc_createKernelThread(net_BH, 0, "net_rx");
 #ifdef SEND_BH
