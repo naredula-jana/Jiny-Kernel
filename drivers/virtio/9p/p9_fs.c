@@ -268,11 +268,11 @@ static uint32_t p9_close(uint32_t fid) {
 }
 static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
 	unsigned long addr;
-	int i,ret=0;
-	uint64_t dummyq;
+	int ret=0;
+	//uint64_t dummyq;
 	uint32_t dummyd;
 	uint16_t dummyw;
-	uint8_t dummyb;
+	//uint8_t dummyb;
 	unsigned char type;
 
 	client.type = P9_TYPE_TSTAT;
@@ -339,13 +339,13 @@ static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, u
 		ret = p9_remove(fid);
 	} else if (type == REQUEST_STAT) {
 		fid = inode->fs_private;
-		ret = p9_stat(fid, data);
+		ret = p9_stat(fid, (struct fileStat *)data);
 	} else if (type == REQUEST_CLOSE) {
 		fid = inode->fs_private;
 		ret = p9_close(fid);
 	}
 
-last:
+
     mutexUnLock(client.lock);
     return ret;
 }
@@ -364,14 +364,14 @@ static int p9Fdatasync(struct inode *inodep) {
 
 	return 1;
 }
-static int p9Write(struct inode *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
+static long p9Write(struct inode *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
 	p9ClientInit();
-    return  p9Request(REQUEST_WRITE, inodep, offset, data, data_len, 0, 0);
+    return (long) p9Request(REQUEST_WRITE, inodep, offset, data, data_len, 0, 0);
 }
 
-static int p9Read(struct inode *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
+static long p9Read(struct inode *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
 	p9ClientInit();
-    return  p9Request(REQUEST_READ, inodep, offset, data, data_len, 0, 0);
+    return  (long)p9Request(REQUEST_READ, inodep, offset, data, data_len, 0, 0);
 }
 
 static int p9Remove(struct inode *inodep) {

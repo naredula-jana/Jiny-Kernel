@@ -1,10 +1,7 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
-
-
 #define VIRTIO 1
-
 #include "types.h"
 #include "atomic.h"
 #include "list.h"
@@ -13,6 +10,7 @@
 #include "multiboot.h"
 #include "task.h"
 #include "spinlock.h"
+
 
 #ifndef NULL
 #define NULL ((void *) 0)
@@ -48,7 +46,7 @@ extern int brk_pnt;
 typedef struct {
 	addr_t address;
 	char type;
-	char name[MAX_SYMBOLLEN];
+	unsigned char name[MAX_SYMBOLLEN];
 }symb_table_t ;
 extern symb_table_t *g_symbol_table;
 extern unsigned long g_total_symbols;
@@ -139,6 +137,6 @@ void kfree (const void *objp);
 extern addr_t g_jiffies;
 
 #define MAX_DMESG_LOG 30000
-
+#include "interface.h"
 
 #endif

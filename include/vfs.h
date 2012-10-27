@@ -64,15 +64,15 @@ TYPE_SHORTLIVED=1,
 TYPE_LONGLIVED=2
 };
 extern unsigned long g_hostShmLen;
-extern kmem_cache_t *g_slab_inodep;
-extern kmem_cache_t *g_slab_filep;
+//extern kmem_cache_t *g_slab_inodep;
+//extern kmem_cache_t *g_slab_filep;
 struct file;
 struct inode;
 struct filesystem {
 	int (*open)(struct inode *inode, int flags, int mode);
 	int (*lseek)(struct file *file,  unsigned long offset,int whence);
-	ssize_t (*write)(struct inode *inode, uint64_t offset, unsigned char *buff,unsigned long len);
-	ssize_t (*read)(struct inode *inode, uint64_t offset,  unsigned char *buff,unsigned long len);
+	long (*write)(struct inode *inode, uint64_t offset, unsigned char *buff,unsigned long len);
+	long (*read)(struct inode *inode, uint64_t offset,  unsigned char *buff,unsigned long len);
 	int (*remove)(struct inode *inode);
 	int (*stat)(struct inode *inode, struct fileStat *stat);
 	int (*close)(struct inode *inodep);

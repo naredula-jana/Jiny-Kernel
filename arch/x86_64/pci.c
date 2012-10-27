@@ -13,8 +13,6 @@
 #include "common.h"
 #include "mm.h"
 #include "task.h"
-void init_pci();
-
 
 int pci_write(pci_addr_t *d, uint16_t pos, uint8_t len, void *buf){
 	uint16_t port;
@@ -155,7 +153,6 @@ static int read_dev_conf(uint8_t bus , uint8_t dev_no,uint8_t func ,device_t *de
 	pci_addr_t *addr=&dev->pci_addr;
 	int ret;
 	int i,count_start;
-	int msi_vector =0;
 
 	addr->bus=bus;
 	addr->device=dev_no;
@@ -186,36 +183,14 @@ static int read_dev_conf(uint8_t bus , uint8_t dev_no,uint8_t func ,device_t *de
 		}
 		dev->pci_bar_count=bar_count;
 		return 1;
-
-#if 0
-		if (header.vendor_id == 0x1af4 && header.device_id==0x1110){
-			init_host_shm(&header,&pci_bars[count_start],i,&msi_vector);
-		}
-#ifdef XEN
-		else if (header.vendor_id == XEN_PLATFORM_VENDOR_ID  && header.device_id == XEN_PLATFORM_DEVICE_ID){
-			init_xen_pci(&header,&pci_bars[count_start],i);
-		}
-#endif
-#ifdef VIRTIO
-#define VIRTIO_PCI_VENDOR_ID 0x1af4
-		else if (header.vendor_id == VIRTIO_PCI_VENDOR_ID  && (header.device_id >= 0x1000 && header.device_id <= 0x103f) ){
-			int msi_enabled = msi_vector;
-
-			return init_virtio_pci(&header,&pci_bars[count_start],i,&msi_vector);
-		}
-#endif
-#endif
 	}
 	return 0;
 }
 
 int read_pci_info(device_t *dev)
 {
-	int i,j;
-
 	DEBUG(" Scanning PCI devices for vendor:%d device:%d \n",dev->pci_hdr.vendor_id, dev->pci_hdr.device_id);
-
-    read_dev_conf(dev->pci_addr.bus, dev->pci_addr.device, dev->pci_addr.function, dev);
+    return read_dev_conf(dev->pci_addr.bus, dev->pci_addr.device, dev->pci_addr.function, dev);
 }
 
 

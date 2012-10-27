@@ -80,7 +80,7 @@ addr_t initialise_paging(addr_t end_addr)
 	// The size of physical memory. For the moment we 
 	// assume it is 16MB big.
 	addr_t end_mem = end_addr;
-	addr_t i,j,fr,nframes;
+	addr_t i,fr,nframes;
 	addr_t *level2_table;
 	unsigned long *p;
 	
@@ -101,7 +101,7 @@ addr_t initialise_paging(addr_t end_addr)
 	}
 
 //	ut_printf("Initializing PAGING  nframes:%x  FR:%x l2:%x i=%d \n",nframes,fr,level2_table,i);
-	p=0x00102000; /* TODO: the following two lines need to remove later */
+	p=(unsigned long *)0x00102000; /* TODO: the following two lines need to remove later */
 	/* reset the L3 table first entry need only when the paging is enabled */
 
 #ifdef SMP
@@ -110,7 +110,7 @@ addr_t initialise_paging(addr_t end_addr)
 	*p=0;
 #endif
 
-	VIDEO=__va(VIDEO);
+	VIDEO=(unsigned long)__va(VIDEO);
 	flush_tlb(0x101000);
 	return placement_address;
 }
@@ -159,8 +159,8 @@ void ar_pageFault(struct fault_ctx *ctx) {
 	int rw = ctx->errcode & 0x2; // Write operation?
 	int us = ctx->errcode & 0x4; // Processor was in user-mode?
 	int reserved = ctx->errcode & 0x8; // Overwritten CPU-reserved bits of page entry?
-	int id = ctx->errcode & 0x10; // Caused by an instruction fetch?
-	struct gpregs *gp = ctx->gprs;
+//	int id = ctx->errcode & 0x10; // Caused by an instruction fetch?
+//	struct gpregs *gp = ctx->gprs;
 
 	// Output an error message.
 	DEBUG("new PAGE FAULT  ip:%x  addr: %x \n",ctx->istack_frame->rip,faulting_address);
@@ -200,8 +200,8 @@ static int copy_pagetable(int level,unsigned long src_ptable_addr,unsigned long 
 	int i;
 	unsigned long *src,*dest,*nv; /* virtual address */
 
-	src=src_ptable_addr;	
-	dest=dest_ptable_addr;
+	src=(unsigned long *)src_ptable_addr;
+	dest=(unsigned long *)dest_ptable_addr;
 	DEBUG("S level: %d src:%x  dest:%x \n",level,src,dest);	
 
 	for (i=0; i<512; i++)
@@ -228,10 +228,10 @@ static int copy_pagetable(int level,unsigned long src_ptable_addr,unsigned long 
 					*dest=*src;
 				}else
 				{
-				nv=mm_getFreePages(MEM_CLEAR,0);	
+				nv=(unsigned long *)mm_getFreePages(MEM_CLEAR,0);
 				if (nv == 0) BUG();
 				DEBUG(" calling i:%d level:%d src:%x  child src:%x physrc:%x \n",i,level,src_ptable_addr,__va(*src),*src);
-				copy_pagetable(level-1,__va((*src)&(~0xfff)),nv);
+				copy_pagetable(level-1,(unsigned long)__va((*src)&(~0xfff)),(unsigned long)nv);
 				*dest=__pa(nv)|0x7;
 				}
 			}
@@ -296,7 +296,7 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 		{
 			pde_t *pde;
 			unsigned long page;
-			pde=v;
+			pde=(pde_t *)v;
 			if ((level == kernel_pages_level) && (i>=kernel_pages_entry)) /* these are kernel pages , do not cleanup recuresvely */
 			{
 				if ((addr+len) < entry_end)
@@ -319,7 +319,7 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 				}else
 				{
 					if (level ==1) /* Freeing the Anonymous page */
-						mm_putFreePages(__va(page),0);				
+						mm_putFreePages((unsigned long)__va(page),0);
 					else
 					{ /* TODO */
 					}
@@ -348,7 +348,7 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 	{
 		v=v-512;
 		DEBUG("Release PAGE during clear page tables: level:%d tableaddr: %x \n",level,p);
-		mm_putFreePages(v,0);				
+		mm_putFreePages((unsigned long)v,0);
 		return 1;
 	}else
 	{
@@ -379,10 +379,10 @@ int ar_pageTableCopy(struct mm_struct *src_mm,struct mm_struct *dest_mm)
 
 	if (src_mm->pgd == 0) return 0;
 	if (dest_mm->pgd != 0) BUG();
-	v=mm_getFreePages(MEM_CLEAR,0);	
+	v=(unsigned char *)mm_getFreePages(MEM_CLEAR,0);
 	if (v == 0) BUG();
 	dest_mm->pgd=__pa(v);
-	copy_pagetable(4,__va(src_mm->pgd),v);	
+	copy_pagetable(4,(unsigned long)__va(src_mm->pgd),(unsigned long)v);
 	return 1;
 }
 
@@ -392,7 +392,6 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 	struct vm_area_struct *vma;
 	addr_t *pl4,*pl3,*pl2,*pl1,*p; /* physical address */
 	addr_t *v;	/* virtual address */
-	unsigned int index;
 	unsigned char user=0;
 
 	mm=g_kernel_mm;
@@ -415,34 +414,34 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 		}
 		BUG();
 	}
-	pl4=(mm->pgd);
+	pl4=(unsigned long *)(mm->pgd);
 	if (pl4 == 0) return 0;
 
 	p=(pl4+(L4_INDEX(addr))) ;
 	v=__va(p);
-	pl3=(*v) & (~0xfff);
+	pl3=(unsigned long *)((*v) & (~0xfff));
 	if (pl3==0)
 	{
-		v=mm_getFreePages(MEM_CLEAR,0); /* get page of 4k size for page table */
+		v=(unsigned long *)mm_getFreePages(MEM_CLEAR,0); /* get page of 4k size for page table */
 		if (v ==0) BUG();
-		ut_memset(v,0,4096);
-		pl3=__pa(v);
+		ut_memset((unsigned char *)v,0,4096);
+		pl3=(unsigned long *)__pa(v);
 		p=(pl4+(L4_INDEX(addr))); /* insert into l4   */
-		v=__va(p);
+		v=(unsigned long *)__va(p);
 		*v=((addr_t) pl3 |((addr_t) 0x7));
 		DEBUG(" Inserted into L4 :%x  p13:%x  pl4:%x addr:%x index:%x \n",p,pl3,pl4,addr,L4_INDEX(addr));
 	}
 	p=(pl3+(L3_INDEX(addr)));
 	v=__va(p);
-	pl2=(*v) & (~0xfff);
+	pl2=(unsigned long *)((*v) & (~0xfff));
 	DEBUG(" Pl3 :%x pl4 :%x p12:%x \n",pl3,pl4,pl2);	
 
 	if (pl2==0)
 	{
-		v=mm_getFreePages(MEM_CLEAR,0); /* get page of 4k size for page table */
+		v=(unsigned long *)mm_getFreePages(MEM_CLEAR,0); /* get page of 4k size for page table */
 		if (v ==0) BUG();
-		ut_memset(v,0,4096);
-		pl2=__pa(v);
+		ut_memset((unsigned char *)v,0,4096);
+		pl2=(unsigned long *)__pa(v);
 		p=(pl3+(L3_INDEX(addr)));
 		v=__va(p);
 		*v=((addr_t) pl2 |((addr_t) 0x7));
@@ -450,16 +449,16 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 	}
 	p=(pl2+(L2_INDEX(addr)));
 	v=__va(p);
-	pl1=(*v) & (~0xfff);
+	pl1=(unsigned long *)((*v) & (~0xfff));
 	DEBUG(" Pl2 :%x pl1 :%x\n",pl2,pl1);	
 
 	if (pl1==0)
 	{
-		v=mm_getFreePages(MEM_CLEAR,0); /* get page of 4k size for page table */
+		v=(unsigned long *)mm_getFreePages(MEM_CLEAR,0); /* get page of 4k size for page table */
 		if (v ==0) BUG();
-		ut_memset(v,0,4096);
-		pl1=__pa(v);
-		p=(pl2+(L2_INDEX(addr)));
+		ut_memset((unsigned char *)v,0,4096);
+		pl1=(unsigned long *)__pa(v);
+		p=(unsigned long *)(pl2+(L2_INDEX(addr)));
 		v=__va(p);
 		*v=((addr_t) pl1 |((addr_t) 0x7));
 		DEBUG(" Inserted into L2 :%x :%x \n",p,pl1);
@@ -470,8 +469,8 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
     int writeFlag = vma->vm_prot&PROT_WRITE;
 	if (vma->vm_flags & MAP_ANONYMOUS)
 	{
-		v=mm_getFreePages(MEM_CLEAR,0); /* get page of 4k size for actual page */	
-		p=__pa(v);
+		v=(unsigned long *)mm_getFreePages(MEM_CLEAR,0); /* get page of 4k size for actual page */
+		p=(unsigned long *)__pa(v);
 		DEBUG(" Adding to LEAF: clean Anonymous page paddr: %x vaddr: %x \n",p,addr);
 	}else if (vma->vm_flags & MAP_FIXED)
 	{
@@ -482,9 +481,9 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 			p=(unsigned long *)pc_getVmaPage(vma,vma->vm_private_data+(addr-vma->vm_start));
 			if (write_fault && (writeFlag!= 0)) {
 				addr_t *fp;
-				fp=mm_getFreePages(MEM_CLEAR,0);
-				ut_memcpy(fp,__va(p),4096);
-				p=__pa(fp);
+				fp=(unsigned long *)mm_getFreePages(MEM_CLEAR,0);
+				ut_memcpy((unsigned char *)fp,(unsigned char *)__va(p),4096);
+				p=(unsigned long *)__pa(fp);
 				writeFlag = 1 ;
 
 			}else{
@@ -494,7 +493,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 			DEBUG(" Adding to LEAF: pagecache  paddr: %x vaddr: %x\n",p,addr);
 		}else
 		{
-			p=vma->vm_private_data + (addr-vma->vm_start) ; 	
+			p=(unsigned long *)(vma->vm_private_data + (addr-vma->vm_start)) ;
 			DEBUG(" Adding to LEAF: private page paddr: %x vaddr: %x \n",p,addr);
 			DEBUG(" page fault of anonymous page p:%x  private_data:%x vm_start::x \n",p,vma->vm_private_data,vma->vm_start);
 		}
@@ -520,9 +519,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,struct addr_list *addr_list )
 {
 	struct mm_struct *mm;
-	struct vm_area_struct *vma;
 	addr_t *pl4,*pl3,*pl2,*pl1,*v;	
-	unsigned int index;
 	pte_t *pte;
 	unsigned long addr;
 	int i;
@@ -534,25 +531,25 @@ unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,stru
 	addr_list->total=0;
 	while (addr <end_addr)
 	{
-		pl4=mm->pgd;
+		pl4=(unsigned long *)mm->pgd;
 		if (pl4 == 0) return 0;
 
 		v=__va(pl4+(L4_INDEX(addr))) ;
-		pl3=(*v) & (~0xfff);
+		pl3=(unsigned long *)((*v) & (~0xfff));
 		if (pl3==0)
 		{
 			return 0;
 		}
 
 		v=__va(pl3+(L3_INDEX(addr)));
-		pl2=(*v) & (~0xfff);
+		pl2=(unsigned long *)((*v) & (~0xfff));
 		if (pl2==0)
 		{
 			return 0;
 		}
 
 		v=__va(pl2+(L2_INDEX(addr)));
-		pl1=(*v) & (~0xfff);
+		pl1=(unsigned long *)((*v) & (~0xfff));
 		if (pl1==0)
 		{
 			return 0;

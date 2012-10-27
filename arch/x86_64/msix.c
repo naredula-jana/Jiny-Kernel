@@ -23,10 +23,7 @@ Bits 0 to 1 = Don't care
  */
 #define LAPIC_BASE    0xfee00000
 static void update_msix_table(struct pcicfg_msix *msix, int mask) {
-	uint32_t offset;
 	unsigned long address;
-	uint32_t data;
-
 	int i;
 
 	for (i = 0; i < msix->msix_msgnum; i++) {
@@ -48,12 +45,11 @@ int read_msi(device_t *dev) {
 	uint16_t buf;
 	uint32_t val;
 	uint32_t bar_offset;
-	int i;
 	struct pcicfg_msix *msix = &dev->msix_cfg;
 
 	pci_addr_t *addr = &dev->pci_addr;
 	uint8_t pos=dev->pci_hdr.capabilities_pointer;
-	pci_bar_t *bars=&dev->pci_bars[0];
+//	pci_bar_t *bars=&dev->pci_bars[0];
 	uint32_t bars_total = dev->pci_bar_count;
 
 	ret = pci_read(addr, pos, 2, &buf);

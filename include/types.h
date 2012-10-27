@@ -1,9 +1,9 @@
-#ifndef __types_h
-#define __types_h
+#ifndef __TYPES_h
+#define __TYPES_h
 
 //typedef long unsigned int size_t
 typedef long  size_t;
-typedef long  ssize_t;
+//typedef long  ssize_t;
 typedef unsigned long  addr_t;
 typedef signed char int8_t;
 typedef signed short int16_t;

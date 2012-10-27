@@ -2,6 +2,7 @@
 #define __PCI_H__
 
 #include "common.h"
+
 #define PCI_CONFIG_ADDRESS 0xCF8
 #define PCI_CONFIG_DATA 0xCFC
 #define PCI_CONF1_MAKE_ADDRESS(b, d, f, p)           \
@@ -128,7 +129,8 @@ struct pcicfg_msix {
 	struct msix_table *msix_table;
 	int isr_vector;
 };
-
+typedef struct device device_t;
+int read_pci_info(device_t *dev);
 int pci_read(pci_addr_t *d, uint16_t pos, uint8_t len, void *buf);
 int pci_write(pci_addr_t *d, uint16_t pos, uint8_t len, void *buf);
 

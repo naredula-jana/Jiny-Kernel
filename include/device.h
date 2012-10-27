@@ -6,9 +6,9 @@
 #define MAX_PCI_BARS 20
 
 typedef struct device_class device_class_t;
-typedef struct device device_t;
+//typedef struct device device_t;
 
-typedef struct device_class{
+struct device_class{
     char *name;
 
 	/* List of Methods*/
@@ -24,7 +24,7 @@ typedef struct device_class{
 };
 
 
-typedef struct device{
+struct device{
 	device_class_t *devClass;
     void *private_data;
 
@@ -38,12 +38,36 @@ typedef struct device{
 };
 extern device_class_t deviceClass_root;
 #define DEFINE_DRIVER(name,parent,probe,attach,dettach) \
-extern device_class_t deviceClass##_##parent; \
-device_class_t deviceClass##_##name = {\
- #name, probe, attach, dettach, &deviceClass##_##parent, \
-	NULL, NULL, NULL};
+   extern device_class_t deviceClass##_##parent; \
+   device_class_t deviceClass##_##name = {\
+       #name, probe, attach, dettach, &deviceClass##_##parent, \
+	    NULL, NULL, NULL};
 
 extern int init_devClasses();
+extern int add_deviceClass(void *addr);
+extern int add_module(void *addr);
+/****************************************************************************
+ * Modules
+ ***************************************************************************/
+typedef struct module module_t;
+struct module{
+    char *name;
 
+	/* List of Methods*/
+	int (*load)();
+	int (*unload)();
+	int (*stat)();
+
+	int init_level;
+	module_t *parent;
+	module_t *children;
+	module_t *sibling;
+};
+extern module_t MODULE_root;
+#define DEFINE_MODULE(name,parent,load,unload,stat) \
+   extern module_t MODULE##_##parent; \
+   module_t MODULE##_##name = {\
+       #name, load, unload, stat, 1,  &MODULE##_##parent, \
+	    NULL, NULL};
 
 #endif

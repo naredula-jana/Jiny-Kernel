@@ -13,7 +13,7 @@
 #include "common.h"
 #include "interface.h"
 extern unsigned long stack,placement_address;
-
+extern void print_symbol(addr_t addr);
 void ut_showTrace(unsigned long *stack_top)
 {
 	unsigned long addr;
@@ -24,13 +24,13 @@ void ut_showTrace(unsigned long *stack_top)
 	sz=(long)stack_top;
 	sz=sz/4;
 	sz=sz*4;
-	stack_top=(unsigned char *)sz;
+	stack_top=(unsigned long *)sz;
 	i = 0;
 	sz=(TASK_SIZE-1);
 	sz=~sz;
 	stack_end = (unsigned long)stack_top & (sz);
 	stack_end = stack_end+TASK_SIZE-10;
-	code_end = &placement_address;
+	code_end = (unsigned long)&placement_address;
 	ut_printf("\nCALL Trace:   code_end:%x  %x :%x  \n",code_end,stack_top,stack_end);
 
 	if (stack_end) {
@@ -415,7 +415,7 @@ static int vsnprintf(char *buf, size_t size, const char *fmt, va_list args)
                 s = "<NULL>";
             //len = strlen(s, precision);
 
-            len = ut_strlen(s);
+            len = ut_strlen((unsigned char *)s);
 
             if (!(flags & LEFT)) {
                 while (len < field_width--) {

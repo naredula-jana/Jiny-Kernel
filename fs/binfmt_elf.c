@@ -160,7 +160,7 @@ unsigned long fs_loadElfLibrary(struct file *file, unsigned long tmp_stack, unsi
 	} else {
 		vm_mmap(0, USERSTACK_ADDR, USERSTACK_LEN, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0);
 		if (stack_len > 0) {
-			aux_vec = aux_addr;
+			aux_vec = (unsigned long *)aux_addr;
 			if (aux_vec != 0) {
 				int aux_last;
 
@@ -193,13 +193,13 @@ unsigned long fs_loadElfLibrary(struct file *file, unsigned long tmp_stack, unsi
 
 				//  AUX_ENT(AT_EXECFN, bprm->exec);
 			}
-			ut_memcpy(USERSTACK_ADDR + USERSTACK_LEN - stack_len, tmp_stack, stack_len);
+			ut_memcpy((unsigned char *)USERSTACK_ADDR + USERSTACK_LEN - stack_len, (unsigned char *)tmp_stack, stack_len);
 
 #define SYSCALL_PAGE 0xffffffffff600000
 			vm_mmap(0, SYSCALL_PAGE, 0x1000, PROT_READ | PROT_EXEC |PROT_WRITE, MAP_ANONYMOUS, 0);
-			ut_memset(SYSCALL_PAGE,0xcc,0x1000);
+			ut_memset((unsigned char *)SYSCALL_PAGE,(unsigned char )0xcc,0x1000);
 			unsigned int *syscallp;
-			syscallp=0xffffffffff600400;
+			syscallp=(unsigned int *)0xffffffffff600400;
 			*syscallp=0xc9c0c748;
 			syscallp++;
 			*syscallp=0x0f000000;

@@ -9,8 +9,9 @@
 *
 */
 //#define DEBUG_ENABLE 1
+#include "common.h"
 #include "mm.h"
-#include "interface.h"
+
 
 /********************* Data Structures *****************************/
 #define NR_MEM_LISTS 6

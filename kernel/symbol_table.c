@@ -4,7 +4,7 @@
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  *
- *   kernel/util.c
+ *   kernel/symbol_table.c
  *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
  *
  */
@@ -14,6 +14,7 @@
  *    Jcmd_xxx_stat  - display stats
  */
 #include "common.h"
+#include "device.h"
 
 symb_table_t *g_symbol_table = 0;
 unsigned long g_total_symbols = 0;
@@ -27,9 +28,10 @@ int init_symbol_table() {
 	for (i = 0; i < g_total_symbols; i++) {
 		unsigned char sym[100], dst[100];
 
+
 		ut_strcpy(sym, g_symbol_table[i].name);
 		sym[7] = '\0'; /* g_conf_ */
-		ut_strcpy(dst, "g_conf_");
+		ut_strcpy(dst, (unsigned char *)"g_conf_");
 		if (ut_strcmp(sym, dst) == 0) {
 			g_symbol_table[i].type = SYMBOL_CONF;
 			confs++;
@@ -38,7 +40,7 @@ int init_symbol_table() {
 
 		ut_strcpy(sym, g_symbol_table[i].name);
 		sym[5] = '\0'; /* Jcmd_ */
-		ut_strcpy(dst, "Jcmd_");
+		ut_strcpy(dst, (unsigned char *)"Jcmd_");
 		if (ut_strcmp(sym, dst) == 0) {
 			g_symbol_table[i].type = SYMBOL_CMD;
 			cmds++;
@@ -47,12 +49,19 @@ int init_symbol_table() {
 
 		ut_strcpy(sym, g_symbol_table[i].name);
 		sym[12] = '\0'; /* Jcmd_ */
-		ut_strcpy(dst, "deviceClass_");
+		ut_strcpy(dst, (unsigned char *)"deviceClass_");
 		if (ut_strcmp(sym, dst) == 0) {
-            add_deviceClass(g_symbol_table[i].address);
+            add_deviceClass((void *)g_symbol_table[i].address);
 			continue;
 		}
 
+		ut_strcpy(sym, g_symbol_table[i].name);
+		sym[12] = '\0'; /* Jcmd_ */
+		ut_strcpy(dst, (unsigned char *)"MODULE_");
+		if (ut_strcmp(sym, dst) == 0) {
+            add_module((void *)g_symbol_table[i].address);
+			continue;
+		}
 	}
 	ut_printf(
 			"Symbol Intilization:  confs:%d stats:%d cmds:%d  totalsymbols:%d \n",
@@ -66,7 +75,7 @@ int display_symbols(int type){
 
 	for (i = 0; i < g_total_symbols; i++) {
 		if (g_symbol_table[i].type != type) continue;
-		conf=g_symbol_table[i].address;
+		conf=(int *)g_symbol_table[i].address;
 		if (type==SYMBOL_CONF)
 		    ut_printf("   %9s = %d\n",g_symbol_table[i].name,*conf);
 		else
@@ -84,13 +93,13 @@ int execute_symbol(int type, char *name, char *argv1,char *argv2){
 		if (g_symbol_table[i].type != type) continue;
 
 		if (type==SYMBOL_CONF){
-			if (ut_strcmp(g_symbol_table[i].name, name) != 0) continue;
-		    conf=g_symbol_table[i].address;
+			if (ut_strcmp((unsigned char *)g_symbol_table[i].name,(unsigned char *) name) != 0) continue;
+		    conf=(int *)g_symbol_table[i].address;
 		    if (argv1==0) return 0;
-		    *conf=ut_atoi(argv1);
+		    *conf=(int)ut_atoi(argv1);
 		    return 1;
 		}else {
-			if (ut_strcmp(&g_symbol_table[i].name[5], name) != 0) continue;
+			if (ut_strcmp((unsigned char *)&g_symbol_table[i].name[5], (unsigned char *)name) != 0) continue;
 			func=g_symbol_table[i].address;
 			func(argv1,argv2);
 			return 1;

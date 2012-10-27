@@ -195,7 +195,7 @@ static inline long IS_ERR(const void *ptr) {/* TODO */
 	return 0;
 }
 #define WARN_ON(x)
-#define BUG(x) stat_errors[x]++;
+#define MM_BUG(x) stat_errors[x]++;
 unsigned long err_arg1=0;
 unsigned long err_arg2=0;
 
@@ -255,11 +255,11 @@ int sanity_check(struct kmemleak_object *o,int loc){
 	}
 	return 1;
 }
-static void *kmem_cache_create(char *type, int unused1 , int unused2 , int unused3, int unused4, int unused5)
+static void *memleak_kmem_cache_create(char *type, int unused1 , int unused2 , int unused3, int unused4, int unused5)
 {
 	int i;
 
-	if (strcmp(type, "kmemleak_objects") == 0) {
+	if (strcmp((unsigned char *)type, (unsigned char *)"kmemleak_objects") == 0) {
 		for (i = 0; i < (MAX_STATIC_OBJS - 1); i++) {
 			objs[i].next_free = &objs[i + 1];
 			objs[i].magic=MAGIC_NUMBER;
@@ -273,18 +273,18 @@ static void *kmem_cache_create(char *type, int unused1 , int unused2 , int unuse
 		objs[MAX_STATIC_OBJS - 1].pointer=0;
 		objs[MAX_STATIC_OBJS - 1].flags=0;
 		return (void *)&objs[0];
-	} else if (strcmp(type, "kmemleak_scan_area") == 0) {
+	} else if (strcmp((unsigned char*)type, (unsigned char *)"kmemleak_scan_area") == 0) {
 		for (i = 0; i < (MAX_STATIC_SCAN_AREAS - 1); i++) {
 			scan_areas[i].next_free = &scan_areas[i + 1];
 		}
 		scan_areas[MAX_STATIC_SCAN_AREAS - 1].next_free = 0;
 		return (void *)&scan_areas[0];
 	} else {
-		BUG(9);
+		MM_BUG(9);
 	}
 	return 0;
 }
-static void kmem_cache_free(void *cache, void *object) {
+static void memleak_kmem_cache_free(void *cache, void *object) {
 	if (cache == object_cache) {
 		struct kmemleak_object *obj = object;
 		obj->next_free = object_cache;
@@ -294,11 +294,11 @@ static void kmem_cache_free(void *cache, void *object) {
 		obj->next_free = scan_area_cache;
 		scan_area_cache = obj;
 	} else {
-		BUG(8);
+		MM_BUG(8);
 	}
 	return;
 }
-static void *kmem_cache_alloc(void *cache, void *flag) {
+static void *memleak_kmem_cache_alloc(void *cache, void *flag) {
 	if (cache == object_cache) {
 		struct kmemleak_object *obj = object_cache;
 		if (object_cache == 0)
@@ -466,7 +466,7 @@ static struct kmemleak_object *_lookup_object(unsigned long ptr, int alias) {
 }
 
 
-#define PAGE_SIZE (0x1000)
+//#define PAGE_SIZE (0x1000)
 /*
  * Save stack trace to the given array of MAX_TRACE size.
  */
@@ -524,18 +524,18 @@ static struct kmemleak_object *create_object(unsigned long ptr, size_t size, int
 	struct prio_tree_node *node;
 
 	if (ptr==0){
-        BUG(6);
+        MM_BUG(6);
 		return NULL;
 	}
 
 	spin_lock_irqsave(&kmemleak_lock, flags); /* global lock  : create */
 	object = _lookup_object(ptr, 0);
 	if (object!=0){
-		BUG(5);
+		MM_BUG(5);
 		object=NULL;
 		goto out;
 	}
-	object = kmem_cache_alloc(object_cache, 0);
+	object = memleak_kmem_cache_alloc(object_cache, 0);
 	if (!object) {
 		memleak_serious_bug=1;
 		sanity_location=801;
@@ -585,7 +585,7 @@ static void delete_object(unsigned long ptr) {
 		int i;
 
 		spin_unlock_irqrestore(&kmemleak_lock, flags);
-		BUG(2);
+		MM_BUG(2);
 		for (i = 0; i < (MAX_STATIC_OBJS - 1); i++) {
 			if (objs[i].pointer == ptr) {
 				pr_debug("ERROR Found the pointer But Failed using Tree :%x  %d next=%x\n",ptr, i, objs[i].next);
@@ -601,7 +601,7 @@ static void delete_object(unsigned long ptr) {
 		list_del(&object->object_list);
 		object->flags &= ~OBJECT_ALLOCATED;
 		object->pointer = 0;
-		kmem_cache_free(object_cache, object);
+		memleak_kmem_cache_free(object_cache, object);
 		spin_unlock_irqrestore(&kmemleak_lock, flags);
 
 		stat_obj_count--;
@@ -623,7 +623,7 @@ void add_scan_area(unsigned long ptr, size_t size) {
 		return;
 	}
 
-	area = kmem_cache_alloc(scan_area_cache, 0);
+	area = memleak_kmem_cache_alloc(scan_area_cache, 0);
 	if (!area) {
 		pr_warning("Cannot allocate a scan area\n");
 		goto out;
@@ -632,7 +632,7 @@ void add_scan_area(unsigned long ptr, size_t size) {
 
 	if (ptr + size > object->pointer + object->size) {
 		kmemleak_warn("Scan area larger than object 0x%08lx\n", ptr);
-		kmem_cache_free(scan_area_cache, area);
+		memleak_kmem_cache_free(scan_area_cache, area);
 		goto out_unlock;
 	}
 
@@ -659,7 +659,7 @@ extern int sysctl_memleak_scan;
  * @gfp:	kmalloc() flags used for kmemleak internal memory allocations
  *
  * This function is called from the kernel allocators when a new object
- * (memory block) is allocated (kmem_cache_alloc, kmalloc, vmalloc etc.).
+ * (memory block) is allocated (memleak_kmem_cache_alloc, kmalloc, vmalloc etc.).
  */
 static void kmemleak_alloc(const void *ptr, int size, int type, void *cachep) {
 	int min_count = 1;
@@ -687,7 +687,7 @@ static void kmemleak_alloc(const void *ptr, int size, int type, void *cachep) {
  * @ptr:	pointer to beginning of the object
  *
  * This function is called from the kernel allocators when an object (memory
- * block) is freed (kmem_cache_free, kfree, vfree etc.).
+ * block) is freed (memleak_kmem_cache_free, kfree, vfree etc.).
  */
 static void kmemleak_free(const void *ptr, void *cachep) {
 
@@ -719,7 +719,7 @@ static void kmemleak_update(const void *ptr,unsigned long type) {
 	   sanity_check(object,1);
        object->type =type;
 	}else{
-		BUG(4);
+		MM_BUG(4);
 	}
 	spin_unlock_irqrestore(&kmemleak_lock, flags);
 
@@ -974,9 +974,9 @@ void kmemleak_init(void) {
 	for (i=0; i<MAX_ERRORS; i++)
 	   stat_errors[i]=0;
 
-	object_cache = kmem_cache_create("kmemleak_objects",
+	object_cache = memleak_kmem_cache_create("kmemleak_objects",
 			sizeof(struct kmemleak_object), 0, 0, 0, 0);
-	scan_area_cache = kmem_cache_create("kmemleak_scan_area",
+	scan_area_cache = memleak_kmem_cache_create("kmemleak_scan_area",
 			sizeof(struct kmemleak_scan_area), 0, 0, 0, 0);
 	INIT_PRIO_TREE_ROOT(&object_tree_root);
 

@@ -10,7 +10,7 @@
  */
 #define DEBUG_ENABLE 1
 #include "common.h"
-//#include "task.h"
+
 #include "interface.h"
 #include "descriptor_tables.h"
 #define MAGIC_CHAR 0xab
@@ -112,7 +112,7 @@ static void _add_to_waitqueue(queue_t *waitqueue, struct task_struct * p, long t
 	long cum_ticks, prev_cum_ticks;
 	struct list_head *pos, *prev_pos;
 	struct task_struct *task;
-	unsigned long flags;
+
 
 	cum_ticks = 0;
 	prev_cum_ticks = 0;
@@ -147,7 +147,7 @@ static int _del_from_waitqueue(queue_t *waitqueue, struct task_struct *p) {
 	struct list_head *pos;
 	struct task_struct *task;
 	int ret = 0;
-	unsigned long flags;
+
 
 	if (p==0 || waitqueue==0) return 0;
 
@@ -329,7 +329,7 @@ static unsigned long setup_userstack(unsigned char **argv, unsigned char **env, 
 			real_stack = real_stack - len - 1;
 			DEBUG(" argument :%d address:%x \n",i,real_stack);
 			ut_strcpy(p, argv[i]);
-			target_argv[i] = real_stack;
+			target_argv[i] = (unsigned char *)real_stack;
 		} else {
 			goto error;
 		}
@@ -344,31 +344,31 @@ static unsigned long setup_userstack(unsigned char **argv, unsigned char **env, 
 			real_stack = real_stack - len - 1;
 			DEBUG(" envs :%d address:%x \n",i,real_stack);
 			ut_strcpy(p, env[i]);
-			target_env[i] = real_stack;
+			target_env[i] = (unsigned char *)real_stack;
 		} else {
 			goto error;
 		}
 	}
 	target_env[i] = 0;
 
-	addr = p;
-	addr = (addr / 8) * 8;
-	p = addr;
+	addr = (unsigned long)p;
+	addr = (unsigned long)((addr / 8) * 8);
+	p = (unsigned char *)addr;
 
 	p = p - (MAX_AUX_VEC_ENTRIES * 16);
 
 	real_stack = USERSTACK_ADDR + USERSTACK_LEN + p - (stack + PAGE_SIZE);
-	*p_aux = p;
+	*p_aux = (unsigned long)p;
 	len = (1+total_args + 1 + total_envs+1) * 8; /* total_args+args+0+envs+0 */
 	if ((p - len - 1) > stack) {
 		unsigned long *t;
 
 		p = p - (total_envs+1)*8;
-		ut_memcpy(p, target_env, (total_envs+1)*8);
+		ut_memcpy(p, (unsigned char *)target_env, (total_envs+1)*8);
 
 		p = p - (1+total_args+1)*8;
-		ut_memcpy(p+8, target_argv, (total_args+1)*8);
-		t = p;
+		ut_memcpy(p+8, (unsigned char *)target_argv, (total_args+1)*8);
+		t = (unsigned long *)p;
 		*t = total_args; /* store argc at the top of stack */
 
 		DEBUG(" arg0:%x arg1:%x arg2:%x len:%d \n",target_argv[0],target_argv[1],target_argv[2],len);
@@ -382,17 +382,15 @@ static unsigned long setup_userstack(unsigned char **argv, unsigned char **env, 
 	*stack_len = PAGE_SIZE - (p - stack);
 	*t_argc = total_args;
 	*t_argv = real_stack ;
-	return stack;
+	return (unsigned long)stack;
 
-	error: mm_putFreePages(stack, 0);
+error: mm_putFreePages((unsigned long)stack, 0);
 	return 0;
 }
 void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **env) {
 	struct file *fp;
 	struct mm_struct *mm,*old_mm;
 	unsigned long main_func;
-	struct user_regs *p;
-	unsigned long *tmp;
 	unsigned long t_argc, t_argv, stack_len, tmp_stack, tmp_aux;
 
 	SYSCALL_DEBUG("execve file:%s argv:%x env:%x \n",file,argv,env);
@@ -408,7 +406,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	mm = kmem_cache_alloc(mm_cachep, 0);
 	if (mm == 0)
 		BUG();
-	ut_memset(mm,0,sizeof(struct mm_struct)); /* clear the mm struct */
+	ut_memset((unsigned char *)mm,0,sizeof(struct mm_struct)); /* clear the mm struct */
 	atomic_set(&mm->count,1);
 	mm->pgd = 0;
 	mm->mmap = 0;
@@ -420,7 +418,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	flush_tlb(mm->pgd);
 
 	/* populate vm with vmaps */
-	fp = fs_open(file, 0, 0);
+	fp = (struct file *)fs_open(file, 0, 0);
 	if (fp == 0) {
 		ut_printf("Error :execve Failed to open the file :%s\n", file);
 		return;
@@ -492,9 +490,10 @@ static unsigned long push_to_userland() {
 	g_cpu_state[cpuid].user_fs_base = 0;
 
 	enter_userspace();
+	return 0;
 }
 static int free_mm(struct mm_struct *mm) {
-	int i, total_fds;
+	int i;
 
 	DEBUG("freeing the mm :%x counter:%x \n",mm,mm->count.counter);
 
@@ -579,8 +578,8 @@ unsigned long SYS_sc_clone(int(*fn)(void *), void *child_stack, int clone_flags,
 	p->pending_signal = 0;
 	p->cpu = getcpuid();
 	if (g_current_task->mm != g_kernel_mm) { /* user level thread */
-		p->thread.userland.ip = fn;
-		p->thread.userland.sp = child_stack;
+		p->thread.userland.ip = (unsigned long)fn;
+		p->thread.userland.sp = (unsigned long)child_stack;
 		p->thread.userland.argc = 0;/* TODO */
 		p->thread.userland.argv = 0; /* TODO */
 		BRK;// TODO need to add the unlock to push_to_userland
@@ -591,7 +590,7 @@ unsigned long SYS_sc_clone(int(*fn)(void *), void *child_stack, int clone_flags,
 		p->thread.argv = args;
 		p->thread.real_ip =fn;
 	}
-	p->thread.sp = (addr_t) p + (addr_t) TASK_SIZE - (addr_t)160; /* 160 bytes are left at the bottom of the stack */
+	p->thread.sp = (void *)((addr_t) p + (addr_t) TASK_SIZE - (addr_t)160); /* 160 bytes are left at the bottom of the stack */
 	p->state = TASK_RUNNING;
 	ut_strncpy(p->name, g_current_task->name, MAX_TASK_NAME);
 
@@ -745,7 +744,7 @@ void init_tasking() {
 
 	atomic_set(&g_kernel_mm->count,1);
 	g_kernel_mm->mmap = 0x0;
-	g_kernel_mm->pgd = (unsigned char *) g_kernel_page_dir;
+	g_kernel_mm->pgd =  g_kernel_page_dir;
 	g_kernel_mm->fs.total = 3;
 
     task_addr=(unsigned long )((unsigned long )(&g_idle_stack)+TASK_SIZE) & (~((unsigned long )(TASK_SIZE-1)));
@@ -760,7 +759,7 @@ void init_tasking() {
 		g_idle_tasks[i]->cpu = i;
 		g_idle_tasks[i]->mm = g_kernel_mm; /* TODO increse the corresponding count */
 		g_current_tasks[i] = g_idle_tasks[i];
-		ut_strncpy(g_idle_tasks[i]->name, "idle", MAX_TASK_NAME);
+		ut_strncpy(g_idle_tasks[i]->name, (unsigned char *)"idle", MAX_TASK_NAME);
 		g_pid++;
 	}
 

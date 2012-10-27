@@ -85,7 +85,7 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 
 	struct scatterlist sg[4];
 	unsigned int out, in;
-	sg[0].page_link = client->pkt_buf;
+	sg[0].page_link = (unsigned long)client->pkt_buf;
 	sg[0].length = 1024;
 	sg[0].offset = 0;
 	out = 1;
@@ -98,7 +98,7 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 		sg[2].offset = 0;
 		in = 2;
 	} else if (client->type == P9_TYPE_TWRITE) {
-		sg[1].page_link = client->user_data;
+		sg[1].page_link = (unsigned long)client->user_data;
 		sg[1].length = client->userdata_len;
 		sg[1].offset = 0;
 		sg[0].length = 23; /* this for header , eventhough it is having space pick the data from sg[1] */
@@ -131,7 +131,7 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 			sc_sleep(300);
 		}
 	}
-	if (addr != client->pkt_buf) {
+	if (addr != (unsigned long)client->pkt_buf) {
 		DEBUG("9p write : got invalid address : %x \n", addr);
 		return 0;
 	}

@@ -9,16 +9,11 @@
 *
 */
 #include "common.h"
+
 #include "pci.h"
 #include "mm.h"
 #include "task.h"
-/* Forward declarations.  */
-extern void init_descriptor_tables();
-extern void init_isr();
-extern void init_pci();
-extern int init_driver_keyboard();
-extern void init_tasking();
-extern void init_serial();
+
 
 /* SLAB cache for vm_area_struct structures */
 kmem_cache_t *vm_area_cachep;
@@ -56,33 +51,33 @@ int init_kernel(unsigned long end_addr)
 
 #ifdef SMP
 	/* 0xfee00000 - 0xfef00000 for lapic */
-	if ((ret=vm_mmap(0,__va(0xFee00000) ,0x100000,PROT_WRITE,MAP_FIXED,0xFee00000)) == 0) /* this is for SMP */
+	if ((ret=vm_mmap(0,(unsigned long)__va(0xFee00000) ,0x100000,PROT_WRITE,MAP_FIXED,0xFee00000)) == 0) /* this is for SMP */
 	{
 		ut_printf("SMP: ERROR : mmap fails for \n");
 		return 0;
 	}
 
-	ret=imps_force(4);
+	ret=init_smp_force(4);
 	ut_printf("SMP: completed, maxcpus: %d \n",getmaxcpus());
 #endif
 
 	cli();  /* disable interrupt incase if it is enabled while apic is started */
-	ut_printf("Initalising: PCI.. \n");
-	//init_pci();
 
-	//init_pci_device(VIRTIO_PCI_VENDOR_ID,0,1,init_virtio_pci);
 
-#ifdef NETWORKING
-//	init_LwipTcpIpStack();
-#endif
-//	init_TestUdpStack();
 
 	ut_printf("Initalising: VFS.. \n");
 	init_vfs();
 //	ar_registerInterrupt(128,syscall_handler);
 
 	init_symbol_table();
+
+	init_devClasses();
 	ut_printf("Initialization completed \n");
+
+
+#ifdef NETWORKING
+//	init_LwipTcpIpStack();
+#endif
 
 	return 1 ;
 }

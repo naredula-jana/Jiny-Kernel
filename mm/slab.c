@@ -13,6 +13,7 @@
 #include "mm.h"
 #include "interface.h"
 
+
 #define __init  /* TODO */
 #define KERN_ERR  /* TODO */
 /* prototypes */
@@ -419,7 +420,7 @@ static void kmem_cache_estimate (unsigned long gfporder, size_t size,
 }
 
 /* Initialisation - setup the `cache' cache. */
-void __init kmem_cache_init(void)
+void kmem_cache_init(void)
 {
 	size_t left_over;
 
@@ -440,7 +441,7 @@ void __init kmem_cache_init(void)
 /* Initialisation - setup remaining internal and general caches.
  * Called after the gfp() functions have been enabled, and before smp_init().
  */
-void __init kmem_cache_sizes_init(void)
+void kmem_cache_sizes_init(void)
 {
 	cache_sizes_t *sizes = cache_sizes;
 	char name[20];
@@ -458,7 +459,7 @@ ut_printf(" In the kmem_cache_sizes_init \n");
 		 * Note for systems short on memory removing the alignment will
 		 * allow tighter packing of the smaller caches. */
 		// TODO : snut_printf(name, sizeof(name), "size-%Zd",sizes->cs_size);
-	ut_strcpy(name,"size");
+	ut_strcpy((unsigned char *)name,(unsigned char *)"size");
 		if (!(sizes->cs_cachep =
 			kmem_cache_create(name, sizes->cs_size,
 					0, SLAB_HWCACHE_ALIGN, NULL, NULL))) {
@@ -644,7 +645,7 @@ kmem_cache_create (const char *name, size_t size, size_t offset,
 	 * Sanity checks... these are all serious usage bugs.
 	 */
 	if ((!name) ||
-		((ut_strlen(name) >= CACHE_NAMELEN - 1)) ||
+		((ut_strlen((unsigned char *)name) >= CACHE_NAMELEN - 1)) ||
 		in_interrupt() ||
 		(size < BYTES_PER_WORD) ||
 		(size > (1<<MAX_OBJ_ORDER)*PAGE_SIZE) ||
@@ -809,7 +810,7 @@ next:
 	cachep->ctor = ctor;
 	cachep->dtor = dtor;
 	/* Copy name over so we don't have problems with unloaded modules */
-	ut_strcpy(cachep->name, name);
+	ut_strcpy((unsigned char *)cachep->name, (unsigned char *)name);
 
 #ifdef CONFIG_SMP
 	if (g_cpucache_up)

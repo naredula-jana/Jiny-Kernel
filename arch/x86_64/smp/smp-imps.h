@@ -256,7 +256,7 @@ cmos_read_byte (int loc)
 extern void ut_memcpy(unsigned char *dest, unsigned char *src, long len);
 extern void ut_printf (const char *format, ...);
 #define KERNEL_PRINT ut_printf
-#define IMPS_DEBUG_PRINT ut_printf
+
 #define memcpy ut_memcpy
 
 #define UDELAY(x) udelay(x)

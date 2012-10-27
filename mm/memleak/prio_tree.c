@@ -161,7 +161,7 @@ struct prio_tree_node *prio_tree_replace(struct prio_tree_root *root,
 	INIT_PRIO_TREE_NODE(node);
 
 	if (prio_tree_root(old)) {
-		BUG_ON(root->prio_tree_node != old,1);
+		MM_BUG_ON(root->prio_tree_node != old,1);
 		/*
 		 * We can reduce root->index_bits here. However, it is complex
 		 * and does not help much to improve performance (IMO).
@@ -309,7 +309,7 @@ void prio_tree_remove(struct prio_tree_root *root, struct prio_tree_node *node)
 	}
 
 	if (prio_tree_root(cur)) {
-		BUG_ON(root->prio_tree_node != cur,2);
+		MM_BUG_ON(root->prio_tree_node != cur,2);
 		__INIT_PRIO_TREE_ROOT(root, root->raw);
 		return;
 	}
@@ -351,8 +351,8 @@ static struct prio_tree_node *prio_tree_left(struct prio_tree_iter *iter,
 				iter->size_level++;
 		} else {
 			if (iter->size_level) {
-				BUG_ON(!prio_tree_left_empty(iter->cur),3);
-				BUG_ON(!prio_tree_right_empty(iter->cur),4);
+				MM_BUG_ON(!prio_tree_left_empty(iter->cur),3);
+				MM_BUG_ON(!prio_tree_right_empty(iter->cur),4);
 				iter->size_level++;
 				iter->mask = ULONG_MAX;
 			} else {
@@ -393,8 +393,8 @@ static struct prio_tree_node *prio_tree_right(struct prio_tree_iter *iter,
 				iter->size_level++;
 		} else {
 			if (iter->size_level) {
-				BUG_ON(!prio_tree_left_empty(iter->cur),5);
-				BUG_ON(!prio_tree_right_empty(iter->cur),6);
+				MM_BUG_ON(!prio_tree_left_empty(iter->cur),5);
+				MM_BUG_ON(!prio_tree_right_empty(iter->cur),6);
 				iter->size_level++;
 				iter->mask = ULONG_MAX;
 			} else {

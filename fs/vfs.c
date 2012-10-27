@@ -247,9 +247,9 @@ unsigned long SYS_fs_lseek(unsigned long fd, unsigned long offset, int whence) {
 	return vfs_fs->lseek(file, offset, whence);
 }
 
-ssize_t SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt) {
+long SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt) {
 	int i;
-	ssize_t ret, tret;
+	long ret, tret;
 	struct file *file;
 
 	SYSCALL_DEBUG("writev: fd:%d iovec:%x count:%d\n",fd,iov,iovcnt);
@@ -271,9 +271,9 @@ ssize_t SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt) {
 	last: return ret;
 }
 
-ssize_t SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt) {
+long SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt) {
 	int i;
-	ssize_t ret, tret;
+	long ret, tret;
 	struct file *file;
 
 	SYSCALL_DEBUG("readv: fd:%d iovec:%x count:%d\n",fd,iov,iovcnt);
@@ -288,7 +288,7 @@ ssize_t SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt) {
 	}
 	last: return ret;
 }
-static ssize_t vfswrite(struct file *filep, unsigned char *buff, unsigned long len) {
+static long vfswrite(struct file *filep, unsigned char *buff, unsigned long len) {
 	int ret;
 	int tmp_len, size, page_offset;
 	struct page *page;
@@ -328,7 +328,7 @@ static ssize_t vfswrite(struct file *filep, unsigned char *buff, unsigned long l
 	error:
 	return tmp_len;
 }
-ssize_t SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
+long SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
 	struct file *file;
 	int i;
 
@@ -344,7 +344,7 @@ ssize_t SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
 	file = fd_to_file(fd);
 	return fs_write(file, buff, len);
 }
-ssize_t fs_write(struct file *file, unsigned char *buff, unsigned long len) {
+long fs_write(struct file *file, unsigned char *buff, unsigned long len) {
 	if (vfs_fs == 0 || (vfs_fs->write==0))
 		return 0;
 	if (file == 0)
@@ -388,7 +388,7 @@ struct page *fs_genericRead(struct inode *inode, unsigned long offset) {
 	}
 	return page;
 }
-static ssize_t vfsread(struct file *filep, unsigned char *buff, unsigned long len)
+static long vfsread(struct file *filep, unsigned char *buff, unsigned long len)
 {
 	int ret;
 	struct page *page;
@@ -423,7 +423,7 @@ static ssize_t vfsread(struct file *filep, unsigned char *buff, unsigned long le
 	}
 	return ret;
 }
-ssize_t fs_read(struct file *file, unsigned char *buff, unsigned long len) {
+long fs_read(struct file *file, unsigned char *buff, unsigned long len) {
 	if (vfs_fs == 0)
 		return 0;
 	if (file == 0)
@@ -431,7 +431,7 @@ ssize_t fs_read(struct file *file, unsigned char *buff, unsigned long len) {
 	return vfsread(file, buff, len);
 }
 
-ssize_t SYS_fs_read(unsigned long fd, unsigned char *buff, unsigned long len) {
+long SYS_fs_read(unsigned long fd, unsigned char *buff, unsigned long len) {
 	struct file *file;
 
 //	SYSCALL_DEBUG("read fd:%d buff:%x len:%x \n",fd,buff,len);

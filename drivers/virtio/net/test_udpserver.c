@@ -13,8 +13,8 @@
 #define WITH_BOTTOM_HALF 1
 //#define SEND_BH 1
 typedef unsigned int u32;
-
-u16 ip_sum_calc(u16 len_ip_header, unsigned char buff[]) {
+extern int addBufToQueue(struct virtqueue *vq, unsigned char *buf, unsigned long len);
+static u16 ip_sum_calc(u16 len_ip_header, unsigned char buff[]) {
 	u16 word16;
 	u32 sum = 0;
 	u16 i;
@@ -37,14 +37,11 @@ u16 ip_sum_calc(u16 len_ip_header, unsigned char buff[]) {
 }
 static unsigned char mac[10];
 static virtio_dev_t *net_dev = 0;
-int dummy_pkt_scan = 1;
+static int dummy_pkt_scan = 1;
 queue_t nbh_waitq;
 static int process_pkt(unsigned char *c, unsigned long len) {
 	unsigned char ip[5], port[3], tc;
 	u16 *pcsum;
-	struct virtio_net_hdr *hdr = c;
-
-	//DEBUG("type of packet :%x \n",h->flags);
 
 	/* ip,udp packet and destination mac matches, then resend back the packet my interchanging ip,udp port and ip checksum recalculate */
 	if (c[22] == 0x8 && c[23] == 0 && c[33] == 0x11 && c[10] == mac[0]
@@ -81,7 +78,7 @@ static int process_pkt(unsigned char *c, unsigned long len) {
 
 		c[34] = 0x0; /* ip checksum is made zero */
 		c[35] = 0x0;
-		pcsum = &c[34];
+		pcsum = (u16 *)&c[34];
 		*pcsum = ip_sum_calc(20, &c[24]);
 		tc = c[34];
 		c[34] = c[35];
@@ -130,7 +127,7 @@ static struct {
 	int len;
 } sendq[MAX_QUEUE_SIZE];
 
-static int put_index = 0;
+//static int put_index = 0;
 static int recv_index = 0;
 void send_net_BH() {
 	int i;
@@ -141,7 +138,7 @@ void send_net_BH() {
 	while (1) {
 		if (sendq[recv_index].addr == 0)
 			continue;
-		netfront_xmit(net_dev, sendq[recv_index].addr, sendq[recv_index].len);
+		netfront_xmit(net_dev, (unsigned char *)sendq[recv_index].addr, sendq[recv_index].len);
 		sendq[recv_index].addr = 0;
 		recv_index++;
 		if (recv_index >= MAX_QUEUE_SIZE)
@@ -149,10 +146,8 @@ void send_net_BH() {
 	}
 }
 
-void net_BH() {
+int net_BH(void *arg) {
 	unsigned long addr, *len;
-	int ret, i;
-	int consumed_pkts = 0;
 
 	int from_sleep = 1;
 	netbh_started = 1;
@@ -162,7 +157,7 @@ void net_BH() {
 		len = 0;
 		netbh_state = 100;
 		netbh_flag = 0;
-		addr = virtio_removeFromQueue(net_dev->vq[0], &len);
+		addr = virtio_removeFromQueue(net_dev->vq[0], (unsigned int *)&len);
 		if (addr == 0) {
 			netbh_state = 200;
 			if (g_conf_netbh_poll<2)
@@ -204,7 +199,7 @@ void net_BH() {
 		//DEBUG("%d: new NEW ISR:%d :%x addd:%x len:%x c:%x:%x:%x:%x  c+10:%x:%x:%x:%x\n", i, index, isr, addr, len, c[0], c[1], c[2], c[3], c[10], c[11], c[12], c[13]);
 
 		recv_count++;
-		if (process_pkt(addr, len) == 1) {
+		if (process_pkt((unsigned char *)addr, len) == 1) {
 
 			netbh_state = 301;
 			if (g_conf_udp_respond == 1) {
@@ -272,8 +267,9 @@ void net_BH() {
 		}
 #endif
 	}
+	return 1;
 }
-
+extern void *init_netfront(void (*net_rx)(unsigned char* data, int len),unsigned char *rawmac, char **ip) ;
 void init_TestUdpStack() {
 static int init=0;
     if (init ==1) return ;
@@ -283,13 +279,14 @@ static int init=0;
 		return;
 	}
 #ifdef WITH_BOTTOM_HALF
-	int i, ret;
+	unsigned long ret;
 
 	init=1;
 	sc_register_waitqueue(&nbh_waitq,"net_bh");
-	ret = sc_createKernelThread(net_BH, 0, "net_rx");
+	ret = sc_createKernelThread(net_BH, 0, (unsigned char *)"net_rx");
 #ifdef SEND_BH
 	ret=sc_createKernelThread(send_net_BH,0,"net_send_bh");
 #endif
 #endif
 }
+//DEFINE_DRIVER(test_udp_server, root, load_udp_server, unload_udp_server, stat_udp_server);

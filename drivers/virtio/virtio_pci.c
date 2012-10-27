@@ -19,7 +19,7 @@ pci_dev_header_t virtio_pci_hdr;
 static void virtio_interrupt(registers_t regs);
 
 extern device_class_t deviceClass_virtio_pci;
-int probe_virtio_pci(device_t *dev) {
+static int probe_virtio_pci(device_t *dev) {
 	device_class_t *devClass;
 
 	if (dev->pci_hdr.vendor_id != VIRTIO_PCI_VENDOR_ID)
@@ -39,9 +39,8 @@ static int attach_virtio_pci(device_t *dev) {
 	pci_dev_header_t *pci_hdr;
 	pci_bar_t *bars;
 	int len;
-	int msi_vector;
-	int i, ret;
-	unsigned long features;
+	int ret;
+
 
 	if (read_pci_info(dev) != 1)
 		return 0;
@@ -82,7 +81,7 @@ static int attach_virtio_pci(device_t *dev) {
 }
 
 static int dettach_virtio_pci(device_t *dev) {
-
+return 0;
 }
 
 static void virtio_interrupt(registers_t regs) {
@@ -165,9 +164,6 @@ int virtio_createQueue(uint16_t index, virtio_dev_t *dev, int qType) {
 		dev->vq[index] = 0;
 		return 0;
 	}
-
-	uint32_t pfn = inl(dev->pci_ioaddr + VIRTIO_PCI_QUEUE_PFN);
-//	DEBUG(" pfn-%d : %x \n",index,pfn);
 
 	size = PAGE_ALIGN(vring_size(num, VIRTIO_PCI_VRING_ALIGN));
 

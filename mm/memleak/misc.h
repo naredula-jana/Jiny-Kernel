@@ -101,6 +101,6 @@ static inline void hlist_del(struct hlist_node *n)
 extern int memleakHook_disable();
 extern int memleak_serious_bug;
 #define unlikely(x)     (x) /* TODO */
-#define BUG_ON(condition,y) do { if (unlikely((condition)!=0)) {printf("BUGON: %d\n",y);  memleakHook_disable(); memleak_serious_bug=1; goto out;}} while(0)
+#define MM_BUG_ON(condition,y) do { if (unlikely((condition)!=0)) {printf("BUGON: %d\n",y);  memleakHook_disable(); memleak_serious_bug=1; goto out;}} while(0)
 
 

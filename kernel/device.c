@@ -25,7 +25,7 @@ struct {
 }device_list[MAX_DEVICES];
 int device_count=0;
 
-void scan_devices(){
+static void scan_devices(){
 	int i,j,k;
 	int ret;
 #define MAX_BUS 32
@@ -100,4 +100,28 @@ static int list_devClasses(device_class_t *parent, int level){
 }
 int Jcmd_dev_stat(){
 	list_devClasses(&deviceClass_root,0);
+}
+/***********************************************************************************************
+ * Modules:
+ ***********************************************************************************************/
+
+module_t MODULE_root = { "root",NULL, NULL, NULL,0,
+	NULL, NULL, NULL};
+
+
+int add_module(void *addr){
+	module_t *module,*parent;
+
+	module = addr;
+    parent = module->parent;
+
+    if (parent == 0 ) return 0;
+    module->sibling = parent->children;
+    parent->children = module;
+    return 1;
+}
+
+int init_modules() {
+
+	return 1;
 }

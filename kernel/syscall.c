@@ -137,26 +137,26 @@ syscalltable_t syscalltable[] = {
 struct utsname
   {
     /* Name of the implementation of the operating system.  */
-    char sysname[UTSNAME_LENGTH];
+    unsigned char sysname[UTSNAME_LENGTH];
     /* Name of this node on the network.  */
-    char nodename[UTSNAME_LENGTH];
+    unsigned char nodename[UTSNAME_LENGTH];
     /* Current release level of this implementation.  */
-    char release[UTSNAME_LENGTH];
+    unsigned char release[UTSNAME_LENGTH];
     /* Current version level of this release.  */
-    char version[UTSNAME_LENGTH];
+    unsigned char version[UTSNAME_LENGTH];
     /* Name of the hardware type the system is running on.  */
-    char machine[UTSNAME_LENGTH];
+    unsigned char machine[UTSNAME_LENGTH];
   };
 
 struct utsname g_utsname;
 //uname({sysname="Linux", nodename="njana-desk", release="2.6.35-22-generic", version="#33-Ubuntu SMP Sun Sep 19 20:32:27 UTC 2010", machine="x86_64"}) = 0
 static int init_utsname()
 {
-	ut_strcpy(g_utsname.sysname,"Linux");	
-	ut_strcpy(g_utsname.nodename,"njana-desk");	
-	ut_strcpy(g_utsname.release,"2.6.35-22-generic");	
-	ut_strcpy(g_utsname.version,"#33-Ubuntu SMP Sun Sep 19 20:32:27 UTC 2010");	
-	ut_strcpy(g_utsname.machine,"x86_64");
+	ut_strcpy(g_utsname.sysname,(unsigned char *)"Linux");
+	ut_strcpy(g_utsname.nodename,(unsigned char *)"njana-desk");
+	ut_strcpy(g_utsname.release,(unsigned char *)"2.6.35-22-generic");
+	ut_strcpy(g_utsname.version,(unsigned char *)"#33-Ubuntu SMP Sun Sep 19 20:32:27 UTC 2010");
+	ut_strcpy(g_utsname.machine,(unsigned char *)"x86_64");
 	return 1;
 }
 static int init_uts_done=0;
@@ -271,18 +271,18 @@ int SYS_fs_stat(const char *path, struct stat *buf)
 {
 	struct file *fp;
 	struct fileStat fstat;
-	int i,ret;
+	int ret;
 	SYSCALL_DEBUG("stat( ppath:%x(%s) buf:%x size:%d\n",path,path,buf,sizeof(struct stat));
 //return -1;
 	if (path==0 || buf==0) return -1;
 
-	fp=fs_open(path,0,0);
+	fp=fs_open((unsigned char *)path,0,0);
 	if ( fp==0 ){
 
 		return -1;
 	}
 	ret = fs_stat(fp, &fstat);
-	ut_memset(buf,0,sizeof(struct stat));
+	ut_memset((unsigned char *)buf,0,sizeof(struct stat));
 	buf->st_size = fstat.st_size ;
 	buf->st_ino = fstat.inode_no ;
     buf->st_blksize = 4096;
@@ -344,13 +344,13 @@ unsigned long SYS_wait4(void *arg1, void *arg2, void *arg3, void *arg4) {
 unsigned long SYS_poll(struct pollfd *fds, int nfds, int timeout) {
 	SYSCALL_DEBUG("poll(partial)  fds:%x nfds:%d timeout:%d  \n",fds,nfds,timeout);
 	if (nfds==0 || fds==0 || timeout==0) return 0;
-
+    return 0;
 }
 unsigned long SYS_getcwd(unsigned char *buf, int len) {
 	SYSCALL_DEBUG("getcwd(partial)  buf:%x len:%d  \n",buf,len);
 	if (buf == 0) return 0;
-	ut_strcpy(buf,"/root");
-     return buf;
+	ut_strcpy(buf,(unsigned char *)"/root");
+     return (unsigned long)buf;
 }
 unsigned long SYS_exit_group(){
 	SYSCALL_DEBUG("exit_group :\n");

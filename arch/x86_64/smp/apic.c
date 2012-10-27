@@ -25,6 +25,7 @@
  */
 
 #include "apic.h"
+
 void dummy(const char *format, ...){
 
 }
@@ -40,6 +41,7 @@ static int __map_apic_page(void)
   local_apic = (struct __local_apic_t *)imps_lapic_addr;
   return 0;
 }
+
 
 /*
  * default functions to access APIC (local APIC)

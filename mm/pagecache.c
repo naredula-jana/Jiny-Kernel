@@ -9,11 +9,12 @@
 *
 */
 //#define DEBUG_ENABLE 1
+#include "common.h"
 #include "mm.h"
 #include "vfs.h"
 #include "list.h"
 #include "../util/host_fs/filecache_schema.h"
-#include "interface.h"
+
 #define DEBUG_ENABLE 1
 enum {
         FRONT=0,

@@ -14,8 +14,6 @@ struct iovec {
 };
 
 
-
-
 /* Naming : SYS : system call
  *
  */
@@ -38,7 +36,6 @@ void sc_schedule();
 unsigned long mm_getFreePages(int gfp_mask, unsigned long order);
 int mm_putFreePages(unsigned long addr, unsigned long order);
 int mm_printFreeAreas(char *arg1,char *arg2);
-
 void kmem_cache_free (kmem_cache_t *cachep, void *objp);
 extern kmem_cache_t *kmem_cache_create(const char *, long,long, unsigned long,void (*)(void *, kmem_cache_t *, unsigned long),void (*)(void *, kmem_cache_t *, unsigned long));
 void *kmem_cache_alloc (kmem_cache_t *cachep, int flags);
@@ -46,7 +43,6 @@ void *mm_malloc (long size, int flags);
 void mm_free (const void *objp);
 #define alloc_page() mm_getFreePages(0, 0)
 #define memset ut_memset
-
 #define ut_free mm_free
 #define ut_malloc(x) mm_malloc(x,0)
 
@@ -60,6 +56,7 @@ int SYS_vm_mprotect(const void *addr, int len, int prot);
 unsigned long vm_brk(unsigned long addr, unsigned long len);
 unsigned long vm_mmap(struct file *fp, unsigned long addr, unsigned long len,unsigned long prot, unsigned long flags, unsigned long pgoff);
 int vm_munmap(struct mm_struct *mm, unsigned long addr, unsigned long len);
+unsigned long vm_setupBrk(unsigned long addr, unsigned long len);
 
 /* page cache */
 int pc_init(unsigned char *start_addr,unsigned long len);
@@ -79,21 +76,22 @@ struct inode *fs_getInode(char *filename);
 unsigned long fs_putInode(struct inode *inode);
 int Jcmd_ls(char *arg1,char *arg2);
 unsigned long fs_open(unsigned char *filename,int mode,int flags);
+int fs_close(struct file *file);
 struct page *fs_genericRead(struct inode *inode,unsigned long offset);
-ssize_t fs_read(struct file *fp ,unsigned char *buff ,unsigned long len);
+long fs_read(struct file *fp ,unsigned char *buff ,unsigned long len);
 unsigned long fs_fadvise(struct inode *inode,unsigned long offset, unsigned long len,int advise);
 unsigned long fs_lseek(struct file *fp ,unsigned long offset, int whence);
 unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsigned long stack_len,unsigned long aux_addr);
-ssize_t fs_write(struct file *file,unsigned char *buff ,unsigned long len);
+long fs_write(struct file *file,unsigned char *buff ,unsigned long len);
 unsigned long fs_fdatasync(struct file *file);
 int fs_stat(struct file *file, struct fileStat *stat);
 
-ssize_t SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt);
-ssize_t SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt);
+long SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt);
+long SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt);
 unsigned long SYS_fs_open(char *filename,int mode,int flags);
 unsigned long SYS_fs_lseek(unsigned long fd ,unsigned long offset, int whence);
-ssize_t SYS_fs_write(unsigned long fd ,unsigned char *buff ,unsigned long len);
-ssize_t SYS_fs_read(unsigned long fd ,unsigned char *buff ,unsigned long len);
+long SYS_fs_write(unsigned long fd ,unsigned char *buff ,unsigned long len);
+long SYS_fs_read(unsigned long fd ,unsigned char *buff ,unsigned long len);
 unsigned long SYS_fs_close(unsigned long fd);
 unsigned long SYS_fs_fdatasync(unsigned long fd );
 unsigned long SYS_fs_fadvise(unsigned long fd,unsigned long offset, unsigned long len,int advise);
@@ -121,8 +119,26 @@ int ar_pageTableCopy(struct mm_struct *src_mm,struct mm_struct *dest_mm);
 int ar_pageTableCleanup(struct mm_struct *mm,unsigned long addr, unsigned long length);
 int ar_flushTlbGlobal();
 void flush_tlb(unsigned long dir);
-int ar_updateCpuState(int cpuid);
-unsigned long ar_archSetUserFS(unsigned long addr);
+int ar_updateCpuState(struct task_struct *p);
+int ar_archSetUserFS(unsigned long addr);
 void ar_setupTssStack(unsigned long stack);
 int ar_addInputKey(unsigned char c);
+
+/**************** misc functions ********/
+int getmaxcpus();
+int apic_send_ipi_vector(int cpu, uint8_t vector);
+
+/**************  init functions */
+int init_kernel(unsigned long end_addr);
+void init_memory(unsigned long phy_end_addr);
+void kmem_cache_init(void);
+void kmem_cache_sizes_init(void);
+void init_descriptor_tables();
+int init_driver_keyboard();
+void init_tasking();
+void init_serial();
+int init_symbol_table();
+void init_vfs();
+int init_smp_force(int ncpus);
+void init_syscall(int cpuid);
 #endif

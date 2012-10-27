@@ -10,7 +10,7 @@
 */
 
 #include "common.h"
-#include "interface.h"
+
 
 void __stack_chk_fail(){
 }
@@ -23,7 +23,7 @@ void __stack_chk_fail(){
 void cmain ();
 void ut_cls (void);
 void init_memory(addr_t end_addr);
-extern int shell_main();
+extern int shell_main(void *arg);
 
 unsigned long g_multiboot_info_ptr;
 unsigned long g_multiboot_magic ;
@@ -73,12 +73,12 @@ void cmain() {  /* This is the first c function to be executed */
 	if (mbi->mods_count > 0) {
 		multiboot_mod_t *mod;
 
-		mod = mbi->mods_addr;
+		mod =(multiboot_mod_t *) mbi->mods_addr;
 		g_multiboot_mod_addr = mod->mod_start;
 		g_multiboot_mod_len = mod->mod_end - mod->mod_start;
 	}
 	init_kernel(max_addr);
-	sc_createKernelThread(shell_main, 0, "shell_main");
+	sc_createKernelThread(shell_main, 0, (unsigned char *)"shell_main");
 	sti(); /* start the interrupts finally */
 	idleTask_func();
 	return;

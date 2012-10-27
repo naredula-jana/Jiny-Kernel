@@ -1,26 +1,21 @@
+Installing :
 1) - install the source in /opt_src/Jiny-Kernel/....
-2)
- virtio+net:
-   ./qemu-system-x86_64 -s -m 1024M -hda /home/jana/jiny/bin/g2_bootdisk -hdb /home/jana/jiny/bin/g2_image -enable-kvm   -vnc :4 -net nic,model=virtio,macaddr=00:30:48:DB:5E:06,vlan=0 -net tap,vlan=0
- 
+2) - install the lwip source from /opt_src/Jiny-Kernel/util/lwip.tar.gz in to /opt_src/lwip/
+ -------------------------
+ Compiling Source Code:
+ cd /opt_src/Jiny-Kernel
+ ./build_g2image      
+ ----------------------------
+1)  virtio+net:
+   ./qemu-system-x86_64 -gdb tcp::1236 -m 1024M -hda /opt_src/Jiny-Kernel/bin/g2_bootdisk -hdb /opt_src/Jiny-Kernel/bin/g2_image -enable-kvm   -vnc :7 -netdev tap,id=guest0,vhost=on,vhostforce -smp 2 -device virtio-net-pci,mac=00:30:48:DB:5E:06,netdev=guest0 -serial telnet::50008,server,nowait -fsdev local,security_model=passthrough,id=fsdev0,path=/opt_src/Jiny-Kernel/test/root/ -device virtio-9p-pci,id=fs0,fsdev=fsdev0,mount_tag=hostshare -monitor tcp::51008,server,nowait,nodelay
    test client:
      test/udp_test/a.out 10.209.129.123 1024 200000
    
-  virtio+p9:
-    ./qemu-system-x86_64 -s -m 1024M -hda /home/jana/jiny/bin/g2_bootdisk -hdb /home/jana/jiny/bin/g2_image -enable-kvm   -vnc :4 -fsdev local,security_model=passthrough,id=fsdev0,path=/home/jana -device virtio-9p-pci,id=fs0,fsdev=fsdev0,mount_tag=hostshare   
- 
- 
- ----------------------
- Running :
-  -> multiboot (hd1)/kernel
-  -> boot
-
-vim commands:
-    ESC V G =   for entire file
-    ESC V % =  for a block
-  V= visual mode
-
-find . | grep "[chS]$" | xargs grep -n TODO
+ 2) virtio+p9:
+    ./qemu-system-x86_64 -s -m 1024M -hda /opt_src/Jiny-Kernel/bin/g2_bootdisk -hdb /opt_src/Jiny-Kernel/bin/g2_image -enable-kvm   -vnc :4 -fsdev local,security_model=passthrough,id=fsdev0,path=/home/jana -device virtio-9p-pci,id=fs0,fsdev=fsdev0,mount_tag=hostshare   
+     
+     Testing P9:
+        cat test_file
 ------------------------------
 Constructing the image for grub2 (Not sucessfull):
 

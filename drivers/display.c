@@ -133,11 +133,11 @@ unsigned long g_dmesg_index = 0;
 int Jcmd_logflush(char *arg1, char *arg2) {
 	static int init = 0;
 	static unsigned long start_offset=0;
-	static unsigned long fd;
+	static struct file  *fd;
 	int ret;
 
 	if (init == 0) {
-		fd = fs_open("jiny.log", 1, 0);
+		fd = fs_open((unsigned char *)"jiny.log", 1, 0);
 		if (fd ==0) return 0;
 		init = 1;
 	}
@@ -210,7 +210,7 @@ void ut_putchar(int c) {
 void ut_printf(const char *format, ...) {
 	char **arg = (char **) &format;
 	int c;
-	unsigned long val, flags;
+	unsigned long val;
 	int i;
 	char buf[40];
 	char *p;
