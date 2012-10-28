@@ -169,7 +169,7 @@ static int boot_cpu(imps_processor *proc) {
 	int cpuid;
 	unsigned bootaddr, accept_status;
 	unsigned long stack;
-	unsigned bios_reset_vector = PHYS_TO_VIRTUAL(BIOS_RESET_VECTOR);
+	unsigned bios_reset_vector = (unsigned )PHYS_TO_VIRTUAL(BIOS_RESET_VECTOR);
 
 	/*
 	 * Copy boot code for secondary CPUs here.  Find it in between
@@ -186,7 +186,7 @@ static int boot_cpu(imps_processor *proc) {
 
 	stack = (unsigned long)g_idle_tasks[cpuid];/* TODO : currently stack is hardcoded for second cpu , need to make configurable */
 	stack = (stack + TASK_SIZE - 0x64);
-	p = (char *) __va(bootaddr) + 0x504;
+	p = (int *)((char *) __va(bootaddr) + 0x504);
 	*p = (int) stack;
 	/*
 	 *  Generic CPU startup sequence starts here.
@@ -289,7 +289,7 @@ int init_smp_force(int ncpus) {
 	KERNEL_PRINT(("SMP: Intel MultiProcessor \"Force\" Support\n"));
 
 	imps_lapic_addr = (READ_MSR_LO(0x1b) & 0xFFFFF000);
-	imps_lapic_addr = PHYS_TO_VIRTUAL(imps_lapic_addr);
+	imps_lapic_addr = (unsigned long)PHYS_TO_VIRTUAL(imps_lapic_addr);
 	/*
 	 *  Setup primary CPU.
 	 */

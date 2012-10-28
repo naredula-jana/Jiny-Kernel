@@ -178,6 +178,7 @@ static int __local_apic_chkerr(void)
 }
 int local_apic_chkerr(){
 	__local_apic_chkerr();
+	return 1;
 }
 uint32_t get_apic_version(void)
 {
@@ -551,7 +552,7 @@ void broadcast_msg(){
 #endif
 }
 int enable_ioapic(){
-	uint32_t *p;
+
 	local_apic_timer_ap_init(LOCAL_TIMER_CPU_IRQ_VEC);
 	return 1;
 }

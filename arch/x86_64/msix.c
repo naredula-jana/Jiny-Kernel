@@ -68,7 +68,7 @@ int read_msi(device_t *dev) {
 	msix->msix_table_res = dev->pci_bars[bar_offset].addr;
 	msix->msix_table = __va(msix->msix_table_res);
 
-	if ((ret = vm_mmap(0, __va(msix->msix_table_res), 0x1000, PROT_WRITE,
+	if ((ret = vm_mmap(0, (unsigned long)__va(msix->msix_table_res), 0x1000, PROT_WRITE,
 			MAP_FIXED, msix->msix_table_res)) == 0) /* this is for SMP */
 	{
 		ut_printf("ERROR : PCI mmap fails for \n");

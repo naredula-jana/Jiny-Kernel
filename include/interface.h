@@ -128,6 +128,11 @@ int ar_addInputKey(unsigned char c);
 int getmaxcpus();
 int apic_send_ipi_vector(int cpu, uint8_t vector);
 
+unsigned char dr_kbGetchar();
+void ut_putchar(int c);
+int read_apic_isr(int isr);
+void local_apic_send_eoi(void);
+
 /**************  init functions */
 int init_kernel(unsigned long end_addr);
 void init_memory(unsigned long phy_end_addr);

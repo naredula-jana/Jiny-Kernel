@@ -212,8 +212,8 @@ int pc_init(unsigned char *start_addr,unsigned long len)
 	page_struct_t *p;
 	int i;
 
-	unsigned long s = start_addr;
-	start_addr = ((s+PC_PAGESIZE)/PC_PAGESIZE)*PC_PAGESIZE;
+	unsigned long s = (unsigned long)start_addr;
+	start_addr = (unsigned char *)(((s+PC_PAGESIZE)/PC_PAGESIZE)*PC_PAGESIZE);
 	pc_startaddr=(unsigned char *)(start_addr);
 	pc_endaddr=(unsigned char *)start_addr+len;
 	total_pages=len/PC_PAGESIZE;
@@ -297,7 +297,6 @@ unsigned long pc_getVmaPage(struct vm_area_struct *vma,unsigned long offset)
 	page=fs_genericRead(inode,offset);
 	if (page == NULL) return 0;
 
-	//ret=to_ptr(page)-pc_startaddr + g_hostShmPhyAddr;
 	ret=to_ptr(page);
 	ret=__pa(ret);
 	DEBUG(" mapInodepage phy addr :%x  hostphyaddr:%x offset:%x diff:%x \n",ret,g_hostShmPhyAddr,offset,(to_ptr(page)-pc_startaddr));
@@ -385,7 +384,7 @@ int pc_insertPage(struct inode *inode,struct page *page)
 			_pagelist_add(page,&active_list,TAIL); /* add to the tail of ACTIVE list */
 		}
 	}
-last:
+
 	return ret;
 
 }

@@ -15,7 +15,7 @@
 #include "interface.h"
 
 #include "shm_queue.h"
-
+int client_add_buf(struct client_queue *q, int desc_id, int type);
 unsigned long g_data_offset;
 static struct shm_queue* create_shmqueue(unsigned long start_addr, int shm_len, int *desc_length ) {
 	struct shm_queue *shmq = start_addr;
@@ -51,7 +51,7 @@ int desc_length;
 	client_q->send_q.desc_head=0;
 	client_q->send_q.desc_list_length=desc_length;
 	client_q->send_q.used_id=0;
-	client_q->shm_start_addr = shm_addr;
+	client_q->shm_start_addr = (unsigned char *)shm_addr;
 
 	/* Fille the Recv queue with empty buffers */
 	for (i = 0; i < MAX_BUF ; i++) {
@@ -72,6 +72,7 @@ int client_add_buf(struct client_queue *q, int desc_id, int type) {
 		q->send_q.shm_queue->avail.ring[id % MAX_BUF] = desc_id;
 		q->send_q.shm_queue->avail.idx++;
 	}
+	return 1;
 }
 
 int client_recv_buf(struct client_queue *q) {
@@ -132,17 +133,18 @@ int client_get_buf(struct client_queue *q, struct buf_desc *buf, int type){
 
 int client_put_buf(struct buf_desc *buf){
 	client_add_buf(buf->q, buf->descr_id, buf->type);
+	return 1;
 }
 
 
 struct client_queue *shm_client_init(){
-	int fd;
+
 	unsigned char *p;
 	struct client_queue *cq;
 
-    p=HOST_SHM_ADDR;
+    p=(unsigned char *)HOST_SHM_ADDR;
 
-	cq = client_create_shmqueue(p,SHM_SIZE);
+	cq = client_create_shmqueue((unsigned long)p,SHM_SIZE);
 	return cq;
 }
 

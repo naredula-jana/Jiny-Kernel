@@ -2,14 +2,11 @@
 #include "task.h"
 
 #include "descriptor_tables.h"
-// Lets us access our ASM functions from our C code.
-extern void gdt_flush(addr);
-extern void idt_flush(addr);
+
 
 // Internal function prototypes.
 static void init_gdt();
 static void init_idt();
-static void gdt_set_gate(int32_t,addr_t,addr_t,uint8_t,uint8_t);
 static void idt_set_gate(int slot, uint8_t type, uint8_t dpl,
 		addr_t handler, int ist);
 
@@ -93,18 +90,18 @@ static void tss_init(tss_t *tssp)
 {
 	int i;
 
-	ut_memset(tssp, 0, sizeof(*tssp));
+	ut_memset((unsigned char *)tssp, 0, sizeof(*tssp));
 	for (i = 0; i < TSS_NUM_ISTS; i++) {
 		tssp->ists[i] = 0;
 	} 
-	tssp->rsp0=&i; /* At this point in time just need a stack , proper stack will setup before the task is moved to ring-3 */
+	tssp->rsp0=(uint64_t)&i; /* At this point in time just need a stack , proper stack will setup before the task is moved to ring-3 */
 
 	tssp->iomap_base = TSS_BASIC_SIZE;
 }
 
 static void init_gdt(int cpu)
 {
-	ut_memset(&gdt_entries[cpu][0], 0, sizeof(gdt_entries[cpu]));
+	ut_memset((unsigned char *)&gdt_entries[cpu][0], 0, sizeof(gdt_entries[cpu]));
 
 	/* Null segment */
 	seg_descr_setup(&gdt_entries[cpu][NULL_DESCR], 0, 0, 0, 0, 0);
@@ -138,7 +135,7 @@ static void init_gdt(int cpu)
 
 int ar_archSetUserFS(unsigned long addr) /* TODO need to reimplement using LDT */
 {
-	int cpu = getcpuid();
+
 
 	if (addr == 0) {
 		g_current_task->thread.userland.user_fs = 0;
@@ -204,7 +201,7 @@ static void init_idt()
 	idt_ptr.limit = sizeof(idt_entry_t) * 256 -1;
 	idt_ptr.base  = (addr_t)&idt_entries;
 
-	ut_memset(&idt_entries[0], 0, 255*sizeof(idt_entry_t));
+	ut_memset((unsigned char *)&idt_entries[0], 0, 255*sizeof(idt_entry_t));
 	for (i = 0; i < 32; i++) {
 		SET_FAULT_GATE(i);
 	}

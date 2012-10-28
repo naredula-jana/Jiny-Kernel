@@ -96,11 +96,11 @@ int execute_symbol(int type, char *name, char *argv1,char *argv2){
 			if (ut_strcmp((unsigned char *)g_symbol_table[i].name,(unsigned char *) name) != 0) continue;
 		    conf=(int *)g_symbol_table[i].address;
 		    if (argv1==0) return 0;
-		    *conf=(int)ut_atoi(argv1);
+		    *conf=(int)ut_atoi((unsigned char *)argv1);
 		    return 1;
 		}else {
 			if (ut_strcmp((unsigned char *)&g_symbol_table[i].name[5], (unsigned char *)name) != 0) continue;
-			func=g_symbol_table[i].address;
+			func=(void *)g_symbol_table[i].address;
 			func(argv1,argv2);
 			return 1;
 		}

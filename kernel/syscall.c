@@ -276,7 +276,7 @@ int SYS_fs_stat(const char *path, struct stat *buf)
 //return -1;
 	if (path==0 || buf==0) return -1;
 
-	fp=fs_open((unsigned char *)path,0,0);
+	fp=(struct file *)fs_open((unsigned char *)path,0,0);
 	if ( fp==0 ){
 
 		return -1;

@@ -128,7 +128,7 @@ int Jcmd_irq_stat(char *arg1,char *arg2)
 void ar_registerInterrupt(uint8_t n, isr_t handler,char *name)
 {
 	g_interrupt_handlers[n].action = handler;
-	g_interrupt_handlers[n].name=name;
+	g_interrupt_handlers[n].name=(unsigned char *)name;
 }
 void DisableTimer(void)
 {
@@ -202,7 +202,7 @@ static void i8259a_mask_irq(unsigned int irq)
 void ar_irqHandler(void *p,unsigned int int_no)
 {
 	if (int_no > 100) { // APIC or MSI based interrupts
-		int isr_status= read_apic_isr(int_no);
+		int isr_status= read_apic_isr(int_no); // TODO: make use of isr_status
 	} else {
 		if (int_no >= 40) {
 			// Send reset signal to slave.

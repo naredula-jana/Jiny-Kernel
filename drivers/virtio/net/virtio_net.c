@@ -34,7 +34,7 @@ static struct virtio_feature_desc vtnet_feature_desc[] = {
     { VIRTIO_NET_F_CTRL_RX_EXTRA,   "RxModeExtra"   },
     { 0, NULL }
 };
-
+extern void print_vq(struct virtqueue *_vq);
 void print_virtio_net() {
 	print_vq(net_dev->vq[0]);
 	print_vq(net_dev->vq[1]);
@@ -44,7 +44,7 @@ int addBufToQueue(struct virtqueue *vq, unsigned char *buf, unsigned long len) {
 	int ret;
 
 	if (buf == 0) {
-		buf = mm_getFreePages(0, 0);
+		buf = (unsigned char *)mm_getFreePages(0, 0);
 		ut_memset(buf, 0, sizeof(struct virtio_net_hdr));
 #if 1
 		if (test_virtio_nob == 1) { /* TODO: this is introduced to burn some cpu cycles, otherwise throughput drops drastically  from 1.6G to 500M , with vhost this is not a issue*/
@@ -54,17 +54,17 @@ int addBufToQueue(struct virtqueue *vq, unsigned char *buf, unsigned long len) {
 #endif
 		len = 4096; /* page size */
 	}
-	sg[0].page_link = buf;
+	sg[0].page_link = (unsigned long)buf;
 	sg[0].length = sizeof(struct virtio_net_hdr);
 	sg[0].offset = 0;
-	sg[1].page_link = buf + sizeof(struct virtio_net_hdr);
+	sg[1].page_link = (unsigned long)(buf + sizeof(struct virtio_net_hdr));
 	sg[1].length = len - sizeof(struct virtio_net_hdr);
 	sg[1].offset = 0;
 	//DEBUG(" scatter gather-0: %x:%x sg-1 :%x:%x \n",sg[0].page_link,__pa(sg[0].page_link),sg[1].page_link,__pa(sg[1].page_link));
 	if (vq->qType == 1) {
-		ret = virtqueue_add_buf_gfp(vq, sg, 0, 2, sg[0].page_link, 0);/* recv q*/
+		ret = virtqueue_add_buf_gfp(vq, sg, 0, 2,(void *) sg[0].page_link, 0);/* recv q*/
 	} else {
-		ret = virtqueue_add_buf_gfp(vq, sg, 2, 0, sg[0].page_link, 0);/* send q */
+		ret = virtqueue_add_buf_gfp(vq, sg, 2, 0, (void *)sg[0].page_link, 0);/* send q */
 	}
 
 	return ret;
@@ -76,7 +76,7 @@ static int probe_virtio_net_pci(device_t *dev) {
 	}
 	return 0;
 }
-
+void init_TestUdpStack();
 static int attach_virtio_net_pci(device_t *pci_dev) {
 	unsigned long addr;
 	unsigned long features;
@@ -148,8 +148,7 @@ static int attach_virtio_net_pci(device_t *pci_dev) {
 static int dettach_virtio_net_pci(device_t *pci_dev) {
 return 0;
 }
-static int s_i = 0;
-static int s_r = 0;
+
 int stop_queueing_bh = 0;
 
 extern queue_t nbh_waitq;
@@ -178,10 +177,10 @@ int netfront_xmit(virtio_dev_t *dev, unsigned char* data, int len) {
 
 	unsigned long addr;
 
-	addr = data;
+	addr = (unsigned long)data;
 	ret = -ENOSPC;
 
-	ret = addBufToQueue(dev->vq[1], addr, len);
+	ret = addBufToQueue(dev->vq[1], (unsigned char *)addr, len);
 	send_pkts++;
 	if (ret == -ENOSPC) {
 		mm_putFreePages(addr, 0);
@@ -195,7 +194,7 @@ int netfront_xmit(virtio_dev_t *dev, unsigned char* data, int len) {
 	i = 0;
 	while (i < 50) {
 		i++;
-		addr = virtio_removeFromQueue(dev->vq[1], &len);
+		addr = (unsigned long)virtio_removeFromQueue(dev->vq[1], &len);
 		if (addr) {
 			mm_putFreePages(addr, 0);
 		} else {
@@ -222,7 +221,7 @@ void *init_netfront(void (*net_rx)(unsigned char* data, int len),
 }
 
 int shutdown_netfront(void *dev) {
-
+return 1;
 }
 
 

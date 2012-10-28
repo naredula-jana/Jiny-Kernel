@@ -316,12 +316,12 @@ void init_memory(unsigned long phy_end_addr)
 
 	ut_printf(" Initializing memory phy_endaddr : %x video:%x \n",phy_end_addr,VIDEO);
 	virt_start_addr=initialise_paging( phy_end_addr);
-	virt_end_addr=__va(phy_end_addr);
+	virt_end_addr=(unsigned long)__va(phy_end_addr);
 	ut_printf(" After Paging initialized start_addr: %x endaddr: %x video:%x \n",virt_start_addr,virt_end_addr,VIDEO);
 
 	if (g_multiboot_mod_len > 0) /* symbol file  reside at the end of memory, it can acess only when page table is initialised */
 	{
-		g_symbol_table=(unsigned char *)virt_start_addr;
+		g_symbol_table=(symb_table_t *)virt_start_addr;
 		g_total_symbols=(g_multiboot_mod_len)/sizeof(symb_table_t);
 		ut_memcpy((unsigned char *)g_symbol_table,(unsigned char *)g_multiboot_mod_addr,g_multiboot_mod_len);
 		virt_start_addr=(unsigned long)virt_start_addr+g_multiboot_mod_len;
@@ -330,7 +330,7 @@ void init_memory(unsigned long phy_end_addr)
 	}
 
 	virt_start_addr=init_free_area( virt_start_addr, virt_end_addr);
-	pc_init(virt_start_addr,0x10000000); /* page cache init */
+	pc_init((unsigned char *)virt_start_addr,0x10000000); /* page cache init */
 	virt_start_addr=virt_start_addr+0x10000000;
 	init_mem(virt_start_addr, virt_end_addr);
 }

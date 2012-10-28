@@ -137,7 +137,7 @@ int Jcmd_logflush(char *arg1, char *arg2) {
 	int ret;
 
 	if (init == 0) {
-		fd = fs_open((unsigned char *)"jiny.log", 1, 0);
+		fd = (struct file  *)fs_open((unsigned char *)"jiny.log", 1, 0);
 		if (fd ==0) return 0;
 		init = 1;
 	}
@@ -150,6 +150,7 @@ int Jcmd_logflush(char *arg1, char *arg2) {
 
 	return 1;
 }
+extern int dr_serialWrite( char *buf , int len);
 /* Put the character C on the screen.  */
 static spinlock_t putchar_lock = SPIN_LOCK_UNLOCKED;
 void ut_putchar(int c) {
@@ -255,7 +256,7 @@ void ut_printf(const char *format, ...) {
 				break;
 			case 's':
 				val = va_arg(vl,long);
-				p = val;
+				p = (char *)val;
 				if (!p)
 					p = "(null)";
 

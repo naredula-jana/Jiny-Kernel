@@ -34,7 +34,7 @@ void ut_showTrace(unsigned long *stack_top)
 	ut_printf("\nCALL Trace:   code_end:%x  %x :%x  \n",code_end,stack_top,stack_end);
 
 	if (stack_end) {
-		while ((stack_top < stack_end) && i<12) {
+		while (((unsigned long)stack_top < stack_end) && i<12) {
 			addr = *stack_top;
 			stack_top=(unsigned char *)stack_top+4;
 			if ((addr > 0x103000) && (addr<code_end)) {

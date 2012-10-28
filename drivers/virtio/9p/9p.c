@@ -18,7 +18,7 @@ static size_t pdu_read(struct p9_fcall *pdu, void *data, size_t size) {
 
 static size_t pdu_write(struct p9_fcall *pdu, const void *data, size_t size) {
 	size_t len = min(pdu->capacity - pdu->size, size);
-	ut_memcpy(&pdu->sdata[pdu->size], data, len);
+	ut_memcpy(&pdu->sdata[pdu->size], (unsigned char *)data, len);
 	pdu->size += len;
 	return size - len;
 }
@@ -26,7 +26,7 @@ static size_t pdu_write(struct p9_fcall *pdu, const void *data, size_t size) {
 int p9pdu_init(struct p9_fcall *pdu, uint8_t type, uint16_t tag, p9_client_t *client, unsigned long addr, unsigned long len) {
     pdu->client= client;
 	pdu->capacity = len;
-	pdu->sdata = addr;
+	pdu->sdata = (unsigned char *)addr;
 	if (type != 0) {
 		pdu->type = type;
 		pdu->tag = tag;
@@ -79,7 +79,7 @@ int p9pdu_read(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 	for (ptr = fmt; *ptr; ptr++) {
 		switch (*ptr) {
 		case 'b': {
-			unsigned char *val = va_arg(ap, int8_t *);
+			unsigned char *val =(unsigned char *) va_arg(ap, int8_t *);
 			if (pdu_read(pdu, val, sizeof(*val))) {
 				errcode = -1;
 				break;
@@ -87,7 +87,7 @@ int p9pdu_read(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 		}
 			break;
 		case 'w': {
-			uint16_t *val = va_arg(ap, int16_t *);
+			uint16_t *val = (uint16_t *)va_arg(ap, int16_t *);
 			uint16_t le_val;
 			if (pdu_read(pdu, &le_val, sizeof(le_val))) {
 				errcode = -2;
@@ -97,7 +97,7 @@ int p9pdu_read(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 		}
 			break;
 		case 'd': {
-			uint32_t *val = va_arg(ap, int32_t *);
+			uint32_t *val = (uint32_t *)va_arg(ap, int32_t *);
 			uint32_t le_val;
 			if (pdu_read(pdu, &le_val, sizeof(le_val))) {
 				errcode = -3;
@@ -108,7 +108,7 @@ int p9pdu_read(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 			break;
 
 		case 'q': {
-			uint64_t *val = va_arg(ap, int64_t *);
+			uint64_t *val =(uint64_t *) va_arg(ap, int64_t *);
 			uint64_t le_val;
 			if (pdu_read(pdu, &le_val, sizeof(le_val))) {
 				errcode = -6;
@@ -119,7 +119,7 @@ int p9pdu_read(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 			break;
 
 		case 's': {
-			char *sptr = va_arg(ap, char **);
+			char *sptr =(char *) va_arg(ap, char **);
 			uint16_t len;
 
 			errcode = p9pdu_read_v(pdu, "w", &len);

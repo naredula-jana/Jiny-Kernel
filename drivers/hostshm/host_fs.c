@@ -51,7 +51,7 @@ static void generate_interrupt_to_peer() {
 	int *p,k;
 	if (peer_pos == -1)
 		return;
-	p = HOST_SHM_CTL_ADDR;
+	p = (int *)HOST_SHM_CTL_ADDR;
 	p = p + 3;
 	k=peer_pos << 16;
 	*p = k;
@@ -62,6 +62,7 @@ struct filesystem Hfs_fs;
 //extern void *Hfs_dev;
 extern queue_t g_hfs_waitqueue;
 extern int client_put_buf(struct buf_desc *buf);
+extern int client_get_buf(struct client_queue *q, struct buf_desc *buf, int type);
 /* This is central switch where the call from vfs routed to the Hfs functions */
 static int HfsRequest(unsigned char type, struct inode *inode, uint64_t offset,
 		unsigned char *data, int data_len, int flags, int mode) {
@@ -73,11 +74,11 @@ static int HfsRequest(unsigned char type, struct inode *inode, uint64_t offset,
 
 	buf.len = data_len;
 	client_get_buf(cq, &buf, SEND);
-	request = buf.buf;
+	request =(Request_t *)buf.buf;
 	request->type = type;
 	request->file_offset = offset;
 	request->request_len = data_len;
-	ut_strcpy(request->filename, inode->filename);
+	ut_strcpy((unsigned char *)request->filename, inode->filename);
 	client_put_buf(&buf);
 
 	generate_interrupt_to_peer();

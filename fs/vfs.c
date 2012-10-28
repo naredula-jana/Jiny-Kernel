@@ -39,7 +39,7 @@ static int inode_init(struct inode *inode, char *filename, struct filesystem *vf
 	inode->file_size = -1;
 	inode->fs_private = 0;
 	inode->vfs = vfs;
-	ut_strcpy(inode->filename, filename);
+	ut_strcpy(inode->filename, (unsigned char *)filename);
 	INIT_LIST_HEAD(&(inode->page_list));
 	INIT_LIST_HEAD(&(inode->inode_link));
 	DEBUG(" inode init filename:%s: :%x  :%x \n",filename,&inode->page_list,&(inode->page_list));
@@ -120,7 +120,7 @@ static struct file *vfsOpen(unsigned char *filename, int flags, int mode) {
 		goto error;
 	}
 
-	inodep = fs_getInode(filep->filename);
+	inodep = fs_getInode((char *)filep->filename);
 	if (inodep == 0)
 		goto error;
 	if (inodep->fs_private == 0) /* need to get info from host  irrespective the file present, REQUEST_OPEN checks the file modification and invalidated the pages*/
@@ -145,7 +145,7 @@ error:
 unsigned long fs_open(unsigned char *filename, int flags, int mode) {
 	if (vfs_fs == 0 || filename==0)
 		return 0;
-	return vfsOpen(filename, flags, mode);
+	return (unsigned long)vfsOpen(filename, flags, mode);
 }
 
 unsigned long SYS_fs_open(char *filename, int mode, int flags) {
@@ -154,10 +154,10 @@ unsigned long SYS_fs_open(char *filename, int mode, int flags) {
 	int i;
 
 	SYSCALL_DEBUG("open : filename :%s: mode:%x flags:%x \n", filename, mode, flags);
-	if (ut_strcmp((unsigned char *)filename, "/dev/tty") == 0) {
+	if (ut_strcmp((unsigned char *)filename, (unsigned char *)"/dev/tty") == 0) {
 		return 1;
 	}
-	filep = fs_open((unsigned char *)filename, mode, flags);
+	filep = (struct file *)fs_open((unsigned char *)filename, mode, flags);
 	total = g_current_task->mm->fs.total;
 	if (filep != 0 && total < MAX_FDS) {
 		for (i = 2; i < MAX_FDS; i++) {
@@ -335,7 +335,7 @@ long SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
 	SYSCALL_DEBUG("write fd:%d buff:%x len:%x \n",fd,buff,len);
 	if (fd == 1 || fd ==2) { /* TODO: remove the fd==2 later , this is only for testing */
 		for (i=0; i<len; i++){
-			ut_putchar(buff[i]);
+			ut_putchar((int)buff[i]);
 		}
 		//ut_printf("%s", buff);/* TODO need to terminate the buf with \0  */
 		return len;

@@ -68,16 +68,7 @@ extern unsigned long g_hostShmLen;
 //extern kmem_cache_t *g_slab_filep;
 struct file;
 struct inode;
-struct filesystem {
-	int (*open)(struct inode *inode, int flags, int mode);
-	int (*lseek)(struct file *file,  unsigned long offset,int whence);
-	long (*write)(struct inode *inode, uint64_t offset, unsigned char *buff,unsigned long len);
-	long (*read)(struct inode *inode, uint64_t offset,  unsigned char *buff,unsigned long len);
-	int (*remove)(struct inode *inode);
-	int (*stat)(struct inode *inode, struct fileStat *stat);
-	int (*close)(struct inode *inodep);
-	int (*fdatasync)(struct inode *inodep);
-};
+
 
 struct file {
 	unsigned char filename[MAX_FILENAME];
@@ -108,6 +99,16 @@ struct fileStat {
 	uint64_t inode_no;
 };
 typedef struct fileStat fileStat_t;
+struct filesystem {
+	int (*open)(struct inode *inode, int flags, int mode);
+	int (*lseek)(struct file *file,  unsigned long offset,int whence);
+	long (*write)(struct inode *inode, uint64_t offset, unsigned char *buff,unsigned long len);
+	long (*read)(struct inode *inode, uint64_t offset,  unsigned char *buff,unsigned long len);
+	int (*remove)(struct inode *inode);
+	int (*stat)(struct inode *inode, struct fileStat *stat);
+	int (*close)(struct inode *inodep);
+	int (*fdatasync)(struct inode *inodep);
+};
 
 #define fd_to_file(fd) (fd > 2 && g_current_task->mm->fs.total >= fd) ? (g_current_task->mm->fs.filep[fd]) : ((struct file *)0)
 

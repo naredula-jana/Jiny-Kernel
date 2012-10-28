@@ -32,7 +32,7 @@ static int probe_virtio_9p_pci(device_t *dev) {
 }
 
 static int attach_virtio_9p_pci(device_t *pci_dev) {
-	pci_dev_header_t *pci_hdr = &pci_dev->pci_hdr;
+//	pci_dev_header_t *pci_hdr = &pci_dev->pci_hdr;
 	virtio_dev_t *virtio_dev = (virtio_dev_t *) pci_dev->private_data;
 	uint32_t msi_vector = pci_dev->msix_cfg.isr_vector;
 
