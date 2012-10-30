@@ -57,8 +57,9 @@ int init_kernel(unsigned long end_addr)
 		return 0;
 	}
 
-	ret=init_smp_force(4);
-	ut_printf("SMP: completed, maxcpus: %d \n",getmaxcpus());
+	ret=init_smp_force(2);
+	ut_printf("NEW SMP: completed, ret:%d maxcpus: %d \n",ret,getmaxcpus());
+	ut_printf("SECOND SMP: completed, ret:%d maxcpus: %d \n",ret,getmaxcpus());
 #endif
 
 	cli();  /* disable interrupt incase if it is enabled while apic is started */
@@ -67,16 +68,20 @@ int init_kernel(unsigned long end_addr)
 
 	ut_printf("Initalising: VFS.. \n");
 	init_vfs();
+
+	init_networking();
+
 //	ar_registerInterrupt(128,syscall_handler);
 
 	init_symbol_table();
 
 	init_devClasses();
+	init_modules();
 	ut_printf("Initialization completed \n");
 
 
 #ifdef NETWORKING
-//	init_LwipTcpIpStack();
+	init_LwipTcpIpStack();
 #endif
 
 	return 1 ;

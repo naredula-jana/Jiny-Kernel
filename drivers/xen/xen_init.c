@@ -270,7 +270,7 @@ int init_xen_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len) {
 	if (pci_hdr->interrupt_line > 0) {
 		DEBUG(" Interrupt number : %i \n", pci_hdr->interrupt_line);
 		ar_registerInterrupt(32 + pci_hdr->interrupt_line, xen_pci_interrupt,
-				"xen_pci");
+				"xen_pci",NULL);
 	}
 
 	init_hypercall_stubs(pci_hdr);

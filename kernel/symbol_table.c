@@ -56,7 +56,7 @@ int init_symbol_table() {
 		}
 
 		ut_strcpy(sym, g_symbol_table[i].name);
-		sym[12] = '\0'; /* Jcmd_ */
+		sym[7] = '\0'; /* Jcmd_ */
 		ut_strcpy(dst, (unsigned char *)"MODULE_");
 		if (ut_strcmp(sym, dst) == 0) {
             add_module((void *)g_symbol_table[i].address);

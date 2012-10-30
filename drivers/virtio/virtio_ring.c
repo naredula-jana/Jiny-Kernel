@@ -170,7 +170,7 @@ void print_vq(struct virtqueue *_vq){
 	struct vring_virtqueue *vq = to_vvq(_vq);
 	diff=vq->vring.used->idx-vq->vring.avail->idx;
 	if (diff < 0) diff=diff*(-1);
-	ut_printf(" num_free:%d  free_head:%d used:%x avail:%x diff:%d [%d]\n",vq->num_free,vq->free_head,vq->vring.used->idx,vq->vring.avail->idx,diff,netbh_state);
+	ut_printf(" num_free:%d  free_head:%d used:%x avail:%x diff:%d \n",vq->num_free,vq->free_head,vq->vring.used->idx,vq->vring.avail->idx,diff);
 }
 int virtqueue_add_buf_gfp(struct virtqueue *_vq,
 			  struct scatterlist sg[],

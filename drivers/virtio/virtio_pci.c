@@ -54,7 +54,7 @@ static int attach_virtio_pci(device_t *dev) {
 	if (virtio_dev_count >= MAX_VIRIO_DEVICES)
 		return 0;
 	ar_registerInterrupt(32 + pci_hdr->interrupt_line, virtio_interrupt,
-			"virtio_driver");
+			"virtio_driver",NULL);
 
 	if (bars[0].addr != 0) {
 		virtio_devices[virtio_dev_count].pci_ioaddr = bars[0].addr - 1;

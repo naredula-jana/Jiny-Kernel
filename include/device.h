@@ -27,12 +27,15 @@ struct device_class{
 struct device{
 	device_class_t *devClass;
     void *private_data;
-
+/* pci related */
 	pci_dev_header_t pci_hdr;
 	pci_addr_t pci_addr;
 	pci_bar_t pci_bars[MAX_PCI_BARS];
 	int pci_bar_count;
 	struct pcicfg_msix msix_cfg;
+/* network related */
+	unsigned char mac[7];
+
 
 	device_t *next;
 };

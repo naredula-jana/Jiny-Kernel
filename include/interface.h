@@ -113,7 +113,7 @@ int ut_sprintf(char * buf, const char *fmt, ...);
 int ut_snprintf(char * buf, size_t size, const char *fmt, ...);
 
 /* architecture depended */
-void ar_registerInterrupt(uint8_t n, isr_t handler,char *name);
+void ar_registerInterrupt(uint8_t n, isr_t handler,char *name, void *private_data);
 unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,struct addr_list *addr_list);
 int ar_pageTableCopy(struct mm_struct *src_mm,struct mm_struct *dest_mm);
 int ar_pageTableCleanup(struct mm_struct *mm,unsigned long addr, unsigned long length);
@@ -133,7 +133,7 @@ void ut_putchar(int c);
 int read_apic_isr(int isr);
 void local_apic_send_eoi(void);
 
-/**************  init functions */
+/**************  init functions *********/
 int init_kernel(unsigned long end_addr);
 void init_memory(unsigned long phy_end_addr);
 void kmem_cache_init(void);
@@ -146,4 +146,13 @@ int init_symbol_table();
 void init_vfs();
 int init_smp_force(int ncpus);
 void init_syscall(int cpuid);
+int init_networking();
+
+/**************************  Networking ***/
+#define NETWORK_PROTOCOLSTACK 1
+#define NETWORK_DRIVER 2
+int registerNetworkHandler(int type, int (*callback)(unsigned char *buf, unsigned int len, void *private_data), void *private_data);
+int netif_rx(unsigned char *data, unsigned int len);
+int netif_tx(unsigned char *data, unsigned int len);
+
 #endif

@@ -34,7 +34,6 @@ static int sh_del(unsigned char *arg1, unsigned char *arg2);
 
 static int sh_test1(unsigned char *arg1, unsigned char *arg2);
 static int sh_mmap(unsigned char *arg1, unsigned char *arg2);
-static int sh_virtio(unsigned char *arg1, unsigned char *arg2);
 static int sh_pci(unsigned char *arg1, unsigned char *arg2);
 
 int conf_set(unsigned char *arg1, unsigned char *arg2);
@@ -80,18 +79,14 @@ commands_t cmd_list[] = { { "help      ", "HELP MENU", "help", print_help }, {
 		{ "del <file>", "flush file-remove from page cache       ", "del",
 				sh_del }, { "cp <f1> <f2>", "copy f1 f2       ", "cp", sh_cp },
 		{ "sync <f1>", "sync f1       ", "sync", sh_sync }, { "sd ",
-				"start pci device       ", "sd", sh_pci }, { "virtio stat ",
-				"v", "v", sh_virtio }, { "t1 ", "t1 file", "t1", sh_test1 }, {
+				"start pci device       ", "sd", sh_pci },
+				{ "t1 ", "t1 file", "t1", sh_test1 }, {
 				0, 0, 0, cmd } /* at last check for command */
 };
 
 extern void ut_putchar(int c);
 
-static int sh_virtio(unsigned char *arg1,unsigned  char *arg2) {
-	print_virtio_net();
-//	sc_threadlist(0,0);
-	print_udpserver();
-}
+
 static char buf[26024];
 static int sh_mmap(unsigned char *arg1,unsigned char *arg2) {
 	struct file *fp;

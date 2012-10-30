@@ -133,6 +133,8 @@ typedef struct device device_t;
 int read_pci_info(device_t *dev);
 int pci_read(pci_addr_t *d, uint16_t pos, uint8_t len, void *buf);
 int pci_write(pci_addr_t *d, uint16_t pos, uint8_t len, void *buf);
+int read_msi(device_t *dev);
+int enable_msix(device_t *dev);
 
 #define VIRTIO_PCI_VENDOR_ID 0x1af4
 #define  VIRTIO_PCI_NET_DEVICE_ID 0x1000

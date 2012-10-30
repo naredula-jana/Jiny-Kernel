@@ -49,7 +49,7 @@ void init_serial()
 	outb(FIFO_CTRL_REG(portno), 0x47);             // Enable FIFO, clear them, with 4-byte threshold 
 	outb(MODEM_CTRL_REG(portno), 0x0B);             // No modem support
 	outb(INT_ENABLE_REG(portno), 0x01);             // Issue an interrupt when input buffer is full.
-	ar_registerInterrupt(36,serial_input_handler,"serial");
+	ar_registerInterrupt(36,serial_input_handler,"serial",NULL);
 
 }
 static spinlock_t serial_lock  = SPIN_LOCK_UNLOCKED;

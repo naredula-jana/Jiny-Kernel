@@ -122,6 +122,26 @@ int add_module(void *addr){
 }
 
 int init_modules() {
+	module_t *module;
 
+	module = MODULE_root.children;
+	while (module != NULL ) {
+		module->load();
+		module = module->sibling;
+	}
 	return 1;
+}
+static int list_modules(module_t *parent, int level){
+	int count=0;
+    if (parent ==0) return 0;
+	while (parent != NULL) {
+       ut_printf("Module level:%d  %s\n",level,parent->name);
+       count = count+list_modules(parent->children,level++);
+       parent = parent->sibling;
+       count = count+1;
+	}
+	return count;
+}
+int Jcmd_module_stat(){
+	list_modules(MODULE_root.children,0);
 }

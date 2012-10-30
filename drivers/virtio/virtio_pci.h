@@ -122,7 +122,7 @@ typedef struct {
 	unsigned long pci_mmiolen;
 	int msi;
 	struct virtqueue *vq[5];
-	unsigned char mac[7];
+	//unsigned char mac[7];
 	//void(*rx_func)(unsigned char* data, int len);
 	void (*isr)(registers_t regs);
 }virtio_dev_t;

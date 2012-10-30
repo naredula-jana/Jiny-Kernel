@@ -9,11 +9,11 @@
 #include "../virtio_ring.h"
 #include "../virtio_pci.h"
 #include "virtio_net.h"
+#include "device.h"
 
-#define WITH_BOTTOM_HALF 1
-//#define SEND_BH 1
 typedef unsigned int u32;
-extern int addBufToQueue(struct virtqueue *vq, unsigned char *buf, unsigned long len);
+extern int addBufToQueue(struct virtqueue *vq, unsigned char *buf,
+		unsigned long len);
 static u16 ip_sum_calc(u16 len_ip_header, unsigned char buff[]) {
 	u16 word16;
 	u32 sum = 0;
@@ -35,14 +35,17 @@ static u16 ip_sum_calc(u16 len_ip_header, unsigned char buff[]) {
 
 	return ((u16) sum);
 }
-static unsigned char mac[10];
-static virtio_dev_t *net_dev = 0;
+
 static int dummy_pkt_scan = 1;
-queue_t nbh_waitq;
-static int process_pkt(unsigned char *c, unsigned long len) {
+
+static int process_pkt(unsigned char *c, unsigned int len, void *private_data) {
 	unsigned char ip[5], port[3], tc;
 	u16 *pcsum;
+	int ret = 0;
+	device_t *dev = (device_t *)private_data;
+	unsigned char *mac=&dev->mac[0];
 
+	ut_printf("Processing the packet by UDP SERVER \n");
 	/* ip,udp packet and destination mac matches, then resend back the packet my interchanging ip,udp port and ip checksum recalculate */
 	if (c[22] == 0x8 && c[23] == 0 && c[33] == 0x11 && c[10] == mac[0]
 			&& c[11] == mac[1] && c[12] == mac[2] && c[13] == mac[3]
@@ -78,7 +81,7 @@ static int process_pkt(unsigned char *c, unsigned long len) {
 
 		c[34] = 0x0; /* ip checksum is made zero */
 		c[35] = 0x0;
-		pcsum = (u16 *)&c[34];
+		pcsum = (u16 *) &c[34];
 		*pcsum = ip_sum_calc(20, &c[24]);
 		tc = c[34];
 		c[34] = c[35];
@@ -97,196 +100,40 @@ static int process_pkt(unsigned char *c, unsigned long len) {
 			for (i = 0; i < 1000 && i < len; i++)
 				cksum = cksum + c[i];
 		}
-		return 1;
+		ret = 1;
 	} else {
-		return 0;
+		ret = 0;
 	}
-}
-int netbh_started = 0;
-static int max_cont_recv = 0;
-static int stat_recv = 0;
-static int went_sleep = 0;
-static int stat_sleep = 0;
-static int recv_count = 0;
-int g_conf_netbh_poll = 0;
-int g_conf_udp_respond = 0;
-int netbh_state = 0;
-extern int virtio_send_errors;
-int netbh_flag = 0;
-
-int stat_netcpus[10];
-void print_udpserver() {
-	ut_printf(
-			"New recv:%d max_recv:%d wsleep:%d sleep:%d total recv:%d snd_err:%d cpus:%d:%d\n",
-			stat_recv, max_cont_recv, went_sleep, stat_sleep, recv_count,
-			virtio_send_errors, stat_netcpus[0], stat_netcpus[1]);
-}
-#define MAX_QUEUE_SIZE 200
-static struct {
-	unsigned long addr;
-	int len;
-} sendq[MAX_QUEUE_SIZE];
-
-//static int put_index = 0;
-static int recv_index = 0;
-void send_net_BH() {
-	int i;
-
-	for (i = 0; i < MAX_QUEUE_SIZE; i++) {
-		sendq[i].addr = 0;
-	}
-	while (1) {
-		if (sendq[recv_index].addr == 0)
-			continue;
-		netfront_xmit(net_dev, (unsigned char *)sendq[recv_index].addr, sendq[recv_index].len);
-		sendq[recv_index].addr = 0;
-		recv_index++;
-		if (recv_index >= MAX_QUEUE_SIZE)
-			recv_index = 0;
-	}
-}
-
-int net_BH(void *arg) {
-	unsigned long addr, *len;
-
-	int from_sleep = 1;
-	netbh_started = 1;
-	stat_netcpus[0] = stat_netcpus[1] = 0;
-	while (1) {
-
-		len = 0;
-		netbh_state = 100;
-		netbh_flag = 0;
-		addr = virtio_removeFromQueue(net_dev->vq[0], (unsigned int *)&len);
-		if (addr == 0) {
-			netbh_state = 200;
-			if (g_conf_netbh_poll<2)
-			   sti();
-			if (g_conf_netbh_poll == 0) {
-				netbh_state = 202;
-				stat_sleep++;
-				virtqueue_enable_cb(net_dev->vq[0]); // enable interrupts as the queue is empty, so interrupt will be recieved for the first packet
-				if (netbh_flag != 0)
-					continue;
-				sc_wait(&nbh_waitq, 2);
-				//__asm__("hlt");
-				//sc_schedule();
-				if (g_current_task->cpu < 9)
-					stat_netcpus[g_current_task->cpu]++;
-				virtqueue_disable_cb(net_dev->vq[0]);
-				netbh_state = 203;
-			} else {
-				cli();
-			}
-			if (stat_recv > 0) {
-				went_sleep++;
-			}
-			stat_recv = 0;
-
-			from_sleep = 1;
-			continue;
-		} else {
-			cli();
-		}
-		stat_recv++;
-
-		if (stat_recv > max_cont_recv)
-			max_cont_recv = stat_recv;
-		if (from_sleep == 1) {
-			from_sleep = 0;
-		}
-		//c = addr;
-		//DEBUG("%d: new NEW ISR:%d :%x addd:%x len:%x c:%x:%x:%x:%x  c+10:%x:%x:%x:%x\n", i, index, isr, addr, len, c[0], c[1], c[2], c[3], c[10], c[11], c[12], c[13]);
-
-		recv_count++;
-		if (process_pkt((unsigned char *)addr, len) == 1) {
-
-			netbh_state = 301;
-			if (g_conf_udp_respond == 1) {
-#if SEND_BH
-				if (sendq[put_index].addr == 0) {
-					sendq[put_index].len = len;
-					sendq[put_index].addr = addr;
-					put_index++;
-					if (put_index >= MAX_QUEUE_SIZE)
-					put_index = 0;
-				} else {
-					mm_putFreePages(addr, 0);
-				}
-#else
-				netfront_xmit(net_dev, addr, len);
-#endif
-			} else {
-#if 0
-                #define TEMP_QUEUE_SIZE 800
-				static unsigned long q[TEMP_QUEUE_SIZE];
-				static int init_done=0;
-				static int begin=0;
-				static int end=0;
-				if (init_done==0){
-					int i;
-					for(i=0; i<TEMP_QUEUE_SIZE-1; i++){
-						q[i]=mm_getFreePages(0, 0);
-					}
-					begin=0;
-					end=TEMP_QUEUE_SIZE-1;
-					q[end]=0;
-					init_done=1;
-				}
-				q[end]=addr;
-				mm_putFreePages(q[begin],0);
-				begin++;
-				end++;
-				if (begin>=TEMP_QUEUE_SIZE) begin=0;
-				if (end>=TEMP_QUEUE_SIZE) end=0;
-#else
-				mm_putFreePages(addr, 0);
-#endif
-			}
-			netbh_state = 320;
-		} else {
-			mm_putFreePages(addr, 0);
-		}
-
-#if 1
-		netbh_state = 403;
-		addBufToQueue(net_dev->vq[0], 0, 4096);
-		netbh_state = 404;
-		virtqueue_kick(net_dev->vq[0]);
-
-#else
-		consumed_pkts++;
-		if (consumed_pkts > 150) {
-			netbh_state = 402;
-			for (i = 0; i < 50; i++) {
-				addBufToQueue(net_dev->vq[0], 0, 4096);
-				consumed_pkts--;
-			}
-			//	if ((recv % 10) ==0)
-			virtqueue_kick(net_dev->vq[0]);
-		}
-#endif
-	}
+	netif_tx(c,len);
+	//mm_putFreePages((unsigned long) c, 0);
 	return 1;
 }
-extern void *init_netfront(void (*net_rx)(unsigned char* data, int len),unsigned char *rawmac, char **ip) ;
-void init_TestUdpStack() {
-static int init=0;
-    if (init ==1) return ;
+
+int stat_udp_server() {
+	return 0;
+}
+
+
+int load_udp_server() {
+	static int init = 0;
+	if (init == 1)
+		return 0;
+#if 0
 	net_dev = init_netfront(0, mac, 0);
 	if (net_dev == 0) {
 		ut_printf(" Fail to initialize the UDP stack \n");
 		return;
 	}
-#ifdef WITH_BOTTOM_HALF
-	unsigned long ret;
-
-	init=1;
-	sc_register_waitqueue(&nbh_waitq,"net_bh");
-	ret = sc_createKernelThread(net_BH, 0, (unsigned char *)"net_rx");
-#ifdef SEND_BH
-	ret=sc_createKernelThread(send_net_BH,0,"net_send_bh");
 #endif
-#endif
+	registerNetworkHandler(NETWORK_PROTOCOLSTACK, process_pkt, NULL);
+	ut_printf("UDPServer : Initilization completed\n");
+	return 1;
 }
-//DEFINE_DRIVER(test_udp_server, root, load_udp_server, unload_udp_server, stat_udp_server);
+static int unload_udp_server() {
+	return 1;
+}
+
+DEFINE_MODULE(test_udp_server, root, load_udp_server, unload_udp_server, stat_udp_server);
+
+int kkk=0;
+

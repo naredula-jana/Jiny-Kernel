@@ -48,6 +48,7 @@ struct irq_handler_t {
 		long num_irqs;
 		long num_error;
 	} stat[MAX_CPUS];
+	void *private_data;
 };
 irq_cpustat_t irq_stat[NR_CPUS] ;
 
@@ -93,10 +94,10 @@ void init_handlers()
 		}
 	}
 	for (i=0; i<32;i++)
-		ar_registerInterrupt(i, gpFault,"gpfault");
+		ar_registerInterrupt(i, gpFault,"gpfault", NULL);
 
-	ar_registerInterrupt(14, ar_pageFault,"pagefault");
-	ar_registerInterrupt(13, gpFault,"gpfault");
+	ar_registerInterrupt(14, ar_pageFault,"pagefault", NULL);
+	ar_registerInterrupt(13, gpFault,"gpfault", NULL);
 }
 
 int Jcmd_irq_stat(char *arg1,char *arg2)
@@ -125,10 +126,11 @@ int Jcmd_irq_stat(char *arg1,char *arg2)
 	return 1;
 }
 
-void ar_registerInterrupt(uint8_t n, isr_t handler,char *name)
+void ar_registerInterrupt(uint8_t n, isr_t handler,char *name, void *data)
 {
 	g_interrupt_handlers[n].action = handler;
 	g_interrupt_handlers[n].name=(unsigned char *)name;
+	g_interrupt_handlers[n].private_data = data;
 }
 void DisableTimer(void)
 {
@@ -220,10 +222,10 @@ void ar_irqHandler(void *p,unsigned int int_no)
 			struct fault_ctx ctx;
 
 			fill_fault_context(&ctx,p,int_no);
-			handler(&ctx);
+			handler(&ctx, g_interrupt_handlers[int_no].private_data);
 		}else
 		{
-			handler();
+			handler(g_interrupt_handlers[int_no].private_data);
 		}
 		g_interrupt_handlers[int_no].stat[getcpuid()].num_irqs++;
 
@@ -247,7 +249,7 @@ extern void timer_callback(registers_t regs);
 void init_timer() {
 	addr_t frequency = 100;
 	// Firstly, register our timer callback.
-	ar_registerInterrupt(32, &timer_callback, "timer_callback");
+	ar_registerInterrupt(32, &timer_callback, "timer_callback", NULL);
 
 	// The value we send to the PIT is the value to divide it's input clock
 	// (1193180 Hz) by, to get our required frequency. Important to note is

@@ -73,11 +73,11 @@ int init_host_shm(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len, int
 #endif
 		ut_printf(" Interrupt NUMBER : %i k:%d \n", pci_hdr->interrupt_line,k);
 		ar_registerInterrupt(32 + pci_hdr->interrupt_line, host_shm_interrupt,
-				"host_shm");
+				"host_shm",NULL);
 	}
 	init_HostFs();
 	if (*msi_vector > 0) {
-		ar_registerInterrupt(*msi_vector , host_shm_interrupt,"hostshm_msi");
+		ar_registerInterrupt(*msi_vector , host_shm_interrupt,"hostshm_msi",NULL);
 	}
 
 	return 1;

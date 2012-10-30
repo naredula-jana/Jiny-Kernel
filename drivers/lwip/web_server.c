@@ -1,10 +1,5 @@
 
-//#include <netfront.h>
 #include <lwip/api.h>
-
-//#define __types_h
-//#include "xen.h"
-
 
 #include "common.h"
 
@@ -14,7 +9,7 @@ extern unsigned long g_dmesg_index;
 
 static char message[300];
 
-static void run_webserver(void *p)
+static void webserver_thread(void *p)
 {
     struct ip_addr listenaddr = { 0 };
     struct netconn *listener;
@@ -72,7 +67,7 @@ int start_webserver()
 {
 	int ret;
     //create_thread("server", run_webserver, NULL);
-    ret=sc_createKernelThread(run_webserver,NULL,"web_server");
+    ret=sc_createKernelThread(webserver_thread,NULL,"web_server");
 
     return 0;
 }

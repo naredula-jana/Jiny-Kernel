@@ -42,7 +42,7 @@
  */
 
 #define __types_h
-
+#define DEBUG_ENABLE 1
 #include "lwip/opt.h"
 #include "lwip/def.h"
 #include "lwip/mem.h"
@@ -112,14 +112,16 @@ low_level_output(struct netif *netif, struct pbuf *p)
      variable. */
   if (!p->next) {
     /* Only one fragment, can send it directly */
-      netfront_xmit(dev, p->payload, p->len);
+     // netfront_xmit(dev, p->payload, p->len);
+	  netif_tx(p->payload, p->len);
   } else {
     unsigned char data[p->tot_len], *cur;
     struct pbuf *q;
 
     for(q = p, cur = data; q != NULL; cur += q->len, q = q->next)
       memcpy(cur, q->payload, q->len);
-    netfront_xmit(dev, data, p->tot_len);
+    //netfront_xmit(dev, data, p->tot_len);
+    netif_tx(data, p->tot_len);
   }
 
 #if ETH_PAD_SIZE
@@ -233,7 +235,7 @@ netfront_input(struct netif *netif, unsigned char* data, int len)
   }
 }
 
-void netif_rx(unsigned char* data,int len)
+static void lwip_netif_rx(unsigned char* data,unsigned int len)
 {
 	static int stat_recv=0;
 	stat_recv++;
@@ -355,9 +357,10 @@ void init_LwipTcpIpStack(void)
   network_started =1 ;
 
 
-  DEBUG("Waiting for network.\n");
+  DEBUG("LWIP: Waiting for network.\n");
   sem_alloc(&tcpip_is_up,0); /* TODO : need to free the sem */
-  dev=init_netfront(netif_rx, rawmac, &ip);
+
+ //TODO  dev=init_netfront(lwip_netif_rx, rawmac, &ip);
   //dev= &g_netfront_dev;
   
   if (ip) {
@@ -371,10 +374,10 @@ void init_LwipTcpIpStack(void)
     else
       DEBUG("Strange IP %s, leaving netmask to 0.\n", ip);
   }
-  DEBUG("IP %x netmask %x gateway %x.\n",
+  DEBUG("LWIP: IP %x netmask %x gateway %x.\n",
           ntohl(ipaddr.addr), ntohl(netmask.addr), ntohl(gw.addr));
   
-  DEBUG("TCP/IP bringup begins.\n");
+  DEBUG("LWIP: TCP/IP bringup begins.\n");
   
   netif = mm_malloc(sizeof(struct netif),0);
   tcpip_init(tcpip_bringup_finished, netif);
@@ -393,13 +396,12 @@ void init_LwipTcpIpStack(void)
        networking_set_addr(&ipaddr, &netmask, &gw);
    }
   //network_rx(dev);
-  DEBUG("Latest Network is ready with IP.\n");
+  DEBUG("LWIP: Latest Network is ready with IP.\n");
 }
 
 /* Shut down the network */
 void stop_networking(void)
 {
-  if (dev)
-    shutdown_netfront(dev);
+
 }
 

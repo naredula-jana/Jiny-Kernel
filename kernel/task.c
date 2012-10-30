@@ -11,7 +11,6 @@
 #define DEBUG_ENABLE 1
 #include "common.h"
 
-#include "interface.h"
 #include "descriptor_tables.h"
 #define MAGIC_CHAR 0xab
 #define MAGIC_LONG 0xabababababababab
@@ -767,7 +766,7 @@ void init_tasking() {
 
 	ar_archSetUserFS(0);
 //	init_timer(); //currently apic timer is in use
-	ar_registerInterrupt(IPI_INTERRUPT, &ipi_interrupt, "IPI");
+	ar_registerInterrupt(IPI_INTERRUPT, &ipi_interrupt, "IPI", NULL);
 }
 static void _delete_task(struct task_struct *task) {
 	if (task ==0) return;
