@@ -81,7 +81,8 @@ int init_kernel(unsigned long end_addr)
 
 
 #ifdef NETWORKING
-	init_LwipTcpIpStack();
+
+
 #endif
 
 	return 1 ;

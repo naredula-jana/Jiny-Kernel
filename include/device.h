@@ -12,7 +12,7 @@ struct device_class{
     char *name;
 
 	/* List of Methods*/
-	int (*probe)(device_t*);
+	int (*probe)(device_t *dev);
 	int (*attach)(device_t *dev);
 	int (*dettach)(device_t *dev);
 

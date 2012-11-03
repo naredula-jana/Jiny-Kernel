@@ -65,10 +65,8 @@
 #include <lwip/netif.h>
 
 
-
-//#include "interface.h"
 #include "common.h"
-//#include <netfront.h>
+#include "device.h"
 
 #define down(x) sys_arch_sem_wait(x,100)
 /* Define those to better describe your network interface. */
@@ -81,8 +79,6 @@
 /* Only have one network interface at a time. */
 static struct netif *the_interface = NULL;
 
-static unsigned char rawmac[6];
-static struct netfront_dev *dev;
 
 /* Forward declarations. */
 static err_t netfront_output(struct netif *netif, struct pbuf *p,
@@ -100,9 +96,7 @@ static err_t netfront_output(struct netif *netif, struct pbuf *p,
 static err_t
 low_level_output(struct netif *netif, struct pbuf *p)
 {
-  if (!dev)
-    return ERR_OK;
-
+DEBUG("LWIP Lowlevel output \n");
 #ifdef ETH_PAD_SIZE
   pbuf_header(p, -ETH_PAD_SIZE); /* drop the padding word */
 #endif
@@ -112,7 +106,6 @@ low_level_output(struct netif *netif, struct pbuf *p)
      variable. */
   if (!p->next) {
     /* Only one fragment, can send it directly */
-     // netfront_xmit(dev, p->payload, p->len);
 	  netif_tx(p->payload, p->len);
   } else {
     unsigned char data[p->tot_len], *cur;
@@ -120,7 +113,6 @@ low_level_output(struct netif *netif, struct pbuf *p)
 
     for(q = p, cur = data; q != NULL; cur += q->len, q = q->next)
       memcpy(cur, q->payload, q->len);
-    //netfront_xmit(dev, data, p->tot_len);
     netif_tx(data, p->tot_len);
   }
 
@@ -216,6 +208,7 @@ netfront_input(struct netif *netif, unsigned char* data, int len)
     etharp_ip_input(netif, p);
 #endif
     /* skip Ethernet header */
+    DEBUG("RECVED THE IP packet send to LWIP for processing\n");
     pbuf_header(p, -(int16_t)sizeof(struct eth_hdr));
     /* pass to network layer */
     if (tcpip_input(p, netif) == ERR_MEM)
@@ -225,25 +218,28 @@ netfront_input(struct netif *netif, unsigned char* data, int len)
       
   case ETHTYPE_ARP:
     /* pass p to ARP module  */
+	  DEBUG("RECVED THE ARP packet send to LWIP for processing\n");
     etharp_arp_input(netif, (struct eth_addr *) netif->hwaddr, p);
     break;
 
   default:
+	  DEBUG("RECVED THE UNKNOWN packet send to LWIP for processing\n");
     pbuf_free(p);
     p = NULL;
     break;
   }
 }
 
-static void lwip_netif_rx(unsigned char* data,unsigned int len)
+static int lwip_netif_rx(unsigned char* data,unsigned int len, void *private_data)
 {
 	static int stat_recv=0;
 	stat_recv++;
 	  if (the_interface != NULL) {
 		  DEBUG("Sending packet to tcpip layer :%d\n",len);
-	    netfront_input(the_interface, data, len);
+	    netfront_input(the_interface, data+10, len);
 	  }
    DEBUG("%d bytes incoming at %x  stat_recv:%d\n",len,data,stat_recv);
+   return 1;
 }
 
 /*
@@ -277,7 +273,7 @@ err_t
 netif_netfront_init(struct netif *netif)
 {
   unsigned char *mac = netif->state;
-
+ut_printf("LWIP: netfront init called \n ");
 #if LWIP_SNMP
   /* ifType ethernetCsmacd(6) @see RFC1213 */
   netif->link_type = 6;
@@ -293,7 +289,7 @@ netif_netfront_init(struct netif *netif)
   netif->ifoutnucastpkts = 0;
   netif->ifoutdiscards = 0;
 #endif
-  
+
   netif->name[0] = IFNAME0;
   netif->name[1] = IFNAME1;
   netif->output = netfront_output;
@@ -318,13 +314,11 @@ netif_netfront_init(struct netif *netif)
   
   /* broadcast capability */
   netif->flags = NETIF_FLAG_BROADCAST;
-
   etharp_init();
-
   sys_timeout(ARP_TMR_INTERVAL, arp_timer, NULL);
-
   return ERR_OK;
 }
+
 
 /*
  * Thread run by netfront: bring up the IP address and fire lwIP timers.
@@ -345,17 +339,18 @@ static void tcpip_bringup_finished(void *p)
  * which calls back to tcpip_bringup_finished(), which 
  * lets us know it's OK to continue.
  */
-void init_LwipTcpIpStack(void)
+int load_LwipTcpIpStack()
 {
+	//mac = 00:30:48:DB:5E:06
+	unsigned char mac[7]={0x00,0x30,0x48,0xDB,0x5E,0x06,0x0};
   struct netif *netif;
   struct ip_addr ipaddr = { htonl(IF_IPADDR) };
   struct ip_addr netmask = { htonl(IF_NETMASK) };
   struct ip_addr gw = { 0 };
   char *ip = NULL;
   static int network_started =0;
-  if (network_started != 0) return ;
+  if (network_started != 0) return 0;
   network_started =1 ;
-
 
   DEBUG("LWIP: Waiting for network.\n");
   sem_alloc(&tcpip_is_up,0); /* TODO : need to free the sem */
@@ -378,30 +373,38 @@ void init_LwipTcpIpStack(void)
           ntohl(ipaddr.addr), ntohl(netmask.addr), ntohl(gw.addr));
   
   DEBUG("LWIP: TCP/IP bringup begins.\n");
-  
+
   netif = mm_malloc(sizeof(struct netif),0);
   tcpip_init(tcpip_bringup_finished, netif);
     
-  netif_add(netif, &ipaddr, &netmask, &gw, rawmac, 
+  netif_add(netif, &ipaddr, &netmask, &gw, mac,
             netif_netfront_init, ip_input);
   netif_set_default(netif);
   netif_set_up(netif);
 
-  down(&tcpip_is_up);
+  //down(&tcpip_is_up);
 
   if (1) {
-       struct ip_addr ipaddr = { htonl(0xc0a801c9) };
+       struct ip_addr ipaddr = { htonl(0x0ad180b2) }; /* 10.209.128.178  */
        struct ip_addr netmask = { htonl(0xff000000) };
-       struct ip_addr gw = { htonl(0xc0a801c8) };
+       struct ip_addr gw = { htonl(0x0ad18001) };
        networking_set_addr(&ipaddr, &netmask, &gw);
    }
-  //network_rx(dev);
+  registerNetworkHandler(NETWORK_PROTOCOLSTACK, lwip_netif_rx, NULL);
   DEBUG("LWIP: Latest Network is ready with IP.\n");
+  start_webserver();
+  return 1;
 }
 
 /* Shut down the network */
-void stop_networking(void)
+int unload_LwipTcpIpStack()
 {
-
+  return 1;
+}
+int stat_LwipTcpIpStack() {
+	return 0;
 }
 
+DEFINE_MODULE(LwipTcpIpStack, root, load_LwipTcpIpStack, unload_LwipTcpIpStack, stat_LwipTcpIpStack);
+
+static int kkk=0;

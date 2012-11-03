@@ -4,20 +4,16 @@
 #include "mm.h"
 #include "vfs.h"
 #include "task.h"
-#include "interface.h"
-#include "../virtio.h"
-#include "../virtio_ring.h"
-#include "../virtio_pci.h"
-#include "virtio_net.h"
 #include "device.h"
 
 typedef unsigned int u32;
 extern int addBufToQueue(struct virtqueue *vq, unsigned char *buf,
 		unsigned long len);
-static u16 ip_sum_calc(u16 len_ip_header, unsigned char buff[]) {
-	u16 word16;
+
+static uint16_t ip_sum_calc(uint16_t len_ip_header, unsigned char buff[]) {
+	uint16_t word16;
 	u32 sum = 0;
-	u16 i;
+	uint16_t i;
 
 	// make 16 bit words out of every two adjacent 8 bit words in the packet
 	// and add them up
@@ -33,14 +29,14 @@ static u16 ip_sum_calc(u16 len_ip_header, unsigned char buff[]) {
 	// one's complement the result
 	sum = ~sum;
 
-	return ((u16) sum);
+	return ((uint16_t) sum);
 }
 
 static int dummy_pkt_scan = 1;
 
 static int process_pkt(unsigned char *c, unsigned int len, void *private_data) {
 	unsigned char ip[5], port[3], tc;
-	u16 *pcsum;
+	uint16_t *pcsum;
 	int ret = 0;
 	device_t *dev = (device_t *)private_data;
 	unsigned char *mac=&dev->mac[0];
@@ -81,7 +77,7 @@ static int process_pkt(unsigned char *c, unsigned int len, void *private_data) {
 
 		c[34] = 0x0; /* ip checksum is made zero */
 		c[35] = 0x0;
-		pcsum = (u16 *) &c[34];
+		pcsum = (uint16_t *) &c[34];
 		*pcsum = ip_sum_calc(20, &c[24]);
 		tc = c[34];
 		c[34] = c[35];
@@ -118,13 +114,7 @@ int load_udp_server() {
 	static int init = 0;
 	if (init == 1)
 		return 0;
-#if 0
-	net_dev = init_netfront(0, mac, 0);
-	if (net_dev == 0) {
-		ut_printf(" Fail to initialize the UDP stack \n");
-		return;
-	}
-#endif
+
 	registerNetworkHandler(NETWORK_PROTOCOLSTACK, process_pkt, NULL);
 	ut_printf("UDPServer : Initilization completed\n");
 	return 1;
@@ -133,7 +123,7 @@ static int unload_udp_server() {
 	return 1;
 }
 
-DEFINE_MODULE(test_udp_server, root, load_udp_server, unload_udp_server, stat_udp_server);
+//DEFINE_MODULE(test_udp_server, root, load_udp_server, unload_udp_server, stat_udp_server);
 
-int kkk=0;
+static int kkk=0;
 

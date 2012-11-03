@@ -1,4 +1,5 @@
 
+#define DEBUG_ENABLE 1
 #include <lwip/api.h>
 
 #include "common.h"
@@ -7,7 +8,7 @@ extern unsigned char g_dmesg[MAX_DMESG_LOG];
 extern unsigned long g_dmesg_index;
 
 
-static char message[300];
+static unsigned char message[300];
 
 static void webserver_thread(void *p)
 {
@@ -16,8 +17,6 @@ static void webserver_thread(void *p)
     struct netconn *session;
     struct timeval tv;
     err_t rc;
-
-
 
     DEBUG("Opening connection fir webserver \n");
 
@@ -39,14 +38,14 @@ static void webserver_thread(void *p)
 
     while (1) {
     	int i;
-
+        DEBUG("BEFORE accept the new connection \n");
         session = netconn_accept(listener);
         if (session == NULL)
             continue;
 
         ut_sprintf(message, "<html><body><pre> Jiny Kernel Dmesg max_len:%d  curr_len:%d \n",MAX_DMESG_LOG,g_dmesg_index);
         (void) netconn_write(session, message, ut_strlen(message), NETCONN_COPY);
-
+#if 0
         i=0;
         while (i<g_dmesg_index)
         {
@@ -54,7 +53,7 @@ static void webserver_thread(void *p)
         		(void) netconn_write(session, &g_dmesg[i],100, NETCONN_COPY);
         	i=i+100;
         }
-
+#endif
         ut_sprintf(message, "</pre></body></html>");
         (void) netconn_write(session, message, ut_strlen(message), NETCONN_COPY);
 
@@ -66,8 +65,8 @@ static void webserver_thread(void *p)
 int start_webserver()
 {
 	int ret;
-    //create_thread("server", run_webserver, NULL);
-    ret=sc_createKernelThread(webserver_thread,NULL,"web_server");
+
+    ret=sc_createKernelThread(webserver_thread,NULL,(unsigned char *)"web_server");
 
     return 0;
 }

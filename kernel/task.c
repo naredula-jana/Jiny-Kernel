@@ -115,6 +115,9 @@ static void _add_to_waitqueue(queue_t *waitqueue, struct task_struct * p, long t
 
 	cum_ticks = 0;
 	prev_cum_ticks = 0;
+	if (p == g_idle_tasks[0] || p == g_idle_tasks[1] ){
+		BUG();
+	}
 	if (waitqueue->head.next == &waitqueue->head) {
 		p->sleep_ticks = ticks;
 		list_add_tail(&p->wait_queue, &waitqueue->head);
@@ -154,9 +157,19 @@ static int _del_from_waitqueue(queue_t *waitqueue, struct task_struct *p) {
 		task = list_entry(pos, struct task_struct, wait_queue);
 
 		if (p == task) {
+			if(pos == 0){
+				BUG();
+			}
 			pos = pos->next;
 			if (pos != &waitqueue->head) {
+				if (p<0x100 || p->magic_numbers[0] != MAGIC_LONG){
+					BUG();
+				}
 				task = list_entry(pos, struct task_struct, wait_queue);
+
+				if ( task<0x100 || task>0xfffffffffffff000){
+					BUG();
+				}
 				task->sleep_ticks = task->sleep_ticks + p->sleep_ticks;
 			}
 			p->sleep_ticks = 0;
@@ -169,7 +182,7 @@ static int _del_from_waitqueue(queue_t *waitqueue, struct task_struct *p) {
 	return ret;
 }
 
-#define MAX_WAIT_QUEUES 50
+#define MAX_WAIT_QUEUES 500
 static queue_t *wait_queues[MAX_WAIT_QUEUES]; /* TODO : this need to be locked */
 int stat_wq_count = 0;
 int sc_register_waitqueue(queue_t *waitqueue, char *name) {

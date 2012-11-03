@@ -169,15 +169,17 @@ static int netdriver_xmit(unsigned char* data, unsigned int len,
 	int i, ret;
 
 	dev = (virtio_dev_t *) pci_dev->private_data;
-	if (dev == 0)
+	if (dev == 0 || data==0)
 		return 0;
 
-	unsigned long addr;
-
-	addr = (unsigned long) data;
+	unsigned char *addr;
+	addr = (unsigned char *) mm_getFreePages(0, 0);
+    if (addr ==0) return 0;
+    ut_memset(addr,0,10);
+	ut_memcpy(addr+10,data,len);
 	ret = -ENOSPC;
 
-	ret = addBufToQueue(dev->vq[1], (unsigned char *) addr, len);
+	ret = addBufToQueue(dev->vq[1], (unsigned char *) addr, len+10);
 	send_pkts++;
 	if (ret == -ENOSPC) {
 		mm_putFreePages(addr, 0);

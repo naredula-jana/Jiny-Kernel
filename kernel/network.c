@@ -64,6 +64,7 @@ static int remove_from_queue(unsigned char **buf, unsigned int *len){
 	}
 	return 0;
 }
+/*   Release the buffer after calling the callback */
 static int netRx_BH(void *arg) {
 	unsigned char *data;
 	unsigned int len;
@@ -76,8 +77,9 @@ static int netRx_BH(void *arg) {
 				ret=protocol_drivers[0].callback(data, len, protocol_drivers[0].private);
 			}
 			if (ret==0){
-				mm_putFreePages(data, 0);
+
 			}
+			mm_putFreePages(data, 0);
 		}
 	}
 	return 1;
@@ -109,9 +111,7 @@ int netif_tx(unsigned char *data, unsigned int len) {
 	if (data==0 || len==0) return 0;
 	if (count_net_drivers > 0) {
 		ret=net_drivers[0].callback(data, len, net_drivers[0].private);
-		if (ret ==0 ){
-			mm_putFreePages(data, 0);
-		}
+
 		return 1;
 	}else{
 
