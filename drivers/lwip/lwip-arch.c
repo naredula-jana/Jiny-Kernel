@@ -62,8 +62,8 @@ void sys_init(void) {
 }
 
 /* Creates an empty mailbox. */
-sys_mbox_t sys_mbox_new(int size) {
-	struct mbox *mbox = mm_malloc(sizeof(struct mbox), 0);
+signed char sys_mbox_new(sys_mbox_t *mbox, int size) {
+
 	if (!size)
 		size = 32;
 	else if (size == 1)
@@ -74,22 +74,28 @@ sys_mbox_t sys_mbox_new(int size) {
 	mbox->reader = 0;
 	sem_alloc(&mbox->write_sem, size);
 	mbox->writer = 0;
-	return mbox;
+	mbox->valid_entry = 1;
+	return 0; /* should return zero if everything is ok */
 }
 
 /* Deallocates a mailbox. If there are messages still present in the
  * mailbox when the mailbox is deallocated, it is an indication of a
  * programming error in lwIP and the developer should be notified. */
-void sys_mbox_free(sys_mbox_t mbox) {
+void sys_mbox_free(sys_mbox_t *mbox) {
 	mm_free(mbox->messages);
 	sem_free(&mbox->read_sem);
 	sem_free(&mbox->write_sem);
-	mm_free(mbox);
+}
+int sys_mbox_valid(sys_mbox_t *mbox){
+	return mbox->valid_entry;
 }
 
+void sys_mbox_set_invalid(sys_mbox_t *mbox){
+	mbox->valid_entry=0;
+}
 /* Posts the "msg" to the mailbox, internal version that actually does the
  * post. */
-static void do_mbox_post(sys_mbox_t mbox, void *msg) {
+static void do_mbox_post(sys_mbox_t *mbox, void *msg) {
 	/* The caller got a semaphore token, so we are now allowed to increment
 	 * writer, but we still need to prevent concurrency between writers
 	 * (interrupt handler vs main) */
@@ -102,7 +108,7 @@ static void do_mbox_post(sys_mbox_t mbox, void *msg) {
 }
 
 /* Posts the "msg" to the mailbox. */
-void sys_mbox_post(sys_mbox_t mbox, void *msg) {
+void sys_mbox_post(sys_mbox_t *mbox, void *msg) {
 	uint32_t ret;
 
 	if (mbox == SYS_MBOX_NULL)
@@ -115,7 +121,7 @@ void sys_mbox_post(sys_mbox_t mbox, void *msg) {
 }
 
 /* Try to post the "msg" to the mailbox. */
-int sys_mbox_trypost(sys_mbox_t mbox, void *msg) {
+signed char  sys_mbox_trypost(sys_mbox_t *mbox, void *msg) {
 	if (mbox == SYS_MBOX_NULL)
 		return ERR_BUF;
 	if (sys_arch_sem_wait(&mbox->write_sem, 1) == IPC_TIMEOUT)
@@ -128,7 +134,7 @@ int sys_mbox_trypost(sys_mbox_t mbox, void *msg) {
  * Fetch a message from a mailbox. Internal version that actually does the
  * fetch.
  */
-static void do_mbox_fetch(sys_mbox_t mbox, void **msg) {
+static void do_mbox_fetch(sys_mbox_t *mbox, void **msg) {
 	sys_prot_t prot;
 	/* The caller got a semaphore token, so we are now allowed to increment
 	 * reader, but we may still need to prevent concurrency between readers.
@@ -153,7 +159,7 @@ static void do_mbox_fetch(sys_mbox_t mbox, void **msg) {
  * The return values are the same as for the sys_arch_sem_wait() function:
  * Number of milliseconds spent waiting or SYS_ARCH_TIMEOUT if there was a
  * timeout. */
-uint32_t sys_arch_mbox_fetch(sys_mbox_t mbox, void **msg, uint32_t timeout) {
+uint32_t sys_arch_mbox_fetch(sys_mbox_t *mbox, void **msg, uint32_t timeout) {
 	uint32_t rv;
 	if (mbox == SYS_MBOX_NULL)
 		return SYS_ARCH_TIMEOUT;
@@ -177,7 +183,7 @@ uint32_t sys_arch_mbox_fetch(sys_mbox_t mbox, void **msg, uint32_t timeout) {
  *     sys_arch_mbox_fetch(mbox,msg,1)
  * although this would introduce unnecessary delays. */
 
-uint32_t sys_arch_mbox_tryfetch(sys_mbox_t mbox, void **msg) {
+uint32_t sys_arch_mbox_tryfetch(sys_mbox_t *mbox, void **msg) {
 	if (mbox == SYS_MBOX_NULL)
 		return SYS_ARCH_TIMEOUT;
 
@@ -293,21 +299,21 @@ int sio_send(int i, int j) {
 }
 
 /************************************************************************** TEST **********************/
-sys_mbox_t *tbox;
+struct mbox tbox;
 int test_init() {
 	static int init = 0;
 	if (init == 0) {
 		init = 1;
-		tbox = sys_mbox_new(30);
+		sys_mbox_new(&tbox,30);
 	}
 	return 1;
 }
 
 int test_prod(char *arg1, char *arg2) {
 	static unsigned long prod = 1;
-	int ret;
+	signed char ret;
 	test_init();
-	ret = sys_mbox_trypost(tbox, prod);
+	 sys_mbox_trypost(&tbox, prod);
 
 	if (ret == 0) {
 		DEBUG("Sucessfully produces :%d \n", prod);
@@ -322,7 +328,7 @@ int test_cons(char *arg1, char *arg2) {
 	unsigned long cons;
 
 	test_init();
-	ret = sys_arch_mbox_tryfetch(tbox, &cons);
+	sys_arch_mbox_tryfetch(&tbox, &cons);
 
 	if (ret == 0) {
 		DEBUG("Sucessfully consumed :%d \n", cons);
@@ -332,4 +338,8 @@ int test_cons(char *arg1, char *arg2) {
 	}
 	return 1;
 }
-
+unsigned int LWIP_RAND(){
+	static unsigned int i=1;
+	i=i*2;
+	return i;
+}

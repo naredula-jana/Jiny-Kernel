@@ -43,6 +43,7 @@ int sem_alloc(struct semaphore *sem,uint8_t count)
 
 	  sem->count = count;
 	  sem->sem_lock = SPIN_LOCK_UNLOCKED;
+	  sem->valid_entry = 1;
 	  ret = sc_register_waitqueue(&sem->wait_queue,"semaphore");
 	  return ret;
 }
@@ -50,28 +51,31 @@ int sem_alloc(struct semaphore *sem,uint8_t count)
 int sem_free(struct semaphore *sem)
 {
     sc_unregister_waitqueue(&sem->wait_queue);
-    return 1;
+    return 0;
 }
 /* Creates and returns a new semaphore. The "count" argument specifies
  * the initial state of the semaphore. */
-sys_sem_t sys_sem_new(uint8_t count)
+signed char  sys_sem_new(sys_sem_t *sem,uint8_t count)
 {
-    struct semaphore *sem = mm_malloc(sizeof(struct semaphore),0);
-
     sem_alloc(sem,count );
-    return sem;
+    return 0;
  }
+int sys_sem_valid(sys_sem_t *sem){
+  return sem->valid_entry;
+}
 
-
+void sys_sem_set_invalid(sys_sem_t *sem){
+	sem->valid_entry=0;
+}
 /* Deallocates a semaphore. */
-void sys_sem_free(sys_sem_t sem)
+void sys_sem_free(sys_sem_t *sem)
 {
     sc_unregister_waitqueue(&sem->wait_queue);
     mm_free(sem);
 }
 
 /* Signals a semaphore. */
-void sys_sem_signal(sys_sem_t sem)
+void sys_sem_signal(sys_sem_t *sem)
 {
     unsigned long flags;
 
@@ -82,7 +86,7 @@ void sys_sem_signal(sys_sem_t sem)
 }
 
 
-uint32_t sys_arch_sem_wait(sys_sem_t sem, uint32_t timeout_arg) {
+uint32_t sys_arch_sem_wait(sys_sem_t *sem, uint32_t timeout_arg) {
 	unsigned long flags;
 	unsigned long timeout;
 

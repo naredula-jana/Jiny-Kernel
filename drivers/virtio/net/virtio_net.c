@@ -158,6 +158,8 @@ static void virtio_net_interrupt(registers_t regs, void *private_data) {
 			(unsigned int *) &len);
 	if (addr != 0)
 		netif_rx(addr, len);
+	addBufToQueue(dev->vq[0], 0, 4096);
+    virtqueue_kick(dev->vq[0]);
 }
 
 int virtio_send_errors = 0;

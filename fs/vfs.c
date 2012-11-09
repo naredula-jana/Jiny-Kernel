@@ -119,6 +119,15 @@ static struct file *vfsOpen(unsigned char *filename, int flags, int mode) {
 	} else {
 		goto error;
 	}
+/* special files handle here before going to regular files */
+	if (ut_strcmp((unsigned char *)filename, (unsigned char *)"/dev/sockets") == 0) {
+		filep->inode = 0;
+		filep->offset = 0;
+		filep->type  = NETWORK_FILE;
+		return filep;
+	}else{
+		filep->type  = REGULAR_FILE;
+	}
 
 	inodep = fs_getInode((char *)filep->filename);
 	if (inodep == 0)
@@ -342,6 +351,10 @@ long SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
 	}
 
 	file = fd_to_file(fd);
+	if (file==0) return 0;
+	if (file->type == NETWORK_FILE){
+		return networkSockWrite(file,buff,len);
+	}
 	return fs_write(file, buff, len);
 }
 long fs_write(struct file *file, unsigned char *buff, unsigned long len) {
@@ -445,20 +458,27 @@ long SYS_fs_read(unsigned long fd, unsigned char *buff, unsigned long len) {
 		return 1;
 	}
 	file = fd_to_file(fd);
-	if ((file==0) || (vfs_fs == 0) || (vfs_fs->read==0))
-		return 0;
 	if (file == 0)
 		return 0;
+	if (file->type == NETWORK_FILE){
+		return networkSockRead(file,buff,len);
+	}
+	if ((vfs_fs == 0) || (vfs_fs->read==0))
+		return 0;
+
 	return vfsread(file, buff, len);
 }
 
 static int vfsClose(struct file *filep)
 {
     int ret;
-
-	if (filep->inode != 0) {
-		ret = vfs_fs->close(filep->inode);
-		fs_putInode(filep->inode);
+	if (filep->type == REGULAR_FILE) {
+		if (filep->inode != 0) {
+			ret = vfs_fs->close(filep->inode);
+			fs_putInode(filep->inode);
+		}
+	} else {
+		networkSockClose(filep);
 	}
 	filep->inode=0;
 	kmem_cache_free(g_slab_filep, filep);

@@ -68,3 +68,5 @@ The expensive (paranoid) way is to read back the MSR_GS_BASE value
 ---------------------------------------------------------
 
 1) keyboard ownership between sheell and userlevel threads
+------------------------------------------------------------
+- spinlock debugging as disabled because of the confligs in global variable in header file while integrating latest lwip.

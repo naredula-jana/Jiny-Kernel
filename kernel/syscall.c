@@ -9,7 +9,6 @@
  *
  */
 #include "common.h"
-#include "interface.h"
 #include "isr.h"
 
 unsigned long SYS_printf(unsigned long *args);
@@ -63,6 +62,8 @@ unsigned long SYS_getppid();
 unsigned long SYS_getpgrp();
 unsigned long SYS_exit_group();
 unsigned long SYS_wait4(void *arg1, void *arg2, void *arg3, void *arg4);
+
+
 struct pollfd {
     int   fd;         /* file descriptor */
     short events;     /* requested events */
@@ -88,8 +89,8 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 30 */
 { snull }, { snull }, { SYS_fs_dup2 }, { snull }, { SYS_nanosleep }, /* 35 = nanosleep */
 { snull }, { snull }, { snull }, { SYS_getpid }, { snull }, /* 40 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 45 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 50 */
+{ SYS_socket }, { SYS_connect }, { SYS_accept }, { SYS_sendto }, { SYS_recvfrom }, /* 45 */
+{ snull }, { snull }, { snull }, { SYS_bind }, { SYS_listen }, /* 50 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 55 */
 { SYS_sc_clone }, { SYS_sc_fork }, { snull }, { SYS_sc_execve }, { SYS_sc_exit }, /* 60 */
 { SYS_wait4 }, { SYS_sc_kill }, { SYS_uname }, { snull }, { snull }, /* 65 */

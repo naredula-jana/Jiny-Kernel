@@ -39,7 +39,7 @@ static void webserver_thread(void *p)
     while (1) {
     	int i;
         DEBUG("BEFORE accept the new connection \n");
-        session = netconn_accept(listener);
+        netconn_accept(listener,&session);
         if (session == NULL)
             continue;
 

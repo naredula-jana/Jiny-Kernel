@@ -37,9 +37,9 @@ unsigned long mm_getFreePages(int gfp_mask, unsigned long order);
 int mm_putFreePages(unsigned long addr, unsigned long order);
 int mm_printFreeAreas(char *arg1,char *arg2);
 void kmem_cache_free (kmem_cache_t *cachep, void *objp);
-extern kmem_cache_t *kmem_cache_create(const char *, long,long, unsigned long,void (*)(void *, kmem_cache_t *, unsigned long),void (*)(void *, kmem_cache_t *, unsigned long));
+extern kmem_cache_t *kmem_cache_create(const char *, size_t,size_t, unsigned long,void (*)(void *, kmem_cache_t *, unsigned long),void (*)(void *, kmem_cache_t *, unsigned long));
 void *kmem_cache_alloc (kmem_cache_t *cachep, int flags);
-void *mm_malloc (long size, int flags);
+void *mm_malloc (size_t size, int flags);
 void mm_free (const void *objp);
 #define alloc_page() mm_getFreePages(0, 0)
 #define memset ut_memset
@@ -154,5 +154,32 @@ int init_networking();
 int registerNetworkHandler(int type, int (*callback)(unsigned char *buf, unsigned int len, void *private_data), void *private_data);
 int netif_rx(unsigned char *data, unsigned int len);
 int netif_tx(unsigned char *data, unsigned int len);
+/************************ socket layer interface ********/
+struct sockaddr {
+	uint16_t family;
+	uint16_t sin_port;
+	uint32_t addr;
+	char     sin_zero[8];  // zero this if you want to
 
+};
+struct Socket_API{
+	void* (*open)(int type);
+	int (*bind)(void *conn,struct sockaddr *s);
+	void* (*accept)(void *conn);
+	int (*listen)(void *conn,int len);
+    int (*write)(void *conn, unsigned char *buff, unsigned long len);
+    int (*read)(void *conn, unsigned char *buff, unsigned long len);
+	int (*close)(void *conn);
+};
+int register_to_socketLayer(struct Socket_API *api);
+int networkSockClose(struct file *file);
+int networkSockRead(struct file *file, unsigned char *buff, unsigned long len);
+int networkSockWrite(struct file *file, unsigned char *buff, unsigned long len);
+int SYS_socket(int family,int type, int z);
+int SYS_listen(int fd,int length);
+int SYS_accept(int fd);
+int SYS_bind(int fd, struct sockaddr  *addr, int len);
+int SYS_connect(int fd);
+int SYS_sendto(int fd);
+int SYS_recvfrom(int fd);
 #endif

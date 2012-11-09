@@ -1,6 +1,8 @@
 Installing :
 1) - install the source in /opt_src/Jiny-Kernel/....
-2) - install the lwip source from /opt_src/Jiny-Kernel/util/lwip.tar.gz in to /opt_src/lwip/
+2) - install the lwip source:
+        a) untar lwip.tar.gz in any directory
+		b) create soft link ln -s ../lwip-..  /opt_src/lwip  
  -------------------------
  Compiling Source Code:
  cd /opt_src/Jiny-Kernel

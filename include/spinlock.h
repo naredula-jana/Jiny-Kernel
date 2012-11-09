@@ -1,7 +1,7 @@
 #ifndef __ASM_SPINLOCK_H
 #define __ASM_SPINLOCK_H
-#define SPINLOCK_DEBUG 1
-#include "task.h"
+//#define SPINLOCK_DEBUG 1
+//#include "task.h"
 typedef struct {
         volatile unsigned int lock;
         unsigned long stat_count;

@@ -126,3 +126,105 @@ int init_networking(){
 	ret = sc_createKernelThread(netRx_BH, 0, (unsigned char *)"netRx_BH");
 	return 1;
 }
+/*******************************************************************************************
+Socket layer
+********************************************************************************************/
+
+static struct Socket_API *socket_api=0;
+static int socketLayerRegistered=0;
+int register_to_socketLayer(struct Socket_API *api){
+	if (api==0) return 0;
+	socket_api=api;
+	socketLayerRegistered=1;
+	return 1;
+}
+
+int networkSockClose(struct file *file){
+	if (socketLayerRegistered==0) return 0; /* TCP/IP sockets are not supported */
+	if (socket_api->close == 0) return 0;
+	return socket_api->close(file->private);
+}
+
+int networkSockRead(struct file *file, unsigned char *buff, unsigned long len){
+	if (socketLayerRegistered==0) return 0; /* TCP/IP sockets are not supported */
+	if (socket_api->read == 0) return 0;
+	return socket_api->read(file->private, buff, len);
+}
+
+int networkSockWrite(struct file *file, unsigned char *buff, unsigned long len){
+	if (socketLayerRegistered==0) return 0; /* TCP/IP sockets are not supported */
+	if (socket_api->write == 0) return 0;
+	return socket_api->write(file->private, buff, len);
+}
+/*
+ * socket(AF_INET,SOCK_STREAM,0);
+ */
+int SYS_socket(int family,int type, int z){
+	void *conn;
+	if (socketLayerRegistered==0) return 0; /* TCP/IP sockets are not supported */
+	SYSCALL_DEBUG("socket : family:%x type:%x arg3:%x\n",family,type,z);
+	if (socket_api->open){
+		conn = socket_api->open(type);
+		if (conn==0) return -2;
+	}else{
+		return -1;
+	}
+
+	int i= SYS_fs_open("/dev/sockets",0,0);
+	struct file *file = g_current_task->mm->fs.filep[i];
+	if (file == 0){
+		socket_api->close(conn);
+		return -3;
+	}
+	file->private = conn;
+	return i;
+}
+
+int SYS_bind(int fd, struct sockaddr  *addr, int len){
+	if (socketLayerRegistered==0) return 0; /* TCP/IP sockets are not supported */
+	SYSCALL_DEBUG("Bind fd:%d addr:%x len\n",fd,addr,len);
+	if (socket_api->bind == 0) return 0;
+
+	struct file *file = g_current_task->mm->fs.filep[fd];
+	if (file==0) return -1;
+	return socket_api->bind(file->private, addr);
+}
+
+int SYS_accept(int fd){
+	struct file *file;
+	if (socketLayerRegistered==0) return 0; /* TCP/IP sockets are not supported */
+	SYSCALL_DEBUG("accept %d \n",fd);
+	if (socket_api->accept == 0) return 0;
+	file = g_current_task->mm->fs.filep[fd];
+	if (file==0) return -1;
+	void *conn=socket_api->accept(file->private);
+	if (conn==0)return -1;
+	int i= SYS_fs_open("/dev/sockets",0,0);
+	if (i==0) {
+		socket_api->close(conn);
+	}
+	file = g_current_task->mm->fs.filep[i];
+	file->private = conn;
+	return i;
+}
+
+int SYS_listen(int fd,int length){
+	SYSCALL_DEBUG("listen fd:%d len:%d\n",fd,length);
+	if (socketLayerRegistered==0) return 0; /* TCP/IP sockets are not supported */
+    return 1;
+}
+int SYS_connect(fd) /* TODO */
+{
+	SYSCALL_DEBUG("connect : TODO\n");
+return 1;
+}
+int SYS_sendto(fd) /* TODO */
+{
+	SYSCALL_DEBUG("SENDTO fd:%d\n",fd);
+return 1;
+}
+int SYS_recvfrom(fd) /* TODO */
+{
+	SYSCALL_DEBUG("SENDTO fd:%d \n",fd);
+return 1;
+}

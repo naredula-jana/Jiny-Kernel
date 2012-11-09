@@ -69,13 +69,17 @@ extern unsigned long g_hostShmLen;
 struct file;
 struct inode;
 
-
+enum {
+	REGULAR_FILE=1,
+	NETWORK_FILE=2
+};
 struct file {
 	unsigned char filename[MAX_FILENAME];
 	int type;
 	unsigned long offset;
 	addr_t *addr;
 	struct inode *inode;
+	void *private;
 };
 
 struct inode {

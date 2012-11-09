@@ -13,6 +13,7 @@
 
 //#include "common.h"
 #include "mm.h"
+#include "ipc.h"
 
 
 #define TASK_RUNNING            0
@@ -51,10 +52,7 @@ struct mm_struct {
 	unsigned long brk_addr, brk_len;
 	unsigned long anonymous_addr;
 };
-typedef struct queue{
-	struct list_head head;
-	char *name;
-}queue_t;
+
 
 // This structure defines a 'task' - a process.
 #define MAX_TASK_NAME 40

@@ -20,10 +20,12 @@ struct mbox {
     struct semaphore write_sem;
     int writer;
     int reader;
+    int valid_entry;
 };
 
-typedef struct mbox *sys_mbox_t;
-#define SYS_MBOX_NULL ((sys_mbox_t) 0)
+#define strlen ut_strlen
+typedef struct mbox sys_mbox_t;
+#define SYS_MBOX_NULL ((sys_mbox_t *) 0)
 
 typedef struct thread *sys_thread_t;
 
