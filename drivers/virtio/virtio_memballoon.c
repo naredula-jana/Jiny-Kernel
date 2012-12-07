@@ -8,6 +8,7 @@
 #include "virtio.h"
 #include "virtio_ring.h"
 #include "virtio_pci.h"
+#include "mach_dep.h"
 static struct virtio_balloon_config {
 	uint32_t num_pages ;
 	uint32_t actual ;

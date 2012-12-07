@@ -22,7 +22,7 @@ extern int sc_register_waitqueue(queue_t *waitqueue, char *name);
 extern int sc_unregister_waitqueue(queue_t *waitqueue);
 int sc_wakeUp(queue_t *waitqueue);
 int sc_wait(queue_t *waitqueue, unsigned long ticks);
-unsigned long  sc_sleep( long ticks); /* each tick is 100HZ or 10ms */
+int sc_sleep( long ticks); /* each tick is 100HZ or 10ms */
 unsigned long SYS_sc_fork();
 unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int flags,void *args);
 int SYS_sc_exit(int status);

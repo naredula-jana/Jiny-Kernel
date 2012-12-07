@@ -265,19 +265,11 @@ int sc_wait(queue_t *waitqueue, unsigned long ticks) {
 	else
 		return g_current_task->sleep_ticks;
 }
-unsigned long sc_sleep(long ticks) /* each tick is 100HZ or 10ms */
+int sc_sleep(long ticks) /* each tick is 100HZ or 10ms */
 /* TODO : return number ticks elapsed  instead of 1*/
 /* TODO : when multiple user level thread sleep it is not returning in correct time , it may be because the idle thread halting*/
 {
-	unsigned long flags;
-
-	spin_lock_irqsave(&sched_lock, flags);
-	g_current_task->state = TASK_INTERRUPTIBLE;
-	_add_to_waitqueue(&timer_queue, g_current_task, ticks);
-	spin_unlock_irqrestore(&sched_lock, flags);
-
-	sc_schedule();
-	return 1;
+	return sc_wait(&timer_queue, ticks);
 }
 int Jcmd_threadlist_stat(char *arg1, char *arg2) {
 	unsigned long flags;
@@ -294,8 +286,8 @@ int Jcmd_threadlist_stat(char *arg1, char *arg2) {
 		else
 			ut_printf("(%d)", task->pid);
 
-		ut_printf("%d %x %x %x %x %d %s %d stat(%d) %d\n",task->state, task, task->ticks, task->mm, task->mm->pgd, task->mm->count.counter, task->name, task->sleep_ticks,
-				task->stats.ticks_consumed,task->cpu);
+		ut_printf("%d %x %x %x %x %d %s %d stat(%d) %d %d\n",task->state, task, task->ticks, task->mm, task->mm->pgd, task->mm->count.counter, task->name, task->sleep_ticks,
+				task->stats.ticks_consumed,task->cpu, task->sleep_ticks);
 	}
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
 		if (wait_queues[i] == 0) continue;
@@ -906,6 +898,7 @@ static unsigned long  _schedule(unsigned long flags) {
 	prev->cpu=0xffff;
 	/* finally switch the task */
 	switch_to(prev, next, prev);
+
 	/* from the next statement onwards should not use any stack variables, new threads launched will not able see next statements*/
 	return g_current_task->flags;
 }

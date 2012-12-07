@@ -1,5 +1,6 @@
 #include "common.h"
 #include "task.h"
+#include "mach_dep.h"
 
 #include "descriptor_tables.h"
 

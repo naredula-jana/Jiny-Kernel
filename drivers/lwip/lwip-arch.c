@@ -70,9 +70,9 @@ signed char sys_mbox_new(sys_mbox_t *mbox, int size) {
 		size = 2;
 	mbox->count = size + 1; /* this is to create one empty slot , so as always  writer and reader does not meet*/
 	mbox->messages = mm_malloc(sizeof(void*) * (size + 1), 0);
-	sem_alloc(&mbox->read_sem, 0);
+	sys_sem_new(&mbox->read_sem, 0);
 	mbox->reader = 0;
-	sem_alloc(&mbox->write_sem, size);
+	sys_sem_new(&mbox->write_sem, size);
 	mbox->writer = 0;
 	mbox->valid_entry = 1;
 	return 0; /* should return zero if everything is ok */
@@ -83,8 +83,8 @@ signed char sys_mbox_new(sys_mbox_t *mbox, int size) {
  * programming error in lwIP and the developer should be notified. */
 void sys_mbox_free(sys_mbox_t *mbox) {
 	mm_free(mbox->messages);
-	sem_free(&mbox->read_sem);
-	sem_free(&mbox->write_sem);
+	sys_sem_free(&mbox->read_sem);
+	sys_sem_free(&mbox->write_sem);
 }
 int sys_mbox_valid(sys_mbox_t *mbox){
 	return mbox->valid_entry;

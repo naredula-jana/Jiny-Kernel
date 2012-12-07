@@ -32,9 +32,6 @@ int mutexLock(void *p);
 int mutexUnLock(void *p);
 int mutexDestroy(void *p);
 
-int sem_alloc(struct semaphore *sem, unsigned char count);
-int sem_free(struct semaphore *sem);
-
 signed char sys_sem_new(sys_sem_t *sem,uint8_t count);
 void sys_sem_free(sys_sem_t *sem);
 void sys_sem_signal(sys_sem_t *sem);

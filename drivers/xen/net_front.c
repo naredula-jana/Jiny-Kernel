@@ -112,7 +112,7 @@ void * init_netfront( void(*thenetif_rx)(unsigned char* data,
 	DEBUG("NEW net TX ring size %d\n", NET_TX_RING_SIZE);
 	DEBUG("net RX ring size %d\n", NET_RX_RING_SIZE);
 
-	sem_alloc(&dev->tx_sem, NET_TX_RING_SIZE);  /* TODO need to free the sem */
+	sys_sem_new(&dev->tx_sem, NET_TX_RING_SIZE);  /* TODO need to free the sem */
 	dev->tx_sem.count=NET_TX_RING_SIZE;
 	for (i = 0; i < NET_TX_RING_SIZE; i++) {
 		add_id_to_freelist(i, dev->tx_freelist);

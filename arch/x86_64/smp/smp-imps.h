@@ -14,7 +14,7 @@
 
 #ifndef _SMP_IMPS_H
 #define _SMP_IMPS_H
-
+#include "mach_dep.h"
 /* make sure "apic.h" is included */
 #ifndef _APIC_H
 #error		Must include "apic.h" before "smp-imps.h"
@@ -263,16 +263,7 @@ extern void ut_printf (const char *format, ...);
 #define CMOS_WRITE_BYTE cmos_write_byte
 #define CMOS_READ_BYTE(x) cmos_read_byte(x)
 
-static inline unsigned long msr_read(unsigned int msr)
-{
-	unsigned int eax, edx;
 
-  __asm__ volatile ("rdmsr\n"
-                    : "=a" (eax), "=d" (edx)
-                    : "c" (msr));
-
-  return (((unsigned long)edx << 32) | eax);
-}
 
 #define READ_MSR_LO msr_read
 

@@ -9,6 +9,7 @@
 #include "../virtio_ring.h"
 #include "../virtio_pci.h"
 #include "9p.h"
+#include "mach_dep.h"
 
 static queue_t p9_waitq;
 virtio_dev_t *p9_dev = 0;

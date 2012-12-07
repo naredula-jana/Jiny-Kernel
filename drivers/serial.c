@@ -1,4 +1,5 @@
 #include "common.h"
+#include "mach_dep.h"
 //// io ports
 #define DATA_BITS_8 3
 #define STOP_BITS_1 0

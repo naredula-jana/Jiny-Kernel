@@ -13,6 +13,7 @@
 #include "task.h"
 #include "vfs.h"
 #include "interface.h"
+#include "mach_dep.h"
 
 typedef struct {
 	char *usage;
@@ -38,7 +39,7 @@ static int sh_pci(unsigned char *arg1, unsigned char *arg2);
 
 int conf_set(unsigned char *arg1, unsigned char *arg2);
 int scan_pagecache(unsigned char *arg1, unsigned char *arg2);
-
+static int debug_trace(unsigned char *arg1, unsigned char *arg2);
 
 int g_conf_debug_level = 1;
 
@@ -67,9 +68,10 @@ int cmd(unsigned char *arg1,unsigned  char *arg2) {
 		ut_printf("Not Found: %s\n", arg1);
 	return ret;
 }
-commands_t cmd_list[] = { { "help      ", "HELP MENU", "help", print_help }, {
-		"set  <var> <value>", "set config variables", "set", conf_set }, {
-		"cmd  <cmd> <arg1> <arg2>", "execute commands", "cmd", cmd }, {
+commands_t cmd_list[] = { { "help      ", "HELP MENU", "help", print_help },
+		{"set  <var> <value>", "set config variables", "set", conf_set },
+		{"debug  ", "debug ", "debug", debug_trace },
+		{"cmd  <cmd> <arg1> <arg2>", "execute commands", "cmd", cmd }, {
 		"c <prog>  ", "Create test thread", "c", sh_create }, { "kill <pid> ",
 		"kill process", "kill", sh_kill }, { "scan        ", "scan page cache ",
 		"scan", scan_pagecache }, { "mem        ", "memstat", "mem",
@@ -131,12 +133,26 @@ static int sh_cp(unsigned char *arg1, unsigned char *arg2) {
 	}
 	return 0;
 }
+static void ipc_thr(){
+	ipc_test1();
+	SYS_sc_exit(22);
+}
+int start_debugtrace();
+static int debug_trace(unsigned char *arg1, unsigned char *arg2) {
+	int ret=4;
+	int *p;
+	p=5;
+	*p=2;
+	ret = sc_createKernelThread(ipc_thr, 0, (unsigned char *)"ipc_test");
+
+	return 1;
+}
 static int sh_pci(unsigned char *arg1, unsigned char *arg2) {
 	//device_t dev;
 	//list_pci();
 
 	init_devClasses();
-return 1;
+    return 1;
 }
 static int sh_del(unsigned char *arg1, unsigned char *arg2) {
 	int fd;

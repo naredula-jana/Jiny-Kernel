@@ -11,6 +11,7 @@
 //#include "task.h"
 #include "common.h"
 #include "isr.h"
+#include "mach_dep.h"
 enum fault_idx {
   FLT_DE  = 0, /* Divide-by-Zero-Error */
   FLT_DB  = 1, /* Debug */
@@ -36,7 +37,7 @@ enum fault_idx {
   FLT_SX = 30, /* Security Exception */
   /* #31 is reserved */
 };
-//addr_t dummy_data[124596]={0xabcd}; /* TODO : REMOVE me later this to place data in seprate area */
+
 uint32_t faults_with_errcode =
   (POW2(FLT_DF) | POW2(FLT_TS) | POW2(FLT_NP) |
    POW2(FLT_SS) | POW2(FLT_GP) | POW2(FLT_PF) |
@@ -59,6 +60,7 @@ extern int getcpuid();
 long fault_ip_g=0;
 long fault_error_g=0;
 long fault_num_g=0;
+struct fault_ctx cpu_ctx;
 static void gpFault(struct fault_ctx *ctx)
 {
 
@@ -113,9 +115,10 @@ int Jcmd_irq_stat(char *arg1,char *arg2)
 		if (g_interrupt_handlers[i].action == 0
 				&& g_interrupt_handlers[i].stat[j].num_error == 0)
 			continue;
-		if (i < 32 && g_interrupt_handlers[i].stat[j].num_error == 0
-				&& g_interrupt_handlers[i].stat[j].num_irqs == 0)
+#if 1
+		if (i < 32 && g_interrupt_handlers[i].action == gpFault)
 			continue;
+#endif
 		ut_printf(" %3d: ",i);
 		for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
 			ut_printf("[%8d %3d] ",g_interrupt_handlers[i].stat[j].num_irqs,g_interrupt_handlers[i].stat[j].num_error);
@@ -132,6 +135,7 @@ void ar_registerInterrupt(uint8_t n, isr_t handler,char *name, void *data)
 	g_interrupt_handlers[n].name=(unsigned char *)name;
 	g_interrupt_handlers[n].private_data = data;
 }
+
 void DisableTimer(void)
 {
 	outb(0x21, inb(0x21) | 1);
@@ -157,21 +161,26 @@ static void fill_fault_context(struct fault_ctx *fctx, void *rsp,
 
 	/* An address RSP pointed to berfore fault occured. */
 	fctx->old_rsp = p;
+	cpu_ctx.gprs=fctx->gprs;
+	cpu_ctx.istack_frame=fctx->istack_frame ;
 }
-
+static int stack_depth=0;
 // This gets called from our ASM interrupt handler stub.
 void ar_faultHandler(void *p, unsigned int  int_no)
 {
 	struct fault_ctx ctx;
 
-	asm volatile("cli"); /* SOME BAD happened STOP all th einterrupts */
+	asm volatile("cli"); /* SOME BAD happened STOP all the interrupts */
 	fill_fault_context(&ctx,p,int_no);
 	if (g_interrupt_handlers[int_no].action != 0)
 	{
+		stack_depth++;
 		isr_t handler = g_interrupt_handlers[int_no].action;
 		handler(&ctx);
 		g_interrupt_handlers[int_no].stat[getcpuid()].num_irqs++;
-		if (int_no ==14 ) return ; /* return properly for page fault */
+
+		stack_depth--;
+		if (int_no ==14 | int_no==1) return ; /* return properly for page fault or debug fault */
 	}else
 	{
 		g_interrupt_handlers[int_no].stat[getcpuid()].num_error++;
@@ -203,6 +212,7 @@ static void i8259a_mask_irq(unsigned int irq)
 #endif
 void ar_irqHandler(void *p,unsigned int int_no)
 {
+
 	if (int_no > 100) { // APIC or MSI based interrupts
 		int isr_status= read_apic_isr(int_no); // TODO: make use of isr_status
 	} else {
@@ -243,6 +253,7 @@ void ar_irqHandler(void *p,unsigned int int_no)
 	local_apic_send_eoi();
 #endif
 	}
+	//start_debug();
 	//do_softirq();
 }
 extern void timer_callback(registers_t regs);

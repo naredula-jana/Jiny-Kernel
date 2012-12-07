@@ -67,6 +67,9 @@ The expensive (paranoid) way is to read back the MSR_GS_BASE value
 1:	ret
 ---------------------------------------------------------
 
-1) keyboard ownership between sheell and userlevel threads
+1) keyboard ownership between shell and userlevel threads
 ------------------------------------------------------------
+LWIP TODO
 - spinlock debugging as disabled because of the confligs in global variable in header file while integrating latest lwip.
+- arch api need to re-implement to suit newer version
+- deltion of buffer while sending and recving the packet.

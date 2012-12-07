@@ -9,6 +9,7 @@
 #include "../virtio_ring.h"
 #include "../virtio_pci.h"
 #include "virtio_net.h"
+#include "mach_dep.h"
 
 int test_virtio_nob = 0;
 

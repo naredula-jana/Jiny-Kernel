@@ -13,6 +13,7 @@
 #include "common.h"
 #include "mm.h"
 #include "task.h"
+#include "mach_dep.h"
 
 int pci_write(pci_addr_t *d, uint16_t pos, uint8_t len, void *buf){
 	uint16_t port;

@@ -363,7 +363,7 @@ int load_LwipTcpIpStack() {
 	network_started = 1;
 
 	DEBUG("LWIP: Waiting for network.\n");
-	sem_alloc(&tcpip_is_up, 0); /* TODO : need to free the sem */
+	sys_sem_new(&tcpip_is_up, 0); /* TODO : need to free the sem */
 
 	DEBUG(
 			"LWIP: IP %x netmask %x gateway %x.\n", ntohl(ipaddr.addr), ntohl(netmask.addr), ntohl(gw.addr));

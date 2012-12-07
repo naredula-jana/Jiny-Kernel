@@ -1,39 +1,7 @@
 #include "common.h"
 #include "task.h"
 #include "descriptor_tables.h"
-/* MSRs */
-#define MSR_EFER         0xC0000080
-#define MSR_STAR         0xC0000081
-#define MSR_LSTAR        0xC0000082
-#define MSR_CSTAR        0xC0000083
-#define MSR_SF_MASK      0xC0000084
-#define MSR_FS_BASE      0xC0000100
-#define MSR_GS_BASE      0xC0000101
-#define MSR_KERN_GS_BASE 0xC0000102
-#define MSR_SYSCFG       0xC0010010
-#define MSR_APIC_BAR     0x0000001B /* APIC base address register */
-
-#define EFER_SCE   0x00  /* System Call Extensions */
-
-
-static inline uint64_t msr_read(uint32_t msr)
-{
-  uint32_t eax, edx;
-
-  __asm__ volatile ("rdmsr\n"
-                    : "=a" (eax), "=d" (edx)
-                    : "c" (msr));
-
-  return (((uint64_t)edx << 32) | eax);
-}
-
-static inline void msr_write(uint32_t msr, uint64_t val)
-{
-	__asm__ volatile ("wrmsr\n"
-			:: "c" (msr), "a" (val & 0xffffffff),
-			"d" (val >> 32));
-}
-
+#include "mach_dep.h"
 
 static void init_fs_and_gs(int cpuid)
 {

@@ -13,6 +13,7 @@
 #include "pci.h"
 #include "mm.h"
 #include "task.h"
+#include "mach_dep.h"
 
 
 /* SLAB cache for vm_area_struct structures */
@@ -20,14 +21,14 @@ kmem_cache_t *vm_area_cachep;
 /* SLAB cache for mm_struct structures (tsk->mm) */
 kmem_cache_t *mm_cachep;
 int brk_pnt=0;
+uint32_t g_cpu_features;
 int init_kernel(unsigned long end_addr)
 {
 	int ret;
 	ut_printf("Initialising: ISR descriptors.. \n");
 	init_descriptor_tables();
 
-	ut_printf("Initialising: serial\n");
-	init_serial();
+
 
 	ut_printf("Initialising: MEMORY physical memory highest addrss:%x \n",end_addr);
 	init_memory(end_addr);
@@ -44,6 +45,9 @@ int init_kernel(unsigned long end_addr)
 
 	ut_printf("Initialising: keyboard \n");
 	init_driver_keyboard(); /* this should be done after wait queues in init_tasking */
+
+	ut_printf("Initialising: serial\n");
+	init_serial();
 
 #ifdef MEMLEAK_TOOL
 	kmemleak_init();
@@ -80,10 +84,11 @@ int init_kernel(unsigned long end_addr)
 	ut_printf("Initialization completed \n");
 
 
-#ifdef NETWORKING
+	uint32_t val[5];
+	do_cpuid(1,val);
+	ut_printf("cpuid result %x : %x :%x :%x \n",val[0],val[1],val[2],val[3]);
+	g_cpu_features=val[3]; /* edx */
 
-
-#endif
 
 	return 1 ;
 }

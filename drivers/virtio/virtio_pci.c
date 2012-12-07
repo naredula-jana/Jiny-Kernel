@@ -10,6 +10,7 @@
 #include <virtio_ring.h>
 #include <virtio_pci.h>
 #include <net/virtio_net.h>
+#include "mach_dep.h"
 
 #define MAX_VIRIO_DEVICES 10
 int virtio_dev_count = 0;
