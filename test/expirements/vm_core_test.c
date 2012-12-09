@@ -3,7 +3,7 @@
 unsigned long test_pages[MAX_TEST_PAGES];
 static int start_polluting_memory=0;
 static struct addr_list dirty_page_list;
-
+/* This Thread clear the dirty bit and wait till the other thread touches the memory, after that scans the page table for pages that are dirted/modified */
 int generate_vm_core_thread() {
 	/*  create some memory that will be volatile */
 	int i, ret;
@@ -15,7 +15,7 @@ int generate_vm_core_thread() {
 		test_pages[i] = test_pages[0] + PAGE_SIZE * i;
 	}
 
-	/* 1.clear the dirty bits in page table(exclude page cache) and start the memory_polluting_thread to pollute page */
+/* 1.clear the dirty bits in page table(exclude page cache) and start the memory_polluting_thread to pollute page */
 	start_addr = test_pages[0];
 	end_addr = test_pages[MAX_TEST_PAGES - 1] + PAGE_SIZE;
 
@@ -23,11 +23,11 @@ int generate_vm_core_thread() {
 			&dirty_page_list); /* this function  clears  the dirty bits*/
 
 	start_polluting_memory = 1;
-	/* 2.copy relavent  pages to disk, this step should take atleast few seconds say 5 to 15 seconds. */
+/* 2.copy relavent  pages to disk, this step should take atleast few seconds say 5 to 15 seconds. */
 
-	while (start_polluting_memory == 1)
+	while (start_polluting_memory == 1) /* wait for other thread to complete touching of memory */
 		;
-	/* 3.check the pagetable for the volatile pages and print it. */
+/* 3.check the pagetable for the volatile pages and print it out. */
 
 	dirty_page_list.total = 0;
 	ret = ar_scanPtes((unsigned long) start_addr, (unsigned long) end_addr, 0,
