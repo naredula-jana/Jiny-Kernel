@@ -14,7 +14,7 @@
 #include "vfs.h"
 #include "interface.h"
 #include "mach_dep.h"
-
+#include "../test/expirements/vm_core_test.c"
 typedef struct {
 	char *usage;
 	char *help;
@@ -32,13 +32,14 @@ static int sh_alloc_mem(unsigned char *arg1, unsigned char *arg2);
 static int sh_free_mem(unsigned char *arg1, unsigned char *arg2);
 static int sh_sync(unsigned char *arg1, unsigned char *arg2);
 static int sh_del(unsigned char *arg1, unsigned char *arg2);
+static int sh_vmcore_test(unsigned char *arg1, unsigned char *arg2);
 
 static int sh_test1(unsigned char *arg1, unsigned char *arg2);
 static int sh_mmap(unsigned char *arg1, unsigned char *arg2);
 static int sh_pci(unsigned char *arg1, unsigned char *arg2);
 
 int conf_set(unsigned char *arg1, unsigned char *arg2);
-int scan_pagecache(unsigned char *arg1, unsigned char *arg2);
+int scan_pagetable(unsigned char *arg1, unsigned char *arg2);
 static int debug_trace(unsigned char *arg1, unsigned char *arg2);
 
 int g_conf_debug_level = 1;
@@ -69,12 +70,13 @@ int cmd(unsigned char *arg1,unsigned  char *arg2) {
 	return ret;
 }
 commands_t cmd_list[] = { { "help      ", "HELP MENU", "help", print_help },
+		{ "vmcore      ", "vmcore", "vmcore", sh_vmcore_test },
 		{"set  <var> <value>", "set config variables", "set", conf_set },
 		{"debug  ", "debug ", "debug", debug_trace },
 		{"cmd  <cmd> <arg1> <arg2>", "execute commands", "cmd", cmd }, {
 		"c <prog>  ", "Create test thread", "c", sh_create }, { "kill <pid> ",
 		"kill process", "kill", sh_kill }, { "scan        ", "scan page cache ",
-		"scan", scan_pagecache }, { "mem        ", "memstat", "mem",
+		"scan", scan_pagetable }, { "mem        ", "memstat", "mem",
 		mm_printFreeAreas }, { "mmap <file> <addr>", "mmap file", "mmap",
 		sh_mmap }, { "amem <order>", "mem allocate ", "amem", sh_alloc_mem }, {
 		"fmem <address>", "mem allocate ", "fmem", sh_free_mem },
@@ -270,8 +272,8 @@ static int sh_alloc_mem(unsigned char *arg1, unsigned char *arg2) {
 	unsigned long addr;
 
 	order = ut_atol(arg1);
-	addr = mm_getFreePages(0, order);
-	ut_printf(" alloc order:%x addr:%x \n", order, addr);
+	addr = mm_getFreePages(MEM_CLEAR, order);
+	ut_printf(" calloc order:%x addr:%x \n", order, addr);
 	return 1;
 }
 static int sh_free_mem(unsigned char *arg1, unsigned char *arg2) {
@@ -312,7 +314,16 @@ static int exec_thread(unsigned char *arg1, unsigned char *arg2) {
 	ut_printf(" ERROR: COntrol Never Reaches\n");
 	return 1;
 }
+static int sh_vmcore_test(unsigned char *arg1, unsigned char *arg2){
+	int ret;
+	tmp_arg[0] = arg1;
+	tmp_arg[1] = arg2;
+	tmp_arg[2] = 0;
 
+	ret = sc_createKernelThread(generate_vm_core_thread, &tmp_arg, arg1);
+	ret = sc_createKernelThread(memory_pollute_thread, &tmp_arg, arg1);
+    return 1;
+}
 static int sh_create(unsigned char *arg1, unsigned char *arg2) {
 	int ret;
 

@@ -1,101 +1,64 @@
-JINY KERNEL 0.1  (JINY : Jana's tINY  toy kernel)
+JINY KERNEL   (JINY : Jana's tINY  toy kernel)
 
 1) WHAT IS JINY?.
- Jiny is a small foot print Toy kernel, initally will be running on a virtual environment and with limited functionality on a baremetal. It is designed to run efficently with small foot print on a virtual environment.
+ Jiny is a small foot print Toy kernel, It is yet another Unix based kernel. It will be specialised more for virtual machine environment but can also use on baremetal. 
   
 2) ON WHAT HARDWARE DOES IT RUN?
- It will be fully tested for x86-64. partially done for x86-32 but discontinued.
+ It was fully tested for x86-64. partially done for x86-32.
 
 3) For What purpose JINY will be used initially?
  JINY will be used initially 
 	a) To model the page cache(MRU+LRU) suitable for hadoop like applications.
 	b) To model Host based filesystem(HFS): HFS is filesystem run in guest OS but does file i/o using the shared memory between the guest and host os. HFS does not need any block drivers, it communicated with block devices using the shared memory between guest and host OS.  
 	c) Benchmarking virtio net performance.
+	d) To model Centralised page cache shared by different vm's.
 ------------------------------------------
 
 The goals of the project are:
-	1) It should be monalitic kernel with a small footprint. 
+	1) It should be monalitic unlix based kernel with a small footprint. 
 	2) powerful command line and debug environment.
 	3) Higly modularise:  To define well defined interface between subsystems , so as any subsystems can be replaced by keeping the interface same. (see include/interface.h for more details.
-	4) virtualization features like virtio,xen para drivers, hot cpu plugin, hot mem plugin, hot network plugin.
-	5) Running linux compiled Busy box application on top of jiny as it is. (partially completed).
+	4) Virtualization friendly: Rich virtualization features like virtio,xen para drivers, hot cpu plugin, hot mem plugin, hot network plugin.
+	5) Running directly linux based application like  Busy box on top of jiny as it is, for this need support almost all system call. (partially completed).
 
 ------------------------------------------
 Feature Currently Available:
 
-Page Cache : 
-   - LRU and MRU based (based on the research/published paper)
+Page Cache: 
+   - LRU and MRU based (based on the below published paper)
    
-File System : 
+File System: 
    - 9p
    - Host based file system based on ivshm(Inter Vm Shared Memory) 
    
 Virtualization:
     - Xen : xenbus, network driver using xen paravirtualised.
-    - KVM : virtio + P9
+    - KVM : virtio + P9 filesystem
     - KVM : virtio + Network (test server with udp stack(tcp/ip))
     - KVM : virtio + memory ballooning
       
-SMP :
+SMP:
    - APIC,MSIX
    
 Networking:
    - XEN: TCP/IP stack(from LWIP) integrated with XEN paravirtualised Network driver .
+   - KVM + LWIP4.0
 
-User level :
+User level:
    - user app(ring-3) can run in user mode without libc and without shared libs.
-   - small user app compiled with libc statically can RUN sucessfully.
+   - app compiled statically on linux can RUN sucessfully without using advanced system calls.
 
     
 TODO Features:
-  - cpu-hotplug
-  - virtio+lwip
-  - clock
-  - memory-hotplug(partial - memory ballooning)
-  - running busybox(partial):trying busybox with statically compiled(halfway)- implementing necessary system calls.
+  - cpu-hotplug.
+  - clock enhancements.
+  - centralised page cache.
+  - memory-hotplug(partially done - memory ballooning).
+  - running linux based app like busybox(partially completed):- implementing necessary system calls(basic calls are present , advanced like futex are need to be developed).
 
------------------------------------------
-page cache Algorithm based on paper:
-      Every file is tagged as Long lived(LRU) or short lived(MRU). Based on the tag, the pages of file will processed differently in the page cache. Page cache algorithm tries to evacuate the Short lived files as soon as possible to create a space for the long lived files. From the Application point of view, a file is tagged by using fadvise call after the open call. This approach of tagging will help applications like hadoop to retain the temporary files as long as possible in dirty state before they are removed, this saves disk io both interms of read and write.
-
-Data Structures:
-	page : Every page containg age attribute, age is updated when ever the page is accessed(read) or dirted(write) depending on type of file.If age of page made eldest means page is going to evacuate from the system very soon. The value of age can varies from 1(youngest) to n(eldest). n is configirable default may be 100. 
-	queues : active,inactive,LRU dirty,MRU dirty and free queue.
-
-Tasks:
-	1) when page is read:
-		if it is MRU type the age is changed to eldest and moved to end of inactive list.
-		if it is LRU it is changed to youngest and moved to end of acive list.
-	2) when page is written:
-		LRU dirty : if it is LRU type moved to end of LRU dirty queue and made youngest.
-		MRU dirty : if it is MRU type, moved to end of MRU dirty queue and made eldest.
-	3) when fle is synced using fdatasync:
-		If the file is LRU: after flushing the page, the page is made youngest and queued at the end of active list.
-		If the file is MRU: after flushing the page, the page is made eldest and queued at the end of inactive list.
-	4) Background house keeper thread: flush the dirty pages and create enough free pages for page cache.
-		a) It scans the pagetables periodically and updates the age.( this is needed only if the file is mmaped. TODO : currently partially implemented).
-		b) flush MRU dirty queues: MRU dirty queue is flushed as soon as possible whenever disk bandwidth is available.
-		c) flush LRU dirty queue LAZILY : It is flushed only when the page cache is running short of free pages and MRU dirty queue is empty or amount of LRU dirty pages execeed threshould.
-					    
-Interface functions:
-	Initialization and stat:
-		int pc_init(unsigned char *start_addr,unsigned long len);
-		int pc_stats(char *arg1,char *arg2);
-	When page is written:
-		int pc_insertPage(struct inode *inode,struct page *page); /* this api is used while reading unpresent page  */
-		int pc_removePage(struct page *page); 
-		int pc_pageDirted(struct page *p);
-	When page is flushed:
-		int pc_pagecleaned(struct page *page);
-	when page is read:
-		struct page *pc_getInodePage(struct inode *inode,unsigned long offset);
-	when empty page is needed:
-		page_struct_t *pc_getFreePage();
-	when page freed:
-		int pc_putFreePage(struct page *page);
-
-_____________________________
+------------------------------------------------------------------------------------
 
 papers:
   1) doc/PageCache-Open-Cirrus.pdf  - paper appered @ open cirrus-2011.
   2) doc/malloc_paper_techpulse_submit_final.pdf  - memory optimization techiniques.
+  3) doc/pagecache.txt - jiny pagecache implementation

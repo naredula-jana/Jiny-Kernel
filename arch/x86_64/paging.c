@@ -1,6 +1,5 @@
 //#define DEBUG_ENABLE 1
-//#include "task.h"
-//#include "mm.h"
+
 #include "common.h"
 #include "paging.h"
 #include "isr.h"
@@ -9,9 +8,8 @@
 
 // The kernel's page directory
 addr_t g_kernel_page_dir=0;
-// Defined in kheap.c
-extern addr_t end; 
-addr_t placement_address=(addr_t)&end;
+
+extern addr_t end; // end of code and data region
 static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int writeFault);
 static void mk_pte(pte_t *pte, addr_t fr,int global,int user,int rw)
 {
@@ -27,7 +25,7 @@ static void mk_pte(pte_t *pte, addr_t fr,int global,int user,int rw)
 		pte->user = 0;
 
 	pte->pwt = 0;
-	pte->pcd = 0;
+	pte->pcd = 1;
 	pte->accessed = 0;
 	pte->dirty = 0;
 	pte->pat = 0;
@@ -55,7 +53,7 @@ static void mk_pde(pde_t *pde, addr_t fr,int page_size,int global,int user)
 	else
 		pde->user=0;
 	pde->pwt=0;
-	pde->pcd=0;
+	pde->pcd=1;
 	pde->accessed=0;
 	pde->dirty=0;
 	if (page_size ==1 )
@@ -80,13 +78,16 @@ addr_t initialise_paging(addr_t end_addr)
 	// The size of physical memory. For the moment we 
 	// assume it is 16MB big.
 	addr_t end_mem = end_addr;
-	addr_t i,fr,nframes;
+	addr_t i,j,fr,nframes;
 	addr_t *level2_table;
+	unsigned long curr_virt_end_addr;
 	unsigned long *p;
 	
+	curr_virt_end_addr =(unsigned long) &end; /* till this point currently memory is in use, the rest can used for pagecache , heap etc. */
 	end_mem &= PAGE_MASK;
 	nframes  = (end_mem)>> PAGE_SHIFT;
 	g_kernel_page_dir=0x00101000;
+	curr_virt_end_addr= (curr_virt_end_addr+PAGE_SIZE)&(~0xfff);
 //	ut_printf("Initializing Paging  %x: physical high addr:%x  \n",placement_address,end_addr);
 	level2_table=(addr_t *)0x00103000+20; /* 20 entries(40M) already intialised */
 	fr=0+20*512; /*  2M= 512 4Kpages already initialised */
@@ -95,7 +96,15 @@ addr_t initialise_paging(addr_t end_addr)
 		if (fr > nframes) {
 			break;
 		}
-		mk_pde(__va(level2_table),fr,1,1,0);
+		if (0) {/* use 2M size of pages */
+			mk_pde(__va(level2_table), fr, 1, 1, 0);
+		} else { /* use 4k  size pages */
+			mk_pde(__va(level2_table), (__pa(curr_virt_end_addr))>>PAGE_SHIFT, 0, 1, 0);
+			for (j = 0; j < 512; j++) {
+				mk_pte(curr_virt_end_addr+j*8, fr + j, 1, 0, 1);
+			}
+			curr_virt_end_addr=curr_virt_end_addr+PAGE_SIZE;
+		}
 		level2_table++;
 		fr=fr+512; /* 2M = 512*4K frames */	
 	}
@@ -112,7 +121,8 @@ addr_t initialise_paging(addr_t end_addr)
 
 	VIDEO=(unsigned long)__va(VIDEO);
 	flush_tlb(0x101000);
-	return placement_address;
+	ut_printf("END address :%x\n",&end);
+	return (addr_t)curr_virt_end_addr;
 }
 static inline void flush_tlb_entry(unsigned long  vaddr)
 {
@@ -142,7 +152,7 @@ int ar_flushTlbGlobal()
                         "movq %1, %%cr4;  # turn off PGE     \n"        
                         "movq %%cr3, %0;  # flush TLB        \n"        
                         "movq %0, %%cr3;                     \n"        
-                        "movq %2, %%cr4;  # turn PGE back on \n"        
+               //         "movq %2, %%cr4;  # turn PGE back on \n"
                         : "=&r" (tmpreg)                                
                         : "r" (mmu_cr4_features & ~(unsigned long )X86_CR4_PGE),   
                           "r" (mmu_cr4_features)                        
@@ -516,19 +526,26 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 }
 
 /************************ house keeping thread related function ****************/
-unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,struct addr_list *addr_list )
+
+unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,struct addr_list *page_access_list, struct addr_list *page_dirty_list)
 {
 	struct mm_struct *mm;
 	addr_t *pl4,*pl3,*pl2,*pl1,*v;	
 	pte_t *pte;
-	unsigned long addr;
+	pde_t *pde;
+	unsigned long addr,total_pages_scan;
 	int i;
 
+	total_pages_scan=0;
 	mm=g_current_task->mm;
 	if (mm==0 || mm->pgd == 0) BUG();
 
 	addr=start_addr;
-	addr_list->total=0;
+	if (page_access_list != 0)
+	    page_access_list->total=0;
+
+	if (page_dirty_list != 0)
+	    page_dirty_list->total=0;
 	while (addr <end_addr)
 	{
 		pl4=(unsigned long *)mm->pgd;
@@ -538,41 +555,63 @@ unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,stru
 		pl3=(unsigned long *)((*v) & (~0xfff));
 		if (pl3==0)
 		{
-			return 0;
+			goto last;
 		}
 
 		v=__va(pl3+(L3_INDEX(addr)));
 		pl2=(unsigned long *)((*v) & (~0xfff));
 		if (pl2==0)
 		{
-			return 0;
+			goto last;
 		}
 
 		v=__va(pl2+(L2_INDEX(addr)));
 		pl1=(unsigned long *)((*v) & (~0xfff));
-		if (pl1==0)
+		pde = __va(pl2+(L2_INDEX(addr)));
+
+		if (pde->ps == 1)/* 2 MB page */
 		{
-			return 0;
+			if (pde->dirty==1){
+			   ut_printf(" Big page: start:%x  end:%x  dirty:%x \n",addr,(addr+PAGE_SIZE*512),pde->dirty);
+			}
+			addr=addr+PAGE_SIZE*512;
+			pde->dirty = 0;
+			continue;
 		}
+
 		pte=__va(pl1+(L1_INDEX(addr)));
-		if (pte->accessed == 1) 
+
+		if (pte->dirty == 1 && page_dirty_list!=0 && page_dirty_list->total<ADDR_LIST_MAX)
 		{
-			pte->accessed=0;
-			i=addr_list->total;
+			pte->dirty=0;
+			i=page_dirty_list->total;
 			if (i<ADDR_LIST_MAX)
 			{
-				addr_list->addr[i]=addr;
-				addr_list->total++;
-			}else
-			{
-				break;
-			}	
+				page_dirty_list->addr[i]=addr;
+				page_dirty_list->total++;
+			}else{
+				ut_printf("Dirty list is full addr:%x\n",addr);
+			}
 		}
+
+		if (pte->accessed == 1 && page_access_list != 0 && page_access_list->total<ADDR_LIST_MAX)
+		{
+			pte->accessed=0;
+			i=page_access_list->total;
+			if (i<ADDR_LIST_MAX)
+			{
+				page_access_list->addr[i]=addr;
+				page_access_list->total++;
+			}
+		}
+		total_pages_scan=total_pages_scan+1;
 		addr=addr+PAGE_SIZE;
 	}
-	if (addr_list->total > 0)
+last:
+	if ((page_access_list && page_access_list->total > 0 ) || (page_dirty_list && page_dirty_list->total > 0 ))
 	{
-		ar_flushTlbGlobal(); /* TODO : need not flush entire table, flush only spoecific tables*/
+		ut_printf("Flushing entire page table : pages scan:%d last addr:%x\n",total_pages_scan,addr);
+		ar_flushTlbGlobal(); /* TODO : need not flush entire table, flush only specific tables*/
 	}
 	return addr;
 }

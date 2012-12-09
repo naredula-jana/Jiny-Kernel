@@ -330,7 +330,7 @@ void init_memory(unsigned long phy_end_addr)
 	}
 
 	virt_start_addr=init_free_area( virt_start_addr, virt_end_addr);
-	pc_init((unsigned char *)virt_start_addr,0x10000000); /* page cache init */
+	pc_init((unsigned char *)virt_start_addr,0x10000000); /* TODO: currently page cache uses 10M, this may be using 2M pages, this need to move to use 4K size pages */
 	virt_start_addr=virt_start_addr+0x10000000;
 	init_mem(virt_start_addr, virt_end_addr);
 }

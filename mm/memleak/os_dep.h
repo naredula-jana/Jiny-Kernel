@@ -18,7 +18,7 @@
 
 extern unsigned long g_jiffies;
 //extern long g_idle_tasks;
-extern void *placement_address;
+extern unsigned long  end;
 #define printf ut_printf
 #define pr_debug ut_printf
 #define strcmp ut_strcmp

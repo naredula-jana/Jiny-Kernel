@@ -14,8 +14,6 @@
 static uint64_t trace[MAX_TRACE+10];
 static int tr_index=0;
 static void debugFault(struct fault_ctx *ctx) {
-	uint64_t rflag;
-	uint32_t eax, edx,msr;
 
 	ctx->istack_frame->rflags =(ctx->istack_frame->rflags) | 0x10000; /* set RF bit */
 

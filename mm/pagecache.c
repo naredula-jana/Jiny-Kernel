@@ -413,11 +413,12 @@ page_struct_t *pc_getFreePage()
 
 /***************************** House keeping functionality ******************/
 static struct addr_list acc_list;
+
 int scan_pagecache(char *arg1 , char *arg2)
 {
 	int i,ret;
 	acc_list.total=0;
-	ret=ar_scanPtes((unsigned long)pc_startaddr,(unsigned long)pc_endaddr,&acc_list);
+	ret=ar_scanPtes((unsigned long)pc_startaddr,(unsigned long)pc_endaddr,&acc_list,0);
 	DEBUG(" ScanPtes  ret:%x total:%d \n",ret,acc_list.total);
 	for (i=0; i<acc_list.total; i++)
 	{
@@ -426,10 +427,48 @@ int scan_pagecache(char *arg1 , char *arg2)
 		if (!(acc_list.addr[i] >= (unsigned long)pc_startaddr && acc_list.addr[i] <= (unsigned long)pc_endaddr ))
 		{
 			BUG();
-		}	
-		p=to_page((unsigned char *)acc_list.addr[i]);	
+		}
+		p=to_page((unsigned char *)acc_list.addr[i]);
 		p->age=0;
 		DEBUG("%d: page addr :%x \n",i,acc_list.addr[i]);
+	}
+	return 1;
+}
+
+static struct addr_list dirty_page_list;
+int scan_pagetable(char *arg1 , char *arg2)
+{
+	int i,ret;
+	char *test_p;
+	unsigned long start_addr=KERNEL_ADDR_START;
+	unsigned long end_addr=KERNEL_ADDR_START + 0x100000000;
+	acc_list.total=0;
+
+
+	ret=ar_scanPtes((unsigned long)start_addr,(unsigned long)end_addr,&acc_list,&dirty_page_list);
+	ut_printf(" ScanPtes start:%x end:%x ret:%x accesstotal:%d \n",start_addr,end_addr,ret,acc_list.total);
+#if 0
+	for (i=0; i<acc_list.total; i++)
+	{
+		struct page *p;
+
+		if (!(acc_list.addr[i] >= (unsigned long)start_addr && acc_list.addr[i] <= (unsigned long)end_addr ))
+		{
+			BUG();
+		}
+		ut_printf("%d: accessed page addr :%x \n",i,acc_list.addr[i]);
+	}
+#endif
+	ut_printf(" ScanPtes  ret:%x dirtytotal:%d  test page addr:%x\n",ret,dirty_page_list.total,test_p);
+	for (i=0; i<dirty_page_list.total; i++)
+	{
+		struct page *p;
+
+		if (!(dirty_page_list.addr[i] >= (unsigned long)start_addr && dirty_page_list.addr[i] <= (unsigned long)end_addr ))
+		{
+			BUG();
+		}	
+		ut_printf("%d: dirty page addr :%x \n",i,dirty_page_list.addr[i]);
 	}
 	return 1;
 }

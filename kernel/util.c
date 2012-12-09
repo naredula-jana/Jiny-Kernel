@@ -12,13 +12,15 @@
 #include <stdarg.h>
 #include "common.h"
 #include "interface.h"
-extern unsigned long stack,placement_address;
+extern unsigned long stack;
+extern addr_t end;
 extern void print_symbol(addr_t addr);
 void ut_showTrace(unsigned long *stack_top)
 {
 	unsigned long addr;
 	unsigned long  sz,stack_end,code_end;
 	int i;
+	unsigned long end_addr=&end;
 
 
 	sz=(long)stack_top;
@@ -30,7 +32,7 @@ void ut_showTrace(unsigned long *stack_top)
 	sz=~sz;
 	stack_end = (unsigned long)stack_top & (sz);
 	stack_end = stack_end+TASK_SIZE-10;
-	code_end = (unsigned long)&placement_address;
+	code_end = (unsigned long)&end_addr;
 	ut_printf("\nCALL Trace:   code_end:%x  %x :%x  \n",code_end,stack_top,stack_end);
 
 	if (stack_end) {

@@ -91,7 +91,7 @@ typedef struct page {
 	struct list_head list; /*TODO: currently used 1)  SLAB 2) pagecache:inodelist  */
 } page_struct_t;
 
-#define ADDR_LIST_MAX 50
+#define ADDR_LIST_MAX 500
 struct addr_list {
 	unsigned long addr[ADDR_LIST_MAX];
 	int total;

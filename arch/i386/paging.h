@@ -3,7 +3,7 @@
 
 #ifndef PAGING_H
 #define PAGING_H
-
+#if 0
 #include "common.h"
 #include "mm.h"
 #define PAGE_MASK	(~(PAGE_SIZE-1))
@@ -45,5 +45,5 @@ void switch_page_directory(page_directory_t *new);
    Handler for page faults.
 **/
 void page_fault(registers_t regs);
-
+#endif
 #endif
