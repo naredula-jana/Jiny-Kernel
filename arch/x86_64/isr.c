@@ -61,20 +61,18 @@ long fault_ip_g=0;
 long fault_error_g=0;
 long fault_num_g=0;
 struct fault_ctx cpu_ctx;
-static void gpFault(struct fault_ctx *ctx)
+static int gpFault(struct fault_ctx *ctx)
 {
-
 	fault_ip_g=ctx->istack_frame->rip;
 	fault_error_g=ctx->errcode;
 	fault_num_g=ctx->fault_num;
-
 
 	ut_printf(" ERROR: cpuid:%d Gp Fault fault ip:%x error code:%x sp:%x fault number:%x \n",getcpuid(),fault_ip_g,fault_error_g,ctx->istack_frame->rsp,fault_num_g);
         if (g_current_task->mm != g_kernel_mm) /* user level thread */
         {
         	   while(1);
                 SYS_sc_exit(100);
-                return;
+                return 0;
         }
 	/*ut_printf("GP fault:  ip: %x  error:%x  fault:%x cs:%x ss:%x \n",ctx->istack_frame->rip,ctx->errcode,ctx->fault_num,ctx->istack_frame->cs,ctx->istack_frame->ss);
 	  ut_printf("GP fault:  ip: %x  error:%x  fault:%x cs:%x ss:%x \n",ctx->istack_frame->rip,ctx->errcode,ctx->fault_num,ctx->istack_frame->cs,ctx->istack_frame->ss);
@@ -166,7 +164,7 @@ static void fill_fault_context(struct fault_ctx *fctx, void *rsp,
 }
 static int stack_depth=0;
 // This gets called from our ASM interrupt handler stub.
-void ar_faultHandler(void *p, unsigned int  int_no)
+int ar_faultHandler(void *p, unsigned int  int_no)
 {
 	struct fault_ctx ctx;
 
@@ -174,13 +172,15 @@ void ar_faultHandler(void *p, unsigned int  int_no)
 	fill_fault_context(&ctx,p,int_no);
 	if (g_interrupt_handlers[int_no].action != 0)
 	{
+		int ret;
+
 		stack_depth++;
 		isr_t handler = g_interrupt_handlers[int_no].action;
-		handler(&ctx);
+		ret = handler(&ctx);
 		g_interrupt_handlers[int_no].stat[getcpuid()].num_irqs++;
 
 		stack_depth--;
-		if (int_no ==14 | int_no==1) return ; /* return properly for page fault or debug fault */
+		return ret; /* return properly for page fault or debug fault or trap fault */
 	}else
 	{
 		g_interrupt_handlers[int_no].stat[getcpuid()].num_error++;

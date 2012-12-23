@@ -70,18 +70,18 @@ int init_kernel(unsigned long end_addr)
 
 
 
-	ut_printf("Initalising: VFS.. \n");
+	ut_printf("Initalising: VFS.. cpudid:%d \n",getcpuid());
 	init_vfs();
 
-	init_networking();
+//	init_networking();
 
-//	ar_registerInterrupt(128,syscall_handler);
+
 
 	init_symbol_table();
 
 	init_devClasses();
 	init_modules();
-	ut_printf("Initialization completed \n");
+	ut_printf("Initialization completed: cpuid: %d \n",getcpuid());
 
 
 	uint32_t val[5];

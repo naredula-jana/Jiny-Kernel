@@ -1,13 +1,29 @@
 #ifndef IPC_H
 #define IPC_H
 
-#if 0
-#include "common.h"
-#include "task.h"
-#endif
+
 
 #include "list.h"
-#include "spinlock.h"
+//#include "spinlock.h"
+
+#define SPINLOCK_DEBUG 1
+typedef struct {
+        volatile unsigned int lock;
+        unsigned long stat_count;
+#ifdef SPINLOCK_DEBUG
+#define MAX_SPIN_LOG 100
+        unsigned long stat_locks;
+        unsigned long stat_unlocks;
+        unsigned long contention;
+        unsigned int log_length;
+        struct {
+            int line;
+            unsigned int process_id;
+            unsigned int cpuid;
+            unsigned long spins;
+        }log[MAX_SPIN_LOG];
+#endif
+} spinlock_t;
 
 
 #define IPC_TIMEOUT 0xffffffffUL
@@ -15,7 +31,10 @@ typedef struct queue{
 	struct list_head head;
 	char *name;
 }queue_t;
-
+#if 0
+#include "common.h"
+#include "task.h"
+#endif
 struct semaphore
 {
 	int count;

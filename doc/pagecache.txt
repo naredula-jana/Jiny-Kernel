@@ -1,0 +1,40 @@
+
+-----------------------------------------
+page cache Algorithm based on paper:
+      Every file is tagged as Long lived(LRU) or short lived(MRU). Based on the tag, the pages of file will processed differently in the page cache. Page cache algorithm tries to evacuate the Short lived files as soon as possible to create a space for the long lived files. From the Application point of view, a file is tagged by using fadvise call after the open call. This approach of tagging will help applications like hadoop to retain the temporary files as long as possible in dirty state before they are removed, this saves disk io both interms of read and write.
+
+Data Structures:
+	page : Every page containg age attribute, age is updated when ever the page is accessed(read) or dirted(write) depending on type of file.If age of page made eldest means page is going to evacuate from the system very soon. The value of age can varies from 1(youngest) to n(eldest). n is configirable default may be 100. 
+	queues : active,inactive,LRU dirty,MRU dirty and free queue.
+
+Tasks:
+	1) when page is read:
+		if it is MRU type the age is changed to eldest and moved to end of inactive list.
+		if it is LRU it is changed to youngest and moved to end of acive list.
+	2) when page is written:
+		LRU dirty : if it is LRU type moved to end of LRU dirty queue and made youngest.
+		MRU dirty : if it is MRU type, moved to end of MRU dirty queue and made eldest.
+	3) when fle is synced using fdatasync:
+		If the file is LRU: after flushing the page, the page is made youngest and queued at the end of active list.
+		If the file is MRU: after flushing the page, the page is made eldest and queued at the end of inactive list.
+	4) Background house keeper thread: flush the dirty pages and create enough free pages for page cache.
+		a) It scans the pagetables periodically and updates the age.( this is needed only if the file is mmaped. TODO : currently partially implemented).
+		b) flush MRU dirty queues: MRU dirty queue is flushed as soon as possible whenever disk bandwidth is available.
+		c) flush LRU dirty queue LAZILY : It is flushed only when the page cache is running short of free pages and MRU dirty queue is empty or amount of LRU dirty pages execeed threshould.
+					    
+Interface functions:
+	Initialization and stat:
+		int pc_init(unsigned char *start_addr,unsigned long len);
+		int pc_stats(char *arg1,char *arg2);
+	When page is written:
+		int pc_insertPage(struct inode *inode,struct page *page); /* this api is used while reading unpresent page  */
+		int pc_removePage(struct page *page); 
+		int pc_pageDirted(struct page *p);
+	When page is flushed:
+		int pc_pagecleaned(struct page *page);
+	when page is read:
+		struct page *pc_getInodePage(struct inode *inode,unsigned long offset);
+	when empty page is needed:
+		page_struct_t *pc_getFreePage();
+	when page freed:
+		int pc_putFreePage(struct page *page);

@@ -41,7 +41,7 @@
  */
 
 #define __types_h
-#define DEBUG_ENABLE 1
+//#define DEBUG_ENABLE 1
 #include "lwip/opt.h"
 #include "lwip/def.h"
 #include "lwip/mem.h"

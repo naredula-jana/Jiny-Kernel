@@ -39,6 +39,7 @@ extern int brk_pnt;
 
 
 #define MAX_SYMBOLLEN 40
+#define MAX_FILELEN 50
 #define SYMBOL_TEXT 0
 #define SYMBOL_DATA 1
 #define SYMBOL_CMD 10
@@ -47,6 +48,7 @@ typedef struct {
 	addr_t address;
 	char type;
 	unsigned char name[MAX_SYMBOLLEN];
+	char file_lineno[MAX_FILELEN];
 }symb_table_t ;
 extern symb_table_t *g_symbol_table;
 extern unsigned long g_total_symbols;
@@ -84,7 +86,7 @@ do {                                                           \
 // Enables registration of callbacks for interrupts or IRQs.
 // For IRQs, to ease confusion, use the #defines above as the
 // first parameter.
-typedef void (*isr_t)();
+typedef int (*isr_t)();
 extern int g_serial_output;
 extern spinlock_t g_inode_lock;
 #define printk ut_printf

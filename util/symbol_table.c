@@ -3,6 +3,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #define MAX_SYMBOLLEN 40
+#define MAX_FILELEN 50
 #define MAX_SYMBOLS 3000
 #define TYPE_TEXT 0
 #define TYPE_DATA 1
@@ -10,6 +11,7 @@ typedef struct {
 	unsigned long address;
 	char type;
 	char name[MAX_SYMBOLLEN];
+	char file_lineno[MAX_FILELEN];
 } symb_table_t;
 symb_table_t stable[MAX_SYMBOLS];
 #define MAX_DATA 900001
@@ -40,8 +42,8 @@ static tokenise(char *p, symb_table_t *t) {
 	q = p;
 	i = 0;
 	t->name[0] = '\0';
-	while (p[i] != '\n' && p[i] != '\0' && p[i] != '\r' && k < 3) {
-		if (p[i] == ' ') {
+	while (p[i] != '\n' && p[i] != '\0' && p[i] != '\r' && k < 4) {
+		if (p[i] == ' ' || p[i] == '\t') {
 
 			p[i] = '\0';
 			if (k == 0) {
@@ -55,16 +57,20 @@ static tokenise(char *p, symb_table_t *t) {
 
 			} else if (k == 2) {
 				snprintf(t->name, MAX_SYMBOLLEN, "%s", q);
+			} else if (k == 3) {
+				snprintf(t->file_lineno, MAX_FILELEN, "%s", q);
 			}
 			k++;
 			q = p + i + 1;
-			if (k > 2)
+			if (k > 3)
 				return 1;
 		}
 		i++;
 	}
-	if (k == 2) {
-		snprintf(t->name, MAX_SYMBOLLEN, "%s", q);
+	if (k == 3) {
+		snprintf(t->file_lineno, MAX_FILELEN, "%s", q);
+		return 1;
+	}else if (k==2){
 		return 1;
 	}
 	return 0;

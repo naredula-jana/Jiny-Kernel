@@ -126,6 +126,7 @@ int ut_strcmp(unsigned char *str1,unsigned  char *str2)
 	if (failed == 1 && str1[i] =='\0') failed=2;
 	return failed;
 }
+
 int ut_memcmp(unsigned char *m1, unsigned char *m2,int len)
 {
 	int i = 0;
@@ -161,6 +162,24 @@ unsigned char *ut_strncpy(unsigned char *dest, const unsigned char *src,int n)
         while (*src != 0 && len<n);
         *dest=0;
         return dest;
+}
+unsigned char *ut_strstr(unsigned char *s1,unsigned char *s2)
+{
+    int i,j;
+    if (s1==0 || s2==0) return 0;
+
+	for (i = 0; s1[i] != '\0'; i++) {
+		if (s1[i] == s2[0]) {
+			for (j = i; s2[j-i]!='0' && s1[j]!='\0'; j++) {
+				if (s1[j] != s2[j-i]){
+					break;
+				}
+			}
+			if (s2[j-i]=='\0') return &s1[i] ;
+		}
+	}
+
+    return 0;
 }
 // Concatenate the NULL-terminated string src onto
 // the end of dest, and return dest.

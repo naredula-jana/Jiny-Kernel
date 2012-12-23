@@ -107,7 +107,7 @@ int getcpuid() {
 	int id;
 	if (imps_num_cpus == 1)
 		return 0;
-#if 1
+#if 0
 	id = g_current_task->cpu;
 #else
 	id= APIC_ID(IMPS_LAPIC_READ(LAPIC_ID)); /* id is 0 based */
@@ -229,7 +229,7 @@ static int boot_cpu(imps_processor *proc) {
 	p = __va(bootaddr);
 	while (*p != 0xA5A5A5A5 && to++ < 100)
 		UDELAY(10000);
-	KERNEL_PRINT("SMP: boot addr: %x \n", *p);
+	KERNEL_PRINT("SMP: boot addr: %x  cpuid:%d \n", *p,cpuid);
 	if (to >= 100) {
 		KERNEL_PRINT("SMP: CPU Not Responding, DISABLED");
 		success = 0;
@@ -318,7 +318,7 @@ int init_smp_force(int ncpus) {
 		p.apic_id = i;
 		add_processor(&p);
 	}
-
+ut_printf(" After adding the processor \n");
 	local_bsp_apic_init(); /* TODO : Need to call this twice to get APIC enabled */
 
 	unsigned long *page_table;

@@ -207,7 +207,7 @@ void ut_putchar(int c) {
 		goto newline;
 	spin_unlock_irqrestore(&putchar_lock, flags);
 }
-
+static spinlock_t printf_lock = SPIN_LOCK_UNLOCKED;
 void ut_printf(const char *format, ...) {
 	char **arg = (char **) &format;
 	int c;
@@ -215,6 +215,7 @@ void ut_printf(const char *format, ...) {
 	int i;
 	char buf[40];
 	char *p;
+	unsigned long flags;
 
 	va_list vl;
 	va_start(vl,format);
@@ -224,7 +225,7 @@ void ut_printf(const char *format, ...) {
 	while (*p)
 		ut_putchar(*p++);
 #endif
-
+	spin_lock_irqsave(&printf_lock, flags);
 	arg++;
 	i = 0;
 	while ((c = *format++) != 0) {
@@ -234,7 +235,7 @@ void ut_printf(const char *format, ...) {
 		else {
 			c = *format++;
 			if (c>'0' && c<='9'){
-				number_len=c-'0';
+				number_len=(c-'0')*2;
 				c = *format++;
 			}
 			switch (c) {
@@ -270,8 +271,10 @@ void ut_printf(const char *format, ...) {
 						}
 					}
 				}
+
 				while (*p)
 					ut_putchar(*p++);
+
 				break;
 
 			default:
@@ -280,5 +283,6 @@ void ut_printf(const char *format, ...) {
 			}
 		}
 	}
+	spin_unlock_irqrestore(&printf_lock, flags);
 	va_end(vl);
 }

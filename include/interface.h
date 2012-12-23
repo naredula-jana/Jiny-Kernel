@@ -106,6 +106,7 @@ int ut_memcmp(unsigned char *m1, unsigned char *m2,int len);
 unsigned char *ut_strcpy(unsigned char *dest, const unsigned char *src);
 unsigned char *ut_strncpy(unsigned char *dest, const unsigned char *src,int n);
 unsigned char *ut_strcat(unsigned char *dest, const unsigned char *src);
+unsigned char *ut_strstr(unsigned char *s1,unsigned char *s2);
 int ut_strlen(const unsigned char * s);
 unsigned long ut_atol(unsigned char *p);
 unsigned int ut_atoi(unsigned char *p);

@@ -96,12 +96,12 @@ fault_entry_point:
         SAVE_GPRS
 	    movq %rsp, %rdi /* contains the context : first argument */
         movq %rax, %rsi /* fault number : second argument */
-        callq ar_faultHandler
+        cmpq $03,%rax /* if it is a breakpoint trap exception */
+        jz breakpoint_handler
+        callq ar_faultHandler   /* rest of the exceptions */
 	    RESTORE_GPRS
-
 	    cmpq $GDT_SEL(KCODE_DESCR), 16 + INT_STACK_FRAME_CS_OFFT(%rsp)
         je 4f
-
         RESTORE_USER_SEGMENT_REGISTERS
         swapgs
 4:
@@ -111,6 +111,74 @@ fault_entry_point:
         orq $(1 << 9),HW_INTERRUPT_CTX_RFLAGS_OFFT(%rsp) 
 	    sti
         iretq
+
+breakpoint_handler:
+        callq ar_faultHandler      /* for breakpoint handling */
+	    RESTORE_GPRS
+	    cmpq $GDT_SEL(KCODE_DESCR), 16 + INT_STACK_FRAME_CS_OFFT(%rsp)
+        je 6f
+        RESTORE_USER_SEGMENT_REGISTERS
+        swapgs
+6:
+		cmpq $1,%rax  /* if return value of trap handler is to pushq %rbp*/
+		jz rbp_push
+		cmpq $2,%rax
+		jz rbp_pop
+
+        popq %rax   /* when we reach , something wrong , return value 0 is not expected */
+	    addq $8, %rsp  /*  error code on th stack */
+		  /* Make sure IF is set after returning from interrupt context.  */
+ //       orq $(1 << 9),HW_INTERRUPT_CTX_RFLAGS_OFFT(%rsp)
+//	    sti
+        iretq
+
+
+rbp_push:
+        popq %rax
+	    addq $8, %rsp  /*  error code on th stack */
+
+		subq	$16, %rsp		/* make room for %rbp */
+		pushq	%rax			/* push temp */
+		movq	24(%rsp), %rax		/* Load RIP */
+		movq	%rax, 8(%rsp)		/* STORE RIP */
+		movq	32(%rsp), %rax		/* Load CS */
+		movq	%rax, 16(%rsp)		/* Store CS */
+		movq	40(%rsp), %rax		/* Load RFLAGS */
+		movq	%rax, 24(%rsp)		/* Store RFLAGS */
+		movq	48(%rsp), %rax		/* Load RSP */
+		subq	$8, %rax		/* 8byte space %rbp */
+		movq	%rax, 32(%rsp)		/* Store RSP */
+		movq	56(%rsp), %rax		/* Load SS */
+		movq	%rax, 40(%rsp)		/* Store SS */
+		movq	32(%rsp), %rax		/* reload RSP */
+		movq	%rbp, (%rax)		/* store %rbp there */
+		popq	%rax			/* pop off temp rax */
+
+		/* Make sure IF is set after returning from interrupt context.  */
+  //      orq $(1 << 9),HW_INTERRUPT_CTX_RFLAGS_OFFT(%rsp)
+//		sti
+		iretq				/* return from interrupt */
+
+rbp_pop:
+        popq %rax
+	    addq $8, %rsp  /*  error code on th stack */
+
+		pushq	%rax			/* push temp */
+		movq	8(%rsp), %rax		/* load calling RIP */
+		movq	%rax, 8(%rsp)		/* store calling RIP */
+		movq	(%rbp), %rax		/* get new %rbp */
+		addq	$8, %rbp		/* adjust new %rsp */
+		movq	%rbp, 32(%rsp)		/* store new %rsp */
+		movq	%rax, %rbp		/* set new %rbp */
+		popq	%rax			/* pop off temp */
+
+				/* Make sure IF is set after returning from interrupt context.  */
+//        orq $(1 << 9),HW_INTERRUPT_CTX_RFLAGS_OFFT(%rsp)
+//		sti
+		iretq				/* return from interrupt */
+
+
+
 
 irq_entry_point:
 

@@ -42,7 +42,7 @@ all: lwip.a
 	rm drivers.a  fs.a mm.a $(ARCH_DIR).a
 	gcc -g -I. $(LINK_FLAG)  $(OBJECTS) -nostdlib -Wl,-N -Wl,-Ttext -Wl,40100000 -o bin/kernel_bin
 	objdump -D -l bin/kernel_bin > bin/obj_file
-	nm bin/kernel_bin | sort > util/in
+	nm -l bin/kernel_bin | sort > util/in
 	util/gen_symboltbl util/in bin/mod_file
 clean:
 	make SOURCE_ROOT=$$PWD -C kernel clean

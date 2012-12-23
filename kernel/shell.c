@@ -92,7 +92,7 @@ extern void ut_putchar(int c);
 
 
 static char buf[26024];
-static int sh_mmap(unsigned char *arg1,unsigned char *arg2) {
+static int sh_mmap(unsigned char *arg1,unsigned char *arg2) {  /* TODO the function broken if given empty args */
 	struct file *fp;
 	unsigned long addr;
 	unsigned char c, *p;

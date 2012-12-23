@@ -70,6 +70,7 @@ struct task_struct {
 	unsigned long ticks;	
 	struct thread_struct thread;
 	struct mm_struct *mm;
+	int trace_stack_length; /* used for trace purpose */
 
 	struct list_head run_link; /* run queue */
 	struct list_head task_link; /* task queue */

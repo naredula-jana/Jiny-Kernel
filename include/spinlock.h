@@ -1,7 +1,8 @@
 #ifndef __ASM_SPINLOCK_H
 #define __ASM_SPINLOCK_H
-//#define SPINLOCK_DEBUG 1
-//#include "task.h"
+
+#if 0
+#define SPINLOCK_DEBUG 1
 typedef struct {
         volatile unsigned int lock;
         unsigned long stat_count;
@@ -19,6 +20,7 @@ typedef struct {
         }log[MAX_SPIN_LOG];
 #endif
 } spinlock_t;
+#endif
 
 #define __sti() __asm__ __volatile__ ("sti": : :"memory")
 #define __cli() __asm__ __volatile__ ("cli": : :"memory")

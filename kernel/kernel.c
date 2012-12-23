@@ -85,6 +85,8 @@ void cmain() {  /* This is the first c function to be executed */
 }
 
 void idleTask_func() {
+	int k=0;
+	ut_printf("Idle Thread Started cpuid: %d stack addrss:%x \n",getcpuid(),&k);
 	while (1) {
 		__asm__("hlt");
 		sc_schedule();

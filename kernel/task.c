@@ -26,10 +26,7 @@ static queue_t timer_queue;
 static spinlock_t sched_lock = SPIN_LOCK_UNLOCKED;
 unsigned long g_pid = 0;
 unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles per second  */
-
 static struct task_struct *g_task_dead = 0; /* TODO : remove me later */
-
-
 
 extern long *g_idle_stack;
 void init_timer();
@@ -149,7 +146,6 @@ static int _del_from_waitqueue(queue_t *waitqueue, struct task_struct *p) {
 	struct list_head *pos;
 	struct task_struct *task;
 	int ret = 0;
-
 
 	if (p==0 || waitqueue==0) return 0;
 
@@ -286,8 +282,8 @@ int Jcmd_threadlist_stat(char *arg1, char *arg2) {
 		else
 			ut_printf("(%d)", task->pid);
 
-		ut_printf("%d %x %x %x %x %d %s %d stat(%d) %d %d\n",task->state, task, task->ticks, task->mm, task->mm->pgd, task->mm->count.counter, task->name, task->sleep_ticks,
-				task->stats.ticks_consumed,task->cpu, task->sleep_ticks);
+		ut_printf("%3d %5x %5x %5x %5x %4d %7s %4d stat(%4d) %4d %4d\n",task->state, task, task->ticks, task->mm, task->mm->pgd, task->mm->count.counter, task->name, task->sleep_ticks,
+				task->stats.ticks_consumed,task->cpu);
 	}
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
 		if (wait_queues[i] == 0) continue;
@@ -604,6 +600,7 @@ unsigned long SYS_sc_clone(int(*fn)(void *), void *child_stack, int clone_flags,
 	p->pid = g_pid;
 	p->cpu =0xffff;
 	p->ppid = g_current_task->pid;
+	p->trace_stack_length = 10; /* some initial stack length, we do not know at what point tracing starts */
 	p->run_link.next = 0;
 	p->run_link.prev = 0;
 	p->task_link.next = 0;
@@ -751,6 +748,7 @@ void init_tasking() {
 	g_kernel_mm->pgd =  g_kernel_page_dir;
 	g_kernel_mm->fs.total = 3;
 
+	g_pid = 0;
     task_addr=(unsigned long )((unsigned long )(&g_idle_stack)+TASK_SIZE) & (~((unsigned long )(TASK_SIZE-1)));
     ut_printf(" Task Addr start :%x  stack:%x current:%x\n",task_addr,&task_addr,g_current_task);
 	for (i = 0; i < MAX_CPUS; i++) {
@@ -759,9 +757,9 @@ void init_tasking() {
 		g_idle_tasks[i]->magic_numbers[0] = g_idle_tasks[i]->magic_numbers[1] = MAGIC_LONG;
 		g_idle_tasks[i]->stats.ticks_consumed = 0;
 		g_idle_tasks[i]->state = TASK_RUNNING;
-		g_idle_tasks[i]->pid = 0;  /* only idle tasks will have id==0 */
+		g_idle_tasks[i]->pid = g_pid;
 		g_idle_tasks[i]->cpu = i;
-		g_idle_tasks[i]->mm = g_kernel_mm; /* TODO increse the corresponding count */
+		g_idle_tasks[i]->mm = g_kernel_mm; /* TODO increase the corresponding count */
 		g_current_tasks[i] = g_idle_tasks[i];
 		ut_strncpy(g_idle_tasks[i]->name, (unsigned char *)"idle", MAX_TASK_NAME);
 		g_pid++;
@@ -852,6 +850,7 @@ static unsigned long  _schedule(unsigned long flags) {
 	prev = g_current_task;
 
 	next = _del_from_runqueue(0);
+
 	if (next == 0 && (prev->state!=TASK_RUNNING))
 		next = g_idle_tasks[cpuid];
 
@@ -860,11 +859,14 @@ static unsigned long  _schedule(unsigned long flags) {
 
 	g_current_tasks[cpuid] = next;
 #ifdef SMP   // SAFE Check
+	if (g_idle_tasks[0]==g_current_tasks[1] || g_current_tasks[0]==g_idle_tasks[1]){
+		ut_printf("ERROR  cpuid :%d  %d\n",cpuid,getcpuid());
+		while(1);
+	}
 	if (g_current_tasks[0]==g_current_tasks[1]){
 		while(1);
 	}
 #endif
-
 
 
 	/* if prev and next are same then return */
@@ -882,7 +884,7 @@ static unsigned long  _schedule(unsigned long flags) {
 			BUG();
 		}
 		g_task_dead = prev;
-	}else if (prev->pid!=0 && prev->state==TASK_RUNNING){ /* some other cpu  can pickup this task , running task and idle task should not be in a run equeue even though there state is running */
+	}else if (prev!=g_idle_tasks[cpuid] && prev->state==TASK_RUNNING){ /* some other cpu  can pickup this task , running task and idle task should not be in a run equeue even though there state is running */
 		if (prev->run_link.next != 0){ /* Prev should not be on the runqueue */
 			BUG();
 		}

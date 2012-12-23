@@ -28,7 +28,6 @@ int init_symbol_table() {
 	for (i = 0; i < g_total_symbols; i++) {
 		unsigned char sym[100], dst[100];
 
-
 		ut_strcpy(sym, g_symbol_table[i].name);
 		sym[7] = '\0'; /* g_conf_ */
 		ut_strcpy(dst, (unsigned char *)"g_conf_");
@@ -66,6 +65,7 @@ int init_symbol_table() {
 	ut_printf(
 			"Symbol Intilization:  confs:%d stats:%d cmds:%d  totalsymbols:%d \n",
 			confs, cmds, stats, g_total_symbols);
+	init_breakpoints();
 	return 1;
 }
 
@@ -84,6 +84,7 @@ int display_symbols(int type){
 	}
 	return count;
 }
+
 
 int execute_symbol(int type, char *name, char *argv1,char *argv2){
     int i,*conf;
