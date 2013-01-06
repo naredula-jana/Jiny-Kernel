@@ -910,14 +910,21 @@ void do_softirq() {
 		sc_schedule();
 	}
 }
-
+unsigned long g_jiffie_errors=0;
+unsigned long g_jiffie_tick=0;
 void timer_callback(registers_t regs) {
 	int i;
 	unsigned long flags;
 
 	/* 1. increment timestamp */
 	if (getcpuid()==0){
-	    g_jiffies++;
+		unsigned long kvm_ticks=get_kvm_clock();
+		if ((kvm_ticks!=0) && (g_jiffie_tick>(kvm_ticks+10)) ){
+			g_jiffie_errors++;
+		}else{
+			g_jiffie_tick++;
+			g_jiffies++;
+		}
 	}
 	g_current_task->counter--;
 	g_current_task->stats.ticks_consumed++;

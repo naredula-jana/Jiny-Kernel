@@ -76,6 +76,7 @@ int init_kernel(unsigned long end_addr)
 //	init_networking();
 
 
+	init_clock();
 
 	init_symbol_table();
 
