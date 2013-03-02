@@ -36,6 +36,7 @@ Virtualization:
     - KVM : virtio + P9 filesystem
     - KVM : virtio + Network (test server with udp stack(tcp/ip))
     - KVM : virtio + memory ballooning
+    - KVM : clock
       
 SMP:
    - APIC,MSIX
@@ -51,7 +52,6 @@ User level:
     
 TODO Features:
   - cpu-hotplug.
-  - clock enhancements.
   - centralised page cache.
   - memory-hotplug(partially done - memory ballooning).
   - running linux based app like busybox(partially completed):- implementing necessary system calls(basic calls are present , advanced like futex are need to be developed).

@@ -60,6 +60,9 @@ struct breakpoint_struct {
 static breakpoint_t breakpoint_table[MAX_BREAKPOINTS];
 static breakpoint_t *brk_hash_table[MAX_BRK_HASH];
 static spinlock_t breakpoint_lock = SPIN_LOCK_UNLOCKED;
+#define MAX_BREAK_STARTINGPOINTS 100
+static int startpoint_count=0;
+static int breakpoint_starts[MAX_BREAK_STARTINGPOINTS];
 
 #define MAX_TRACES 2048
 typedef struct {
@@ -68,11 +71,11 @@ typedef struct {
 	int cpu_id;
 	int pid;
 	int count;
-
 } trace_t;
 
 static int g_conf_trace_enable=1;
 static int trace_index=0;
+static int g_conf_trace_user=1; /* trace only user space threads inside the kernel , especially interested in syscall */
 static trace_t traces[MAX_TRACES];
 
 //static spinlock_t trace_lock = SPIN_LOCK_UNLOCKED;
@@ -120,6 +123,7 @@ static int breakpoint_fault(struct fault_ctx *ctx) {
 	unsigned long addr = ctx->istack_frame->rip - 1;
 	int index = addr % MAX_BRK_HASH;
 	breakpoint_t *brk_p = brk_hash_table[index];
+    int j;
 
 	while (brk_p != 0 && brk_p->addr != addr) {
 		brk_p = brk_p->next;
@@ -129,13 +133,35 @@ static int breakpoint_fault(struct fault_ctx *ctx) {
 			BUG();
 		brk_p->stats.call_count++;
 		if (g_conf_trace_enable == 1) {
-			int brk_index = ((unsigned long)brk_p - (unsigned long)(&breakpoint_table[0]))/(sizeof(breakpoint_t));
-			breakpoint_add_trace(brk_index);
+			if (g_conf_trace_user == 1) { /* user level threads */
+				int found=0;
+				if (g_current_task->mm == g_kernel_mm)  return brk_p->type;
+				for (j = 0; j < startpoint_count; j++) {
+					if (breakpoint_starts[j] == brk_p->symb_index) {
+						found =1;
+						if (g_current_task->trace_on == 1 && brk_p->type == BRKPOINT_RET){
+							g_current_task->trace_on = 0;
+						}else if (g_current_task->trace_on == 0 && brk_p->type == BRKPOINT_START){
+							g_current_task->trace_on = 1;
+						}
+						break;
+					}
+				}
+				if (found == 0 && g_current_task->trace_on==0){
+					return brk_p->type;
+				}
+
+				int brk_index = ((unsigned long) brk_p - (unsigned long) (&breakpoint_table[0])) / (sizeof(breakpoint_t));
+				breakpoint_add_trace(brk_index);
+			}else{ /* kernel thread */
+				int brk_index = ((unsigned long) brk_p - (unsigned long) (&breakpoint_table[0])) / (sizeof(breakpoint_t));
+				breakpoint_add_trace(brk_index);
+			}
 		}
 		return brk_p->type;
 	}
 	BUG();
-	return 0;
+	return 0;  /* unreachable */
 }
 int Jcmd_enable_trace(unsigned char *arg_name, unsigned char *arg2){
 	trace_index=0;
@@ -255,6 +281,7 @@ static int breakpoint_create(int sym_index){
 	int  k;
 	int ret=0;
 
+
 	instr = g_symbol_table[sym_index].address;
 	if (instr[0] != DEBUG_PUSHL_EBP) {
 		return ret;
@@ -264,6 +291,8 @@ static int breakpoint_create(int sym_index){
 	if (breakpoint_add(sym_index, (unsigned long) instr, BRKPOINT_START) == 1) {
 		instr[0] = DEBUG_PATCHVAL;
 		ret++;
+	}else{
+		return ret;
 	}
 
 	/* patchup the returns: there should only one return  */
@@ -274,12 +303,20 @@ static int breakpoint_create(int sym_index){
 				ret++;
 				if (ret >2 ){
 					ut_printf("ERROR:ret:%d instr:%x in:%x s_ind:%d  addr:%x \n",ret,instr,instr+k,sym_index,g_symbol_table[sym_index + 1].address);
+				    goto last;
 				}
 			}
 		}
 	}
+last:
 	if (ret!=0 && ret!=2){
-		ut_printf("ERROR: something Wrong name :%s:  rt:%d \n",g_symbol_table[sym_index].name, ret);
+
+		if (ret ==1){  /* remove the breakpoint at the start of the function */
+			breakpoint_delete(sym_index);
+			ut_printf("WARNING : something Wrong name :%s:  rt:%d , REVERETED to old state\n",g_symbol_table[sym_index].name, ret);
+		}else{
+			ut_printf("ERROR: something Wrong name :%s:  rt:%d \n",g_symbol_table[sym_index].name, ret);
+		}
 	}
 	return ret;
 }
@@ -355,7 +392,34 @@ int Jcmd_break_group(unsigned char *arg_name, unsigned char *arg2) {
 	ut_printf(" Total breaks :%s: ret=%d  index=%d\n", arg_name, ret, i);
 	return ret;
 }
+int Jcmd_break_start(unsigned char *arg_name){
+	int i,j;
 
+	if (arg_name == NULL) {
+		ut_printf("break_start [start fucntion]\n");
+	}
+	for (i = 0; i < g_total_symbols; i++) {
+		if (g_symbol_table[i].type != SYMBOL_TEXT)
+			continue;
+		if (ut_strcmp((unsigned char *) g_symbol_table[i].name,
+				(unsigned char *) arg_name) != 0)
+			continue;
+		if (startpoint_count < MAX_BREAK_STARTINGPOINTS) {
+			for (j = 0; j < startpoint_count; j++) {
+				if (breakpoint_starts[j] == -1) {
+					breakpoint_starts[j] = i;
+					return 1;
+				}
+			}
+			if (startpoint_count < (MAX_BREAK_STARTINGPOINTS-1)){
+				breakpoint_starts[startpoint_count] = i;
+				startpoint_count++;
+				return 1;
+			}
+		}
+	}
+	return 0;
+}
 int Jcmd_break(unsigned char *arg_name, unsigned char *arg2) {
 	int i, k;
 	int ret = 0;

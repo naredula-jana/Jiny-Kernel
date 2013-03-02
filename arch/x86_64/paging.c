@@ -1,4 +1,4 @@
-//#define DEBUG_ENABLE 1
+#define DEBUG_ENABLE 1
 
 #include "common.h"
 #include "paging.h"
@@ -173,11 +173,14 @@ void ar_pageFault(struct fault_ctx *ctx) {
 //	struct gpregs *gp = ctx->gprs;
 
 	// Output an error message.
+#if 0
 	DEBUG("new PAGE FAULT  ip:%x  addr: %x \n",ctx->istack_frame->rip,faulting_address);
 	DEBUG("rbp:%x rsi:%x rdi:%x rdx:%x rcx:%x rbx:%x \n",gp->rbp,gp->rsi,gp->rdi,gp->rdx,gp->rcx,gp->rbx);
 	DEBUG("r15:%x r14:%x r13:%x r12:%x r11:%x r10:%x \n",gp->r15,gp->r14,gp->r13,gp->r12,gp->r11,gp->r10);
 	DEBUG("r9:%x r8:%x rax:%x rsp:%x\n",gp->r9,gp->r8,gp->rax,ctx->istack_frame->rsp);
 	DEBUG("PAGE FAULT ctx:%x  ip:%x  addr: %x ", ctx, ctx->istack_frame->rip, faulting_address);
+#endif
+
 	if (present) {
 		DEBUG("page fault: Updating present \n");
 		//mm_debug=1;
@@ -224,25 +227,29 @@ static int copy_pagetable(int level,unsigned long src_ptable_addr,unsigned long 
 			nv=0;
 			if ((level==2 && pde->ps==1) || level==1) /* 2nd level page with large pages or 1st level page table */
 			{
-				if (level ==2)
-				{
-				}else
-				{
+				unsigned long phy_addr=(*src & (~0xfff));
+				if (is_pc_paddr(phy_addr)){ /* page cache physical addr */
+					*dest=*src;
+				}else{/* anonymous pages need to be copied */
+					/* TODO : need to implement Copy On Write instead of Simple Copy */
+					nv = (unsigned long *) mm_getFreePages(0, 0);
+					ut_memcpy(nv,__va(phy_addr),PAGE_SIZE);
+					*dest=__pa(nv) | (*src&0xfff);
+					DEBUG("Copying the page src:%x dest:%x \n",*dest,*src);
 				}
-				*dest=*src;
-
 			}else
 			{
-				if ((level == kernel_pages_level) && (i>=kernel_pages_entry)) /* for kernel pages , directly link the page table itself instead of copy recursively */
+				if ((level == kernel_pages_level) && (i >= kernel_pages_entry)) /* for kernel pages , directly link the page table itself instead of copy recursively */
 				{
-					*dest=*src;
-				}else
-				{
-				nv=(unsigned long *)mm_getFreePages(MEM_CLEAR,0);
-				if (nv == 0) BUG();
-				DEBUG(" calling i:%d level:%d src:%x  child src:%x physrc:%x \n",i,level,src_ptable_addr,__va(*src),*src);
-				copy_pagetable(level-1,(unsigned long)__va((*src)&(~0xfff)),(unsigned long)nv);
-				*dest=__pa(nv)|0x7;
+					*dest = *src;
+				} else {
+					nv = (unsigned long *) mm_getFreePages(MEM_CLEAR, 0);
+					if (nv == 0)
+						BUG();
+					DEBUG(" calling i:%d level:%d src:%x  child src:%x physrc:%x \n", i, level, src_ptable_addr, __va(*src), *src);
+					copy_pagetable(level - 1,(unsigned long) __va((*src)&(~0xfff)),
+							(unsigned long) nv);
+					*dest = __pa(nv) | 0x7;
 				}
 			}
 			DEBUG("updated  level: %d i:%d *src:%x  dest:%x *dest:%x %x nv:%x  \n",level,i,*src,dest,*dest,__pa(nv),nv);	
@@ -316,8 +323,9 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 				}else
 				{
 					DEBUG(" Clearing kernel entry %d:%d  entry end:%x addr+len:%x\n",level,i,entry_end,(addr+len));
-					*v=0;
+					//*v=0;
 				}
+				*v=0;
 			}
 			else if ((level==2 && pde->ps==1) || level ==1) /* Leaf level entries */
 			{
@@ -353,16 +361,16 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 		if (*v ==0) cleared++;
 		v++;
 	}
-
+	v=v-512;
 	if (cleared==512) /* All entries are cleared then remove the table */
 	{
-		v=v-512;
 		DEBUG("Release PAGE during clear page tables: level:%d tableaddr: %x \n",level,p);
 		mm_putFreePages((unsigned long)v,0);
 		return 1;
 	}else
 	{
 		DEBUG("Unable to clear all entries: %d level:%d \n",cleared,level);
+		//mm_putFreePages((unsigned long)v,0);
 	}
 
 	return 0;	
@@ -383,7 +391,7 @@ int ar_pageTableCleanup(struct mm_struct *mm,unsigned long addr, unsigned long l
 	return 0;
 }
 
-int ar_pageTableCopy(struct mm_struct *src_mm,struct mm_struct *dest_mm)
+int ar_dup_pageTable(struct mm_struct *src_mm,struct mm_struct *dest_mm)
 {
 	unsigned char *v;
 
