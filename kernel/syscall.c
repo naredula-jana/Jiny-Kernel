@@ -11,6 +11,17 @@
 #include "common.h"
 #include "isr.h"
 
+struct __sysctl_args {
+    int    *name;    /* integer vector describing variable */
+    int     nlen;    /* length of this vector */
+    void   *oldval;  /* 0 or address where to store old value */
+    size_t *oldlenp; /* available room for old value,
+                        overwritten by actual size of old value */
+    void   *newval;  /* 0 or address of new value */
+    size_t  newlen;  /* size of new value */
+};
+
+unsigned long SYS_sysctl(struct __sysctl_args *args );
 unsigned long SYS_printf(unsigned long *args);
 
 unsigned long SYS_fork();
@@ -61,7 +72,7 @@ unsigned long SYS_getpid();
 unsigned long SYS_getppid();
 unsigned long SYS_getpgrp();
 unsigned long SYS_exit_group();
-unsigned long SYS_wait4(void *arg1, void *arg2, void *arg3, void *arg4);
+unsigned long SYS_wait4(int pid, void *status,  unsigned long  option, void *rusage);
 
 
 struct pollfd {
@@ -73,6 +84,7 @@ unsigned long SYS_poll(struct pollfd *fds, int nfds, int timeout);
 
 unsigned long SYS_nanosleep(const struct timespec *req, struct timespec *rem);
 unsigned long SYS_getcwd(unsigned char *buf, int len);
+unsigned long SYS_chdir(unsigned char *filename);
 unsigned long SYS_fs_fcntl(int fd, int cmd, void *args);
 
 typedef struct {
@@ -96,7 +108,7 @@ syscalltable_t syscalltable[] = {
 { SYS_wait4 }, { SYS_sc_kill }, { SYS_uname }, { snull }, { snull }, /* 65 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 70 */
 { snull }, { SYS_fs_fcntl }, { snull }, { snull }, { SYS_fs_fdatasync }, /* 75 */
-{ snull }, { snull }, { snull }, { SYS_getcwd }, { snull }, /* 80 */
+{ snull }, { snull }, { snull }, { SYS_getcwd }, { SYS_chdir }, /* 80 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 85 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 90 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 95 */
@@ -112,7 +124,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 145 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 150 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 155 */
-{ snull }, { snull }, { SYS_arch_prctl }, { snull }, { snull }, /* 160 */
+{ SYS_sysctl }, { snull }, { SYS_arch_prctl }, { snull }, { snull }, /* 160 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 165 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 170 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 175 */
@@ -330,13 +342,49 @@ unsigned long SYS_futex(unsigned long *a){
 	*a=0;
 	return 1;
 }
+
+
+unsigned long SYS_sysctl(struct __sysctl_args *args) {
+	SYSCALL_DEBUG("sysctl  args:%x %x\n", args);
+	int *name;
+	unsigned char *carg[10];
+	int i;
+
+	if (args == 0)
+		return -1; /* -1 is error */
+
+	name = args->name[0];
+//	ut_printf(" sysctl name.. addr:%x: %x: %x: nlen:%d: \n", name[0], name[1], name[2], args->nlen);
+
+	for (i = 0; i < 10; i++) {
+		carg[i] = 0;
+	}
+	for (i = 0; i < 3; i++) {
+		if (name[i] != 0 ) {
+			carg[i] = name[i];
+		}
+	}
+	if (carg[0] != 0 && ut_strcmp(carg[0], "set") == 0) {
+		ut_printf("executing set command :%s : %s \n", carg[1], carg[2]);
+		if (carg[1] != 0 && carg[2] != 0) {
+			execute_symbol(SYMBOL_CONF, carg[1], carg[2]);
+			return 1;
+		} else {
+			return 0;
+		}
+	}
+
+	return 0; /* success */
+}
+
 unsigned long SYS_fs_fcntl(int fd, int cmd, void *args) {
 	SYSCALL_DEBUG("fcntl(Dummy)  fd:%x cmd:%x args:%x\n",fd,cmd,args);
 	return 0;
 }
-unsigned long SYS_wait4(void *arg1, void *arg2, void *arg3, void *arg4) {
-	SYSCALL_DEBUG("wait4(Dummy)  arg1:%x arg2:%x arg3:%x\n",arg1,arg2,arg3);
-	return 0;
+unsigned long SYS_wait4(int pid, void *status,  unsigned long  option, void *rusage) {
+	SYSCALL_DEBUG("wait4(Dummy)  pid:%x status:%x option:%x rusage:%x\n",pid,status,option,rusage);
+
+	return -1;
 }
 /*************************************
  * TODO : partially implemented calls
@@ -346,6 +394,11 @@ unsigned long SYS_poll(struct pollfd *fds, int nfds, int timeout) {
 	SYSCALL_DEBUG("poll(partial)  fds:%x nfds:%d timeout:%d  \n",fds,nfds,timeout);
 	if (nfds==0 || fds==0 || timeout==0) return 0;
     return 0;
+}
+unsigned long SYS_chdir(unsigned char *filename){
+	SYSCALL_DEBUG("chdir  buf:%s \n",filename);
+
+	return 1;
 }
 unsigned long SYS_getcwd(unsigned char *buf, int len) {
 	SYSCALL_DEBUG("getcwd(partial)  buf:%x len:%d  \n",buf,len);

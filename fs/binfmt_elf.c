@@ -1,4 +1,4 @@
-#define DEBUG_ENABLE
+//#define DEBUG_ENABLE
 #define DLINFO_ITEMS 13
 
 #include <elf.h>

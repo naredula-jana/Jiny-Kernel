@@ -24,7 +24,9 @@ int sc_wakeUp(queue_t *waitqueue);
 int sc_wait(queue_t *waitqueue, unsigned long ticks);
 int sc_sleep( long ticks); /* each tick is 100HZ or 10ms */
 unsigned long SYS_sc_fork();
-unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int flags,void *args);
+//unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int flags,void *args);
+
+unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void *ctid,  void *args) ;
 int SYS_sc_exit(int status);
 int SYS_sc_kill(unsigned long pid,unsigned long signal);
 void SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned char **env);
@@ -57,6 +59,7 @@ unsigned long vm_brk(unsigned long addr, unsigned long len);
 unsigned long vm_mmap(struct file *fp, unsigned long addr, unsigned long len,unsigned long prot, unsigned long flags, unsigned long pgoff);
 int vm_munmap(struct mm_struct *mm, unsigned long addr, unsigned long len);
 unsigned long vm_setupBrk(unsigned long addr, unsigned long len);
+unsigned long vm_dup_vmaps(struct mm_struct *src_mm,struct mm_struct *dest_mm);
 
 /* page cache */
 int pc_init(unsigned char *start_addr,unsigned long len);
@@ -72,7 +75,7 @@ page_struct_t *pc_getFreePage();
 
 /*vfs */
 unsigned long fs_registerFileSystem(struct filesystem *fs);
-struct inode *fs_getInode(char *filename);
+//struct inode *fs_getInode(char *filename);
 unsigned long fs_putInode(struct inode *inode);
 int Jcmd_ls(char *arg1,char *arg2);
 unsigned long fs_open(unsigned char *filename,int mode,int flags);
@@ -116,7 +119,7 @@ int ut_snprintf(char * buf, size_t size, const char *fmt, ...);
 /* architecture depended */
 void ar_registerInterrupt(uint8_t n, isr_t handler,char *name, void *private_data);
 unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,struct addr_list *addr_list, struct addr_list *page_dirty_list);
-int ar_pageTableCopy(struct mm_struct *src_mm,struct mm_struct *dest_mm);
+int ar_dup_pageTable(struct mm_struct *src_mm,struct mm_struct *dest_mm);
 int ar_pageTableCleanup(struct mm_struct *mm,unsigned long addr, unsigned long length);
 int ar_flushTlbGlobal();
 void flush_tlb(unsigned long dir);

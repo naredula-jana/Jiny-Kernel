@@ -116,7 +116,28 @@ long SYS_vm_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsi
 	file = fd_to_file(fd);
 	return vm_mmap(file, addr, len, prot, flags, pgoff);
 }
+unsigned long vm_dup_vmaps(struct mm_struct *src_mm,struct mm_struct *dest_mm){ /* duplicate vmaps to the new thread */
+	struct vm_area_struct *vma,*new_vma;
 
+	vma = src_mm->mmap;
+	while (vma) {
+		new_vma = kmem_cache_alloc(vm_area_cachep, 0);
+		if (new_vma == 0){
+			BUG();
+			return 0;
+		}
+		ut_memcpy(new_vma,vma,sizeof(struct vm_area_struct));
+		new_vma->vm_mm = dest_mm;
+		new_vma->vm_next = 0;
+
+		if (vma_link(dest_mm,new_vma)< 0){
+			BUG();
+		}
+		vma = vma->vm_next;
+	}
+
+    return 1;
+}
 unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long pgoff) {
 	struct mm_struct *mm = g_current_task->mm;
 	struct vm_area_struct *vma;

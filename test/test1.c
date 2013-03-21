@@ -14,7 +14,7 @@ main()
 	if (fp != 0)
 	{
 		ret=read(fp,buf,1024);	
-		printf(" Bytes read from file : %d ",ret);
+		printf(" Bytes read from file : %d \n ",ret);
 		if (ret > 0)
 		{
 			write(wp,buf,ret);

@@ -59,7 +59,7 @@ clean:
 	make SOURCE_ROOT=$$PWD -C mm clean
 	make SOURCE_ROOT=$$PWD -C mm/memleak clean
 	\rm bin/mod_file
-	\rm $(LWIP_OBJ)
+#	\rm $(LWIP_OBJ)
 
 LWC     := $(shell find /opt_src/lwip/src/ -type f -name '*.c')
 LWC     := $(filter-out %6.c %ip6_addr.c, $(LWC))

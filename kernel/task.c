@@ -17,6 +17,7 @@
 
 struct task_struct *g_current_tasks[MAX_CPUS];
 struct task_struct *g_idle_tasks[MAX_CPUS];
+static struct task_struct *g_dead_tasks[MAX_CPUS]; /* TODO : remove me later */
 struct mm_struct *g_kernel_mm = 0;
 
 static queue_t run_queue;
@@ -26,13 +27,15 @@ static queue_t timer_queue;
 static spinlock_t sched_lock = SPIN_LOCK_UNLOCKED;
 unsigned long g_pid = 0;
 unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles per second  */
-static struct task_struct *g_task_dead = 0; /* TODO : remove me later */
+
 
 extern long *g_idle_stack;
 void init_timer();
 static int free_mm(struct mm_struct *mm);
 static unsigned long push_to_userland();
 static unsigned long _schedule(unsigned long flags);
+static void schedule_kernelSecondHalf();
+static void schedule_userSecondHalf();
 static struct task_struct *alloc_task_struct(void) {
 	return (struct task_struct *) mm_getFreePages(0, 2); /*WARNING: do not change the size it is related TASK_SIZE, 4*4k=16k page size */
 }
@@ -48,8 +51,7 @@ static inline int _add_to_runqueue(struct task_struct * p) /* Add at the first *
 {
 	if (p->magic_numbers[0] != MAGIC_LONG || p->magic_numbers[1] != MAGIC_LONG) /* safety check */
 	{
-		DEBUG(
-				" Task Stack Got CORRUPTED task:%x :%x :%x \n", p, p->magic_numbers[0], p->magic_numbers[1]);
+		ut_printf(" Task Stack Got CORRUPTED task:%x :%x :%x \n", p, p->magic_numbers[0], p->magic_numbers[1]);
 		BUG();
 	}
 	if (p->run_link.next == 0 && p->cpu == 0xffff) { /* Avoid adding self adding in to runqueue */
@@ -388,7 +390,7 @@ error: mm_putFreePages((unsigned long)stack, 0);
 	return 0;
 }
 void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **env) {
-	struct file *fp;
+	//struct file *fp;
 	struct mm_struct *mm,*old_mm;
 	unsigned long main_func;
 	unsigned long t_argc, t_argv, stack_len, tmp_stack, tmp_aux;
@@ -401,8 +403,8 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	if (tmp_stack == 0) {
 		return;
 	}
-	/* delete old vm and create a new one */
 
+	/* delete old vm and create a new one */
 	mm = kmem_cache_alloc(mm_cachep, 0);
 	if (mm == 0)
 		BUG();
@@ -411,21 +413,25 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	mm->pgd = 0;
 	mm->mmap = 0;
 	mm->fs.total = 3;
-	ar_pageTableCopy(g_kernel_mm, mm); /* every process page table should have soft links to kernel page table */
+	ar_dup_pageTable(g_kernel_mm, mm); /* every process page table should have soft links to kernel page table */
 	old_mm=g_current_task->mm;
 	g_current_task->mm = mm;
 	free_mm(old_mm);
 	flush_tlb(mm->pgd);
 
 	/* populate vm with vmaps */
-	fp = (struct file *)fs_open(file, 0, 0);
-	if (fp == 0) {
-		ut_printf("Error :execve Failed to open the file :%s\n", file);
+	mm->exec_fp = (struct file *)fs_open(file, 0, 0);
+	if (mm->exec_fp == 0) {
+		mm_putFreePages(tmp_stack, 0);
+		ut_printf("Error execve : Failed to open the file :%s\n", file);
+		SYS_sc_exit(100);
 		return;
 	}
-	main_func = fs_loadElfLibrary(fp, tmp_stack + (PAGE_SIZE - stack_len), stack_len, tmp_aux);
+	main_func = fs_loadElfLibrary(mm->exec_fp, tmp_stack + (PAGE_SIZE - stack_len), stack_len, tmp_aux);
 	if (main_func == 0) {
 		mm_putFreePages(tmp_stack, 0);
+		ut_printf("Error execve : ELF load Failed \n");
+		SYS_sc_exit(100);
 		return ;
 	}
 	mm_putFreePages(tmp_stack, 0);
@@ -445,19 +451,18 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 
 	g_current_task->thread.userland.user_fs_base = 0;
 	ar_updateCpuState(g_current_task);
+
 	push_to_userland();
 }
 
-struct user_regs {
-	struct gpregs gpres;
-	struct intr_stack_frame isf;
-};
+
 #define DEFAULT_RFLAGS_VALUE (0x10202)
 #define GLIBC_PASSING 1
 extern void enter_userspace();
 static unsigned long push_to_userland() {
 	struct user_regs *p;
 	int cpuid=getcpuid();
+
 	DEBUG(" from PUSH113_TO_USERLAND :%d\n",cpuid);
 	/* From here onwards DO NOT  call any function that consumes stack */
 	asm("cli");
@@ -492,9 +497,29 @@ static unsigned long push_to_userland() {
 	enter_userspace();
 	return 0;
 }
-static int free_mm(struct mm_struct *mm) {
-	int i;
+static unsigned long clone_push_to_userland() {
+	struct user_regs *p;
 
+	DEBUG("CLONE from PUSH113_TO_USERLAND :%d\n",getcpuid());
+	/* From here onwards DO NOT  call any function that consumes stack */
+	asm("cli");
+	asm("movq %%rsp,%0" : "=m" (p));
+	p = p - 1;
+	asm("subq $0xa0,%rsp");
+
+	ut_memcpy(p,&(g_current_task->thread.user_regs),sizeof(struct user_regs));
+
+	p->gpres.rax =0 ; /* return of the clone call */
+	p->isf.rflags = DEFAULT_RFLAGS_VALUE;
+	if (g_current_task->thread.userland.sp != 0)
+	    p->isf.rsp = g_current_task->thread.userland.sp;
+	p->isf.cs = GDT_SEL(UCODE_DESCR) | SEG_DPL_USER;
+	p->isf.ss = GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
+
+	enter_userspace();
+	return 0;
+}
+static int free_mm(struct mm_struct *mm) {
 	DEBUG("freeing the mm :%x counter:%x \n",mm,mm->count.counter);
 
 	if (mm->count.counter == 0)
@@ -503,24 +528,32 @@ static int free_mm(struct mm_struct *mm) {
 	if (mm->count.counter > 0)
 		return 0;
 
+	unsigned long vm_space_size= 511*512*512*512*PAGE_SIZE; /* 4 level page table size */
 	vm_munmap(mm, 0, 0xffffffff);
-	ar_pageTableCleanup(mm, 0, 0xfffffffff);
+	vm_space_size = ~0;
+	DEBUG(" Freeing the final PAGE TABLE :%x\n",vm_space_size);
+	ar_pageTableCleanup(mm, 0, vm_space_size);
+#if 0
 	for (i = 3; i < mm->fs.total; i++) {
 		DEBUG("FREEing the files :%d \n",i);
 		fs_close(mm->fs.filep[i]);
 	}
+	if (mm->exec_fp != 0)
+		fs_close(mm->exec_fp);
+
 	mm->fs.total = 0;
+#endif
 	kmem_cache_free(mm_cachep, mm);
 	return 1;
 }
-#define CLONE_VM 1
+#define CLONE_VM 0x100
 unsigned long sc_createKernelThread(int(*fn)(void *), unsigned char *args, unsigned char *thread_name) {
 	unsigned long pid;
 	unsigned long flags;
 	struct list_head *pos;
 	struct task_struct *task;
 
-	pid = SYS_sc_clone(fn, 0, CLONE_VM, args);
+	pid = SYS_sc_clone(CLONE_VM,0,0, fn, args);
 
 	if (thread_name == 0)
 		return pid;
@@ -537,23 +570,22 @@ last:
 
 	return pid;
 }
-static void schedule_secondHalf(){
-	spin_unlock_irqrestore(&sched_lock, g_current_task->flags);
-	g_current_task->thread.real_ip(0);
-}
-unsigned long SYS_sc_clone(int(*fn)(void *), void *child_stack, int clone_flags, void *args) {
+
+unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void *ctid,  void *args) {
 	struct task_struct *p;
 	struct mm_struct *mm;
 	unsigned long flags;
+	void *fn=ctid;
+	unsigned long ret_pid=0;
 
-	SYSCALL_DEBUG("clone fn:%x child_stack:%x flags:%x args:%x \n",fn,child_stack,clone_flags,args);
+	SYSCALL_DEBUG("clone ctid:%x child_stack:%x flags:%x args:%x \n",fn,child_stack,clone_flags,args);
 	/* Initialize the stack  */
 	p = alloc_task_struct();
 	if (p == 0)
 		BUG();
 	ut_memset((unsigned char *) p, MAGIC_CHAR, TASK_SIZE);
 	/* Initialize mm */
-	if (clone_flags | CLONE_VM) /* parent and child run in the same vm */
+	if (clone_flags & CLONE_VM) /* parent and child run in the same vm */
 	{
 		mm = g_current_task->mm;
 		atomic_inc(&mm->count);
@@ -566,26 +598,41 @@ unsigned long SYS_sc_clone(int(*fn)(void *), void *child_stack, int clone_flags,
 		atomic_set(&mm->count,1);
 		DEBUG("clone  the mm :%x counter:%x \n",mm,mm->count.counter);
 		mm->pgd = 0;
+		mm->mmap = 0;
 		for (i=0; i<MAX_FDS;i++)
 			mm->fs.filep[i]=0;
 		mm->fs.total = 3;
-		ar_pageTableCopy(g_current_task->mm, mm);
-		mm->mmap = 0;
+		DEBUG("BEFORE duplicating pagetables and vmaps \n");
+		ar_dup_pageTable(g_current_task->mm, mm);
+		vm_dup_vmaps(g_current_task->mm, mm);
+		DEBUG("AFTER duplicating pagetables and vmaps\n");
+
+		mm->exec_fp = 0; // TODO : need to be cloned
 	}
 	/* initialize task struct */
 	p->mm = mm;
+	p->trace_on = 0;
 	p->ticks = 0;
 	p->pending_signal = 0;
 	p->cpu = getcpuid();
+	p->thread.userland.user_fs = 0;
+	p->thread.userland.user_fs_base = 0;
 	if (g_current_task->mm != g_kernel_mm) { /* user level thread */
-		p->thread.userland.ip = (unsigned long)fn;
+		ut_memcpy(&(p->thread.userland), &(g_current_task->thread.userland), sizeof(struct user_thread));
+		ut_memcpy(&(p->thread.user_regs),g_cpu_state[getcpuid()].kernel_stack-sizeof(struct user_regs),sizeof(struct user_regs));
+
+		DEBUG(" userland  ip :%x \n",p->thread.userland.ip);
 		p->thread.userland.sp = (unsigned long)child_stack;
-		p->thread.userland.argc = 0;/* TODO */
-		p->thread.userland.argv = 0; /* TODO */
-		BRK;// TODO need to add the unlock to push_to_userland
-		p->thread.ip = (void *) push_to_userland;
+		p->thread.userland.user_stack = (unsigned long)child_stack;
+
+		DEBUG(" child ip:%x stack:%x \n",p->thread.userland.ip,p->thread.userland.sp);
+		DEBUG("userspace rip:%x rsp:%x \n",p->thread.user_regs.isf.rip,p->thread.user_regs.isf.rsp);
+		//p->thread.userland.argc = 0;/* TODO */
+		//p->thread.userland.argv = 0; /* TODO */
+		save_flags(p->flags);
+		p->thread.ip = (void *) schedule_userSecondHalf;
 	} else { /* kernel level thread */
-		p->thread.ip = (void *) schedule_secondHalf;
+		p->thread.ip = (void *) schedule_kernelSecondHalf;
 		save_flags(p->flags);
 		p->thread.argv = args;
 		p->thread.real_ip =fn;
@@ -606,12 +653,9 @@ unsigned long SYS_sc_clone(int(*fn)(void *), void *child_stack, int clone_flags,
 	p->task_link.next = 0;
 	p->task_link.prev = 0;
 	p->wait_queue.next = p->wait_queue.prev = NULL;
-
-	p->thread.userland.user_fs = 0;
-	p->thread.userland.user_fs_base = 0;
-
 	p->stats.ticks_consumed = 0;
 
+	ret_pid=p->pid;
 	spin_lock_irqsave(&sched_lock, flags);
 	list_add_tail(&p->task_link, &task_queue.head);
 	if (_add_to_runqueue(p)==0) {
@@ -619,19 +663,39 @@ unsigned long SYS_sc_clone(int(*fn)(void *), void *child_stack, int clone_flags,
 	}
 	spin_unlock_irqrestore(&sched_lock, flags);
 
-	return p->pid;
+	SYSCALL_DEBUG("clone return pid :%d \n",ret_pid);
+	return ret_pid;
 }
 unsigned long SYS_sc_fork() {
 	SYSCALL_DEBUG("fork \n");
-	return SYS_sc_clone(0, 0, CLONE_VM, 0);
+	return SYS_sc_clone(CLONE_VM, 0, 0,  0, 0);
+}
+static int release_resources(struct task_struct *task){
+	int i;
+	struct mm_struct *mm;
+
+	mm = task->mm;
+
+	for (i = 3; i < mm->fs.total; i++) {
+		DEBUG("FREEing the files :%d \n",i);
+		fs_close(mm->fs.filep[i]);
+	}
+	if (mm->exec_fp != 0)
+		fs_close(mm->exec_fp);
+
+	mm->fs.total = 0;
+	mm->exec_fp=0;
+	return 1;
 }
 int SYS_sc_exit(int status) {
 	unsigned long flags;
 	SYSCALL_DEBUG("sys exit : status:%d \n",status);
 	ar_updateCpuState(g_current_task);
 
+	release_resources(g_current_task);
+
 	spin_lock_irqsave(&sched_lock, flags);
-	g_current_task->state = TASK_DEAD;
+	g_current_task->state = TASK_DEAD; /* this should be last statement before schedule */
 	spin_unlock_irqrestore(&sched_lock, flags);
 
 	sc_schedule();
@@ -761,6 +825,7 @@ void init_tasking() {
 		g_idle_tasks[i]->cpu = i;
 		g_idle_tasks[i]->mm = g_kernel_mm; /* TODO increase the corresponding count */
 		g_current_tasks[i] = g_idle_tasks[i];
+		g_dead_tasks[i] = 0;
 		ut_strncpy(g_idle_tasks[i]->name, (unsigned char *)"idle", MAX_TASK_NAME);
 		g_pid++;
 	}
@@ -771,11 +836,18 @@ void init_tasking() {
 //	init_timer(); //currently apic timer is in use
 	ar_registerInterrupt(IPI_INTERRUPT, &ipi_interrupt, "IPI", NULL);
 }
-static void _delete_task(struct task_struct *task) {
+/* This function should not block, if it block then the idle thread may block */
+static void delete_task(struct task_struct *task) {
+	unsigned long intr_flags;
+
 	if (task ==0) return;
+    DEBUG("DELETING TASK :%x\n",task->pid);
+
+	spin_lock_irqsave(&sched_lock, intr_flags);
 	list_del(&task->wait_queue);
 	list_del(&task->run_link);
 	list_del(&task->task_link);
+	spin_unlock_irqrestore(&sched_lock, intr_flags);
 
 	free_mm(task->mm);
 	free_task_struct(task);
@@ -790,9 +862,37 @@ int getmaxcpus(){
 	return 1;
 }
 #endif
+static struct task_struct * _get_dead_task(){
+	struct task_struct *task=0;
 
-void sc_schedule() {
+	int cpuid=getcpuid();
+	if (g_dead_tasks[cpuid]!=0) {
+		task=g_dead_tasks[cpuid];
+		g_dead_tasks[cpuid]=0;
+	}else{
+		task=0;
+	}
+	return task;
+}
+static void schedule_userSecondHalf(){ /* user thread second Half: _schedule function function land here. */
+	struct task_struct *task = _get_dead_task();
+	spin_unlock_irqrestore(&sched_lock, g_current_task->flags);
+	if (task != 0)
+		delete_task(task);
+
+	ar_updateCpuState(g_current_task);
+	clone_push_to_userland();
+}
+static void schedule_kernelSecondHalf(){ /* kernel thread second half:_schedule function task can lands here. */
+	struct task_struct *task = _get_dead_task();
+	spin_unlock_irqrestore(&sched_lock, g_current_task->flags);
+	if (task != 0)
+		delete_task(task);
+	g_current_task->thread.real_ip(0);
+}
+void sc_schedule() { /* _schedule function task can land here. */
 	unsigned long intr_flags;
+
 	int cpuid=getcpuid();
 
 	if (!g_current_task) {
@@ -808,23 +908,12 @@ void sc_schedule() {
 
 	spin_lock_irqsave(&sched_lock, intr_flags);
 	intr_flags=_schedule(intr_flags);
+	struct task_struct *task = _get_dead_task();
 	spin_unlock_irqrestore(&sched_lock, intr_flags);
 
-	if (1)
-	{
-		struct task_struct *task=0;
-		spin_lock_irqsave(&sched_lock, intr_flags);
-		if (g_task_dead!=0) {
-			task=g_task_dead;
-			g_task_dead=0;
-		}else{
-			task=0;
-		}
-		spin_unlock_irqrestore(&sched_lock, intr_flags);
-		if (task != 0){
-			_delete_task(task);
-		}
-	}
+	if (task != 0)
+		delete_task(task);
+
 }
 void sc_check_signal() {
 
@@ -835,7 +924,9 @@ void sc_check_signal() {
 	if (is_kernelThread(g_current_task)) {
 		ut_printf(" WARNING: kernel thread cannot be killed \n");
 	} else {
-		g_current_task->state = TASK_DEAD;
+		g_current_task->pending_signal = 0;
+		SYS_sc_exit(9);
+		return;
 	}
 	g_current_task->pending_signal = 0;
     sc_schedule();
@@ -880,10 +971,10 @@ static unsigned long  _schedule(unsigned long flags) {
 		flush_tlb(next->mm->pgd);
 	}
 	if (prev->state == TASK_DEAD) {
-		if (g_task_dead != NULL){
-			BUG();
+		if (g_dead_tasks[cpuid] != NULL){
+			BUG(); //Hitting
 		}
-		g_task_dead = prev;
+		g_dead_tasks[cpuid] = prev;
 	}else if (prev!=g_idle_tasks[cpuid] && prev->state==TASK_RUNNING){ /* some other cpu  can pickup this task , running task and idle task should not be in a run equeue even though there state is running */
 		if (prev->run_link.next != 0){ /* Prev should not be on the runqueue */
 			BUG();

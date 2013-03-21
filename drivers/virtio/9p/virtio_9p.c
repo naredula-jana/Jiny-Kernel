@@ -1,4 +1,4 @@
-#define DEBUG_ENABLE 1
+//#define DEBUG_ENABLE 1
 #include "common.h"
 #include "device.h"
 #include "mm.h"
@@ -156,8 +156,7 @@ int p9_read_rpc(p9_client_t *client, const char *fmt, ...) {
 	client->recv_type = type;
 	ret = p9pdu_read(&pdu, fmt, ap);
 	va_end(ap);
-	DEBUG(
-			"Recv Header ret:%x total len :%x stype:%x(%d) rtype:%x(%d) tag:%x \n", ret, total_len, client->type, client->type, type, type, tag);
+	DEBUG("Recv Header ret:%x:%d total len :%x stype:%x(%d) rtype:%x(%d) tag:%x \n", ret,ret, total_len, client->type, client->type, type, type, tag);
 	if (type == 107) { // TODO better way of handling other and this error
 		recv[100] = '\0';
 		DEBUG(" recv error data :%s: \n ", &recv[9]);

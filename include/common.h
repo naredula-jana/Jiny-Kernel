@@ -20,8 +20,14 @@
 
 extern int g_conf_syscall_debug;
 extern int g_conf_debug_level;
+extern spinlock_t g_userspace_stdio_lock;
 #define SYSCALL_DEBUG(x...) do { \
-	if (g_conf_syscall_debug==1)	{ut_printf("SYSCALL(%x :%d uip: %x) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].user_ip); ut_printf(x);} \
+	if (g_conf_syscall_debug==1)	{\
+		unsigned long flags; \
+		spin_lock_irqsave(&g_userspace_stdio_lock, flags); \
+		ut_printf("SYSCALL(%x :%d uip: %x) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].user_ip); ut_printf(x);\
+		spin_unlock_irqrestore(&g_userspace_stdio_lock, flags); \
+	} \
 } while (0) 
 
  //#define DEBUG_ENABLE 1

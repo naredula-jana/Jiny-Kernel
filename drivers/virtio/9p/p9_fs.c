@@ -1,4 +1,4 @@
-#define DEBUG_ENABLE 1
+//#define DEBUG_ENABLE 1
 #include "vfs.h"
 #include "mm.h"
 #include "common.h"

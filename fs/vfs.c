@@ -8,7 +8,7 @@
 *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
 *
 */
-//#define DEBUG_ENABLE 1
+#define DEBUG_ENABLE 1
 #include "common.h"
 #include "mm.h"
 #include "vfs.h"
@@ -28,7 +28,7 @@ static int inode_init(struct inode *inode, char *filename, struct filesystem *vf
 
 	if (inode == NULL)
 		return 0;
-	inode->count.counter = 0;
+	inode->count.counter = 1;
 	inode->nrpages = 0;
 	if (filename && filename[0] == 't') /* TODO : temporary solution need to replace with fadvise call */
 	{
@@ -36,8 +36,9 @@ static int inode_init(struct inode *inode, char *filename, struct filesystem *vf
 	} else {
 		inode->type = TYPE_LONGLIVED;
 	}
-	inode->file_size = -1;
+	inode->file_size = 0;
 	inode->fs_private = 0;
+	inode->inode_no = 0;
 	inode->vfs = vfs;
 	ut_strcpy(inode->filename, (unsigned char *)filename);
 	INIT_LIST_HEAD(&(inode->page_list));
@@ -57,36 +58,87 @@ int Jcmd_ls(char *arg1, char *arg2) {
 	struct inode *tmp_inode;
 	struct list_head *p;
 
-	ut_printf(" Name usagecount nrpages length \n");
+	ut_printf(" Name usagecount nrpages length  inode_no\n");
+	list_for_each(p, &inode_list) {
+		tmp_inode = list_entry(p, struct inode, inode_link);
+		ut_printf("%s %d %d %d %d\n", tmp_inode->filename, tmp_inode->count,
+				tmp_inode->nrpages, tmp_inode->file_size, tmp_inode->inode_no);
+	}
+	return 1;
+}
+int Jcmd_clear_pagecache(){
+	struct inode *tmp_inode;
+	struct list_head *p;
+
 	list_for_each(p, &inode_list) {
 		tmp_inode = list_entry(p, struct inode, inode_link);
 		ut_printf("%s %d %d %d \n", tmp_inode->filename, tmp_inode->count,
 				tmp_inode->nrpages, tmp_inode->file_size);
+		fs_fadvise(tmp_inode, 0, 0, POSIX_FADV_DONTNEED);
 	}
 	return 1;
 }
-struct inode *fs_getInode(char *filename) {
-	struct inode *ret_inode;
+static struct inode *fs_getInode(char *filename, int flags, int mode) {
+	struct inode *ret_inode,*tmp_inode;
 	struct list_head *p;
-	unsigned long flags;
+	unsigned long lock_flags;
+	int ret;
 
 	ret_inode = 0;
 
-	spin_lock_irqsave(&g_inode_lock, flags);
+	spin_lock_irqsave(&g_inode_lock, lock_flags);
 	list_for_each(p, &inode_list) {
 		ret_inode = list_entry(p, struct inode, inode_link);
 		if (ut_strcmp((unsigned char *)filename, ret_inode->filename) == 0) {
 			atomic_inc(&ret_inode->count);
-			spin_unlock_irqrestore(&g_inode_lock, flags);
+			spin_unlock_irqrestore(&g_inode_lock, lock_flags);
 			goto last;
 		}
 	}
-	spin_unlock_irqrestore(&g_inode_lock, flags);
+	spin_unlock_irqrestore(&g_inode_lock, lock_flags);
 
 	ret_inode = kmem_cache_alloc(slab_inodep, 0);
-	inode_init(ret_inode, filename, vfs_fs);
+	if (ret_inode != 0) {
+		struct fileStat stat;
+		inode_init(ret_inode, filename, vfs_fs);
 
-	last: return ret_inode;
+#if 1
+		ret = vfs_fs->open(ret_inode, flags, mode);
+		if (ret < 0){
+			ret_inode->count.counter = 0;
+			if (fs_putInode(ret_inode)==0){
+				BUG();
+			}
+			ret_inode = 0;
+			goto last;
+		}
+
+		if (vfs_fs->stat(ret_inode, &stat) == 1) { /* this is to get inode number */
+			ret_inode->inode_no = stat.inode_no;
+			ret_inode->file_size = stat.st_size;
+			DEBUG("get_inode file :%s: inode_no:%d: size:%d: \n",filename,stat.inode_no,stat.st_size);
+			list_for_each(p, &inode_list) {
+				tmp_inode = list_entry(p, struct inode, inode_link);
+				if (tmp_inode == ret_inode)
+					continue;
+				if (ret_inode->inode_no == tmp_inode->inode_no) {
+					ret_inode->count.counter = 0;
+					if (fs_putInode(ret_inode) == 0) {
+						BUG();
+					}
+					ret_inode = tmp_inode;
+				}
+			}
+		} else {
+			ut_printf("ERROR: cannot able to get STAT\n");
+		}
+#endif
+
+		atomic_inc(&ret_inode->count);
+	}
+
+last:
+    return ret_inode;
 }
 
 unsigned long fs_putInode(struct inode *inode) {
@@ -97,19 +149,22 @@ unsigned long fs_putInode(struct inode *inode) {
 	if (inode != 0 && inode->nrpages == 0 && inode->count.counter == 0) {
 		list_del(&inode->inode_link);
 		ret = 1;
+	}else{
+		if (inode != 0)
+		  atomic_dec(&inode->count);
 	}
 	spin_unlock_irqrestore(&g_inode_lock, flags);
 
 	if (ret == 1)
 		kmem_cache_free(slab_inodep, inode);
 
-	return 0;
+	return ret;
 }
 
 static struct file *vfsOpen(unsigned char *filename, int flags, int mode) {
 	struct file *filep;
 	struct inode *inodep;
-	int ret;
+	//int ret;
 
 	filep = kmem_cache_alloc(g_slab_filep, 0);
 	if (filep == 0)
@@ -129,16 +184,11 @@ static struct file *vfsOpen(unsigned char *filename, int flags, int mode) {
 		filep->type  = REGULAR_FILE;
 	}
 
-	inodep = fs_getInode((char *)filep->filename);
+	inodep = fs_getInode((char *)filep->filename, flags, mode);
 	if (inodep == 0)
 		goto error;
-	if (inodep->fs_private == 0) /* need to get info from host  irrespective the file present, REQUEST_OPEN checks the file modification and invalidated the pages*/
-	{
-		ret = vfs_fs->open(inodep, flags, mode);
-		if (ret < 0)
-			goto error;
-		inodep->file_size = ret;
-	}
+
+
 	filep->inode = inodep;
 	filep->offset = 0;
 	return filep;
@@ -169,7 +219,7 @@ unsigned long SYS_fs_open(char *filename, int mode, int flags) {
 	filep = (struct file *)fs_open((unsigned char *)filename, mode, flags);
 	total = g_current_task->mm->fs.total;
 	if (filep != 0 && total < MAX_FDS) {
-		for (i = 2; i < MAX_FDS; i++) {
+		for (i = 3; i < MAX_FDS; i++) { /* fds: 0,1,2 are for in/out/error */
 			if (g_current_task->mm->fs.filep[i] == 0) {
 				break;
 			}
@@ -208,7 +258,7 @@ static int vfsDataSync(struct file *filep)
 		page=list_entry(p, struct page, list);
 		if (PageDirty(page))
 		{
-			int len=inode->file_size;
+			uint64_t len=inode->file_size;
 			if (len < (page->offset+PC_PAGESIZE))
 			{
 				len=len-page->offset;
@@ -337,15 +387,19 @@ static long vfswrite(struct file *filep, unsigned char *buff, unsigned long len)
 	error:
 	return tmp_len;
 }
+spinlock_t g_userspace_stdio_lock = SPIN_LOCK_UNLOCKED;
 long SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
 	struct file *file;
 	int i;
 
 	SYSCALL_DEBUG("write fd:%d buff:%x len:%x \n",fd,buff,len);
-	if (fd == 1 || fd ==2) { /* TODO: remove the fd==2 later , this is only for testing */
+	if (fd == 1 || fd == 2) { /* TODO: remove the fd==2 later , this is only for testing */
+		unsigned long flags;
+		spin_lock_irqsave(&g_userspace_stdio_lock, flags);
 		for (i=0; i<len; i++){
 			ut_putchar((int)buff[i]);
 		}
+		spin_unlock_irqrestore(&g_userspace_stdio_lock, flags);
 		//ut_printf("%s", buff);/* TODO need to terminate the buf with \0  */
 		return len;
 	}
@@ -472,9 +526,10 @@ long SYS_fs_read(unsigned long fd, unsigned char *buff, unsigned long len) {
 static int vfsClose(struct file *filep)
 {
     int ret;
+    if (filep == 0) return 0;
 	if (filep->type == REGULAR_FILE) {
 		if (filep->inode != 0) {
-			ret = vfs_fs->close(filep->inode);
+			//ret = vfs_fs->close(filep->inode);
 			fs_putInode(filep->inode);
 		}
 	} else {

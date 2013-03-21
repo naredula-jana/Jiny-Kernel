@@ -76,7 +76,7 @@ enum {
 struct file {
 	unsigned char filename[MAX_FILENAME];
 	int type;
-	unsigned long offset;
+	uint64_t offset;
 	addr_t *addr;
 	struct inode *inode;
 	void *private;
@@ -89,7 +89,10 @@ struct inode {
 	time_t mtime; /* last modified time */
 	unsigned long fs_private;
 	struct filesystem *vfs;
-	unsigned long file_size; /* file length */
+
+	uint64_t file_size; /* file length */
+	uint64_t inode_no;
+
 	unsigned char filename[MAX_FILENAME];
 	struct list_head page_list;	
 	struct list_head vma_list;	

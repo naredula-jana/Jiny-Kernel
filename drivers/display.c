@@ -271,7 +271,7 @@ void ut_printf(const char *format, ...) {
 						}
 					}
 				}
-
+/* TODO: need to check the validy of virtual address, otherwise it will generate page fault with lock */
 				while (*p)
 					ut_putchar(*p++);
 

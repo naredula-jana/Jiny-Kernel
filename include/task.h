@@ -22,6 +22,10 @@
 #define TASK_STOPPED            4
 #define TASK_DEAD               64
 
+struct user_regs {
+	struct gpregs gpres;
+	struct intr_stack_frame isf;
+};
 
 struct user_thread {
 	unsigned long ip,sp;
@@ -36,6 +40,7 @@ struct thread_struct {
 	int(*real_ip)(void *);
 	unsigned char **argv;
 	struct user_thread userland;
+	struct user_regs user_regs;
 };
 #define MAX_FDS 100
 struct file;
@@ -49,6 +54,7 @@ struct mm_struct {
 	unsigned long pgd;
 	atomic_t count; /* How many references to "struct mm_struct" (users count as 1) */
 	struct fs_struct fs;
+	struct file *exec_fp; /* execute file */
 	unsigned long brk_addr, brk_len;
 	unsigned long anonymous_addr;
 };
@@ -70,7 +76,9 @@ struct task_struct {
 	unsigned long ticks;	
 	struct thread_struct thread;
 	struct mm_struct *mm;
+
 	int trace_stack_length; /* used for trace purpose */
+	char trace_on; /* used for trace */
 
 	struct list_head run_link; /* run queue */
 	struct list_head task_link; /* task queue */
