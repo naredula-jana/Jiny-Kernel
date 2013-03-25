@@ -70,12 +70,13 @@ int cmd(unsigned char *arg1,unsigned  char *arg2) {
 		ut_printf("Not Found: %s\n", arg1);
 	return ret;
 }
-commands_t cmd_list[] = { { "help      ", "HELP MENU", "help", print_help },
+commands_t cmd_list[] = { { "help      ", "HELP MENU", "help", sh_create },
+		{ "t1 ", "t1 file", "t1", sh_test1 },
 		{ "vmcore      ", "vmcore", "vmcore", sh_vmcore_test },
 		{"set  <var> <value>", "set config variables", "set", conf_set },
 		{"debug  ", "debug ", "debug", debug_trace },
 		{"cmd  <cmd> <arg1> <arg2>", "execute commands", "cmd", cmd },
-		{"c <prog>  ", "Create test thread", "c", sh_create },
+		{"c <prog>  ", "Create test thread", "c", sh_create1 },
 		{"c1 <prog>  ", "Create test thread", "c1", sh_create1 },
 		{ "kill <pid> ","kill process", "kill", sh_kill },
 		{ "scan        ", "scan page cache ", "scan", scan_pagetable },
@@ -87,7 +88,7 @@ commands_t cmd_list[] = { { "help      ", "HELP MENU", "help", print_help },
 		{ "cp <f1> <f2>", "copy f1 f2       ", "cp", sh_cp },
 		{ "sync <f1>", "sync f1       ", "sync", sh_sync },
 		{ "sd ","start pci device       ", "sd", sh_pci },
-				{ "t1 ", "t1 file", "t1", sh_test1 }, {
+				 {
 				0, 0, 0, cmd } /* at last check for command */
 };
 

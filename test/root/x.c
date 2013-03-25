@@ -2,5 +2,7 @@
 
 main()
 {
- execve("/home/njana/jiny/test/std_test",0,0);
+	               char *newargv[] = { NULL, "hello", "world", NULL };
+				                  char *newenviron[] = { NULL };
+ execve("./y", newargv, newenviron);
 }

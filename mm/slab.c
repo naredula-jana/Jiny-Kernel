@@ -1380,6 +1380,9 @@ try_again:
 	}
 #else
 	objp = kmem_cache_alloc_one(cachep);
+	if (objp != 0){
+		ut_memset(objp,0,cachep->objsize);
+	}
 #endif
 	local_irq_restore(save_flags);
 #ifdef MEMLEAK_TOOL

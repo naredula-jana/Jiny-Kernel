@@ -206,8 +206,48 @@ void ar_pageFault(struct fault_ctx *ctx) {
 	BUG();
 }
 
+#define MAX_KERNEL_ENTRIES 10
 static int kernel_pages_level=3;
-static int kernel_pages_entry=(KERNEL_ADDR_START/0x40000000);
+static unsigned long kernel_level3_entries[MAX_KERNEL_ENTRIES];
+static int kernel_level3_entries_count=0;
+static void copy_kernel_pagetable_entries(){
+	int i,j,k;
+	unsigned long p4,p3,phy_entry; /* physical address */
+	unsigned long *v4,*v3; /* virtual address */
+
+	k=0;
+	p4 = g_kernel_mm->pgd;
+	for (i=0; i<512; i++)
+	{
+		v4=__va(p4+i*8);
+		p3=(*v4 & (~0xfff));
+		if (p3==0) continue;
+		for (j=0; j<512; j++){
+			v3=__va(p3+j*8);
+			kernel_level3_entries[k] = (*v3 & (~0xfff));
+			if (kernel_level3_entries[k]!=0) k++;
+			else continue;
+			if (k>=MAX_KERNEL_ENTRIES){
+				BUG();
+			}
+		}
+	}
+	kernel_level3_entries_count=k;
+	if (k==0){
+		BUG();
+	}
+}
+static int check_kernel_ptable_entry(unsigned long phy_addr){
+	int i;
+	for (i=0; i<kernel_level3_entries_count; i++)
+	{
+		if (kernel_level3_entries[i]==(phy_addr & (~0xfff))){
+			return 1;
+		}
+	}
+	return 0;
+}
+
 static int copy_pagetable(int level,unsigned long src_ptable_addr,unsigned long dest_ptable_addr)
 {
 	int i;
@@ -239,7 +279,7 @@ static int copy_pagetable(int level,unsigned long src_ptable_addr,unsigned long 
 				}
 			}else
 			{
-				if ((level == kernel_pages_level) && (i >= kernel_pages_entry)) /* for kernel pages , directly link the page table itself instead of copy recursively */
+				if ((level == kernel_pages_level) && check_kernel_ptable_entry((*src & (~0xfff)))) /* for kernel pages , directly link the page table itself instead of copy recursively */
 				{
 					*dest = *src;
 				} else {
@@ -260,6 +300,36 @@ static int copy_pagetable(int level,unsigned long src_ptable_addr,unsigned long 
 	DEBUG("E level: %d src:%x  dest:%x \n",level,src,dest);	
 	return 1;
 }
+static  void pagetable_walk(int level,unsigned long ptable_addr){
+	unsigned long p,phy_entry; /* physical address */
+	unsigned long *v; /* virtual address */
+	unsigned int i,max_i,j;
+
+	p=ptable_addr;
+	if (p == 0) return 0;
+
+	if (level == 4){
+		ut_printf("Page Table Walk : %x \n",ptable_addr);
+	}
+	max_i=512;
+	for (i=0; i<max_i; i++){
+		v=__va(p+i*8);
+		phy_entry=(*v & (~0xfff));
+		if (phy_entry == 0) continue;
+		for (j=level; j<5; j++)
+			ut_printf("   ");
+
+
+		if ((level == kernel_pages_level) && check_kernel_ptable_entry(phy_entry)){
+			ut_printf(" %d (%d):%x  **** \n",level,i,phy_entry);
+			continue;
+		}
+		ut_printf(" %d (%d):%x\n",level,i,phy_entry);
+		if (level > 3) pagetable_walk(level-1,phy_entry);
+	}
+	return;
+}
+
 /*
 Return value : 1 - if entire table is cleared and deleted  else return 0
 */
@@ -314,17 +384,10 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 			pde_t *pde;
 			unsigned long page;
 			pde=(pde_t *)v;
-			if ((level == kernel_pages_level) && (i>=kernel_pages_entry)) /* these are kernel pages , do not cleanup recuresvely */
+			if ((level == kernel_pages_level) && check_kernel_ptable_entry((*v & (~0xfff)))) /* these are kernel pages , do not cleanup recuresvely */
 			{
-				if ((addr+len) < entry_end)
-				{
-					DEBUG("    Not Clearing kernel entry %d:%d  entry end:%x addr+len:%x\n",level,i,entry_end,(addr+len));
-					
-				}else
-				{
-					DEBUG(" Clearing kernel entry %d:%d  entry end:%x addr+len:%x\n",level,i,entry_end,(addr+len));
-					//*v=0;
-				}
+				DEBUG(" Not Clearing kernel entry %d:%d  entry end:%x addr+len:%x\n",level,i,entry_end,(addr+len));
+
 				*v=0;
 			}
 			else if ((level==2 && pde->ps==1) || level ==1) /* Leaf level entries */
@@ -333,9 +396,11 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 		//		DEBUG(" Freeing leaf entry from page table level:%d  vaddr:%x paddr:%x  \n",level,page,*v);
 				if (is_pc_paddr(page))
 				{ /* TODO : page cache, need to decrease the usage count*/
+					DEBUG(" Not freeing PAGECACHE page  from page table level:%d  vaddr:%x paddr:%x  \n",level,page,*v);
 
 				}else
 				{
+					DEBUG("Freeing ANONYMOUS  from page table level:%d  vaddr:%x paddr:%x  \n",level,page,*v);
 					if (level ==1) /* Freeing the Anonymous page */
 						mm_putFreePages((unsigned long)__va(page),0);
 					else
@@ -387,7 +452,9 @@ int ar_pageTableCleanup(struct mm_struct *mm,unsigned long addr, unsigned long l
 		ut_printf(" ERROR : trying to free kernel page table \n");
 		return 0;
 	}
-	DEBUG("Pagetable Start Page : %x\n",mm->pgd);
+	DEBUG("Pagetable Start Page : %x len:%x\n",mm->pgd,length);
+	//if (length == ~0)
+	//     pagetable_walk(4,mm->pgd);
 	if (clear_pagetable(4,mm->pgd,addr,length,0) == 1)
 	{
 		mm->pgd=0;
@@ -405,7 +472,14 @@ int ar_dup_pageTable(struct mm_struct *src_mm,struct mm_struct *dest_mm)
 	v=(unsigned char *)mm_getFreePages(MEM_CLEAR,0);
 	if (v == 0) BUG();
 	dest_mm->pgd=__pa(v);
+	if (kernel_level3_entries_count==0 && src_mm==g_kernel_mm){
+		copy_kernel_pagetable_entries();
+	}
 	copy_pagetable(4,(unsigned long)__va(src_mm->pgd),(unsigned long)v);
+#if 0
+	pagetable_walk(4,src_mm->pgd);
+	pagetable_walk(4,g_kernel_mm->pgd);
+#endif
 	return 1;
 }
 

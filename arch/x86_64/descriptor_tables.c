@@ -136,8 +136,6 @@ static void init_gdt(int cpu)
 
 int ar_archSetUserFS(unsigned long addr) /* TODO need to reimplement using LDT */
 {
-
-
 	if (addr == 0) {
 		g_current_task->thread.userland.user_fs = 0;
 		g_current_task->thread.userland.user_fs_base = 0;
@@ -154,17 +152,17 @@ int ar_updateCpuState(struct task_struct *p)
 	if (cpuid != getcpuid()){
 		BUG();
 	}
-	g_cpu_state[cpuid].user_stack=p->thread.userland.user_stack;
-	g_cpu_state[cpuid].user_ds = p->thread.userland.user_ds;
-	g_cpu_state[cpuid].user_es = p->thread.userland.user_es;
-	g_cpu_state[cpuid].user_fs = p->thread.userland.user_fs;
-	g_cpu_state[cpuid].user_gs = p->thread.userland.user_gs;
-	g_cpu_state[cpuid].user_fs_base = p->thread.userland.user_fs_base;
-	g_cpu_state[cpuid].kernel_stack = (unsigned long) p + TASK_SIZE;
+	g_cpu_state[cpuid].md_state.user_stack=p->thread.userland.user_stack;
+	g_cpu_state[cpuid].md_state.user_ds = p->thread.userland.user_ds;
+	g_cpu_state[cpuid].md_state.user_es = p->thread.userland.user_es;
+	g_cpu_state[cpuid].md_state.user_fs = p->thread.userland.user_fs;
+	g_cpu_state[cpuid].md_state.user_gs = p->thread.userland.user_gs;
+	g_cpu_state[cpuid].md_state.user_fs_base = p->thread.userland.user_fs_base;
+	g_cpu_state[cpuid].md_state.kernel_stack = (unsigned long) p + TASK_SIZE;
 
-	seg_descr_setup(&gdt_entries[cpuid][FS_UDATA_DESCR], SEG_TYPE_DATA, SEG_DPL_USER, g_cpu_state[cpuid].user_fs_base, 0xfffff, SEG_FLG_PRESENT | SEG_FLG_64BIT | SEG_FLG_GRAN);
+	seg_descr_setup(&gdt_entries[cpuid][FS_UDATA_DESCR], SEG_TYPE_DATA, SEG_DPL_USER, g_cpu_state[cpuid].md_state.user_fs_base, 0xfffff, SEG_FLG_PRESENT | SEG_FLG_64BIT | SEG_FLG_GRAN);
 	gdtr_load(&gdt_ptr[cpuid]);
-	asm volatile("mov %0, %%fs":: "r"(g_cpu_state[cpuid].user_fs));
+	asm volatile("mov %0, %%fs":: "r"(g_cpu_state[cpuid].md_state.user_fs));
 	return 1;
 }
 

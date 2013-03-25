@@ -15,9 +15,6 @@
 #define MAGIC_CHAR 0xab
 #define MAGIC_LONG 0xabababababababab
 
-struct task_struct *g_current_tasks[MAX_CPUS];
-struct task_struct *g_idle_tasks[MAX_CPUS];
-static struct task_struct *g_dead_tasks[MAX_CPUS]; /* TODO : remove me later */
 struct mm_struct *g_kernel_mm = 0;
 
 static queue_t run_queue;
@@ -36,6 +33,8 @@ static unsigned long push_to_userland();
 static unsigned long _schedule(unsigned long flags);
 static void schedule_kernelSecondHalf();
 static void schedule_userSecondHalf();
+static int release_resources(struct task_struct *task);
+
 static struct task_struct *alloc_task_struct(void) {
 	return (struct task_struct *) mm_getFreePages(0, 2); /*WARNING: do not change the size it is related TASK_SIZE, 4*4k=16k page size */
 }
@@ -58,13 +57,7 @@ static inline int _add_to_runqueue(struct task_struct * p) /* Add at the first *
 		list_add_tail(&p->run_link, &run_queue.head);
 		return 1;
 	}
-#if 0
-	if (g_current_tasks[0] == p || g_current_tasks[1] == p) //SAFE CHECK
-	{
-		BUG();
-	}
-#endif
-	//BUG();
+
 	return 0;
 }
 
@@ -114,7 +107,7 @@ static void _add_to_waitqueue(queue_t *waitqueue, struct task_struct * p, long t
 
 	cum_ticks = 0;
 	prev_cum_ticks = 0;
-	if (p == g_idle_tasks[0] || p == g_idle_tasks[1] ){
+	if (p == g_cpu_state[0].idle_task  || p == g_cpu_state[1].idle_task ){
 		BUG();
 	}
 	if (waitqueue->head.next == &waitqueue->head) {
@@ -240,7 +233,7 @@ int sc_wakeUp(queue_t *waitqueue ) {
 	if (ret>0){/* wakeup any other idle cpus to serve the runqueue  */
 		int i;
 		for (i=0; i<getmaxcpus(); i++){
-			if (g_current_task->cpu != i && g_current_tasks[i]==g_idle_tasks[i]){
+			if (g_current_task->cpu != i && g_cpu_state[i].current_task==g_cpu_state[i].idle_task){
 				apic_send_ipi_vector(i,IPI_INTERRUPT);
 				return ret;
 			}
@@ -269,7 +262,7 @@ int sc_sleep(long ticks) /* each tick is 100HZ or 10ms */
 {
 	return sc_wait(&timer_queue, ticks);
 }
-int Jcmd_threadlist_stat(char *arg1, char *arg2) {
+int Jcmd_ps(char *arg1, char *arg2) {
 	unsigned long flags;
 	struct list_head *pos;
 	struct task_struct *task;
@@ -297,10 +290,7 @@ int Jcmd_threadlist_stat(char *arg1, char *arg2) {
 		ut_printf("\n");
 	}
 	for (i=0; i<getmaxcpus(); i++){
-		if (g_current_tasks[i]==g_idle_tasks[i])
-			ut_printf("%d : <idle>\n",i);
-		else
-			ut_printf("%d : %s(%d)\n",i,g_current_tasks[i]->name,g_current_tasks[i]->pid);
+			ut_printf("%d : %s(%d)\n",i,g_cpu_state[i].current_task->name,g_cpu_state[i].current_task->pid);
 	}
 	spin_unlock_irqrestore(&sched_lock, flags);
 	return 1;
@@ -315,7 +305,7 @@ static unsigned long setup_userstack(unsigned char **argv, unsigned char **env, 
 	unsigned char *target_env[12];
 
 	if (argv == 0 && env == 0) {
-		ut_printf(" ERROR  argv:0\n");
+		ut_printf(" ERROR in setuo_userstack argv:0\n");
 		return 0;
 	}
 	stack = (unsigned char *) mm_getFreePages(MEM_CLEAR, 0);
@@ -413,14 +403,23 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	mm->pgd = 0;
 	mm->mmap = 0;
 	mm->fs.total = 3;
-	ar_dup_pageTable(g_kernel_mm, mm); /* every process page table should have soft links to kernel page table */
+	/* every process page table should have soft links to kernel page table */
+	if (ar_dup_pageTable(g_kernel_mm, mm)!=1){
+		BUG();
+	}
+	mm->exec_fp = (struct file *)fs_open(file, 0, 0);
+	ut_strncpy(g_current_task->name, file, MAX_TASK_NAME);
+
+	release_resources(g_current_task);
 	old_mm=g_current_task->mm;
 	g_current_task->mm = mm;
-	free_mm(old_mm);
+
+	 /* from this point onwards new address space comes into picture, no memory belonging to previous address space like file etc should  be used */
 	flush_tlb(mm->pgd);
+	free_mm(old_mm);
+
 
 	/* populate vm with vmaps */
-	mm->exec_fp = (struct file *)fs_open(file, 0, 0);
 	if (mm->exec_fp == 0) {
 		mm_putFreePages(tmp_stack, 0);
 		ut_printf("Error execve : Failed to open the file :%s\n", file);
@@ -435,7 +434,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 		return ;
 	}
 	mm_putFreePages(tmp_stack, 0);
-	ut_strncpy(g_current_task->name, file, MAX_TASK_NAME);
+
 	//Jcmd_vmaps_stat(0, 0);
 
 	g_current_task->thread.userland.ip = main_func;
@@ -490,9 +489,9 @@ static unsigned long push_to_userland() {
 	p->isf.cs = GDT_SEL(UCODE_DESCR) | SEG_DPL_USER;
 	p->isf.ss = GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
 
-	g_cpu_state[cpuid].user_fs = 0;
-	g_cpu_state[cpuid].user_gs = 0;
-	g_cpu_state[cpuid].user_fs_base = 0;
+	g_cpu_state[cpuid].md_state.user_fs = 0;
+	g_cpu_state[cpuid].md_state.user_gs = 0;
+	g_cpu_state[cpuid].md_state.user_fs_base = 0;
 
 	enter_userspace();
 	return 0;
@@ -528,21 +527,11 @@ static int free_mm(struct mm_struct *mm) {
 	if (mm->count.counter > 0)
 		return 0;
 
-	unsigned long vm_space_size= 511*512*512*512*PAGE_SIZE; /* 4 level page table size */
-	vm_munmap(mm, 0, 0xffffffff);
-	vm_space_size = ~0;
-	DEBUG(" Freeing the final PAGE TABLE :%x\n",vm_space_size);
+	unsigned long vm_space_size = ~0;
+	vm_munmap(mm, 0, vm_space_size);
+	DEBUG(" tid:%x Freeing the final PAGE TABLE :%x\n",g_current_task->pid,vm_space_size);
 	ar_pageTableCleanup(mm, 0, vm_space_size);
-#if 0
-	for (i = 3; i < mm->fs.total; i++) {
-		DEBUG("FREEing the files :%d \n",i);
-		fs_close(mm->fs.filep[i]);
-	}
-	if (mm->exec_fp != 0)
-		fs_close(mm->exec_fp);
 
-	mm->fs.total = 0;
-#endif
 	kmem_cache_free(mm_cachep, mm);
 	return 1;
 }
@@ -595,6 +584,7 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void 
 		mm = kmem_cache_alloc(mm_cachep, 0);
 		if (mm == 0)
 			BUG();
+		ut_memset(mm,0,sizeof(struct mm_struct));
 		atomic_set(&mm->count,1);
 		DEBUG("clone  the mm :%x counter:%x \n",mm,mm->count.counter);
 		mm->pgd = 0;
@@ -602,6 +592,7 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void 
 		for (i=0; i<MAX_FDS;i++)
 			mm->fs.filep[i]=0;
 		mm->fs.total = 3;
+
 		DEBUG("BEFORE duplicating pagetables and vmaps \n");
 		ar_dup_pageTable(g_current_task->mm, mm);
 		vm_dup_vmaps(g_current_task->mm, mm);
@@ -619,7 +610,7 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void 
 	p->thread.userland.user_fs_base = 0;
 	if (g_current_task->mm != g_kernel_mm) { /* user level thread */
 		ut_memcpy(&(p->thread.userland), &(g_current_task->thread.userland), sizeof(struct user_thread));
-		ut_memcpy(&(p->thread.user_regs),g_cpu_state[getcpuid()].kernel_stack-sizeof(struct user_regs),sizeof(struct user_regs));
+		ut_memcpy(&(p->thread.user_regs),g_cpu_state[getcpuid()].md_state.kernel_stack-sizeof(struct user_regs),sizeof(struct user_regs));
 
 		DEBUG(" userland  ip :%x \n",p->thread.userland.ip);
 		p->thread.userland.sp = (unsigned long)child_stack;
@@ -670,12 +661,15 @@ unsigned long SYS_sc_fork() {
 	SYSCALL_DEBUG("fork \n");
 	return SYS_sc_clone(CLONE_VM, 0, 0,  0, 0);
 }
-static int release_resources(struct task_struct *task){
+static int release_resources(struct task_struct *child_task){
 	int i;
 	struct mm_struct *mm;
+	unsigned long flags;
+	struct list_head *pos;
+	struct task_struct *task;
 
-	mm = task->mm;
-
+	mm = child_task->mm;
+ 	if (mm->count.counter > 1) return 0;
 	for (i = 3; i < mm->fs.total; i++) {
 		DEBUG("FREEing the files :%d \n",i);
 		fs_close(mm->fs.filep[i]);
@@ -685,6 +679,18 @@ static int release_resources(struct task_struct *task){
 
 	mm->fs.total = 0;
 	mm->exec_fp=0;
+
+	spin_lock_irqsave(&sched_lock, flags);
+	list_for_each(pos, &task_queue.head) {
+		task = list_entry(pos, struct task_struct, task_link);
+		if (task->pid == child_task->ppid) {
+			task->wait_child_id = child_task->pid;
+			goto last;
+		}
+	}
+last:
+	spin_unlock_irqrestore(&sched_lock, flags);
+
 	return 1;
 }
 int SYS_sc_exit(int status) {
@@ -816,17 +822,17 @@ void init_tasking() {
     task_addr=(unsigned long )((unsigned long )(&g_idle_stack)+TASK_SIZE) & (~((unsigned long )(TASK_SIZE-1)));
     ut_printf(" Task Addr start :%x  stack:%x current:%x\n",task_addr,&task_addr,g_current_task);
 	for (i = 0; i < MAX_CPUS; i++) {
-		g_idle_tasks[i] = (unsigned char *)(task_addr)+i*TASK_SIZE;
-		g_idle_tasks[i]->ticks = 0;
-		g_idle_tasks[i]->magic_numbers[0] = g_idle_tasks[i]->magic_numbers[1] = MAGIC_LONG;
-		g_idle_tasks[i]->stats.ticks_consumed = 0;
-		g_idle_tasks[i]->state = TASK_RUNNING;
-		g_idle_tasks[i]->pid = g_pid;
-		g_idle_tasks[i]->cpu = i;
-		g_idle_tasks[i]->mm = g_kernel_mm; /* TODO increase the corresponding count */
-		g_current_tasks[i] = g_idle_tasks[i];
-		g_dead_tasks[i] = 0;
-		ut_strncpy(g_idle_tasks[i]->name, (unsigned char *)"idle", MAX_TASK_NAME);
+		g_cpu_state[i].idle_task = (unsigned char *)(task_addr)+i*TASK_SIZE;
+		g_cpu_state[i].idle_task->ticks = 0;
+		g_cpu_state[i].idle_task->magic_numbers[0] = g_cpu_state[i].idle_task->magic_numbers[1] = MAGIC_LONG;
+		g_cpu_state[i].idle_task->stats.ticks_consumed = 0;
+		g_cpu_state[i].idle_task->state = TASK_RUNNING;
+		g_cpu_state[i].idle_task->pid = g_pid;
+		g_cpu_state[i].idle_task->cpu = i;
+		g_cpu_state[i].idle_task->mm = g_kernel_mm; /* TODO increase the corresponding count */
+		g_cpu_state[i].current_task = g_cpu_state[i].idle_task;
+		g_cpu_state[i].dead_task = 0;
+		ut_strncpy(g_cpu_state[i].idle_task->name, (unsigned char *)"idle", MAX_TASK_NAME);
 		g_pid++;
 	}
 
@@ -866,9 +872,9 @@ static struct task_struct * _get_dead_task(){
 	struct task_struct *task=0;
 
 	int cpuid=getcpuid();
-	if (g_dead_tasks[cpuid]!=0) {
-		task=g_dead_tasks[cpuid];
-		g_dead_tasks[cpuid]=0;
+	if (g_cpu_state[cpuid].dead_task!=0) {
+		task=g_cpu_state[cpuid].dead_task;
+		g_cpu_state[cpuid].dead_task=0;
 	}else{
 		task=0;
 	}
@@ -936,25 +942,24 @@ static unsigned long  _schedule(unsigned long flags) {
 	struct task_struct *prev, *next;
 	int cpuid=getcpuid();
 
-
 	g_current_task->ticks++;
 	prev = g_current_task;
 
 	next = _del_from_runqueue(0);
 
 	if (next == 0 && (prev->state!=TASK_RUNNING))
-		next = g_idle_tasks[cpuid];
+		next = g_cpu_state[cpuid].idle_task;
 
 	if (next ==0 ) /* by this point , we will always have some next */
 		next = prev;
 
-	g_current_tasks[cpuid] = next;
+	g_cpu_state[cpuid].current_task = next;
 #ifdef SMP   // SAFE Check
-	if (g_idle_tasks[0]==g_current_tasks[1] || g_current_tasks[0]==g_idle_tasks[1]){
+	if (g_cpu_state[0].idle_task==g_cpu_state[1].current_task || g_cpu_state[0].current_task==g_cpu_state[1].idle_task){
 		ut_printf("ERROR  cpuid :%d  %d\n",cpuid,getcpuid());
 		while(1);
 	}
-	if (g_current_tasks[0]==g_current_tasks[1]){
+	if (g_cpu_state[0].current_task==g_cpu_state[1].current_task){
 		while(1);
 	}
 #endif
@@ -971,11 +976,11 @@ static unsigned long  _schedule(unsigned long flags) {
 		flush_tlb(next->mm->pgd);
 	}
 	if (prev->state == TASK_DEAD) {
-		if (g_dead_tasks[cpuid] != NULL){
+		if (g_cpu_state[cpuid].dead_task != NULL){
 			BUG(); //Hitting
 		}
-		g_dead_tasks[cpuid] = prev;
-	}else if (prev!=g_idle_tasks[cpuid] && prev->state==TASK_RUNNING){ /* some other cpu  can pickup this task , running task and idle task should not be in a run equeue even though there state is running */
+		g_cpu_state[cpuid].dead_task = prev;
+	}else if (prev!=g_cpu_state[cpuid].idle_task && prev->state==TASK_RUNNING){ /* some other cpu  can pickup this task , running task and idle task should not be in a run equeue even though there state is running */
 		if (prev->run_link.next != 0){ /* Prev should not be on the runqueue */
 			BUG();
 		}

@@ -14,7 +14,7 @@
 //#include "common.h"
 #include "mm.h"
 #include "ipc.h"
-
+#include "descriptor_tables.h"
 
 #define TASK_RUNNING            0
 #define TASK_INTERRUPTIBLE      1
@@ -62,6 +62,7 @@ struct mm_struct {
 
 // This structure defines a 'task' - a process.
 #define MAX_TASK_NAME 40
+
 /*
  - task can be on run queue or in wait queues */
 struct task_struct {
@@ -80,6 +81,8 @@ struct task_struct {
 	int trace_stack_length; /* used for trace purpose */
 	char trace_on; /* used for trace */
 
+	unsigned long wait_child_id; /* TODO : need to look for permanent solution */
+
 	struct list_head run_link; /* run queue */
 	struct list_head task_link; /* task queue */
 	struct list_head wait_queue; /* wait queue */
@@ -90,11 +93,17 @@ struct task_struct {
 
 	unsigned long magic_numbers[4]; /* already stack is default fill with magic numbers */
 }; 
+struct cpu_state {
+	struct md_cpu_state md_state; /* This should be at the first location */
+	struct task_struct *current_task;
+	struct task_struct *dead_task;
+	struct task_struct *idle_task;
+}; /* TODO : align to 64 */
+//}__aligned(64);
+struct cpu_state g_cpu_state[];
 #define is_kernelThread(task) (task->mm == g_kernel_mm)
 #define IPI_INTERRUPT 200
 extern int getcpuid();
-extern struct task_struct *g_idle_tasks[];
-extern struct task_struct *g_current_tasks[];
 
 static inline struct task_struct *current_task(void)
 {

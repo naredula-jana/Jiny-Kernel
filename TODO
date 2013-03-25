@@ -68,7 +68,11 @@ The expensive (paranoid) way is to read back the MSR_GS_BASE value
 ----------------------------------------------------------
 Task.c or scheduler
 1) moving architecture depended code in architecture specific area.
-2) standadising exit errors(currently SYS_sys_exit(..)
+2) standising exit errors(currently SYS_sys_exit(..)
+---------------------------------------------------------
+Running user app BusyBox:
+1) wait4 : present process not recving the signal when child dies
+2) stat on directory
 ---------------------------------------------------------
 Display and Keyboard:
 1) keyboard ownership between kernel(shell) and userlevel threads

@@ -286,7 +286,7 @@ int SYS_fs_stat(const char *path, struct stat *buf)
 	struct fileStat fstat;
 	int ret;
 	SYSCALL_DEBUG("stat( ppath:%x(%s) buf:%x size:%d\n",path,path,buf,sizeof(struct stat));
-//return -1;
+
 	if (path==0 || buf==0) return -1;
 
 	fp=(struct file *)fs_open((unsigned char *)path,0,0);
@@ -300,17 +300,29 @@ int SYS_fs_stat(const char *path, struct stat *buf)
 	buf->st_ino = fstat.inode_no ;
     buf->st_blksize = 4096;
     buf->st_blocks = 8;
-    buf->st_nlink = 49;
+    buf->st_nlink = 4;
+#if 0
     buf->st_mtime.tv_sec =  fstat.mtime/1000000;
     buf->st_mtime.tv_nsec = fstat.mtime;
     buf->st_atime.tv_sec = fstat.atime/1000000;
     buf->st_atime.tv_nsec = fstat.atime;
-    buf->st_mode = fstat.mode;
+#endif
+    buf->st_mtime.tv_sec = 0x514dbd5e;
+    buf->st_mtime.tv_nsec = 0x18809349;
+    buf->st_atime.tv_sec = 0x514dbd5e;
+    buf->st_atime.tv_nsec = 0x18809349;
+
+    buf->st_mode = fstat.mode & 0xfffffff;
+    buf->st_dev = 2054;
+    buf->st_rdev = 0;
 
 /* TODO : fill the rest of the fields from fstat */
    buf->st_gid = TEMP_UID;
    buf->st_uid = TEMP_UID;
 
+
+   buf->__unused[0]=buf->__unused[1]=buf->__unused[2]=0;
+   buf->__pad0 =0;
     fs_close(fp);
     /*
      *stat(".", {st_dev=makedev(8, 6), st_ino=5381699, st_mode=S_IFDIR|0775, st_nlink=4,
@@ -318,8 +330,8 @@ int SYS_fs_stat(const char *path, struct stat *buf)
      *          st_mtime=2012/09/16-11:29:50, st_ctime=2012/09/16-11:29:50}) = 0
      *
      */
-    SYSCALL_DEBUG(" stat END : st_size: %d st_ino:%d mode:%x uid:%x gid:%x blksize:%x\n",
-    		buf->st_size,buf->st_ino, buf->st_mode, buf->st_uid, buf->st_gid, buf->st_blksize );
+    SYSCALL_DEBUG(" stat END : st_size: %d st_ino:%d nlink:%x mode:%x uid:%x gid:%x blksize:%x\n",
+    		buf->st_size,buf->st_ino, buf->st_nlink, buf->st_mode, buf->st_uid, buf->st_gid, buf->st_blksize );
 	return ret;
 }
 
@@ -382,9 +394,16 @@ unsigned long SYS_fs_fcntl(int fd, int cmd, void *args) {
 	return 0;
 }
 unsigned long SYS_wait4(int pid, void *status,  unsigned long  option, void *rusage) {
-	SYSCALL_DEBUG("wait4(Dummy)  pid:%x status:%x option:%x rusage:%x\n",pid,status,option,rusage);
+	//SYSCALL_DEBUG("wait4(Dummy)  pid:%x status:%x option:%x rusage:%x\n",pid,status,option,rusage);
+   unsigned long child_id;
 
-	return -1;
+   child_id = g_current_task->wait_child_id;
+   g_current_task->wait_child_id = 0;
+
+   if (child_id != 0){
+	   ut_printf(" wait child id :%d\n",child_id);
+   }
+	return child_id;
 }
 /*************************************
  * TODO : partially implemented calls

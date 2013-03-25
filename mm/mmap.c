@@ -223,7 +223,7 @@ int vm_munmap(struct mm_struct *mm, unsigned long addr, unsigned long len) {
 	unsigned long start_addr, end_addr;
 	int ret = 0;
 
-	if ((len = PAGE_ALIGN(len)) == 0)
+	if ((len!=~0) && ((PAGE_ALIGN(len)) == 0))
 		return -1;
 	DEBUG("VMA unlinking addr:%x len:%x \n",addr,len);
 	restart: vma = mm->mmap;

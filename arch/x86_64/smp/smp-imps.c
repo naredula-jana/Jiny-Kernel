@@ -184,7 +184,7 @@ static int boot_cpu(imps_processor *proc) {
 	bootaddr = (512 - 64) * 1024;
 	memcpy((unsigned char *) __va(bootaddr),(unsigned char *) &trampoline_data, 0x512);
 
-	stack = (unsigned long)g_idle_tasks[cpuid];/* TODO : currently stack is hardcoded for second cpu , need to make configurable */
+	stack = (unsigned long)g_cpu_state[cpuid].idle_task;/* TODO : currently stack is hardcoded for second cpu , need to make configurable */
 	stack = (stack + TASK_SIZE - 0x64);
 	p = (int *)((char *) __va(bootaddr) + 0x504);
 	*p = (int) stack;

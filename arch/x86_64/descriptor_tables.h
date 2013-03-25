@@ -126,7 +126,6 @@ typedef struct tss {
 } __attribute__ ((packed)) tss_t;
 
 struct tss_descr {
-  //struct segment_descr seg_low;
   struct gdt_entry_struct seg_low;
   struct {
     uint32_t base_rest;
@@ -135,14 +134,14 @@ struct tss_descr {
 } __attribute__ ((packed));
 typedef struct tss_descr tss_descr_t;
 
-struct cpu_state { /* NOTE: do not alter the attributes, there location matter */
+struct md_cpu_state { /* NOTE: do not alter the attributes, there location matter */
         unsigned long kernel_stack;
         unsigned long kernel_ds;
         unsigned long user_stack;
         unsigned long user_ds,user_es,user_fs,user_gs,user_fs_base;
         unsigned long user_ip; /* Stats and debugging pupose */
 };
-extern struct cpu_state g_cpu_state[];
+//extern struct cpu_state g_cpu_state[];
 
 #endif
 #endif

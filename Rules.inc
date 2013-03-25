@@ -11,7 +11,6 @@ CC=gcc -g
 AT=
 
 ARCH=64
-ARCH_DIR=i386
 
 C_SOURCES=$(wildcard *.c)
 ASM_SOURCES=$(wildcard *.s)
@@ -35,6 +34,9 @@ INCLUDE += -DNETWORKING
 endif
 ifdef SMP
 INCLUDE += -DSMP
+endif
+ifdef MEMLEAK_TOOL
+INCLUDE += -DMEMLEAK_TOOL
 endif
 
 %.o: %.c

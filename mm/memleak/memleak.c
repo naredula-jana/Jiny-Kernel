@@ -97,7 +97,7 @@ typedef unsigned char u8;
 /*
  * Kmemleak configuration and common defines.
  */
-#define MAX_TRACE		1	/* stack trace length */
+#define MAX_TRACE		8	/* stack trace length */
 #define MSECS_MIN_AGE		5000	/* minimum object age for reporting */
 #define SECS_FIRST_SCAN		60	/* delay before the first scan */
 #define SECS_SCAN_WAIT		600	/* subsequent auto scanning delay */
@@ -476,7 +476,7 @@ static unsigned int save_stack_trace(unsigned long **trace_output) {
 	unsigned long *stack_top = &addr;
 	unsigned long sz, stack_end;
 	int i;
-return 0;
+//return 0;
 
 	stack_trace.max_entries = MAX_TRACE;
 	stack_trace.nr_entries = 0;
@@ -671,7 +671,7 @@ static void kmemleak_alloc(const void *ptr, int size, int type, void *cachep) {
 	}
 
 	if (memleak_serious_bug==1){
-		printf(" inside the create\n");
+		printf("ERROR : inside the create\n");
 		kmemleak_scan();
 	}
 #if 0
@@ -697,7 +697,7 @@ static void kmemleak_free(const void *ptr, void *cachep) {
 		return;
 
 	if (memleak_serious_bug==1){
-		printf(" inside the delete\n");
+		printf("ERROR:    inside the delete\n");
 		kmemleak_scan();
 	}
 #if 0
@@ -725,7 +725,7 @@ static void kmemleak_update(const void *ptr,unsigned long type) {
 
 
 	if (memleak_serious_bug==1){
-		printf(" inside the update\n");
+		printf("ERROR: inside the update\n");
 		kmemleak_scan();
 	}
 	return;
@@ -935,8 +935,14 @@ void kmemleak_scan(void) {
 		}
 		if (object->type != 0)
 			withtype++;
-		if (object->count == 0)
+		if (object->count == 0){
+			pr_debug(" Leak Object addr: %x size:%d trace:",object->pointer,object->size);
+			for (k = 0; k < MAX_TRACE; k++){
+				pr_debug(" %x ",object->trace[k]);
+			}
+			pr_debug("\n");
 			new_leaks++;
+		}
 
 		total_mem = total_mem + object->size;
 	}
@@ -998,7 +1004,7 @@ void kmemleak_init(void) {
 	if (memleakHook_copyFromEarlylog(kmemleak_alloc, kmemleak_free, kmemleak_update)==0){
 		atomic_set(&kmemleak_enabled, 0);
 	}
-	pr_debug("Init kmemleak code: %x-%x data: %x-%x \n",code_region_start,data_region_start,data_region_start,data_region_end);
+	pr_debug("Init kmemleak code: %x-%x data: %x-%x  OBJECT CACHE:%x\n",code_region_start,data_region_start,data_region_start,data_region_end,object_cache);
 	pr_debug("Init kmemleak max objects:%d total objects:%d  object size:%d\n",MAX_STATIC_OBJS,stat_obj_count,sizeof(struct kmemleak_object));
 }
 
