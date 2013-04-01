@@ -336,7 +336,6 @@ static int sh_create1(unsigned char *arg1, unsigned char *arg2) {
 	tmp_arg[2] = 0;
 	ret = sc_createKernelThread(exec_thread, &tmp_arg, arg1);
 
-	sc_sleep(5000000);
 	return 1;
 }
 static int sh_create(unsigned char *arg1, unsigned char *arg2) {
@@ -473,7 +472,7 @@ static int get_cmd(unsigned char *line) {
 	}
 	while (i < MAX_LINE_LENGTH) {
 		int c;
-		while ((line[i] = dr_kbGetchar()) == 0)
+		while ((line[i] = dr_kbGetchar(g_current_task->mm->fs.input_device)) == 0)
 			;
 		c = line[i];
 		if (line[i] == 1) /* upArrow */

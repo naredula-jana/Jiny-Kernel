@@ -3,6 +3,7 @@
 #include "common.h"
 #include "mm.h"
 #include "task.h"
+
 #define MAX_FILENAME 200
 #define HOST_SHM_ADDR 0xd0000000
 #define HOST_SHM_CTL_ADDR 0xd1000000
@@ -70,9 +71,17 @@ struct file;
 struct inode;
 
 enum {
-	REGULAR_FILE=1,
-	NETWORK_FILE=2
+	REGULAR_FILE=0x8000,
+	NETWORK_FILE=2,
+	DIRECTORY_FILE=0x4000,
+	SYM_LINK_FILE=0xA000
 };
+enum {
+	DEVICE_SERIAL=1,
+	DEVICE_KEYBOARD=2,
+	DEVICE_DISPLAY_VGI=3
+};
+
 struct file {
 	unsigned char filename[MAX_FILENAME];
 	int type;
@@ -90,6 +99,7 @@ struct inode {
 	unsigned long fs_private;
 	struct filesystem *vfs;
 
+	int file_type;
 	uint64_t file_size; /* file length */
 	uint64_t inode_no;
 
@@ -104,13 +114,23 @@ struct fileStat {
 	uint32_t atime,mtime;
 	uint64_t st_size;
 	uint64_t inode_no;
+	uint32_t type;
+	uint32_t blk_size;
 };
+
+struct dirEntry {
+	unsigned char filename[MAX_FILENAME];
+	int file_type;
+	uint64_t inode_no;
+};
+
 typedef struct fileStat fileStat_t;
 struct filesystem {
 	int (*open)(struct inode *inode, int flags, int mode);
-	int (*lseek)(struct file *file,  unsigned long offset,int whence);
-	long (*write)(struct inode *inode, uint64_t offset, unsigned char *buff,unsigned long len);
-	long (*read)(struct inode *inode, uint64_t offset,  unsigned char *buff,unsigned long len);
+	int (*lseek)(struct file *file,  unsigned long offset, int whence);
+	long (*write)(struct inode *inode, uint64_t offset, unsigned char *buff, unsigned long len);
+	long (*read)(struct inode *inode, uint64_t offset,  unsigned char *buff, unsigned long len);
+	long (*readDir)(struct inode *inode, struct dirEntry *dir_ptr, unsigned long dir_max);
 	int (*remove)(struct inode *inode);
 	int (*stat)(struct inode *inode, struct fileStat *stat);
 	int (*close)(struct inode *inodep);

@@ -20,7 +20,7 @@ static void serial_input_handler(registers_t regs)
 {
 	unsigned char c;
 	c=inb(DATA_REG(SERIAL_PORT));
-	ar_addInputKey(c);
+	ar_addInputKey(DEVICE_SERIAL, c);
 //	ut_printf(" Received the char from serial %x %c \n",c,c);
 	outb(INT_ENABLE_REG(SERIAL_PORT), 0x01);             // Issue an interrupt when input buffer is full.
 }

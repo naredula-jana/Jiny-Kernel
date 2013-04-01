@@ -24,8 +24,6 @@ int sc_wakeUp(queue_t *waitqueue);
 int sc_wait(queue_t *waitqueue, unsigned long ticks);
 int sc_sleep( long ticks); /* each tick is 100HZ or 10ms */
 unsigned long SYS_sc_fork();
-//unsigned long SYS_sc_clone(int (*fn)(void *), void *child_stack,int flags,void *args);
-
 unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void *ctid,  void *args) ;
 int SYS_sc_exit(int status);
 int SYS_sc_kill(unsigned long pid,unsigned long signal);
@@ -126,7 +124,7 @@ void flush_tlb(unsigned long dir);
 int ar_updateCpuState(struct task_struct *p);
 int ar_archSetUserFS(unsigned long addr);
 void ar_setupTssStack(unsigned long stack);
-int ar_addInputKey(unsigned char c);
+int ar_addInputKey(int device_id,unsigned char c);
 
 /**************** misc functions ********/
 int getmaxcpus();

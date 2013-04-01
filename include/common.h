@@ -12,6 +12,7 @@
 #include "spinlock.h"
 
 
+
 #ifndef NULL
 #define NULL ((void *) 0)
 #endif
@@ -25,7 +26,7 @@ extern spinlock_t g_userspace_stdio_lock;
 	if (g_conf_syscall_debug==1)	{\
 		unsigned long flags; \
 		spin_lock_irqsave(&g_userspace_stdio_lock, flags); \
-		ut_printf("SYSCALL(%x :%d uip: %x) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip); ut_printf(x);\
+		ut_log("SYSCALL(%x :%d uip: %x) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip); ut_log(x);\
 		spin_unlock_irqrestore(&g_userspace_stdio_lock, flags); \
 	} \
 } while (0) 
@@ -103,7 +104,7 @@ void *kmalloc (long size, int flags);
 void kfree (const void *objp);
 extern addr_t g_jiffies;
 
-#define MAX_DMESG_LOG 30000
+#define MAX_DMESG_LOG 10000
 #include "interface.h"
 
 #endif

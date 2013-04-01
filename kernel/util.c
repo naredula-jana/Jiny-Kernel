@@ -195,6 +195,7 @@ unsigned char *ut_strcat(unsigned char *dest, const unsigned char *src)
 		*dest++ = *src++;
 	}
 	while (*src != 0);
+	*dest = 0;
 	return dest;
 }
 

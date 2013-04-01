@@ -70,14 +70,15 @@ Task.c or scheduler
 1) moving architecture depended code in architecture specific area.
 2) standising exit errors(currently SYS_sys_exit(..)
 ---------------------------------------------------------
-Running user app BusyBox:
-1) wait4 : present process not recving the signal when child dies
+Running user app BusyBox, long term solution :
+1) wait4 : 
 2) stat on directory
 ---------------------------------------------------------
-Display and Keyboard:
-1) keyboard ownership between kernel(shell) and userlevel threads
-2) display ownership(both are currently intemingled and common buffer)
-3) checking validty of virtual addresses presence in pagetable before displaying, otherwise a junk address in ut_printf can cause a pagefault with spinlock(printf_lock) on.
+Display 
+1) checking validty of virtual addresses presence in pagetable before displaying, otherwise a junk address in ut_printf can cause a pagefault with spinlock(printf_lock) on.
+
+ 
+
 ------------------------------------------------------------
 LWIP TODO
 - spinlock debugging as disabled because of the confligs in global variable in header file while integrating latest lwip.

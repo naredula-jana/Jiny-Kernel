@@ -8,7 +8,7 @@
 *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
 *
 */
-#define DEBUG_ENABLE 1
+//#define DEBUG_ENABLE 1
 #include "common.h"
 #include "mm.h"
 #include "vfs.h"
@@ -39,6 +39,7 @@ static int inode_init(struct inode *inode, char *filename, struct filesystem *vf
 	inode->file_size = 0;
 	inode->fs_private = 0;
 	inode->inode_no = 0;
+	inode->file_type = 0;
 	inode->vfs = vfs;
 	ut_strcpy(inode->filename, (unsigned char *)filename);
 	INIT_LIST_HEAD(&(inode->page_list));
@@ -58,11 +59,11 @@ int Jcmd_ls(char *arg1, char *arg2) {
 	struct inode *tmp_inode;
 	struct list_head *p;
 
-	ut_printf(" Name usagecount nrpages length  inode_no\n");
+	ut_printf("usagecount nrpages length  inode_no type  name\n");
 	list_for_each(p, &inode_list) {
 		tmp_inode = list_entry(p, struct inode, inode_link);
-		ut_printf("%s %d %d %d %d\n", tmp_inode->filename, tmp_inode->count,
-				tmp_inode->nrpages, tmp_inode->file_size, tmp_inode->inode_no);
+		ut_printf(" %4d %4d %8d %8d %2x %s\n", tmp_inode->count,
+				tmp_inode->nrpages, tmp_inode->file_size, tmp_inode->inode_no,tmp_inode->file_type, tmp_inode->filename);
 	}
 	return 1;
 }
@@ -78,13 +79,25 @@ int Jcmd_clear_pagecache(){
 	}
 	return 1;
 }
-static struct inode *fs_getInode(char *filename, int flags, int mode) {
+static struct inode *fs_getInode(char *arg_filename, int flags, int mode) {
 	struct inode *ret_inode,*tmp_inode;
 	struct list_head *p;
 	unsigned long lock_flags;
 	int ret;
+	unsigned char filename[MAX_FILENAME];
+	int i;
 
 	ret_inode = 0;
+
+	if (arg_filename[0]!='/'){
+		ut_strcpy(filename,g_current_task->mm->fs.cwd);
+	}else{
+		filename[0]=0;
+	}
+	i=0;
+	if (arg_filename[0]=='.' && arg_filename[1]=='/') i=2;
+
+	ut_strcat(filename,&arg_filename[i]);  //TODO use strncat
 
 	spin_lock_irqsave(&g_inode_lock, lock_flags);
 	list_for_each(p, &inode_list) {
@@ -187,7 +200,6 @@ static struct file *vfsOpen(unsigned char *filename, int flags, int mode) {
 	inodep = fs_getInode((char *)filep->filename, flags, mode);
 	if (inodep == 0)
 		goto error;
-
 
 	filep->inode = inodep;
 	filep->offset = 0;
@@ -293,7 +305,13 @@ unsigned long fs_lseek(struct file *file, unsigned long offset, int whence) {
 		return 0;
 	return vfs_fs->lseek(file, offset, whence);
 }
-
+unsigned long fs_readdir(struct file *file, struct dirEntry *dir_ent, int max_dir) {
+	if (vfs_fs == 0)
+		return 0;
+	if (file == 0)
+		return 0;
+	return vfs_fs->readDir(file->inode, dir_ent, max_dir);
+}
 unsigned long SYS_fs_lseek(unsigned long fd, unsigned long offset, int whence) {
 	struct file *file;
 
@@ -504,7 +522,7 @@ long SYS_fs_read(unsigned long fd, unsigned char *buff, unsigned long len) {
 //	SYSCALL_DEBUG("read fd:%d buff:%x len:%x \n",fd,buff,len);
 	if (fd ==0 ){
 		if (buff==0 || len==0) return 0;
-		buff[0]=dr_kbGetchar();
+		buff[0]=dr_kbGetchar(g_current_task->mm->fs.input_device);
 		if (buff[0]==0xd) buff[0]='\n';
 		buff[1]='\0';
     ut_printf("%s",buff);
@@ -588,6 +606,7 @@ static int vfsStat(struct file *filep, struct fileStat *stat)
 int fs_stat(struct file *file, struct fileStat *stat) {
 	if (vfs_fs == 0)
 		return 0;
+
 	return vfsStat(file, stat);
 }
 unsigned long fs_fadvise(struct inode *inode, unsigned long offset,

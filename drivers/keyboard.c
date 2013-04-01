@@ -60,30 +60,39 @@ static int en_scan_to_ascii(unsigned char *buf, uint8_t scancode, uint8_t comb_f
 	}
 	return 0;
 }
-#define MAX_BUF 100
-static unsigned char kb_buffer[MAX_BUF+1];
-static int current_pos=0;
-static int read_pos=0;
-int keyboard_int=0;
-static queue_t kb_waitq;
-static void dr_keyBoardBH() /* bottom half */
-{
-		sc_wakeUp(&kb_waitq);
-}
-unsigned char dr_kbGetchar() {
 
+#define MAX_BUF 100
+#define MAX_INPUT_DEVICES 2
+static struct {
+	int device_id;
+	unsigned char kb_buffer[MAX_BUF+1];
+	int current_pos;
+	int read_pos;
+	queue_t kb_waitq;
+}input_devices[MAX_INPUT_DEVICES];
+
+
+unsigned char dr_kbGetchar(int device_id) {
+	int i;
 	unsigned char c;
 
-	while (current_pos == 0) {
-		sc_wait(&kb_waitq, 100);
+	for (i = 0; i < MAX_INPUT_DEVICES; i++) {
+		if (input_devices[i].device_id == device_id)
+			break;
+	}
+	if (i >= MAX_INPUT_DEVICES)
+		return -1;
+
+	while (input_devices[i].current_pos == 0) {
+		sc_wait(&input_devices[i].kb_waitq, 100);
 	}
 //TODO: the below code need to be protected by spin lock if multiple reader are there
-	if (read_pos < current_pos) {
-		c = kb_buffer[read_pos];
-		read_pos++;
-		if (read_pos == current_pos) {
-			current_pos = 0;
-			read_pos = 0;
+	if (input_devices[i].read_pos < input_devices[i].current_pos) {
+		c = input_devices[i].kb_buffer[input_devices[i].read_pos];
+		input_devices[i].read_pos++;
+		if (input_devices[i].read_pos == input_devices[i].current_pos) {
+			input_devices[i].current_pos = 0;
+			input_devices[i].read_pos = 0;
 		}
 
 		return c;
@@ -91,40 +100,60 @@ unsigned char dr_kbGetchar() {
 
 	return 0;
 }
-int ar_addInputKey(unsigned char c)
-{
-	if (current_pos < MAX_BUF)
-	{
-		kb_buffer[current_pos]=c;
-		current_pos++;
+int ar_addInputKey(int device_id, unsigned char c) {
+	int i;
+	for (i = 0; i < MAX_INPUT_DEVICES; i++) {
+		if (input_devices[i].device_id != device_id)
+			continue;
+		if (input_devices[i].current_pos < MAX_BUF) {
+			int pos = input_devices[i].current_pos;
+			input_devices[i].kb_buffer[pos] = c;
+			input_devices[i].current_pos++;
+			break;
+		}
 	}
-	dr_keyBoardBH();
+	if (i >= MAX_INPUT_DEVICES)
+		return -1;
+	sc_wakeUp(&input_devices[i].kb_waitq);
+
 	return 1;
 }
-static void keyboard_handler(registers_t regs)
-{
-	unsigned char c,control_kbd,LastKey;
+static void keyboard_handler(registers_t regs) {
+	unsigned char c, control_kbd, lastKey;
 	int ret;
 
-	LastKey = inb(0x60);
+	lastKey = inb(0x60);
 //	printf(" Key pressed : %x curr_pos:%x read:%x\n",LastKey,current_pos,read_pos);
-	if (current_pos < MAX_BUF && LastKey<128)
-	{
-		ret=en_scan_to_ascii(&c,LastKey,0,0);
+	if ( lastKey < 128) {
+		ret = en_scan_to_ascii(&c, lastKey, 0, 0);
 		//     printf(" character :%c: ret:%d \n",kb_buffer[current_pos],ret);
-		if (ret == 1) ar_addInputKey(c);
+		if (ret == 1)
+			ar_addInputKey(DEVICE_KEYBOARD, c);
 	}
 	/* Tell the keyboard hat the key is processed */
 	control_kbd = inb(0x61);
-	outb(0x61, control_kbd | 0x80);  /* set the "enable kbd" bit */
-	outb(0x61, control_kbd);  /* write back the original control value */
-	keyboard_int=1;
-	//dr_keyBoardBH();
+	outb(0x61, control_kbd | 0x80); /* set the "enable kbd" bit */
+	outb(0x61, control_kbd); /* write back the original control value */
 
 }
-int init_driver_keyboard()
-{
-	sc_register_waitqueue(&kb_waitq,"keyboard");
-	ar_registerInterrupt(33,keyboard_handler,"keyboard",NULL);
+int init_driver_keyboard() {
+	int i;
+
+	for (i = 0; i < MAX_INPUT_DEVICES; i++) {
+		input_devices[i].current_pos = 0;
+		input_devices[i].read_pos = 0;
+		if (i > 1)
+			BUG(); //TODO: currently only two input devices
+
+		if (i == 0) {
+			input_devices[i].device_id = DEVICE_SERIAL;
+			sc_register_waitqueue(&input_devices[i].kb_waitq, "kb-serial");
+		} else {
+			input_devices[i].device_id = DEVICE_KEYBOARD;
+			sc_register_waitqueue(&input_devices[i].kb_waitq, "kb-key");
+		}
+	}
+
+	ar_registerInterrupt(33, keyboard_handler, "keyboard", NULL);
 	return 1;
 }

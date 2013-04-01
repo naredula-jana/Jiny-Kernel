@@ -100,7 +100,7 @@ void init_handlers()
 	ar_registerInterrupt(13, gpFault,"gpfault", NULL);
 }
 
-int Jcmd_irq_stat(char *arg1,char *arg2)
+int Jcmd_irq(char *arg1,char *arg2)
 {
 	int i, j;
 
@@ -117,9 +117,9 @@ int Jcmd_irq_stat(char *arg1,char *arg2)
 		if (i < 32 && g_interrupt_handlers[i].action == gpFault)
 			continue;
 #endif
-		ut_printf(" %3d: ",i);
+		ut_printf(" %2d: ",i);
 		for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
-			ut_printf("[%8d %3d] ",g_interrupt_handlers[i].stat[j].num_irqs,g_interrupt_handlers[i].stat[j].num_error);
+			ut_printf("[%4d %3d] ",g_interrupt_handlers[i].stat[j].num_irqs,g_interrupt_handlers[i].stat[j].num_error);
 		}
 		ut_printf(":%s \n",g_interrupt_handlers[i].name);
 	}

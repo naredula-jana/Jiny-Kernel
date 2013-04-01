@@ -15,6 +15,7 @@
 #include "mm.h"
 #include "ipc.h"
 #include "descriptor_tables.h"
+//#include  "vfs.h"
 
 #define TASK_RUNNING            0
 #define TASK_INTERRUPTIBLE      1
@@ -43,10 +44,13 @@ struct thread_struct {
 	struct user_regs user_regs;
 };
 #define MAX_FDS 100
+//#define MAX_FILENAME 200
 struct file;
 struct fs_struct {
 	struct file *filep[MAX_FDS];
 	int total;
+	unsigned char cwd[200]; // change to MAX_FILENAME
+	unsigned int input_device,output_device; /* for user level thread serial line will be input/output*/
 };
 
 struct mm_struct {

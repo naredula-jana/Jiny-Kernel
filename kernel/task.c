@@ -8,7 +8,7 @@
  *   Author: Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
  *
  */
-#define DEBUG_ENABLE 1
+//#define DEBUG_ENABLE 1
 #include "common.h"
 
 #include "descriptor_tables.h"
@@ -273,12 +273,12 @@ int Jcmd_ps(char *arg1, char *arg2) {
 	list_for_each(pos, &task_queue.head) {
 		task = list_entry(pos, struct task_struct, task_link);
 		if (is_kernelThread(task))
-			ut_printf("[%d]", task->pid);
+			ut_printf("[%2d]", task->pid);
 		else
-			ut_printf("(%d)", task->pid);
+			ut_printf("(%2d)", task->pid);
 
-		ut_printf("%3d %5x %5x %5x %5x %4d %7s %4d stat(%4d) %4d %4d\n",task->state, task, task->ticks, task->mm, task->mm->pgd, task->mm->count.counter, task->name, task->sleep_ticks,
-				task->stats.ticks_consumed,task->cpu);
+		ut_printf("%3d %5x %5x %5x %5x %4d %7s %4d tick(%4d) cpu:%4d :%s:\n",task->state, task, task->ticks, task->mm, task->mm->pgd, task->mm->count.counter, task->name, task->sleep_ticks,
+				task->stats.ticks_consumed,task->cpu,task->mm->fs.cwd);
 	}
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
 		if (wait_queues[i] == 0) continue;
@@ -289,8 +289,9 @@ int Jcmd_ps(char *arg1, char *arg2) {
 		}
 		ut_printf("\n");
 	}
+	ut_printf(" CPU Processors\n");
 	for (i=0; i<getmaxcpus(); i++){
-			ut_printf("%d : %s(%d)\n",i,g_cpu_state[i].current_task->name,g_cpu_state[i].current_task->pid);
+			ut_printf("%2d : %7s(%d)\n",i,g_cpu_state[i].current_task->name,g_cpu_state[i].current_task->pid);
 	}
 	spin_unlock_irqrestore(&sched_lock, flags);
 	return 1;
@@ -380,7 +381,7 @@ error: mm_putFreePages((unsigned long)stack, 0);
 	return 0;
 }
 void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **env) {
-	//struct file *fp;
+
 	struct mm_struct *mm,*old_mm;
 	unsigned long main_func;
 	unsigned long t_argc, t_argv, stack_len, tmp_stack, tmp_aux;
@@ -402,11 +403,16 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	atomic_set(&mm->count,1);
 	mm->pgd = 0;
 	mm->mmap = 0;
+	/* these are for user level threads */
 	mm->fs.total = 3;
+	mm->fs.input_device = DEVICE_SERIAL;
+	mm->fs.output_device = 	DEVICE_SERIAL;
+	ut_strcpy(mm->fs.cwd,g_current_task->mm->fs.cwd);
 	/* every process page table should have soft links to kernel page table */
 	if (ar_dup_pageTable(g_kernel_mm, mm)!=1){
 		BUG();
 	}
+
 	mm->exec_fp = (struct file *)fs_open(file, 0, 0);
 	ut_strncpy(g_current_task->name, file, MAX_TASK_NAME);
 
@@ -418,11 +424,23 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	flush_tlb(mm->pgd);
 	free_mm(old_mm);
 
+	/* check for symbolic link */
+	if (mm->exec_fp != 0 && (mm->exec_fp->inode->file_type != REGULAR_FILE)) {
+		struct fileStat  file_stat;
+		unsigned char newfilename[MAX_FILENAME];
+		fs_stat(mm->exec_fp,&file_stat);
+		if (mm->exec_fp->inode->file_type == SYM_LINK_FILE){
+			if (fs_read(mm->exec_fp, newfilename, MAX_FILENAME)!=0){
+				fs_close(mm->exec_fp);
+				mm->exec_fp = (struct file *)fs_open(newfilename, 0, 0);
+			}
+		}
+	}
 
 	/* populate vm with vmaps */
 	if (mm->exec_fp == 0) {
 		mm_putFreePages(tmp_stack, 0);
-		ut_printf("Error execve : Failed to open the file :%s\n", file);
+		ut_printf("Error execve : Failed to open the file \n");
 		SYS_sc_exit(100);
 		return;
 	}
@@ -592,6 +610,9 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void 
 		for (i=0; i<MAX_FDS;i++)
 			mm->fs.filep[i]=0;
 		mm->fs.total = 3;
+		mm->fs.input_device = g_current_task->mm->fs.input_device;
+		mm->fs.output_device = g_current_task->mm->fs.output_device;
+		ut_strcpy(mm->fs.cwd,g_current_task->mm->fs.cwd);
 
 		DEBUG("BEFORE duplicating pagetables and vmaps \n");
 		ar_dup_pageTable(g_current_task->mm, mm);
@@ -817,6 +838,9 @@ void init_tasking() {
 	g_kernel_mm->mmap = 0x0;
 	g_kernel_mm->pgd =  g_kernel_page_dir;
 	g_kernel_mm->fs.total = 3;
+	g_kernel_mm->fs.input_device = DEVICE_KEYBOARD;
+	g_kernel_mm->fs.output_device = DEVICE_DISPLAY_VGI;
+	ut_strcpy(g_kernel_mm->fs.cwd,"/");
 
 	g_pid = 0;
     task_addr=(unsigned long )((unsigned long )(&g_idle_stack)+TASK_SIZE) & (~((unsigned long )(TASK_SIZE-1)));

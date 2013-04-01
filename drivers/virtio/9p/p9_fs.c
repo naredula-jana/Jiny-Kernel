@@ -182,18 +182,88 @@ static uint32_t p9_walk(unsigned char *filename, int flags, unsigned char **crea
 	return ret_fd;
 }
 
-static uint32_t p9_read(uint32_t fid, uint64_t offset, unsigned char *data, uint32_t data_len) {
+static int p9_get_dir_entries(p9_client_t *client, struct dirEntry *dir_ent, int max_dir) {
+	unsigned char *recv;
+	p9_fcall_t pdu;
+	int i, ret;
+	uint32_t total_len;
+	unsigned char type1, type2;
+	uint32_t dummyd;
+	uint16_t tag;
+
+	uint64_t inode, dummyi;
+
+	recv = client->pkt_buf + 1024;
+	p9pdu_init(&pdu, 0, 0, client, recv, 1024);
+	ret = p9pdu_read_v(&pdu, "dbw", &total_len, &type1, &tag);
+	ret = p9pdu_read_v(&pdu, "d", &total_len);
+
+	for (i = 0; (i<max_dir) && ret==0; i++) {
+		ret = p9pdu_read_v(&pdu, "bdqqbs", &type1, &dummyd, &dir_ent[i].inode_no, &dummyi,
+				&type2, dir_ent[i].filename);
+		if (dir_ent[i].inode_no==0){
+			break;
+		}
+	//	ut_printf(" NEW dir dir : %s: INODE:%x:%d type:%d %d dummyd:%x ret:%d total_len:%d\n", dir_ent[i].filename,
+		//		dir_ent[i].inode_no, dir_ent[i].inode_no,type1, type2, dummyd,ret,total_len);
+	}
+
+	return i;
+}
+unsigned char dir_data[4000]; //TODO : should not be global
+static uint32_t p9_readdir(uint32_t fid, unsigned char *data,
+		uint32_t data_len) {
 	unsigned long addr;
 	int ret;
-	uint32_t read_len=0;
+	uint32_t read_len = 0;
 
-	client.type = P9_TYPE_TREAD;
-	client.user_data = data;
-	client.userdata_len = data_len;
 
-	addr = p9_write_rpc(&client, "dqd", fid, offset, data_len);
-	if (addr != 0) {
-		ret = p9_read_rpc(&client, "d", &read_len);
+	unsigned char type;
+	struct fileStat fstat, *stat;
+	stat = &fstat;
+
+	client.type = P9_TYPE_TREADDIR;
+	client.user_data = dir_data;
+	client.userdata_len = 4000;
+
+	addr = p9_write_rpc(&client, "dqd", fid, 0, 3500);
+
+	ret=p9_get_dir_entries(&client,data,data_len);
+	// d-length + bdqqbs = Qqbs
+	//	ret = p9_read_rpc(&client, "dbdqqbsbdqqbs",&dummyd,    &type,&dummyd,&stat->inode_no,&dummyq,&type,name,   &type,&dummyd,&dummyq,&dinode,&type,uid);
+
+	return ret;
+}
+static unsigned char test1[1000];
+static unsigned char test2[1000];
+static uint32_t p9_read(uint32_t fid, uint64_t offset, unsigned char *data,
+		uint32_t data_len, int file_type) {
+	unsigned long addr;
+	int ret;
+	uint32_t read_len = 0;
+	int i;
+
+	if (file_type==SYM_LINK_FILE){
+		client.type = P9_TYPE_TREADLINK;
+		client.user_data = data;
+		client.userdata_len = data_len;
+
+		addr = p9_write_rpc(&client, "d", fid);
+		if (addr != 0) {
+			test1[0]=0;
+			test2[0]=0;
+			ret = p9_read_rpc(&client, "sd", data,&read_len);
+			//ut_printf(" readlink file name :%s: len: %d  %d ret\n",data,read_len,ret);
+		}
+	} else {
+		client.type = P9_TYPE_TREAD;
+		client.user_data = data;
+		client.userdata_len = data_len;
+
+		addr = p9_write_rpc(&client, "dqd", fid, offset, data_len);
+		if (addr != 0) {
+			ret = p9_read_rpc(&client, "d", &read_len);
+		}
 	}
 
 	return read_len;
@@ -266,12 +336,13 @@ static uint32_t p9_close(uint32_t fid) {
 	}
 	return ret;
 }
+
 static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
 	unsigned long addr;
 	int ret=0;
 	//uint64_t dummyq;
 	uint32_t dummyd;
-	uint16_t dummyw;
+	uint16_t dummyw1,dummyw2,dummyw3;
 	//uint8_t dummyb;
 	unsigned char type;
 
@@ -284,14 +355,19 @@ static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
 		//"wwdbdqdddqssss?sddd"
 		//Q=bdq
 		//"wwdQdddqsssssddd"
-		ret = p9_read_rpc(&client, "wwwdbdqdddq",&dummyw,&dummyw,&dummyw,&dummyd,&type,&dummyd,&stat->inode_no,&stat->mode,&stat->atime,&stat->mtime,&stat->st_size);
+		ret = p9_read_rpc(&client, "wwwdbdqdddq",&dummyw1,&dummyw2,&dummyw3,&stat->blk_size,&type,&dummyd,&stat->inode_no,&stat->mode,&stat->atime,&stat->mtime,&stat->st_size);
 		//DEBUG("stats length :%x \n",stat->st_size);
-		// ut_printf(" file mode :%x %x\n",stat->mode,type);
+		//ut_printf("w1:%x w2 :%x w3:%x file mode :%x type %x\n",dummyw1,dummyw2,dummyw3,stat->mode,type);
+
+		stat->type = 0;
 		if (type ==0){ /* Regular file */
-			stat->mode = stat->mode | 0x8000 ;
-		}else{ /* directory */
-			stat->mode = stat->mode | 0x4000 ;
+			stat->type = 0x8000;
+		}else if (type ==0x80){ /* directory */
+			stat->type = 0x4000;
+		}else if (type ==2){ /* soft link */
+			stat->type = 0xA000;
 		}
+
 		if (client.recv_type == P9_TYPE_RSTAT) {
 			ret = 1;
 		}
@@ -328,7 +404,7 @@ static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, u
 		}
 	} else if (type == REQUEST_READ) {
 		fid = inode->fs_private;
-		ret = p9_read(fid, offset, data, data_len);
+		ret = p9_read(fid, offset, data, data_len,inode->file_type);
 		update_size(inode,offset,ret);
 	} else if (type == REQUEST_WRITE) {
 		fid = inode->fs_private;
@@ -338,11 +414,18 @@ static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, u
 		fid = inode->fs_private;
 		ret = p9_remove(fid);
 	} else if (type == REQUEST_STAT) {
+		struct fileStat *fp = data;
 		fid = inode->fs_private;
-		ret = p9_stat(fid, (struct fileStat *)data);
+		ret = p9_stat(fid, fp);
+		if (ret==1){
+			inode->file_type = fp->type;
+		}
 	} else if (type == REQUEST_CLOSE) {
 		fid = inode->fs_private;
 		ret = p9_close(fid);
+	}else if (type == REQUEST_READDIR) {
+		fid = inode->fs_private;
+		ret = p9_readdir(fid,data,data_len);
 	}
 
 
@@ -374,6 +457,11 @@ static long p9Read(struct inode *inodep, uint64_t offset, unsigned char *data, u
     return  (long)p9Request(REQUEST_READ, inodep, offset, data, data_len, 0, 0);
 }
 
+static long p9ReadDir(struct inode *inodep, struct dirEntry *dir_ptr, unsigned long dir_max) {
+	p9ClientInit();
+    return  (long)p9Request(REQUEST_READDIR, inodep, 0, dir_ptr, dir_max, 0, 0);
+}
+
 static int p9Remove(struct inode *inodep) {
 	p9ClientInit();
     return  p9Request(REQUEST_REMOVE, inodep, 0, 0, 0, 0, 0);
@@ -393,6 +481,7 @@ int p9_initFs() {
 //	p9ClientInit(); /* TODO need to include here */
 	p9_fs.open = p9Open;
 	p9_fs.read = p9Read;
+	p9_fs.readDir = p9ReadDir;
 	p9_fs.close = p9Close;
 	p9_fs.write = p9Write;
 	p9_fs.remove = p9Remove;

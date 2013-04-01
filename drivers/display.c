@@ -29,6 +29,7 @@ void cls(void);
 static void itoa(char *buf, int buf_len, int base, unsigned long d);
 void ut_putchar(int c);
 void ut_printf(const char *format, ...);
+void ut_log(const char *format, ...);
 
 /* Clear the screen and initialize VIDEO, XPOS and YPOS.  */
 int ut_cls(void) {
@@ -126,43 +127,59 @@ static void scroll() {
 	}
 	refresh_screen();
 }
-int g_conf_serial_line = 1;
 
-unsigned char g_dmesg[MAX_DMESG_LOG];
+unsigned char g_dmesg[MAX_DMESG_LOG+1];
 unsigned long g_dmesg_index = 0;
 int Jcmd_logflush(char *arg1, char *arg2) {
 	static int init = 0;
-	static unsigned long start_offset=0;
-	static struct file  *fd;
+	static unsigned long start_offset = 0;
+	static struct file *fp;
 	int ret;
 
 	if (init == 0) {
-		fd = (struct file  *)fs_open((unsigned char *)"jiny.log", 1, 0);
-		if (fd ==0) return 0;
+		fp = (struct file *) fs_open((unsigned char *) "jiny.log", 1, 0);
+		if (fp == 0)
+			return 0;
 		init = 1;
 	}
-	if (fd == 0) return 0;
-	if ((g_dmesg_index-start_offset) > 0) {
-       ret=fs_write(fd,&g_dmesg[start_offset],(g_dmesg_index-start_offset));
-       fs_fdatasync(fd);
-       start_offset=start_offset+ret;
+	if (fp == 0)
+		return 0;
+	while ((g_dmesg_index - start_offset) > 0) {
+		int index, len;
+		index = start_offset % MAX_DMESG_LOG;
+		len = MAX_DMESG_LOG - index;
+		if (((g_dmesg_index - start_offset)) < len)
+			len = (g_dmesg_index - start_offset);
+		ret = fs_write(fp, &g_dmesg[start_offset % MAX_DMESG_LOG], len);
+		fs_fdatasync(fp);
+		if (ret > 0) {
+			start_offset = start_offset + ret;
+		}else{
+			break;
+		}
 	}
 
 	return 1;
 }
+
 extern int dr_serialWrite( char *buf , int len);
 /* Put the character C on the screen.  */
 static spinlock_t putchar_lock = SPIN_LOCK_UNLOCKED;
-void ut_putchar(int c) {
-	unsigned char *ptr;
-	unsigned long flags;
 
+static void log_putchar(int c){
+	unsigned long flags;
 	spin_lock_irqsave(&putchar_lock, flags);
 	g_dmesg_index++;
 	g_dmesg[g_dmesg_index % MAX_DMESG_LOG] = (unsigned char) c;
 	spin_unlock_irqrestore(&putchar_lock, flags);
+}
 
-	if (g_conf_serial_line == 1) {
+void ut_putchar(int c) {
+	unsigned char *ptr;
+	unsigned long flags;
+
+	//1. Serial output
+	if (g_current_task->mm->fs.output_device == DEVICE_SERIAL) {
 		char buf[5];
 		if (c == '\n') {
 			buf[0] = '\r';
@@ -176,8 +193,11 @@ void ut_putchar(int c) {
 			buf[1] = '\0';
 			dr_serialWrite(buf, 1);
 		}
+		return;
 	}
-    if (!is_kernelThread(g_current_task)) return; //if it is user level thread do not print
+
+	//2. VGI output
+	log_putchar(c);
 
 	video_g = (unsigned char *) VIDEO;
 	spin_lock_irqsave(&putchar_lock, flags);
@@ -208,30 +228,34 @@ void ut_putchar(int c) {
 	spin_unlock_irqrestore(&putchar_lock, flags);
 }
 static spinlock_t printf_lock = SPIN_LOCK_UNLOCKED;
-void ut_printf(const char *format, ...) {
+
+static void format_string(int log, const char *format, va_list vl) {
 	char **arg = (char **) &format;
 	int c;
 	unsigned long val;
 	int i;
 	char buf[40];
 	char *p;
-	unsigned long flags;
 
-	va_list vl;
-	va_start(vl,format);
+
 #if 0
 	ut_snprintf(buf,35,"%d:",g_jiffies);  // print timestamp before line
 	p=&buf[0];
 	while (*p)
 		ut_putchar(*p++);
 #endif
-	spin_lock_irqsave(&printf_lock, flags);
+
 	arg++;
 	i = 0;
 	while ((c = *format++) != 0) {
 		int number_len=0;
-		if (c != '%')
-			ut_putchar(c);
+		if (c != '%'){
+			if (log){
+				log_putchar(c);
+			}else{
+			    ut_putchar(c);
+			}
+		}
 		else {
 			c = *format++;
 			if (c>'0' && c<='9'){
@@ -272,17 +296,45 @@ void ut_printf(const char *format, ...) {
 					}
 				}
 /* TODO: need to check the validy of virtual address, otherwise it will generate page fault with lock */
-				while (*p)
-					ut_putchar(*p++);
+				while (*p){
+					if (log){
+						log_putchar(*p++);
+					}else{
+					    ut_putchar(*p++);
+					}
+				}
 
 				break;
 
 			default:
-				ut_putchar(*((int *) arg++));
+				if (log){
+					log_putchar(*((int *) arg++));
+				}else{
+				    ut_putchar(*((int *) arg++));
+				}
 				break;
 			}
 		}
 	}
+	//va_end(vl);
+}
+void ut_printf(const char *format, ...) {
+	unsigned long flags;
+	spin_lock_irqsave(&printf_lock, flags);
+	va_list vl;
+	va_start(vl,format);
+
+	format_string(0,format,vl);
+
 	spin_unlock_irqrestore(&printf_lock, flags);
-	va_end(vl);
+}
+void ut_log(const char *format, ...){
+	unsigned long flags;
+	spin_lock_irqsave(&printf_lock, flags);
+	va_list vl;
+	va_start(vl,format);
+
+	format_string(1,format,vl);
+
+	spin_unlock_irqrestore(&printf_lock, flags);
 }
