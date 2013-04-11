@@ -73,11 +73,13 @@ struct task_struct {
 	volatile long state;    /* -1 unrunnable, 0 runnable, >0 stopped */
 	unsigned long flags;    /* per process flags, defined below */
 	unsigned long pending_signal;	
+	int exit_code;
 	unsigned long pid,ppid;
 	unsigned char name[MAX_TASK_NAME+1];
 	int cpu;
 	int counter;
 	long sleep_ticks;
+	unsigned long cpu_contexts; /* every cpu context , it will be incremented */
 	unsigned long ticks;	
 	struct thread_struct thread;
 	struct mm_struct *mm;
@@ -102,6 +104,10 @@ struct cpu_state {
 	struct task_struct *current_task;
 	struct task_struct *dead_task;
 	struct task_struct *idle_task;
+	int active; /* only active cpu will pickup the tasks , otherwise they can only run idle threads */
+	int intr_disabled; /* interrupts disabled */
+
+	unsigned long cpu_contexts;
 }; /* TODO : align to 64 */
 //}__aligned(64);
 struct cpu_state g_cpu_state[];

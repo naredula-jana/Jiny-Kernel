@@ -71,27 +71,65 @@ static int vma_link(struct mm_struct *mm, struct vm_area_struct *vma) {
 }
 
 /************************** API function *****************/
-
-int Jcmd_vmaps_stat(char *arg1, char *arg2) {
+extern queue_t task_queue;
+int Jcmd_maps(char *arg1, char *arg2) {
+	struct list_head *pos;
+	struct task_struct *task;
 	struct mm_struct *mm;
 	struct vm_area_struct *vma;
+	unsigned long flags;
+	unsigned char *buf;
+	int len=PAGE_SIZE;
+	int ret;
+	int pid;
 
-	mm = g_current_task->mm;
-	if (mm == 0)
+	buf = mm_getFreePages(0, 0);
+	if (buf == 0)
 		return 0;
-	vma = mm->mmap;
 
+	spin_lock_irqsave(&g_global_lock, flags);
+
+	if (arg1 == 0) {
+		task = g_current_task;
+	} else {
+		pid=ut_atoi(arg1);
+		list_for_each(pos, &task_queue.head) {
+			task = list_entry(pos, struct task_struct, task_link);
+			if (task->pid == pid) {
+				break;
+			}
+		}
+	}
+	if (task == 0) {
+		goto last;
+	}
+	mm = task->mm;
+	if (mm == 0)
+		goto last;
+	vma = mm->mmap;
+	ret=0;
+	buf[0]=0;
 	while (vma) {
+		int tret;
 		struct inode *inode;
 
 		inode = vma->vm_inode;
 		if (inode == NULL) {
-			ut_printf(" [ %x - %x ] - (+%x)\n", vma->vm_start, vma->vm_end, vma->vm_private_data);
+			tret=ut_snprintf(buf+ret,len-ret," [ %x - %x ] - (+%x)\n", vma->vm_start, vma->vm_end,
+					vma->vm_private_data);
 		} else {
-			ut_printf(" [ %x - %x ] - %s(+%x)\n", vma->vm_start, vma->vm_end, inode->filename, vma->vm_private_data);
+			tret=ut_snprintf(buf+ret,len-ret," [ %x - %x ] - %s(+%x)\n", vma->vm_start, vma->vm_end,
+					inode->filename, vma->vm_private_data);
 		}
+		ret=ret+tret;
+		len=len-tret;
+		if (len <0) goto last;
 		vma = vma->vm_next;
 	}
+	last:
+	spin_unlock_irqrestore(&g_global_lock, flags);
+    ut_printf(buf);
+	mm_putFreePages(buf, 0);
 	return 1;
 }
 struct vm_area_struct *vm_findVma(struct mm_struct *mm, unsigned long addr, unsigned long len) {

@@ -186,7 +186,7 @@ static int p9_get_dir_entries(p9_client_t *client, struct dirEntry *dir_ent, int
 	unsigned char *recv;
 	p9_fcall_t pdu;
 	int i, ret;
-	uint32_t total_len;
+	uint32_t total_len1,total_len2;
 	unsigned char type1, type2;
 	uint32_t dummyd;
 	uint16_t tag;
@@ -195,22 +195,23 @@ static int p9_get_dir_entries(p9_client_t *client, struct dirEntry *dir_ent, int
 
 	recv = client->pkt_buf + 1024;
 	p9pdu_init(&pdu, 0, 0, client, recv, 1024);
-	ret = p9pdu_read_v(&pdu, "dbw", &total_len, &type1, &tag);
-	ret = p9pdu_read_v(&pdu, "d", &total_len);
+	ret = p9pdu_read_v(&pdu, "dbw", &total_len1, &type1, &tag);
+	ret = p9pdu_read_v(&pdu, "d", &total_len2);
+	//ut_printf(" readir len1: %d len2:%d \n",total_len1,total_len2);
 
 	for (i = 0; (i<max_dir) && ret==0; i++) {
 		ret = p9pdu_read_v(&pdu, "bdqqbs", &type1, &dummyd, &dir_ent[i].inode_no, &dummyi,
 				&type2, dir_ent[i].filename);
-		if (dir_ent[i].inode_no==0){
+		if (dir_ent[i].inode_no==0 || (type2!=4 && type2!=10 && type2!=8)){ /* check for soft link, dir,regular file */
 			break;
 		}
 	//	ut_printf(" NEW dir dir : %s: INODE:%x:%d type:%d %d dummyd:%x ret:%d total_len:%d\n", dir_ent[i].filename,
-		//		dir_ent[i].inode_no, dir_ent[i].inode_no,type1, type2, dummyd,ret,total_len);
+	//			dir_ent[i].inode_no, dir_ent[i].inode_no,type1, type2, dummyd,ret,total_len1);
 	}
 
 	return i;
 }
-unsigned char dir_data[4000]; //TODO : should not be global
+static unsigned char dir_data[4000]; //TODO : should not be global
 static uint32_t p9_readdir(uint32_t fid, unsigned char *data,
 		uint32_t data_len) {
 	unsigned long addr;
@@ -286,7 +287,11 @@ static uint32_t p9_write(uint32_t fid, uint64_t offset, unsigned char *data, uin
 
 	rd = client.pkt_buf+1024+10;
 	rd[20]='\0';
-	//DEBUG("P9 write len :%d  write_rpc ret:%d : \n",data_len,ret);
+
+	if (write_len > data_len){ /* something wrong */
+		ut_printf("ERROR P9 write datalen :%d  write_rpc ret:%d : offset:%d write_len:%d\n",data_len,ret,offset,write_len);
+		write_len =0;
+	}
 	return write_len;
 }
 

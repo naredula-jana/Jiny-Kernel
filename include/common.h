@@ -18,15 +18,19 @@
 #endif
 #define POW2(n) (1 << (n))
 
+#define SYSCALL_SUCCESS 0
+#define SYSCALL_FAIL -1
 
 extern int g_conf_syscall_debug;
 extern int g_conf_debug_level;
 extern spinlock_t g_userspace_stdio_lock;
+extern spinlock_t g_global_lock;
+
 #define SYSCALL_DEBUG(x...) do { \
 	if (g_conf_syscall_debug==1)	{\
 		unsigned long flags; \
 		spin_lock_irqsave(&g_userspace_stdio_lock, flags); \
-		ut_log("SYSCALL(%x :%d uip: %x) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip); ut_log(x);\
+		ut_printf("SYSCALL(%x :%d uip: %x) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip); ut_printf(x);\
 		spin_unlock_irqrestore(&g_userspace_stdio_lock, flags); \
 	} \
 } while (0) 
@@ -104,7 +108,7 @@ void *kmalloc (long size, int flags);
 void kfree (const void *objp);
 extern addr_t g_jiffies;
 
-#define MAX_DMESG_LOG 10000
+#define MAX_DMESG_LOG 100000
 #include "interface.h"
 
 #endif

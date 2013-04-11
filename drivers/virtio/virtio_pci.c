@@ -54,8 +54,7 @@ static int attach_virtio_pci(device_t *dev) {
 
 	if (virtio_dev_count >= MAX_VIRIO_DEVICES)
 		return 0;
-	ar_registerInterrupt(32 + pci_hdr->interrupt_line, virtio_interrupt,
-			"virtio_driver",NULL);
+
 
 	if (bars[0].addr != 0) {
 		virtio_devices[virtio_dev_count].pci_ioaddr = bars[0].addr - 1;
@@ -68,13 +67,15 @@ static int attach_virtio_pci(device_t *dev) {
 		return 0;
 	}
 
-	DEBUG(
-			" Initializing VIRTIO PCI device id:%x ioaddr :%x(%d) mmioadd:%x(%d)\n", pci_hdr->subsys_id, virtio_devices[virtio_dev_count].pci_ioaddr, virtio_devices[virtio_dev_count].pci_iolen, virtio_devices[virtio_dev_count].pci_mmio, virtio_devices[virtio_dev_count].pci_mmiolen);
+	DEBUG(" Initializing VIRTIO PCI device id:%x ioaddr :%x(%d) mmioadd:%x(%d)\n", pci_hdr->subsys_id, virtio_devices[virtio_dev_count].pci_ioaddr, virtio_devices[virtio_dev_count].pci_iolen, virtio_devices[virtio_dev_count].pci_mmio, virtio_devices[virtio_dev_count].pci_mmiolen);
 	virtio_devices[virtio_dev_count].type = pci_hdr->subsys_id;
 
 	dev->private_data = &virtio_devices[virtio_dev_count];
 	ret = dev->devClass->attach(dev);
 	virtio_devices[virtio_dev_count].type = pci_hdr->subsys_id;
+
+	ar_registerInterrupt(32 + pci_hdr->interrupt_line, virtio_interrupt, dev->devClass->name,NULL);
+		//	"virtio_driver",NULL);
 
 	virtio_dev_count++;
 	return ret;

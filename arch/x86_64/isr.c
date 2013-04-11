@@ -129,9 +129,15 @@ int Jcmd_irq(char *arg1,char *arg2)
 
 void ar_registerInterrupt(uint8_t n, isr_t handler,char *name, void *data)
 {
+	int j;
+
 	g_interrupt_handlers[n].action = handler;
 	g_interrupt_handlers[n].name=(unsigned char *)name;
 	g_interrupt_handlers[n].private_data = data;
+	for (j = 0; j < MAX_CPUS; j++) {
+		g_interrupt_handlers[n].stat[j].num_irqs = 0;
+		g_interrupt_handlers[n].stat[j].num_error = 0;
+	}
 }
 
 void DisableTimer(void)
@@ -241,7 +247,7 @@ void ar_irqHandler(void *p,unsigned int int_no)
 
 
 #ifdef SMP
-	local_apic_send_eoi();
+	local_apic_send_eoi(); // Re-enable the APIC interrupts
 #endif
 	}else
 	{
@@ -250,11 +256,9 @@ void ar_irqHandler(void *p,unsigned int int_no)
 			//ut_printf("UNhandled interrupt ..: %d \n",int_no);
 		}
 #ifdef SMP
-	local_apic_send_eoi();
+	local_apic_send_eoi();  // Re-enable the APIC interrupts
 #endif
 	}
-	//start_debug();
-	//do_softirq();
 }
 extern void timer_callback(registers_t regs);
 void init_timer() {

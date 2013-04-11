@@ -61,7 +61,7 @@ int init_kernel(unsigned long end_addr)
 		return 0;
 	}
 
-	ret=init_smp_force(2);
+	ret=init_smp_force(4);
 	ut_printf("NEW SMP: completed, ret:%d maxcpus: %d \n",ret,getmaxcpus());
 	ut_printf("SECOND SMP: completed, ret:%d maxcpus: %d \n",ret,getmaxcpus());
 #endif

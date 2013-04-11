@@ -86,7 +86,7 @@ extern void kmem_cache_sizes_init(void);
 #define SLAB_CTOR_VERIFY        0x004UL         /* tell constructor it's a verify call */
 /* Guard access to the cache-chain. */
 static long	cache_chain_sem;/* TODO not used */
-static spinlock_t mem_slab_lock  = SPIN_LOCK_UNLOCKED;
+static spinlock_t mem_slab_lock  = SPIN_LOCK_UNLOCKED("mem_slab");
 #define down(irq_flags,a)  \
 {\
    spin_lock_irqsave(&mem_slab_lock, irq_flags);\
@@ -368,7 +368,7 @@ static kmem_cache_t cache_cache = {
 	slabs_free:	LIST_HEAD_INIT(cache_cache.slabs_free),
 	objsize:	sizeof(kmem_cache_t),
 	flags:		SLAB_NO_REAP,
-	spinlock:	SPIN_LOCK_UNLOCKED,
+	spinlock:	SPIN_LOCK_UNLOCKED("kmem_cache"),
 	colour_off:	L1_CACHE_BYTES,
 	name:		"kmem_cache",
 };

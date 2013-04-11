@@ -89,9 +89,9 @@ addr_t initialise_paging(addr_t end_addr)
 	g_kernel_page_dir=0x00101000;
 	curr_virt_end_addr= (curr_virt_end_addr+PAGE_SIZE)&(~0xfff);
 //	ut_printf("Initializing Paging  %x: physical high addr:%x  \n",placement_address,end_addr);
-	level2_table=(addr_t *)0x00103000+20; /* 20 entries(40M) already intialised */
-	fr=0+20*512; /*  2M= 512 4Kpages already initialised */
-	for (i=20; i<512; i++) /* 20 entres is already initialized, this loop covers for 1G */
+	level2_table=(addr_t *)0x00103000+20; /* 20 entries(40M) already initialized */
+	fr=0+20*512; /*  2M= 512 4Kpages already initialized */
+	for (i=20; i<512; i++) /* 20 entries is already initialized, this loop covers for 1G */
 	{
 		if (fr > nframes) {
 			break;
@@ -523,7 +523,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 		if (v ==0) BUG();
 		ut_memset((unsigned char *)v,0,4096);
 		pl3=(unsigned long *)__pa(v);
-		p=(pl4+(L4_INDEX(addr))); /* insert into l4   */
+		p=(pl4+(L4_INDEX(addr))); /* insert into l4 */
 		v=(unsigned long *)__va(p);
 		*v=((addr_t) pl3 |((addr_t) 0x7));
 		DEBUG(" Inserted into L4 :%x  p13:%x  pl4:%x addr:%x index:%x \n",p,pl3,pl4,addr,L4_INDEX(addr));
@@ -567,13 +567,16 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 	if (vma->vm_flags & MAP_ANONYMOUS)
 	{
 		v=(unsigned long *)mm_getFreePages(MEM_CLEAR,0); /* get page of 4k size for actual page */
+		if ( v==0 ) { /* No Memory: kill the current process */
+			SYS_sc_exit(999);
+			return 1;
+		}
 		p=(unsigned long *)__pa(v);
 		DEBUG(" Adding to LEAF: clean Anonymous page paddr: %x vaddr: %x \n",p,addr);
 	}else if (vma->vm_flags & MAP_FIXED)
 	{
 		if ( vma->vm_inode != NULL)
 		{
-
 			asm volatile("sti");
 			p=(unsigned long *)pc_getVmaPage(vma,vma->vm_private_data+(addr-vma->vm_start));
 			if (write_fault && (writeFlag!= 0)) {
@@ -582,7 +585,6 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 				ut_memcpy((unsigned char *)fp,(unsigned char *)__va(p),4096);
 				p=(unsigned long *)__pa(fp);
 				writeFlag = 1 ;
-
 			}else{
 				writeFlag = 0 ; /* this should be a COW data pages */
 			}

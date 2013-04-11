@@ -121,6 +121,8 @@ void apic_set_task_priority(uint8_t prio)
 	local_apic->tpr.reg = prio; 
 }
 
+
+
 static void __local_apic_clear(void)
 {
   uint32_t max_lvt;
@@ -475,7 +477,7 @@ void local_apic_timer_init(uint8_t vector)
   /* enable timer */
   lvt_timer.mask=0x0;
   local_apic->lvt_timer.reg=lvt_timer.reg;
-  ar_registerInterrupt(LOCAL_TIMER_CPU_IRQ_VEC, &timer_callback, "apictimer");
+  ar_registerInterrupt(LOCAL_TIMER_CPU_IRQ_VEC, &timer_callback, "APICtimer");
 }
 
 void local_apic_timer_ap_init(uint8_t vector)
@@ -582,5 +584,38 @@ int local_bsp_apic_init(void)
 	__unmask_extint();
 
   return 0;
+}
+
+/********************************** ELASTIC CPU ****************************/
+void apic_disable_partially(){// TODO sometimes cpu stop recving the interrupt interrupt
+
+	/* 1. disable all external interrupt except timer */
+	  apic_lvt_lint_t lvt_lint=local_apic->lvt_lint0;
+	  lvt_lint.mask=0x1;
+	  local_apic->lvt_lint0.reg = lvt_lint.reg;
+
+	  lvt_lint=local_apic->lvt_lint1;
+	  lvt_lint.mask=0x1;
+	  local_apic->lvt_lint1.reg = lvt_lint.reg;
+
+	/* 2. set the timer so that interrupts happens with very less frequency */
+	  local_apic_timer_disable();
+	  local_apic->timer_icr.count=delay_loop*100;  // recevies timer interrupt 1 per second instead of 100 per second
+	  local_apic_timer_enable();
+}
+void apic_reenable(){// TODO : sometimes cpu stop recving the interrupt interrupt
+	/* 1. enable all external interrupt except timer */
+	  apic_lvt_lint_t lvt_lint=local_apic->lvt_lint0;
+	  lvt_lint.mask=0x0;
+	  local_apic->lvt_lint0.reg = lvt_lint.reg;
+
+	  lvt_lint=local_apic->lvt_lint1;
+	  lvt_lint.mask=0x0;
+	  local_apic->lvt_lint1.reg = lvt_lint.reg;
+
+	/* 2. set the timer to the defualt frequency frequency */
+	  local_apic_timer_disable();
+	  local_apic->timer_icr.count=delay_loop;
+	  local_apic_timer_enable();
 }
 

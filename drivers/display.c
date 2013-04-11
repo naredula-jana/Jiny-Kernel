@@ -164,7 +164,7 @@ int Jcmd_logflush(char *arg1, char *arg2) {
 
 extern int dr_serialWrite( char *buf , int len);
 /* Put the character C on the screen.  */
-static spinlock_t putchar_lock = SPIN_LOCK_UNLOCKED;
+static spinlock_t putchar_lock = SPIN_LOCK_UNLOCKED("putchar");
 
 static void log_putchar(int c){
 	unsigned long flags;
@@ -227,14 +227,34 @@ void ut_putchar(int c) {
 		goto newline;
 	spin_unlock_irqrestore(&putchar_lock, flags);
 }
-static spinlock_t printf_lock = SPIN_LOCK_UNLOCKED;
+static spinlock_t printf_lock = SPIN_LOCK_UNLOCKED("printf");
 
-static void format_string(int log, const char *format, va_list vl) {
+struct writer_struct{
+	int type;
+	unsigned char *buf;
+	int len;
+};
+static int str_writer(struct writer_struct *writer,int c){
+	if (writer->type==1){
+		log_putchar(c);
+		return 1;
+	}else if (writer->type==0){
+	    ut_putchar(c);
+		return 1;
+	}else if (writer->buf != 0 && (writer->len > 0)){
+		writer->buf[0]=c;
+		writer->len--;
+		writer->buf++;
+		return 1;
+	}
+	return 0;
+}
+static void format_string(struct writer_struct *writer, const char *format, va_list vl) {
 	char **arg = (char **) &format;
 	int c;
 	unsigned long val;
 	int i;
-	char buf[40];
+	char buf[80];
 	char *p;
 
 
@@ -250,11 +270,7 @@ static void format_string(int log, const char *format, va_list vl) {
 	while ((c = *format++) != 0) {
 		int number_len=0;
 		if (c != '%'){
-			if (log){
-				log_putchar(c);
-			}else{
-			    ut_putchar(c);
-			}
+			if (str_writer(writer,c) ==0) return;
 		}
 		else {
 			c = *format++;
@@ -286,55 +302,76 @@ static void format_string(int log, const char *format, va_list vl) {
 					p = "(null)";
 
 	string:
-	            if (number_len != 0) {
+	            if (number_len > 0) {
 					int num_len;
-					for (num_len = 0; num_len < number_len; num_len++) {
-						if (p[num_len] == '\0') {
-							p[num_len] = ' ';
-							p[num_len + 1] = '\0';
+					int end_str=0;
+
+					for (num_len = 0; num_len < number_len && num_len<80; num_len++) {
+						if (p[num_len] == '\0' || end_str==1) {
+							buf[num_len] = ' ';
+							buf[num_len + 1] = '\0';
+							end_str=1;
+						}else{
+							buf[num_len] = p[num_len];
 						}
 					}
+					p=buf;
 				}
-/* TODO: need to check the validy of virtual address, otherwise it will generate page fault with lock */
+/* TODO: need to check the validity of virtual address, otherwise it will generate page fault with lock */
 				while (*p){
-					if (log){
-						log_putchar(*p++);
-					}else{
-					    ut_putchar(*p++);
-					}
+					if (str_writer(writer,(int)*p) ==0) return;
+					p++;
 				}
 
 				break;
 
 			default:
-				if (log){
-					log_putchar(*((int *) arg++));
-				}else{
-				    ut_putchar(*((int *) arg++));
-				}
+				if (str_writer(writer,(int)*arg) ==0) return;
+				arg++;
 				break;
 			}
 		}
 	}
-	//va_end(vl);
 }
 void ut_printf(const char *format, ...) {
+	struct writer_struct writer;
 	unsigned long flags;
 	spin_lock_irqsave(&printf_lock, flags);
 	va_list vl;
 	va_start(vl,format);
 
-	format_string(0,format,vl);
+	writer.type=0;
+	format_string(&writer,format,vl);
 
 	spin_unlock_irqrestore(&printf_lock, flags);
 }
-void ut_log(const char *format, ...){
+
+#if 0
+void ut_snprintf(unsigned char *buff, int len, const char *format, ...) {
+	struct writer_struct writer;
 	unsigned long flags;
 	spin_lock_irqsave(&printf_lock, flags);
 	va_list vl;
 	va_start(vl,format);
 
-	format_string(1,format,vl);
+	writer.type=2;
+	writer.buf=buff;
+	writer.len=len;
+	format_string(&writer,format,vl);
+
+	spin_unlock_irqrestore(&printf_lock, flags);
+}
+#endif
+
+void ut_log(const char *format, ...){
+	struct writer_struct writer;
+	unsigned long flags;
+	spin_lock_irqsave(&printf_lock, flags);
+	va_list vl;
+	va_start(vl,format);
+
+	writer.type=1;
+	format_string(&writer,format,vl);
 
 	spin_unlock_irqrestore(&printf_lock, flags);
 }

@@ -43,7 +43,7 @@ unsigned char *pc_startaddr;
 unsigned char *pc_endaddr;
 static int pc_totalpages=0;
 static page_list_t free_list,active_list,dirty_list,inactive_list;
-static spinlock_t pc_lock  = SPIN_LOCK_UNLOCKED; /* protects page cache */
+static spinlock_t pc_lock  = SPIN_LOCK_UNLOCKED("pagecache"); /* protects page cache */
 /**
 page life:  page moves from free->active->inactive->free
 
@@ -254,13 +254,13 @@ static int list_count(struct list_head *head)
 	return i;
 }
 
-int Jcmd_pagecache_stat(char *arg1,char *arg2)
+int Jcmd_pc(char *arg1,char *arg2)
 {
-	ut_printf(" Total Pages : %d \n",pc_totalpages);
-	ut_printf(" FREE List        : %d %d \n",free_list.count.counter,list_count(&free_list.head));
-	ut_printf(" Active clean List: %d %d \n",active_list.count.counter,list_count(&active_list.head));
-	ut_printf(" Dirty List       : %d %d\n",dirty_list.count.counter,list_count(&dirty_list.head));
-	ut_printf(" Inactive List    : %d %d\n",inactive_list.count.counter,list_count(&inactive_list.head));
+	ut_printf(" PageCache Total Pages : %d = %dM\n",pc_totalpages,(pc_totalpages*4)/1024);
+	ut_printf(" FREE List        : %3d %3d \n",free_list.count.counter,list_count(&free_list.head));
+	ut_printf(" Active clean List: %3d %3d \n",active_list.count.counter,list_count(&active_list.head));
+	ut_printf(" Dirty List       : %3d %3d\n",dirty_list.count.counter,list_count(&dirty_list.head));
+	ut_printf(" Inactive List    : %3d %3d\n",inactive_list.count.counter,list_count(&inactive_list.head));
 	return 1;
 }
 int pc_pageDirted(struct page *page) /* TODO : split the dirty list into LRU and MRU */

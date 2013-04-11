@@ -10,8 +10,7 @@
  */
 #include "common.h"
 #include "isr.h"
-#define SYSCALL_SUCCESS 0
-#define SYSCALL_FAIL -1
+
 struct __sysctl_args {
     int    *name;    /* integer vector describing variable */
     int     nlen;    /* length of this vector */
@@ -26,7 +25,7 @@ unsigned long SYS_sysctl(struct __sysctl_args *args );
 unsigned long SYS_printf(unsigned long *args);
 unsigned long SYS_getdents(unsigned int fd, unsigned char *user_buf,int size);
 unsigned long SYS_fork();
-int g_conf_syscall_debug=1;
+int g_conf_syscall_debug=0;
 long SYS_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags,unsigned long fd, unsigned long off);
 unsigned long snull(unsigned long *args);
 unsigned long SYS_uname(unsigned long *args);
@@ -410,7 +409,7 @@ unsigned long SYS_getdents(unsigned int fd, unsigned char *user_buf,int size){
 		user_buf = user_buf + dirp->d_reclen;
 		ret = ret + dirp->d_reclen;
 
-		//ut_printf(" :%s:  :%d: d_reclen:%d\n",dirp->d_name,dirp->d_ino,dirp->d_reclen);
+		SYSCALL_DEBUG("    getident :%s:  :%d: d_reclen:%d tret:%d \n",dirp->d_name,dirp->d_ino,dirp->d_reclen,tret);
 		dirp->d_off = user_buf;
 	}
 	fp->offset =i;
@@ -463,16 +462,23 @@ unsigned long SYS_sysctl(struct __sysctl_args *args) {
 		carg[i] = 0;
 	}
 	for (i = 0; i < 3; i++) {
-		carg[i]=0;
-		if (name[i] != 0 ) {
+		carg[i] = 0;
+		if (name[i] != 0) {
 			carg[i] = name[i];
 		}
 	}
 	if (carg[0] != 0 && ut_strcmp(carg[0], "set") == 0) {
-			execute_symbol(SYMBOL_CONF, carg[1], carg[2]);
+		execute_symbol(SYMBOL_CONF, carg[1], carg[2]);
 
-	}else {
-			execute_symbol(SYMBOL_CMD, carg[0], carg[1]);
+	} else {
+		if (carg[0] == 0) {
+			ut_printf("Conf variables:\n");
+			display_symbols(SYMBOL_CONF);
+			ut_printf("Cmd variables:\n");
+			display_symbols(SYMBOL_CMD);
+		} else {
+			execute_symbol(SYMBOL_CMD, carg[0], carg[1], carg[2]);
+		}
 	}
 
 	return SYSCALL_SUCCESS; /* success */
@@ -482,16 +488,20 @@ unsigned long SYS_fs_fcntl(int fd, int cmd, void *args) {
 	SYSCALL_DEBUG("fcntl(Dummy)  fd:%x cmd:%x args:%x\n",fd,cmd,args);
 	return 0;
 }
-unsigned long SYS_wait4(int pid, void *status,  unsigned long  option, void *rusage) {
+unsigned long SYS_wait4(int pid, void *status, unsigned long option,
+		void *rusage) {
 	//SYSCALL_DEBUG("wait4(Dummy)  pid:%x status:%x option:%x rusage:%x\n",pid,status,option,rusage);
-   unsigned long child_id;
+	unsigned long child_id;
+	unsigned long flags;
 
-   child_id = g_current_task->wait_child_id;
-   g_current_task->wait_child_id = 0;
+	spin_lock_irqsave(&g_global_lock, flags);
+	child_id = g_current_task->wait_child_id;
+	g_current_task->wait_child_id = 0;
+	spin_unlock_irqrestore(&g_global_lock, flags);
 
-   if (child_id != 0){
-	  // ut_printf(" wait child id :%d\n",child_id);
-   }
+	if (child_id != 0) {
+		// ut_printf(" wait child id :%d\n",child_id);
+	}
 	return child_id;
 }
 unsigned long SYS_chdir(unsigned char *filename) {
@@ -500,10 +510,14 @@ unsigned long SYS_chdir(unsigned char *filename) {
 	SYSCALL_DEBUG("chdir  buf:%s \n", filename);
 	ut_strncpy(g_current_task->mm->fs.cwd, filename, MAX_FILENAME);
 	ret = ut_strlen(g_current_task->mm->fs.cwd);
+	// TODO : need to validate the file for its existence
+#if 0
 	if (ret > 0 && g_current_task->mm->fs.cwd[ret-1] != '/') {
 		g_current_task->mm->fs.cwd[ret] = '/';
 		ret++;
 	}
+#endif
+
 	return SYSCALL_SUCCESS;
 }
 

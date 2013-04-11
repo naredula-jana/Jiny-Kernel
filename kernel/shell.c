@@ -23,7 +23,7 @@ typedef struct {
 } commands_t;
 #define MAX_COMMANDS 500
 static int sh_create(unsigned char *arg1, unsigned char *arg2);
-static int sh_create1(unsigned char *arg1, unsigned char *arg2);
+
 
 static int print_help(unsigned char *arg1, unsigned char *arg2);
 static int Jcmd_cat(unsigned char *arg1, unsigned char *arg2);
@@ -76,11 +76,9 @@ commands_t cmd_list[] = { { "help      ", "HELP MENU", "help", sh_create },
 		{"set  <var> <value>", "set config variables", "set", conf_set },
 		{"debug  ", "debug ", "debug", debug_trace },
 		{"cmd  <cmd> <arg1> <arg2>", "execute commands", "cmd", cmd },
-		{"c <prog>  ", "Create test thread", "c", sh_create1 },
-		{"c1 <prog>  ", "Create test thread", "c1", sh_create1 },
+		{"c <prog>  ", "Create test thread", "c", sh_create },
 		{ "kill <pid> ","kill process", "kill", sh_kill },
 		{ "scan        ", "scan page cache ", "scan", scan_pagetable },
-		{ "mem        ", "memstat", "mem",mm_printFreeAreas },
 		{ "mmap <file> <addr>", "mmap file", "mmap",sh_mmap },
 		{ "amem <order>", "mem allocate ", "amem", sh_alloc_mem },
 		{"fmem <address>", "mem allocate ", "fmem", sh_free_mem },
@@ -292,7 +290,7 @@ static int sh_free_mem(unsigned char *arg1, unsigned char *arg2) {
 }
 static unsigned char *tmp_arg[100]; /* TODO :   need to find some permanent solution to pass the arguments */
 static unsigned char *envs[] = { (unsigned char *)"HOSTNAME=jana", (unsigned char *)"USER=jana",
-		(unsigned char *)"HOME=/home/jana", (unsigned char *)"PWD=/home/jana", 0 };
+		(unsigned char *)"HOME=/", (unsigned char *)"PWD=/", 0 };
 static int exec_thread(unsigned char *arg1, unsigned char *arg2) {
 //	char *argv[]={"First argument","second argument",0};
 //	char *argv[]={0};
@@ -328,16 +326,7 @@ static int sh_vmcore_test(unsigned char *arg1, unsigned char *arg2){
 	ret = sc_createKernelThread(memory_pollute_thread, &tmp_arg, arg1);
     return 1;
 }
-static int sh_create1(unsigned char *arg1, unsigned char *arg2) {
-	int ret;
 
-	tmp_arg[0] = arg1;
-	tmp_arg[1] = arg2;
-	tmp_arg[2] = 0;
-	ret = sc_createKernelThread(exec_thread, &tmp_arg, arg1);
-
-	return 1;
-}
 static int sh_create(unsigned char *arg1, unsigned char *arg2) {
 	int ret;
 
@@ -515,6 +504,8 @@ static int get_cmd(unsigned char *line) {
 
 int shell_main(void *arg) {
 	int i, cmd_type;
+
+	sh_create("./busybox", "sh");  // start the user level shell
 
 	ut_strncpy(g_current_task->name, "shell", MAX_TASK_NAME);
 	for (i = 0; i < MAX_CMD_HISTORY; i++)

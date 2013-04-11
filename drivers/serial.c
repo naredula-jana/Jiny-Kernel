@@ -21,7 +21,7 @@ static void serial_input_handler(registers_t regs)
 	unsigned char c;
 	c=inb(DATA_REG(SERIAL_PORT));
 	ar_addInputKey(DEVICE_SERIAL, c);
-//	ut_printf(" Received the char from serial %x %c \n",c,c);
+	//ut_printf(" Received the char from serial %x %c \n",c,c);
 	outb(INT_ENABLE_REG(SERIAL_PORT), 0x01);             // Issue an interrupt when input buffer is full.
 }
 void init_serial()
@@ -53,7 +53,7 @@ void init_serial()
 	ar_registerInterrupt(36,serial_input_handler,"serial",NULL);
 
 }
-static spinlock_t serial_lock  = SPIN_LOCK_UNLOCKED;
+static spinlock_t serial_lock  = SPIN_LOCK_UNLOCKED("serial");
 int dr_serialWrite( char *buf , int len)
 {
 	int i;

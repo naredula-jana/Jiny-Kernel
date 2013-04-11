@@ -207,8 +207,8 @@ static LIST_HEAD(object_list);
 /* the list of gray-colored objects (see color_gray comment below) */
 static LIST_HEAD(gray_list);
 
-//static spinlock_t kmemleak_lock = SPIN_LOCK_UNLOCKED;
-static spinlock_t kmemleak_lock = {0};
+
+static spinlock_t kmemleak_lock = SPIN_LOCK_UNLOCKED("memleak");
 
 
 /* set if tracing memory operations is enabled */

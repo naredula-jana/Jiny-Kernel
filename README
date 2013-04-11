@@ -32,6 +32,15 @@ File System:
    - Host based file system based on ivshm(Inter Vm Shared Memory) 
    
 Virtualization:
+   - Elastic Cpu's:
+       - depending on the load, some of the cpu's will be rested.
+       - todo: disabling IPI interrupts for a in-active cpu.
+       
+   - Elastic Memory:
+       - depending on the load, some amount of physical memory can be disabled, so as host/other vm's can use.
+       - todo: using common pool memory for pagecache, currently there are two pools of memory one for pagecache, second for rest.
+       
+Virtualization drivers:
     - Xen : xenbus, network driver using xen paravirtualised.
     - KVM : virtio + P9 filesystem
     - KVM : virtio + Network (test server with udp stack(tcp/ip))
@@ -47,14 +56,14 @@ Networking:
 
 User level:
    - user app(ring-3) can run in user mode without libc and without shared libs.
-   - app compiled statically on linux can RUN sucessfully without using advanced system calls.
+   - bustbox can shell command and file related apps.
 
     
 TODO Features:
-  - cpu-hotplug.
-  - centralised page cache.
-  - memory-hotplug(partially done - memory ballooning).
-  - running linux based app like busybox(partially completed):- implementing necessary system calls(basic calls are present , advanced like futex are need to be developed).
+  - Elastic CPU's: and Elastic Memory todo's       
+  - Centralised page cache.
+  - Syscalls: Implementing advanced syscalls like futex etc :Running advanced apps in busybox, currently all file related apps(ls ,cat,cp ..etc) can be run.
+  
 
 ------------------------------------------------------------------------------------
 

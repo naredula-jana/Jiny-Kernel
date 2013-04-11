@@ -59,7 +59,7 @@ struct breakpoint_struct {
 };
 static breakpoint_t breakpoint_table[MAX_BREAKPOINTS];
 static breakpoint_t *brk_hash_table[MAX_BRK_HASH];
-static spinlock_t breakpoint_lock = SPIN_LOCK_UNLOCKED;
+static spinlock_t breakpoint_lock = SPIN_LOCK_UNLOCKED("breakpoint");
 #define MAX_BREAK_STARTINGPOINTS 100
 static int startpoint_count=0;
 static int breakpoint_starts[MAX_BREAK_STARTINGPOINTS];

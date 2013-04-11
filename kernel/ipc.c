@@ -38,7 +38,7 @@ signed char sys_sem_new(struct semaphore *sem,uint8_t count)
 	  int ret;
 
 	  sem->count = count;
-	  sem->sem_lock = SPIN_LOCK_UNLOCKED;
+	  sem->sem_lock = SPIN_LOCK_UNLOCKED(0);
 	  sem->valid_entry = 1;
 	  ret = sc_register_waitqueue(&sem->wait_queue,"semaphore");
 	  return 0;
@@ -97,6 +97,23 @@ uint32_t sys_arch_sem_wait(sys_sem_t *sem, uint32_t timeout_arg) /* timeout_arg 
     spin_unlock_irqrestore(&(sem->sem_lock), flags);
 	return IPC_TIMEOUT;
 }
+
+#ifdef SPINLOCK_DEBUG
+spinlock_t *g_spinlocks[MAX_SPINLOCKS];
+int g_spinlock_count=0;
+int Jcmd_locks(char *arg1, char *arg2) {
+	int i;
+
+	ut_printf(" Name  pid count contention(rate) \n");
+	for (i = 0; i < g_spinlock_count; i++) {
+		ut_printf(" %9s %3x %5d %5d(%d) \n", g_spinlocks[i]->name,g_spinlocks[i]->pid,
+				g_spinlocks[i]->stat_locks, g_spinlocks[i]->contention,g_spinlocks[i]->contention/g_spinlocks[i]->stat_locks);
+	}
+	return 1;
+}
+#endif
+
+/**********************************************/
 
 void ipc_test1(){
 	int i;

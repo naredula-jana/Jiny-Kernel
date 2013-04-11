@@ -1,26 +1,7 @@
 #ifndef __ASM_SPINLOCK_H
 #define __ASM_SPINLOCK_H
 
-#if 0
-#define SPINLOCK_DEBUG 1
-typedef struct {
-        volatile unsigned int lock;
-        unsigned long stat_count;
-#ifdef SPINLOCK_DEBUG
-#define MAX_SPIN_LOG 100
-        unsigned long stat_locks;
-        unsigned long stat_unlocks;
-        unsigned long contention;
-        unsigned int log_length;
-        struct {
-            int line;
-            unsigned int process_id;
-            unsigned int cpuid;
-            unsigned long spins;
-        }log[MAX_SPIN_LOG];
-#endif
-} spinlock_t;
-#endif
+
 
 #define __sti() __asm__ __volatile__ ("sti": : :"memory")
 #define __cli() __asm__ __volatile__ ("cli": : :"memory")
@@ -43,8 +24,12 @@ typedef struct {
 
 #define __SPINLOCK_LOCKED   1
 #define __SPINLOCK_UNLOCKED 0
+
 #ifdef SPINLOCK_DEBUG
-#define SPIN_LOCK_UNLOCKED (spinlock_t) { __SPINLOCK_UNLOCKED,0,0,0 }
+#define SPIN_LOCK_UNLOCKED(x) (spinlock_t) { __SPINLOCK_UNLOCKED,0,0,0,x,-1}
+#define MAX_SPINLOCKS 100
+extern spinlock_t *g_spinlocks[MAX_SPINLOCKS];
+extern int g_spinlock_count;
 #else
 #define SPIN_LOCK_UNLOCKED (spinlock_t) { __SPINLOCK_UNLOCKED }
 #endif
@@ -64,12 +49,20 @@ static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 			: "%rax","%rbx", "memory" );
 #ifdef SPINLOCK_DEBUG
 	lock->stat_locks++;
+
+	if (lock->name!=0 && lock->linked == -1 && g_spinlock_count<MAX_SPINLOCKS){
+		lock->linked = 0;
+		g_spinlocks[g_spinlock_count]=lock;
+		g_spinlock_count++;
+	}
+
 	if (lock->log_length >= MAX_SPIN_LOG) lock->log_length=0;
 	lock->log[lock->log_length].line = line ;
 	lock->log[lock->log_length].process_id = g_current_task->pid ;
 	lock->log[lock->log_length].cpuid = g_current_task->cpu ;
 	lock->log[lock->log_length].spins = 1 + (lock->stat_count/10) ;
 	lock->log_length++;
+	lock->pid = g_current_task->pid;
 	lock->contention=lock->contention+(lock->stat_count/10);
 #endif
 }
@@ -84,6 +77,7 @@ static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 	lock->log[lock->log_length].cpuid = g_current_task->cpu ;
 	lock->log[lock->log_length].spins = 0 ;
 	lock->log_length++;
+	lock->pid = 0;
 #endif
 
   __asm__ __volatile__( __LOCK_PREFIX "xchgl %0, %1\n"

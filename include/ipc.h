@@ -1,8 +1,6 @@
 #ifndef IPC_H
 #define IPC_H
 
-
-
 #include "list.h"
 //#include "spinlock.h"
 
@@ -14,6 +12,9 @@ typedef struct {
 #define MAX_SPIN_LOG 100
         unsigned long stat_locks;
         unsigned long stat_unlocks;
+        unsigned char *name;
+        int linked; /* linked this structure to stats */
+        unsigned long pid;
         unsigned long contention;
         unsigned int log_length;
         struct {
@@ -31,10 +32,7 @@ typedef struct queue{
 	struct list_head head;
 	char *name;
 }queue_t;
-#if 0
-#include "common.h"
-#include "task.h"
-#endif
+
 struct semaphore
 {
 	int count;

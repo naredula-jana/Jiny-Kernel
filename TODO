@@ -16,6 +16,7 @@ fixes:
 p9 :
   - fseek, closing fids, 
   - interpreting qid 
+  - ERROR in writing
 
 ----------------------------------  
 executing userland program(busybox ):
@@ -68,19 +69,21 @@ The expensive (paranoid) way is to read back the MSR_GS_BASE value
 ----------------------------------------------------------
 Task.c or scheduler
 1) moving architecture depended code in architecture specific area.
-2) standising exit errors(currently SYS_sys_exit(..)
+2) standising exit errors(currently SYS_sys_exit(..), storing exit error in task
 ---------------------------------------------------------
 Running user app BusyBox, long term solution :
-1) wait4 : 
-2) stat on directory
+1) wait4 redesign 
+2) CTRL-C and CTRL-D not working
+3) soft link are detected but cannot able to execute
+
 ---------------------------------------------------------
 Display 
 1) checking validty of virtual addresses presence in pagetable before displaying, otherwise a junk address in ut_printf can cause a pagefault with spinlock(printf_lock) on.
-
+--------------------------------------
  
 
 ------------------------------------------------------------
 LWIP TODO
 - spinlock debugging as disabled because of the confligs in global variable in header file while integrating latest lwip.
 - arch api need to re-implement to suit newer version
-- deltion of buffer while sending and recving the packet.
+- delition of buffer while sending and recving the packet.

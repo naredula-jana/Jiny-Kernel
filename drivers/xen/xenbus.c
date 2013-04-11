@@ -4,8 +4,8 @@
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 static struct xenstore_domain_interface *xenstore_buf;
 typedef unsigned long xenbus_transaction_t;
-static spinlock_t req_lock = SPIN_LOCK_UNLOCKED;
-static spinlock_t xenstore_lock = SPIN_LOCK_UNLOCKED;
+static spinlock_t req_lock = SPIN_LOCK_UNLOCKED("xen_req");
+static spinlock_t xenstore_lock = SPIN_LOCK_UNLOCKED("xenstore");
 
 #define NR_REQS 32
 static int nr_live_reqs;

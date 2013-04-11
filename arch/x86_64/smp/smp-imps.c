@@ -102,20 +102,29 @@ static int send_ipi(unsigned int dst, unsigned int v) {
 
 	return (to < 1000);
 }
-
-int getcpuid() {
+static int apic_getcpuid() {
 	int id;
 	if (imps_num_cpus == 1)
 		return 0;
-#if 0
-	id = g_current_task->cpu;
-#else
+
 	id= APIC_ID(IMPS_LAPIC_READ(LAPIC_ID)); /* id is 0 based */
-#endif
+
 	if (id >= MAX_CPUS || id < 0 || id >= imps_num_cpus)
 		return 0;
 
 	return id;
+}
+int getcpuid() {
+	unsigned long cpuid;
+	if (imps_num_cpus == 1)
+		return 0;
+
+	asm volatile("movq %%gs:0x48,%0" : "=r" (cpuid));
+
+	if (cpuid >= MAX_CPUS || cpuid < 0 || cpuid >= imps_num_cpus)
+		return 0;
+
+	return cpuid;
 }
 int getmaxcpus() {
 	return imps_num_cpus;
@@ -151,7 +160,7 @@ void smp_main() {
 		; /* wait till boot cpu trigger */
 	cli();
 	/* disable interrupts */
-	cpuid=getcpuid();
+	cpuid=apic_getcpuid();
 	init_smp_gdt(cpuid);
 	local_ap_apic_init();
 	__enable_apic();
@@ -318,7 +327,7 @@ int init_smp_force(int ncpus) {
 		p.apic_id = i;
 		add_processor(&p);
 	}
-ut_printf(" After adding the processor \n");
+
 	local_bsp_apic_init(); /* TODO : Need to call this twice to get APIC enabled */
 
 	unsigned long *page_table;

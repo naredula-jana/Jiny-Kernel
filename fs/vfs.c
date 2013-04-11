@@ -18,7 +18,7 @@
 static struct filesystem *vfs_fs = 0;
 static kmem_cache_t *slab_inodep;
 static LIST_HEAD(inode_list);
-spinlock_t g_inode_lock = SPIN_LOCK_UNLOCKED; /* protects inode_list */
+spinlock_t g_inode_lock = SPIN_LOCK_UNLOCKED("inode"); /* protects inode_list */
 #define OFFSET_ALIGN(x) ((x/PC_PAGESIZE)*PC_PAGESIZE) /* the following 2 need to be removed */
 
 kmem_cache_t *g_slab_filep;
@@ -79,25 +79,47 @@ int Jcmd_clear_pagecache(){
 	}
 	return 1;
 }
+static void transform_filename(unsigned char *arg_filename, char *filename){
+	int i,len;
+
+	filename[0]=0;
+	if (arg_filename[0]!='/'){
+		ut_strcpy(filename,g_current_task->mm->fs.cwd);
+	}
+
+	i=0;
+
+	/* remove "./" from input file */
+	if (arg_filename[0]=='.' && arg_filename[1]=='/') i=2;
+
+	len=ut_strlen(filename);
+	if (filename[len-1]!='/'){
+		ut_strcat(filename,"/");
+	}
+	ut_strcat(filename,&arg_filename[i]);  //TODO use strncat
+
+	len=ut_strlen(filename);
+
+
+	/* remove "/" as last character */
+	if (filename[len-1]=='/'){
+		filename[len-1] = 0;
+	}
+
+    DEBUG(" opening in :%s:  transformfile :%s: \n",arg_filename,filename);
+
+}
 static struct inode *fs_getInode(char *arg_filename, int flags, int mode) {
 	struct inode *ret_inode,*tmp_inode;
 	struct list_head *p;
 	unsigned long lock_flags;
 	int ret;
 	unsigned char filename[MAX_FILENAME];
-	int i;
+
 
 	ret_inode = 0;
 
-	if (arg_filename[0]!='/'){
-		ut_strcpy(filename,g_current_task->mm->fs.cwd);
-	}else{
-		filename[0]=0;
-	}
-	i=0;
-	if (arg_filename[0]=='.' && arg_filename[1]=='/') i=2;
-
-	ut_strcat(filename,&arg_filename[i]);  //TODO use strncat
+	transform_filename(arg_filename, filename);
 
 	spin_lock_irqsave(&g_inode_lock, lock_flags);
 	list_for_each(p, &inode_list) {
@@ -405,7 +427,7 @@ static long vfswrite(struct file *filep, unsigned char *buff, unsigned long len)
 	error:
 	return tmp_len;
 }
-spinlock_t g_userspace_stdio_lock = SPIN_LOCK_UNLOCKED;
+spinlock_t g_userspace_stdio_lock = SPIN_LOCK_UNLOCKED("userspace_stdio");
 long SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
 	struct file *file;
 	int i;

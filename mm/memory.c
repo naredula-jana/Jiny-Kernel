@@ -28,7 +28,7 @@ page_struct_t *g_mem_map = NULL;
 unsigned long g_max_mapnr=0;
 int g_nr_free_pages = 0;
 static struct free_mem_area_struct free_mem_area[NR_MEM_LISTS];
-static spinlock_t free_area_lock = SPIN_LOCK_UNLOCKED;
+static spinlock_t free_area_lock = SPIN_LOCK_UNLOCKED("memory_freearea");
 
 /*********************** local function *******************************/
 
@@ -212,6 +212,7 @@ static unsigned long init_free_area(unsigned long start_mem, unsigned long end_m
 	return start_mem;
 }
 static int init_done=0;
+static unsigned long stat_mem_size=0;
 static void init_mem(unsigned long start_mem, unsigned long end_mem)
 {
 	int reservedpages = 0;
@@ -221,7 +222,7 @@ static void init_mem(unsigned long start_mem, unsigned long end_mem)
 	g_max_mapnr  = MAP_NR(end_mem);
 
 	start_mem = PAGE_ALIGN(start_mem);
-
+	stat_mem_size = end_mem -start_mem;
 	while (start_mem < end_mem) {
 		clear_bit(PG_reserved, &g_mem_map[MAP_NR(start_mem)].flags);
 		start_mem += PAGE_SIZE;
@@ -247,23 +248,24 @@ static void init_mem(unsigned long start_mem, unsigned long end_mem)
  * We also calculate the percentage fragmentation. We do this by counting the
  * memory on each free list with the exception of the first item on the list.
  */
-int mm_printFreeAreas(char *arg1,char *arg2)
-{
-        unsigned long order, flags;
-        unsigned long total = 0;
+int Jcmd_mem(char *arg1, char *arg2) {
+	unsigned long order, flags;
+	unsigned long total = 0;
 
-        spin_lock_irqsave(&free_area_lock, flags);
-        for (order=0 ; order < NR_MEM_LISTS; order++) {
-                struct page * tmp;
-                unsigned long nr = 0;
-                for (tmp = free_mem_area[order].next ; tmp != memory_head(free_mem_area+order) ; tmp = tmp->next) {
-                        nr ++;
-                }
-                total += nr << order;
-                ut_printf("%d: count:%d  static count:%d total:%d\n", order,nr,free_mem_area[order].stat_count,total);
-        }
-        spin_unlock_irqrestore(&free_area_lock, flags);
-        ut_printf("total = %d\n", total);
+	spin_lock_irqsave(&free_area_lock, flags);
+	for (order = 0; order < NR_MEM_LISTS; order++) {
+		struct page * tmp;
+		unsigned long nr = 0;
+		for (tmp = free_mem_area[order].next;
+				tmp != memory_head(free_mem_area+order); tmp = tmp->next) {
+			nr++;
+		}
+		total += nr << order;
+		ut_printf("%d: count:%d  static count:%d total:%d\n", order, nr,
+				free_mem_area[order].stat_count, (nr << order));
+	}
+	spin_unlock_irqrestore(&free_area_lock, flags);
+	ut_printf("total Free pages = %d (%dM) Actual pages: %d (%dM) \n", total, (total * 4) / 1024,stat_mem_size/PAGE_SIZE,stat_mem_size/(1024*1024));
 	return 1;
 }
 int mm_putFreePages(unsigned long addr, unsigned long order) {
