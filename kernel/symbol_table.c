@@ -18,15 +18,40 @@
 
 symb_table_t *g_symbol_table = 0;
 unsigned long g_total_symbols = 0;
-
+/**************************************
+ * Subsytems: sc-schedule ,
+ *            fs-vfs file system ,
+ *            SYS-syscalls,
+ *            ar-machineDepenedent,
+ *            sock- network
+ *            vm - virtual memory
+ *            mem - memory
+ *            ipc - sys,ipc ...  : ipc layer
+ *            pc - page cache
+ *            sysctl - Jcmd_,g_conf_
+ *            ut - utilities
+ *
+ *            lwip
+ *
+ */
+static unsigned char *subsystems[]={"SYS_","sc_","ut_","fs_","p9_","ipc_","pc_","ar_","mm_","vm_","Jcmd_","virtio_",0};
 int init_symbol_table() {
-	int i;
+	int i,j;
 	int confs = 0;
 	int stats = 0;
 	int cmds = 0;
 
 	for (i = 0; i < g_total_symbols; i++) {
 		unsigned char sym[100], dst[100];
+
+		g_symbol_table[i].subsystem_type = 0;
+		/* detect subsytem type */
+		for (j=0; subsystems[j]!=0; j++){
+			if (ut_strstr(g_symbol_table[i].name, (unsigned char *) subsystems[j]) != 0){
+				g_symbol_table[i].subsystem_type = subsystems[j];
+				break;
+			}
+		}
 
 		ut_strcpy(sym, g_symbol_table[i].name);
 		sym[7] = '\0'; /* g_conf_ */
@@ -69,7 +94,7 @@ int init_symbol_table() {
 	return 1;
 }
 
-int display_symbols(int type){
+int ut_symbol_show(int type){
 	int i,count=0;
     int *conf;
 
@@ -86,7 +111,7 @@ int display_symbols(int type){
 }
 
 
-int execute_symbol(int type, char *name, char *argv1,char *argv2){
+int ut_symbol_execute(int type, char *name, char *argv1,char *argv2){
     int i,*conf;
 	int (*func)(char *argv1,char *argv2);
 

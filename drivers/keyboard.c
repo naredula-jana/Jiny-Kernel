@@ -68,7 +68,7 @@ static struct {
 	unsigned char kb_buffer[MAX_BUF+1];
 	int current_pos;
 	int read_pos;
-	queue_t kb_waitq;
+	wait_queue_t kb_waitq;
 }input_devices[MAX_INPUT_DEVICES];
 
 
@@ -84,7 +84,7 @@ unsigned char dr_kbGetchar(int device_id) {
 		return -1;
 
 	while (input_devices[i].current_pos == 0) {
-		sc_wait(&input_devices[i].kb_waitq, 100);
+		ipc_waiton_waitqueue(&input_devices[i].kb_waitq, 100);
 	}
 //TODO: the below code need to be protected by spin lock if multiple reader are there
 	if (input_devices[i].read_pos < input_devices[i].current_pos) {
@@ -114,7 +114,7 @@ int ar_addInputKey(int device_id, unsigned char c) {
 	}
 	if (i >= MAX_INPUT_DEVICES)
 		return -1;
-	sc_wakeUp(&input_devices[i].kb_waitq);
+	ipc_wakeup_waitqueue(&input_devices[i].kb_waitq);
 
 	return 1;
 }
@@ -147,10 +147,10 @@ int init_driver_keyboard() {
 
 		if (i == 0) {
 			input_devices[i].device_id = DEVICE_SERIAL;
-			sc_register_waitqueue(&input_devices[i].kb_waitq, "kb-serial");
+			ipc_register_waitqueue(&input_devices[i].kb_waitq, "kb-serial");
 		} else {
 			input_devices[i].device_id = DEVICE_KEYBOARD;
-			sc_register_waitqueue(&input_devices[i].kb_waitq, "kb-key");
+			ipc_register_waitqueue(&input_devices[i].kb_waitq, "kb-key");
 		}
 	}
 

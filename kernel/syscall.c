@@ -12,17 +12,16 @@
 #include "isr.h"
 
 struct __sysctl_args {
-    int    *name;    /* integer vector describing variable */
-    int     nlen;    /* length of this vector */
-    void   *oldval;  /* 0 or address where to store old value */
-    size_t *oldlenp; /* available room for old value,
-                        overwritten by actual size of old value */
-    void   *newval;  /* 0 or address of new value */
-    size_t  newlen;  /* size of new value */
+	int *name; /* integer vector describing variable */
+	int nlen; /* length of this vector */
+	void *oldval; /* 0 or address where to store old value */
+	size_t *oldlenp; /* available room for old value,
+	 overwritten by actual size of old value */
+	void *newval; /* 0 or address of new value */
+	size_t newlen; /* size of new value */
 };
 
 unsigned long SYS_sysctl(struct __sysctl_args *args );
-unsigned long SYS_printf(unsigned long *args);
 unsigned long SYS_getdents(unsigned int fd, unsigned char *user_buf,int size);
 unsigned long SYS_fork();
 int g_conf_syscall_debug=0;
@@ -36,6 +35,8 @@ struct timespec {
     long   tv_sec;        /* seconds */
     long   tv_nsec;       /* nanoseconds */
 };
+
+
 struct stat {
 	unsigned long int st_dev; /* ID of device containing file */
 	unsigned long int st_ino; /* inode number */
@@ -77,18 +78,25 @@ unsigned long SYS_getpgrp();
 unsigned long SYS_exit_group();
 unsigned long SYS_wait4(int pid, void *status,  unsigned long  option, void *rusage);
 
-
 struct pollfd {
-    int   fd;         /* file descriptor */
-    short events;     /* requested events */
-    short revents;    /* returned events */
+	int fd; /* file descriptor */
+	short events; /* requested events */
+	short revents; /* returned events */
 };
+struct timezone {
+	int tz_minuteswest; /* minutes west of Greenwich */
+	int tz_dsttime; /* type of DST correction */
+};
+
 unsigned long SYS_poll(struct pollfd *fds, int nfds, int timeout);
 
 unsigned long SYS_nanosleep(const struct timespec *req, struct timespec *rem);
 unsigned long SYS_getcwd(unsigned char *buf, int len);
 unsigned long SYS_chdir(unsigned char *filename);
 unsigned long SYS_fs_fcntl(int fd, int cmd, void *args);
+unsigned long SYS_setsockopt(int sockfd, int level, int optname,
+		const void *optval, int optlen);
+unsigned long SYS_gettimeofday(time_t *tv, struct timezone *tz);
 
 typedef struct {
 	void *func;
@@ -106,7 +114,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { snull }, { SYS_getpid }, { snull }, /* 40 */
 { SYS_socket }, { SYS_connect }, { SYS_accept }, { SYS_sendto }, { SYS_recvfrom }, /* 45 */
 { snull }, { snull }, { snull }, { SYS_bind }, { SYS_listen }, /* 50 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 55 */
+{ snull }, { snull }, { snull }, { SYS_setsockopt }, { snull }, /* 55 */
 { SYS_sc_clone }, { SYS_sc_fork }, { snull }, { SYS_sc_execve }, { SYS_sc_exit }, /* 60 */
 { SYS_wait4 }, { SYS_sc_kill }, { SYS_uname }, { snull }, { snull }, /* 65 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 70 */
@@ -115,7 +123,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 85 */
 { snull }, { snull }, { snull }, { SYS_fs_readlink }, { snull }, /* 90 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 95 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 100 */
+{ SYS_gettimeofday }, { snull }, { snull }, { snull }, { snull }, /* 100 */
 { snull }, { SYS_getuid }, { snull }, { SYS_getgid }, { SYS_setuid }, /* 105 */
 { SYS_setgid }, { SYS_geteuid }, { snull }, { SYS_setpgid }, { SYS_getppid }, /* 110 */
 { SYS_getpgrp }, { snull }, { snull }, { snull }, { snull }, /* 115 */
@@ -166,32 +174,32 @@ struct utsname
 
 struct utsname g_utsname;
 //uname({sysname="Linux", nodename="njana-desk", release="2.6.35-22-generic", version="#33-Ubuntu SMP Sun Sep 19 20:32:27 UTC 2010", machine="x86_64"}) = 0
-static int init_utsname()
-{
-	ut_strcpy(g_utsname.sysname,(unsigned char *)"Linux");
-	ut_strcpy(g_utsname.nodename,(unsigned char *)"njana-desk");
-	ut_strcpy(g_utsname.release,(unsigned char *)"2.6.35-22-generic");
-	ut_strcpy(g_utsname.version,(unsigned char *)"#33-Ubuntu SMP Sun Sep 19 20:32:27 UTC 2010");
-	ut_strcpy(g_utsname.machine,(unsigned char *)"x86_64");
+static int init_utsname() {
+	ut_strcpy(g_utsname.sysname, (unsigned char *) "Linux");
+	ut_strcpy(g_utsname.nodename, (unsigned char *) "njana-desk");
+	ut_strcpy(g_utsname.release, (unsigned char *) "2.6.35-22-generic");
+	ut_strcpy(g_utsname.version,
+			(unsigned char *) "#33-Ubuntu SMP Sun Sep 19 20:32:27 UTC 2010");
+	ut_strcpy(g_utsname.machine, (unsigned char *) "x86_64");
 	return 1;
 }
-static int init_uts_done=0;
+static int init_uts_done = 0;
 
-unsigned long SYS_uname(unsigned long *args)
-{
-	SYSCALL_DEBUG("uname args:%x \n",args);
-	if (init_uts_done==0) init_utsname();
+unsigned long SYS_uname(unsigned long *args) {
+	SYSCALL_DEBUG("uname args:%x \n", args);
+	if (init_uts_done == 0)
+		init_utsname();
 //	ut_printf(" Inside uname : %s \n",g_utsname.sysname);
-	ut_memcpy((unsigned char *)args,(unsigned char *)&g_utsname,sizeof(g_utsname));
+	ut_memcpy((unsigned char *) args, (unsigned char *) &g_utsname,
+			sizeof(g_utsname));
 	return 0;
 }
 
 #define ARCH_SET_FS 0x1002
-unsigned long SYS_arch_prctl(unsigned long code,unsigned long addr)
-{
-	SYSCALL_DEBUG("sys arc_prctl : code :%x addr:%x \n",code,addr);
+unsigned long SYS_arch_prctl(unsigned long code, unsigned long addr) {
+	SYSCALL_DEBUG("sys arc_prctl : code :%x addr:%x \n", code, addr);
 	if (code == ARCH_SET_FS)
-        	ar_archSetUserFS(addr);	
+		ar_archSetUserFS(addr);
 	else
 		SYSCALL_DEBUG(" ERROR arc_prctl code is invalid \n");
 	return 0;
@@ -201,10 +209,9 @@ unsigned long SYS_getpid() {
 	return g_current_task->pid;
 }
 
-
 unsigned long SYS_nanosleep(const struct timespec *req, struct timespec *rem) {
 	long ticks;
-	SYSCALL_DEBUG("nanosleep sec:%d nsec:%d:\n",req->tv_sec,req->tv_nsec);
+	SYSCALL_DEBUG("nanosleep sec:%d nsec:%d:\n", req->tv_sec, req->tv_nsec);
 	if (req == 0)
 		return 0;
 	ticks = req->tv_sec * 100;
@@ -216,21 +223,30 @@ unsigned long SYS_getppid() {
 	SYSCALL_DEBUG("getppid :\n");
 	return g_current_task->ppid;
 }
-unsigned long snull(unsigned long *args)
-{
+unsigned long snull(unsigned long *args) {
 	unsigned long syscall_no;
 
 	asm volatile("movq %%rax,%0" : "=r" (syscall_no));
-	ut_printf("ERROR: SYSCALL null as hit :%d \n",syscall_no);	
+	ut_printf("ERROR: SYSCALL null as hit :%d \n", syscall_no);
 	SYS_sc_exit(123);
 	return 1;
 }
 
-long int SYS_time(__time_t *time){
-	SYSCALL_DEBUG("time :%x \n",time);
-	if (time==0) return 0;
-	*time = g_jiffies;
+long int SYS_time(__time_t *time) {
+	SYSCALL_DEBUG("time :%x \n", time);
+	if (time == 0)
+		return 0;
+	//*time = g_jiffies;
+	get_wallclock(time);
+	SYSCALL_DEBUG("Return time :%x seconds \n", *time);
 	return *time;
+}
+unsigned long SYS_gettimeofday(time_t *tv, struct timezone *tz) {
+	SYSCALL_DEBUG("gettimeofday tv:%x tz:%x\n", tv, tz);
+	if (tv == 0)
+		return SYSCALL_FAIL;
+	get_wallclock(&(tv->tv_nsec));
+	return SYSCALL_SUCCESS;
 }
 #define TEMP_UID 500
 /*****************************************
@@ -245,17 +261,17 @@ unsigned long SYS_getgid() {
 	return TEMP_UID;
 }
 unsigned long SYS_setuid(unsigned long uid) {
-	SYSCALL_DEBUG("setuid(Hardcoded) :%x(%d)\n",uid,uid);
+	SYSCALL_DEBUG("setuid(Hardcoded) :%x(%d)\n", uid, uid);
 	return 0;
 }
 unsigned long SYS_setgid(unsigned long gid) {
-	SYSCALL_DEBUG("setgid(Hardcoded) :%x(%d)\n",gid,gid);
+	SYSCALL_DEBUG("setgid(Hardcoded) :%x(%d)\n", gid, gid);
 	return 0;
 }
-static unsigned long temp_pgid=0;
+static unsigned long temp_pgid = 0;
 unsigned long SYS_setpgid(unsigned long pid, unsigned long gid) {
-	SYSCALL_DEBUG("setpgid(Hardcoded) :%x(%d)\n",gid,gid);
-	temp_pgid=gid;
+	SYSCALL_DEBUG("setpgid(Hardcoded) :%x(%d)\n", gid, gid);
+	temp_pgid = gid;
 	return 0;
 }
 unsigned long SYS_geteuid() {
@@ -266,19 +282,19 @@ unsigned long SYS_getpgrp() {
 	SYSCALL_DEBUG("getpgrp(Hardcoded) :\n");
 	return 0x123;
 }
-unsigned long SYS_rt_sigaction(){
+unsigned long SYS_rt_sigaction() {
 	SYSCALL_DEBUG("sigaction(Dummy) \n");
-	return 0;
+	return SYSCALL_SUCCESS;
 }
 #define TIOCSPGRP 0x5410
-unsigned long SYS_ioctl(int d, int request, unsigned long *addr){
-	SYSCALL_DEBUG("ioctl(Dummy) d:%x request:%x addr:%x\n",d,request,addr);
+unsigned long SYS_ioctl(int d, int request, unsigned long *addr) {
+	SYSCALL_DEBUG("ioctl(Dummy) d:%x request:%x addr:%x\n", d, request, addr);
 	if (request == TIOCSPGRP && addr != 0) {
-      *addr=temp_pgid;
-      return 0;
+		*addr = temp_pgid;
+		return 0;
 	}
 	if (addr != 0) {
-	   *addr=0x123;
+		*addr = 0x123;
 	}
 	return 0;
 }
@@ -298,7 +314,7 @@ unsigned long SYS_fs_readlink(unsigned char *path, char *buf, int bufsiz) {
 	}
 
 	if (fp->inode->file_type == SYM_LINK_FILE) {
-		ret=fs_read(fp, buf, bufsiz);
+		ret = fs_read(fp, buf, bufsiz);
 	}
 	fs_close(fp);
 
@@ -311,7 +327,8 @@ unsigned long SYS_fs_stat(const char *path, struct stat *buf) {
 	struct fileStat fstat;
 	int ret = -2; /* no such file exists */
 
-	SYSCALL_DEBUG("Stat (ppath:%x(%s) buf:%x size:%d\n", path, path, buf, sizeof(struct stat));
+	SYSCALL_DEBUG(
+			"Stat (ppath:%x(%s) buf:%x size:%d\n", path, path, buf, sizeof(struct stat));
 
 	if (path == 0 || buf == 0)
 		return ret;
@@ -325,13 +342,12 @@ unsigned long SYS_fs_stat(const char *path, struct stat *buf) {
 	buf->st_size = fstat.st_size;
 	buf->st_ino = fstat.inode_no;
 
+	buf->st_mtime.tv_sec = fstat.mtime;
+	buf->st_mtime.tv_nsec = 0;
+	buf->st_atime.tv_sec = fstat.atime;
+	buf->st_atime.tv_nsec = 0;
 
-	buf->st_mtime.tv_sec = fstat.mtime / 1000000;
-	buf->st_mtime.tv_nsec = fstat.mtime;
-	buf->st_atime.tv_sec = fstat.atime / 1000000;
-	buf->st_atime.tv_nsec = fstat.atime;
-
-	buf->st_mode = (fstat.mode | fstat.type )& 0xfffffff;
+	buf->st_mode = (fstat.mode | fstat.type) & 0xfffffff;
 	buf->st_dev = 2054;
 	buf->st_rdev = 0;
 
@@ -343,11 +359,11 @@ unsigned long SYS_fs_stat(const char *path, struct stat *buf) {
 	buf->__pad0 = 0;
 
 	buf->st_blksize = 4096; //TODO
-	buf->st_blocks = 8;  //TODO
+	buf->st_blocks = 8; //TODO
 	buf->st_nlink = 4; //TODO
-	if (fstat.type == SYM_LINK_FILE){
-			buf->st_blocks = 0;  //TODO
-			buf->st_nlink = 1; //TODO
+	if (fstat.type == SYM_LINK_FILE) {
+		buf->st_blocks = 0; //TODO
+		buf->st_nlink = 1; //TODO
 	}
 	fs_close(fp);
 	ret = SYSCALL_SUCCESS;
@@ -357,94 +373,94 @@ unsigned long SYS_fs_stat(const char *path, struct stat *buf) {
 	 *          st_mtime=2012/09/16-11:29:50, st_ctime=2012/09/16-11:29:50}) = 0
 	 *
 	 */
-	SYSCALL_DEBUG(" stat END : st_size: %d st_ino:%d nlink:%x mode:%x uid:%x gid:%x blksize:%x ret:%x\n", buf->st_size, buf->st_ino, buf->st_nlink, buf->st_mode, buf->st_uid, buf->st_gid, buf->st_blksize, ret);
+	SYSCALL_DEBUG(
+			" stat END : st_size: %d st_ino:%d nlink:%x mode:%x uid:%x gid:%x blksize:%x ret:%x mtime: %x :%x sec\n", buf->st_size, buf->st_ino, buf->st_nlink, buf->st_mode, buf->st_uid, buf->st_gid, buf->st_blksize, ret, buf->st_mtime.tv_sec, fstat.mtime);
 	return ret;
 }
 
 /************************* getdents ******************************/
 struct linux_dirent {
-    unsigned long  d_ino;     /* Inode number */
-    unsigned long  d_off;     /* Offset to next linux_dirent */
-    unsigned short d_reclen;  /* Length of this linux_dirent */
-    char           d_name[];  /* Filename (null-terminated) */
-                        /* length is actually (d_reclen - 2 -
-                           offsetof(struct linux_dirent, d_name) */
-    /*
-   // char           pad;       // Zero padding byte
-   // char           d_type;    // File type (only since Linux 2.6.4;
-    */                     // offset is (d_reclen - 1))
+	unsigned long d_ino; /* Inode number */
+	unsigned long d_off; /* Offset to next linux_dirent */
+	unsigned short d_reclen; /* Length of this linux_dirent */
+	char d_name[]; /* Filename (null-terminated) */
+/* length is actually (d_reclen - 2 -
+ offsetof(struct linux_dirent, d_name) */
+/*
+ // char           pad;       // Zero padding byte
+ // char           d_type;    // File type (only since Linux 2.6.4;
+ */ // offset is (d_reclen - 1))
 };
 
-unsigned long SYS_getdents(unsigned int fd, unsigned char *user_buf,int size){
-	struct file *fp=0;
-	unsigned char *temp_buf=0;
+unsigned long SYS_getdents(unsigned int fd, unsigned char *user_buf, int size) {
+	struct file *fp = 0;
+	unsigned char *temp_buf = 0;
 	struct linux_dirent *dirp;
-	int i,tret,len;
-	int ret=-1;
+	int i, tret, len;
+	int ret = -1;
 	struct dirEntry *dir_ent;
 
-	SYSCALL_DEBUG("getidents fd:%d userbuf:%x size:%d \n",fd,user_buf,size);
-	fp=fd_to_file(fd);
-	if (fp <= 0 || user_buf==0) {
-      ret = -1;
-	  goto last;
+	SYSCALL_DEBUG("getidents fd:%d userbuf:%x size:%d \n", fd, user_buf, size);
+	fp = fd_to_file(fd);
+	if (fp <= 0 || user_buf == 0) {
+		ret = -1;
+		goto last;
 	}
 
-	temp_buf = mm_getFreePages(0, 0);
+	temp_buf = mm_getFreePages(0, 1);
 
-	tret = fs_readdir(fp, temp_buf, PAGE_SIZE/sizeof(struct dirEntry));
-	if (tret <= 0){
+	tret = fs_readdir(fp, temp_buf, (2 * PAGE_SIZE) / sizeof(struct dirEntry));
+	if (tret <= 0) {
 		goto last;
 	}
 
 	dir_ent = temp_buf;
-	ret =0;
-	for (i = fp->offset; (i < tret) && ((ret+220)<size); i++) {
+	ret = 0;
+	for (i = fp->offset; (i < tret) && ((ret + 220) < size); i++) {
 		dirp = user_buf;
 		dirp->d_ino = dir_ent[i].inode_no;
-		ut_strncpy(dirp->d_name, dir_ent[i].filename,MAX_FILENAME-1);
-		len = 2*(sizeof (unsigned long))+sizeof(unsigned short) + ut_strlen(dirp->d_name) +2;
-		dirp->d_reclen = (len/8)*8;
-		if ((dirp->d_reclen)<len)dirp->d_reclen=dirp->d_reclen+8;
+		ut_strncpy(dirp->d_name, dir_ent[i].filename, MAX_FILENAME - 1);
+		len = 2 * (sizeof(unsigned long)) + sizeof(unsigned short)
+				+ ut_strlen(dirp->d_name) + 2;
+		dirp->d_reclen = (len / 8) * 8;
+		if ((dirp->d_reclen) < len)
+			dirp->d_reclen = dirp->d_reclen + 8;
 		user_buf = user_buf + dirp->d_reclen;
 		ret = ret + dirp->d_reclen;
 
-		SYSCALL_DEBUG("    getident :%s:  :%d: d_reclen:%d tret:%d \n",dirp->d_name,dirp->d_ino,dirp->d_reclen,tret);
+		SYSCALL_DEBUG(
+				"    getident :%s:  :%d: d_reclen:%d tret:%d \n", dirp->d_name, dirp->d_ino, dirp->d_reclen, tret);
 		dirp->d_off = user_buf;
 	}
-	fp->offset =i;
+	fp->offset = i;
 
-last:
-	if (temp_buf != 0){
-		mm_putFreePages(temp_buf, 0);
+	last: if (temp_buf != 0) {
+		mm_putFreePages(temp_buf, 1);
 	}
-	SYSCALL_DEBUG("getidents Ret :%d  tret:%d \n",ret,tret);
+	SYSCALL_DEBUG("getidents Ret :%d  tret:%d \n", ret, tret);
 
 	return ret;
 }
 /*********************** end of getdents *************************/
-unsigned long SYS_fs_dup2(int fd1, int fd2)
-{
-	SYSCALL_DEBUG("dup2(hardcoded)  fd1:%x fd2:%x \n",fd1,fd2);
+unsigned long SYS_fs_dup2(int fd1, int fd2) {
+	SYSCALL_DEBUG("dup2(hardcoded)  fd1:%x fd2:%x \n", fd1, fd2);
 	return fd2;
 }
-unsigned long SYS_fs_fstat(int fd, void *buf)
-{
+unsigned long SYS_fs_fstat(int fd, void *buf) {
 	struct file *fp;
-	SYSCALL_DEBUG("fstat  fd:%x buf:%x \n",fd,buf);
+	SYSCALL_DEBUG("fstat  fd:%x buf:%x \n", fd, buf);
 
-	fp=fd_to_file(fd);
-	if (fp <= 0 || buf==0) return -1;
+	fp = fd_to_file(fd);
+	if (fp <= 0 || buf == 0)
+		return -1;
 	return fs_stat(fp, buf);
 }
 
-
-unsigned long SYS_futex(unsigned long *a){
-	SYSCALL_DEBUG("futex  addr:%x \n",a);
-	*a=0;
+unsigned long SYS_futex(unsigned long *a) {
+	SYSCALL_DEBUG("futex  addr:%x \n", a);
+	*a = 0;
 	return 1;
 }
-
 
 unsigned long SYS_sysctl(struct __sysctl_args *args) {
 	SYSCALL_DEBUG("sysctl  args:%x \n", args);
@@ -468,16 +484,16 @@ unsigned long SYS_sysctl(struct __sysctl_args *args) {
 		}
 	}
 	if (carg[0] != 0 && ut_strcmp(carg[0], "set") == 0) {
-		execute_symbol(SYMBOL_CONF, carg[1], carg[2]);
+		ut_symbol_execute(SYMBOL_CONF, carg[1], carg[2]);
 
 	} else {
 		if (carg[0] == 0) {
 			ut_printf("Conf variables:\n");
-			display_symbols(SYMBOL_CONF);
+			ut_symbol_show(SYMBOL_CONF);
 			ut_printf("Cmd variables:\n");
-			display_symbols(SYMBOL_CMD);
+			ut_symbol_show(SYMBOL_CMD);
 		} else {
-			execute_symbol(SYMBOL_CMD, carg[0], carg[1], carg[2]);
+			ut_symbol_execute(SYMBOL_CMD, carg[0], carg[1], carg[2]);
 		}
 	}
 
@@ -485,7 +501,7 @@ unsigned long SYS_sysctl(struct __sysctl_args *args) {
 }
 
 unsigned long SYS_fs_fcntl(int fd, int cmd, void *args) {
-	SYSCALL_DEBUG("fcntl(Dummy)  fd:%x cmd:%x args:%x\n",fd,cmd,args);
+	SYSCALL_DEBUG("fcntl(Dummy)  fd:%x cmd:%x args:%x\n", fd, cmd, args);
 	return 0;
 }
 unsigned long SYS_wait4(int pid, void *status, unsigned long option,
@@ -493,43 +509,60 @@ unsigned long SYS_wait4(int pid, void *status, unsigned long option,
 	//SYSCALL_DEBUG("wait4(Dummy)  pid:%x status:%x option:%x rusage:%x\n",pid,status,option,rusage);
 	unsigned long child_id;
 	unsigned long flags;
+	struct task_struct *child_task = 0;
 
 	spin_lock_irqsave(&g_global_lock, flags);
-	child_id = g_current_task->wait_child_id;
-	g_current_task->wait_child_id = 0;
+	struct list_head *node;
+	node = g_current_task->dead_tasks.head.next;
+	if (list_empty(&(g_current_task->dead_tasks.head.next))) {
+
+	} else {
+		child_task = list_entry(node,struct task_struct, wait_queue);
+		if (child_task == 0)
+			BUG();
+		list_del(&child_task->wait_queue);
+	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
 
-	if (child_id != 0) {
-		// ut_printf(" wait child id :%d\n",child_id);
+	if (child_task != 0) {
+		child_id = child_task->pid;
+		sc_delete_task(child_task);
+		SYSCALL_DEBUG(
+				" wait returning the child id :%d(%x) \n", child_id, child_id);
+		return child_id;
+	} else {
+		return 0;
 	}
-	return child_id;
 }
 unsigned long SYS_chdir(unsigned char *filename) {
 	int ret;
-
+	struct file *fp;
 	SYSCALL_DEBUG("chdir  buf:%s \n", filename);
+	if (filename == 0)
+		return SYSCALL_FAIL;
+	fp = (struct file *) fs_open((unsigned char *) filename, 0, 0);
+	if (fp == 0) {
+		if (ut_strcmp(filename, "/") != 0)
+			return SYSCALL_FAIL;
+	} else {
+		fs_close(fp);
+	}
 	ut_strncpy(g_current_task->mm->fs.cwd, filename, MAX_FILENAME);
 	ret = ut_strlen(g_current_task->mm->fs.cwd);
-	// TODO : need to validate the file for its existence
-#if 0
-	if (ret > 0 && g_current_task->mm->fs.cwd[ret-1] != '/') {
-		g_current_task->mm->fs.cwd[ret] = '/';
-		ret++;
-	}
-#endif
 
 	return SYSCALL_SUCCESS;
 }
 
 unsigned long SYS_getcwd(unsigned char *buf, int len) {
-	int ret=SYSCALL_FAIL;
+	int ret = SYSCALL_FAIL;
 
-	SYSCALL_DEBUG("getcwd  buf:%x len:%d  \n",buf,len);
-	if (buf == 0) return 0;
-	ut_strncpy(buf,g_current_task->mm->fs.cwd,len);
-	ret=ut_strlen(buf);
+	SYSCALL_DEBUG("getcwd  buf:%x len:%d  \n", buf, len);
+	if (buf == 0)
+		return 0;
+	ut_strncpy(buf, g_current_task->mm->fs.cwd, len);
+	ret = ut_strlen(buf);
 
-     return ret;
+	return ret;
 }
 
 /*************************************
@@ -537,14 +570,24 @@ unsigned long SYS_getcwd(unsigned char *buf, int len) {
  * **********************************/
 
 unsigned long SYS_poll(struct pollfd *fds, int nfds, int timeout) {
-	SYSCALL_DEBUG("poll(partial)  fds:%x nfds:%d timeout:%d  \n",fds,nfds,timeout);
-	if (nfds==0 || fds==0 || timeout==0) return 0;
-    return 0;
+	SYSCALL_DEBUG(
+			"poll(partial)  fds:%x nfds:%d timeout:%d  \n", fds, nfds, timeout);
+	if (nfds == 0 || fds == 0 || timeout == 0)
+		return 0;
+	return 0;
+}
+unsigned long SYS_setsockopt(int sockfd, int level, int optname,
+		const void *optval, int optlen) {
+	SYSCALL_DEBUG(
+			"Setsocklopt (TODO) fd:%d level:%d optname:%d optval:%x optlen:%d\n", sockfd, level, optname, optval, optlen);
+	if (optname == 8) /* SO_RECVBUF */
+	{
+
+	}
+	return SYSCALL_FAIL;
 }
 
-
-
-unsigned long SYS_exit_group(){
+unsigned long SYS_exit_group() {
 	SYSCALL_DEBUG("exit_group :\n");
 	SYS_sc_exit(103);
 	return 0;

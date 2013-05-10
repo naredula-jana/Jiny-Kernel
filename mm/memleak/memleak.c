@@ -97,7 +97,7 @@ typedef unsigned char u8;
 /*
  * Kmemleak configuration and common defines.
  */
-#define MAX_TRACE		8	/* stack trace length */
+#define MAX_TRACE		20	/* stack trace length */
 #define MSECS_MIN_AGE		5000	/* minimum object age for reporting */
 #define SECS_FIRST_SCAN		60	/* delay before the first scan */
 #define SECS_SCAN_WAIT		600	/* subsequent auto scanning delay */

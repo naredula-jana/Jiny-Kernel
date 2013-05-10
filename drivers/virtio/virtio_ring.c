@@ -173,7 +173,7 @@ void print_vq(struct virtqueue *_vq){
 	if (diff < 0) diff=diff*(-1);
 	ut_printf(" num_free:%d  free_head:%d used:%x avail:%x diff:%d \n",vq->num_free,vq->free_head,vq->vring.used->idx,vq->vring.avail->idx,diff);
 }
-int virtqueue_add_buf_gfp(struct virtqueue *_vq,
+int virtio_add_buf_to_queue(struct virtqueue *_vq,
 			  struct scatterlist sg[],
 			  unsigned int out,
 			  unsigned int in,
@@ -258,7 +258,7 @@ add_head:
 }
 
 
-void virtqueue_kick(struct virtqueue *_vq)
+void virtio_queue_kick(struct virtqueue *_vq)
 {
 	struct vring_virtqueue *vq = to_vvq(_vq);
 	u16 new, old;
@@ -373,7 +373,7 @@ void *virtio_removeFromQueue(struct virtqueue *_vq, unsigned int *len)
 }
 
 
-void virtqueue_disable_cb(struct virtqueue *_vq)
+void virtio_disable_cb(struct virtqueue *_vq)
 {
 	struct vring_virtqueue *vq = to_vvq(_vq);
 
@@ -381,7 +381,7 @@ void virtqueue_disable_cb(struct virtqueue *_vq)
 }
 
 
-bool virtqueue_enable_cb(struct virtqueue *_vq)
+bool virtio_enable_cb(struct virtqueue *_vq)
 {
 	struct vring_virtqueue *vq = to_vvq(_vq);
 

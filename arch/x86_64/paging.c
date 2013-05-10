@@ -387,7 +387,6 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 			if ((level == kernel_pages_level) && check_kernel_ptable_entry((*v & (~0xfff)))) /* these are kernel pages , do not cleanup recuresvely */
 			{
 				DEBUG(" Not Clearing kernel entry %d:%d  entry end:%x addr+len:%x\n",level,i,entry_end,(addr+len));
-
 				*v=0;
 			}
 			else if ((level==2 && pde->ps==1) || level ==1) /* Leaf level entries */
@@ -397,17 +396,19 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 				if (is_pc_paddr(page))
 				{ /* TODO : page cache, need to decrease the usage count*/
 					DEBUG(" Not freeing PAGECACHE page  from page table level:%d  vaddr:%x paddr:%x  \n",level,page,*v);
-
+					*v=0;
 				}else
 				{
 					DEBUG("Freeing ANONYMOUS  from page table level:%d  vaddr:%x paddr:%x  \n",level,page,*v);
 					if (level ==1) /* Freeing the Anonymous page */
+					{
 						mm_putFreePages((unsigned long)__va(page),0);
-					else
+					    *v=0;
+					}else
 					{ /* TODO */
+						ut_printf(" ERROR : in clear pagetable\n");
 					}
 				}
-				*v=0;
 			}
 			else /* Non leaf level entries */
 			{

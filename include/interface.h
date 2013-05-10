@@ -18,27 +18,31 @@ struct iovec {
  *
  */
 /* scheduling */
-extern int sc_register_waitqueue(queue_t *waitqueue, char *name);
-extern int sc_unregister_waitqueue(queue_t *waitqueue);
-int sc_wakeUp(queue_t *waitqueue);
-int sc_wait(queue_t *waitqueue, unsigned long ticks);
+extern int ipc_register_waitqueue(wait_queue_t *waitqueue, char *name);
+extern int ipc_unregister_waitqueue(wait_queue_t *waitqueue);
+int ipc_wakeup_waitqueue(wait_queue_t *waitqueue);
+int ipc_waiton_waitqueue(wait_queue_t *waitqueue, unsigned long ticks);
 int sc_sleep( long ticks); /* each tick is 100HZ or 10ms */
 unsigned long SYS_sc_fork();
 unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void *ctid,  void *args) ;
 int SYS_sc_exit(int status);
+void sc_delete_task(struct task_struct *task);
 int SYS_sc_kill(unsigned long pid,unsigned long signal);
 void SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned char **env);
 int Jcmd_threadlist_stat( char *arg1,char *arg2);
 unsigned long sc_createKernelThread(int (*fn)(void *),unsigned char *argv,unsigned char *name);
 void sc_schedule();
 
+/* ipc */
+void ipc_check_waitqueues();
+
 /* mm */
 unsigned long mm_getFreePages(int gfp_mask, unsigned long order);
 int mm_putFreePages(unsigned long addr, unsigned long order);
 int mm_printFreeAreas(char *arg1,char *arg2);
-void kmem_cache_free (kmem_cache_t *cachep, void *objp);
+void mm_slab_cache_free (kmem_cache_t *cachep, void *objp);
 extern kmem_cache_t *kmem_cache_create(const char *, size_t,size_t, unsigned long,void (*)(void *, kmem_cache_t *, unsigned long),void (*)(void *, kmem_cache_t *, unsigned long));
-void *kmem_cache_alloc (kmem_cache_t *cachep, int flags);
+void *mm_slab_cache_alloc (kmem_cache_t *cachep, int flags);
 void *mm_malloc (size_t size, int flags);
 void mm_free (const void *objp);
 #define alloc_page() mm_getFreePages(0, 0)
@@ -76,7 +80,7 @@ unsigned long fs_registerFileSystem(struct filesystem *fs);
 //struct inode *fs_getInode(char *filename);
 unsigned long fs_putInode(struct inode *inode);
 int Jcmd_ls(char *arg1,char *arg2);
-unsigned long fs_open(unsigned char *filename,int mode,int flags);
+struct file *fs_open(unsigned char *filename,int mode,int flags);
 int fs_close(struct file *file);
 struct page *fs_genericRead(struct inode *inode,unsigned long offset);
 long fs_read(struct file *fp ,unsigned char *buff ,unsigned long len);
@@ -169,19 +173,21 @@ struct Socket_API{
 	int (*bind)(void *conn,struct sockaddr *s);
 	void* (*accept)(void *conn);
 	int (*listen)(void *conn,int len);
+	int (*connect)(void *conn, uint32_t *addr, uint16_t port);
     int (*write)(void *conn, unsigned char *buff, unsigned long len);
     int (*read)(void *conn, unsigned char *buff, unsigned long len);
 	int (*close)(void *conn);
 };
 int register_to_socketLayer(struct Socket_API *api);
-int networkSockClose(struct file *file);
-int networkSockRead(struct file *file, unsigned char *buff, unsigned long len);
-int networkSockWrite(struct file *file, unsigned char *buff, unsigned long len);
+int socket_close(struct file *file);
+int socket_read(struct file *file, unsigned char *buff, unsigned long len);
+int socket_write(struct file *file, unsigned char *buff, unsigned long len);
 int SYS_socket(int family,int type, int z);
 int SYS_listen(int fd,int length);
 int SYS_accept(int fd);
 int SYS_bind(int fd, struct sockaddr  *addr, int len);
-int SYS_connect(int fd);
-int SYS_sendto(int fd);
+int SYS_connect(int fd, struct sockaddr  *addr, int len);
+unsigned long SYS_sendto(int sockfd, const void *buf, size_t len, int flags,
+               const struct sockaddr *dest_addr, int addrlen);
 int SYS_recvfrom(int fd);
 #endif

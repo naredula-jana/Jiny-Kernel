@@ -46,12 +46,12 @@ static struct xenbus_req_info req_info[NR_REQS];
         typeof(y) tmpy = (y);                 \
         tmpx < tmpy ? tmpx : tmpy;            \
         })
-queue_t xb_waitq;
+wait_queue_t xb_waitq;
 
 static void xenbus_evtchn_handler(evtchn_port_t port, struct pt_regs *regs,
 		void *ign) {
 	int ret;
-	ret=sc_wakeUp(&xb_waitq); /* wake all the waiting processes */
+	ret=ipc_wakeup_waitqueue(&xb_waitq); /* wake all the waiting processes */
 	DEBUG(" Xenbus wait handler: Waking up the waiting process :%d \n",ret);
 }
 
@@ -61,7 +61,7 @@ void init_xenbus(unsigned long xenstore_phyaddr, uint32_t evtchannel) {
 	int err;
 	DEBUG("Initialising xenbus\n");
 
-	sc_register_waitqueue(&xb_waitq,"xen");
+	ipc_register_waitqueue(&xb_waitq,"xen");
 #define HOST_XEN_STORE_ADDR 0xe3000000
 	xenstore_buf = HOST_XEN_STORE_ADDR;
 	store_evtchannel = evtchannel;
@@ -253,7 +253,7 @@ int xenbus_read(const char *path, char *reply, int reply_len) {
 	while(iter<10 && req_info[id].resp_ready!=1)
 	{
 		process_responses();
-		sc_wait(&xb_waitq,100);
+		ipc_waiton_waitqueue(&xb_waitq,100);
 		iter++;
 	}
 	DEBUG("AFTER NEW AFTER  wait xenbus read \n");
@@ -289,7 +289,7 @@ int xenbus_write(const char *path, char *val) {
 	while(iter<10 && req_info[id].resp_ready!=1)
 	{
 		process_responses();
-		sc_wait(&xb_waitq,100);
+		ipc_waiton_waitqueue(&xb_waitq,100);
 		iter++;
 	}
 	DEBUG("AFTER    NEW WAIT  xb_write \n");

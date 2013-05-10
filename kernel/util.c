@@ -111,6 +111,7 @@ int ut_strcmp(unsigned char *str1,unsigned  char *str2)
 {
 	int i = 0;
 	int failed = 0;
+	if (str1==0 || str2==0) return -1;
 	while(str1[i] != '\0' && str2[i] != '\0')
 	{
 		if(str1[i] != str2[i])

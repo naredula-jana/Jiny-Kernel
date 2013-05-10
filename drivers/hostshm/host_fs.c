@@ -60,7 +60,7 @@ static void generate_interrupt_to_peer() {
 
 struct filesystem Hfs_fs;
 //extern void *Hfs_dev;
-extern queue_t g_hfs_waitqueue;
+extern wait_queue_t g_hfs_waitqueue;
 extern int client_put_buf(struct buf_desc *buf);
 extern int client_get_buf(struct client_queue *q, struct buf_desc *buf, int type);
 /* This is central switch where the call from vfs routed to the Hfs functions */
@@ -84,7 +84,7 @@ static int HfsRequest(unsigned char type, struct inode *inode, uint64_t offset,
 	generate_interrupt_to_peer();
 
 	while (client_get_buf(cq, &buf, RECV) == 0) {
-		sc_wait(&g_hfs_waitqueue, 5);
+		ipc_waiton_waitqueue(&g_hfs_waitqueue, 5);
 	}
 	request = (Request_t *)buf.buf;
 	peer_pos = request->guestos_pos;

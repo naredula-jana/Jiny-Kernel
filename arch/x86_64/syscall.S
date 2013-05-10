@@ -122,12 +122,15 @@ good_syscall_number:
          */
         movq %r10,%rcx
 
-        call *syscalltable(,%rax,8)
-#if 1
         pushq %rax
-        call sc_check_signal
+        call sc_before_syscall
         popq %rax
-#endif
+
+        call *syscalltable(,%rax,8)
+
+        pushq %rax
+        call sc_after_syscall
+        popq %rax
 
 syscall_done:
 	RESTORE_GPRS

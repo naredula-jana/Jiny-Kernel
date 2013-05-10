@@ -61,23 +61,25 @@ long fault_ip_g=0;
 long fault_error_g=0;
 long fault_num_g=0;
 struct fault_ctx cpu_ctx;
-static int gpFault(struct fault_ctx *ctx)
-{
-	fault_ip_g=ctx->istack_frame->rip;
-	fault_error_g=ctx->errcode;
-	fault_num_g=ctx->fault_num;
+static int gpFault(struct fault_ctx *ctx) {
+	fault_ip_g = ctx->istack_frame->rip;
+	fault_error_g = ctx->errcode;
+	fault_num_g = ctx->fault_num;
 
-	ut_printf(" ERROR: cpuid:%d Gp Fault fault ip:%x error code:%x sp:%x fault number:%x \n",getcpuid(),fault_ip_g,fault_error_g,ctx->istack_frame->rsp,fault_num_g);
-        if (g_current_task->mm != g_kernel_mm) /* user level thread */
-        {
-        	   while(1);
-                SYS_sc_exit(100);
-                return 0;
-        }
+	ut_printf(
+			" ERROR: cpuid:%d Gp Fault fault ip:%x error code:%x sp:%x fault number:%x taskname:%s:\n",
+			getcpuid(), fault_ip_g, fault_error_g, ctx->istack_frame->rsp,
+			fault_num_g, g_current_task->name);
+	if (g_current_task->mm != g_kernel_mm) /* user level thread */
+	{
+		SYS_sc_exit(100);
+		return 0;
+	}
 	/*ut_printf("GP fault:  ip: %x  error:%x  fault:%x cs:%x ss:%x \n",ctx->istack_frame->rip,ctx->errcode,ctx->fault_num,ctx->istack_frame->cs,ctx->istack_frame->ss);
-	  ut_printf("GP fault:  ip: %x  error:%x  fault:%x cs:%x ss:%x \n",ctx->istack_frame->rip,ctx->errcode,ctx->fault_num,ctx->istack_frame->cs,ctx->istack_frame->ss);
-	  show_trace(&i); */
-	while(1);
+	 ut_printf("GP fault:  ip: %x  error:%x  fault:%x cs:%x ss:%x \n",ctx->istack_frame->rip,ctx->errcode,ctx->fault_num,ctx->istack_frame->cs,ctx->istack_frame->ss);
+	 show_trace(&i); */
+	while (1)
+		;
 }
 
 void init_handlers()
@@ -221,7 +223,7 @@ void ar_irqHandler(void *p,unsigned int int_no)
 
 	if (int_no > 100) { // APIC or MSI based interrupts
 		int isr_status= read_apic_isr(int_no); // TODO: make use of isr_status
-	} else {
+	}else{
 		if (int_no >= 40) {
 			// Send reset signal to slave.
 			outb(0xA0, 0x20);

@@ -6,9 +6,6 @@ main(int argc , char **argv)
 	int fp,wp,j;
 	unsigned long ret;
 //    printf("PARENT argc:%x   first  argv[0]: %s argv[1]:%s  argv:%x\n",argc,argv[0],argv[1],argv);
-
-
-
     for (j = 0; j < 100000; j++) {
 		if (argv[1] == 0)
 			fp = open("input", 0);

@@ -63,6 +63,7 @@
                 aux_vec[aux_index++] = val; \
         } while (0)
 
+extern void * __vsyscall_page;
 #define userstack_addr(kaddr)  (USERSTACK_ADDR+USERSTACK_LEN+kaddr-((kaddr/PAGE_SIZE)*PAGE_SIZE)-PAGE_SIZE)
 unsigned long fs_loadElfLibrary(struct file *file, unsigned long tmp_stack, unsigned long stack_len, unsigned long aux_addr) {
 	struct elf_phdr *elf_phdata;
@@ -197,7 +198,9 @@ unsigned long fs_loadElfLibrary(struct file *file, unsigned long tmp_stack, unsi
 
 #define SYSCALL_PAGE 0xffffffffff600000
 			vm_mmap(0, SYSCALL_PAGE, 0x1000, PROT_READ | PROT_EXEC |PROT_WRITE, MAP_ANONYMOUS, 0);
-			ut_memset((unsigned char *)SYSCALL_PAGE,(unsigned char )0xcc,0x1000);
+			//ut_memset((unsigned char *)SYSCALL_PAGE,(unsigned char )0xcc,0x1000);
+			ut_memcpy((unsigned char *)SYSCALL_PAGE,(unsigned char *)&__vsyscall_page,0x1000);
+#if 0
 			unsigned int *syscallp;
 			syscallp=(unsigned int *)0xffffffffff600400;
 			*syscallp=0xc9c0c748;
@@ -206,6 +209,7 @@ unsigned long fs_loadElfLibrary(struct file *file, unsigned long tmp_stack, unsi
 			syscallp++;
 			*syscallp=0xccccc305;
 			syscallp++;
+#endif
 		}
 	}
 	DEBUG(" Program start address(autod) : %x \n",elf_ex.e_entry);

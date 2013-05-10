@@ -5,13 +5,15 @@
 #define MAX_SYMBOLLEN 40
 #define MAX_FILELEN 50
 #define MAX_SYMBOLS 3000
-#define TYPE_TEXT 0
+#define TYPE_GTEXT 0
+#define TYPE_LTEXT 2
 #define TYPE_DATA 1
 typedef struct {
 	unsigned long address;
 	char type;
 	char name[MAX_SYMBOLLEN];
 	char file_lineno[MAX_FILELEN];
+	unsigned long subsystem_type;
 } symb_table_t;
 symb_table_t stable[MAX_SYMBOLS];
 #define MAX_DATA 900001
@@ -50,10 +52,14 @@ static tokenise(char *p, symb_table_t *t) {
 				t->address = ut_atoi(p);
 //printf(" %s : %x \n",p,t->address);
 			} else if (k == 1) {
-				if (q[0] = 't' || q[1] == 'T') {
-					t->type = TYPE_TEXT;
-				} else
+				if (q[0] == 'T') {
+					t->type = TYPE_GTEXT;
+				} else if (q[0] == 't') {
+					t->type = TYPE_LTEXT;
+				}else{
+					//printf("  :%c:    :%c: \n",q[0],q[1]);
 					t->type = TYPE_DATA;
+				}
 
 			} else if (k == 2) {
 				snprintf(t->name, MAX_SYMBOLLEN, "%s", q);

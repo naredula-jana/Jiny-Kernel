@@ -24,7 +24,7 @@ static int p9ClientInit() {
 	client.pkt_buf = (unsigned char *) mm_getFreePages(MEM_CLEAR, 0);
 	client.pkt_len = 4098;
 
-	client.lock = mutexCreate();
+	client.lock = mutexCreate("mutex_p9");
     if (client.lock == 0) return 0;
 	client.type = P9_TYPE_TVERSION;
 	client.tag = 0xffff;
@@ -62,19 +62,23 @@ static int p9_open(uint32_t fid, unsigned char *filename, int flags, int arg_mod
 			break;
 		}
 	}
-
+#if 0
 	if (flags & O_RDONLY)
 		mode_b = 0;
-	else if (flags & O_WRONLY)
+	else if ((flags & O_WRONLY) || (flags & O_APPEND)){
 		mode_b = 1;
-	else if (flags & O_RDWR)
+	} else if (flags & O_RDWR)
 		mode_b = 2;
+#endif
+
+	mode_b = 2; /* every file is opened as RDWR with p9 filesystem, since the open file will use for all the files( read file, write file etc) in vfs */
 	if (flags & O_CREAT) {
 		client.type = P9_TYPE_TCREATE;
 		perm = 0x1ff; /* this is same as 777 */
 		if (flags & O_DIRECTORY)
 			perm = perm | 0x80000000;
-		addr = p9_write_rpc(&client, "dsdb", fid, filename, perm, mode_b);
+		addr = p9_write_rpc(&client, "dsdbs", fid, filename, perm, mode_b,"");
+		DEBUG("p9 Creating the New file :%s: \n",filename);
 	} else {
 		client.type = P9_TYPE_TOPEN;
 		addr = p9_write_rpc(&client, "db", fid, mode_b);
@@ -87,8 +91,6 @@ static int p9_open(uint32_t fid, unsigned char *filename, int flags, int arg_mod
 	return ret;
 }
 
-
-//TODO: handling locking in entire p9 using new mutex calls
 static uint32_t p9_walk(unsigned char *filename, int flags, unsigned char **create_filename) {
 	unsigned long addr;
 	static unsigned char names[MAX_P9_FILEDEPTH][MAX_P9_FILELENGTH];
@@ -194,13 +196,13 @@ static int p9_get_dir_entries(p9_client_t *client, struct dirEntry *dir_ent, int
 	uint64_t inode, dummyi;
 
 	recv = client->pkt_buf + 1024;
-	p9pdu_init(&pdu, 0, 0, client, recv, 1024);
-	ret = p9pdu_read_v(&pdu, "dbw", &total_len1, &type1, &tag);
-	ret = p9pdu_read_v(&pdu, "d", &total_len2);
+	p9_pdu_init(&pdu, 0, 0, client, recv, 1024);
+	ret = p9_pdu_read_v(&pdu, "dbw", &total_len1, &type1, &tag);
+	ret = p9_pdu_read_v(&pdu, "d", &total_len2);
 	//ut_printf(" readir len1: %d len2:%d \n",total_len1,total_len2);
 
 	for (i = 0; (i<max_dir) && ret==0; i++) {
-		ret = p9pdu_read_v(&pdu, "bdqqbs", &type1, &dummyd, &dir_ent[i].inode_no, &dummyi,
+		ret = p9_pdu_read_v(&pdu, "bdqqbs", &type1, &dummyd, &dir_ent[i].inode_no, &dummyi,
 				&type2, dir_ent[i].filename);
 		if (dir_ent[i].inode_no==0 || (type2!=4 && type2!=10 && type2!=8)){ /* check for soft link, dir,regular file */
 			break;
@@ -217,8 +219,6 @@ static uint32_t p9_readdir(uint32_t fid, unsigned char *data,
 	unsigned long addr;
 	int ret;
 	uint32_t read_len = 0;
-
-
 	unsigned char type;
 	struct fileStat fstat, *stat;
 	stat = &fstat;
@@ -230,9 +230,6 @@ static uint32_t p9_readdir(uint32_t fid, unsigned char *data,
 	addr = p9_write_rpc(&client, "dqd", fid, 0, 3500);
 
 	ret=p9_get_dir_entries(&client,data,data_len);
-	// d-length + bdqqbs = Qqbs
-	//	ret = p9_read_rpc(&client, "dbdqqbsbdqqbs",&dummyd,    &type,&dummyd,&stat->inode_no,&dummyq,&type,name,   &type,&dummyd,&dummyq,&dinode,&type,uid);
-
 	return ret;
 }
 static unsigned char test1[1000];
@@ -363,18 +360,21 @@ static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
 		ret = p9_read_rpc(&client, "wwwdbdqdddq",&dummyw1,&dummyw2,&dummyw3,&stat->blk_size,&type,&dummyd,&stat->inode_no,&stat->mode,&stat->atime,&stat->mtime,&stat->st_size);
 		//DEBUG("stats length :%x \n",stat->st_size);
 		//ut_printf("w1:%x w2 :%x w3:%x file mode :%x type %x\n",dummyw1,dummyw2,dummyw3,stat->mode,type);
+		if (1) {
+			stat->type = 0;
+			if (type == 0) { /* Regular file */
+				stat->type = REGULAR_FILE;
+			} else if (type == 0x80) { /* directory */
+				stat->type = DIRECTORY_FILE;
+			} else if (type == 2) { /* soft link */
+				stat->type = SYM_LINK_FILE;
+			} else {
+				return 0;
+			}
 
-		stat->type = 0;
-		if (type ==0){ /* Regular file */
-			stat->type = 0x8000;
-		}else if (type ==0x80){ /* directory */
-			stat->type = 0x4000;
-		}else if (type ==2){ /* soft link */
-			stat->type = 0xA000;
-		}
-
-		if (client.recv_type == P9_TYPE_RSTAT) {
-			ret = 1;
+			if (client.recv_type == P9_TYPE_RSTAT) {
+				ret = 1;
+			}
 		}
 	}
 
@@ -400,7 +400,9 @@ static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, u
 
 	mutexLock(client.lock);
 	if (type == REQUEST_OPEN) {
+
 		fid = p9_walk(inode->filename, flags, &createFilename);
+		DEBUG("P9 open filename :%s: flags:%x mode:%x  createfilename :%s:\n",inode->filename,flags,mode,createFilename);
 		if (fid > 0) {
 			inode->fs_private = fid;
 			ret = p9_open(fid, createFilename, flags, mode);

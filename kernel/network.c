@@ -19,7 +19,7 @@
 
 #define MAX_QUEUE_LENGTH 250
 struct queue_struct{
-	queue_t waitq;
+	wait_queue_t waitq;
 	int producer,consumer;
 	struct {
 		unsigned char *buf;
@@ -70,7 +70,7 @@ static int netRx_BH(void *arg) {
 	unsigned int len;
 
 	while (1) {
-		sc_wait(&queue.waitq, 10);
+		ipc_waiton_waitqueue(&queue.waitq, 10);
 		while (remove_from_queue(&data, &len) == 1) {
 			int ret=0;
 			if (count_protocol_drivers > 0) {
@@ -122,7 +122,7 @@ int init_networking(){
 	int ret;
 
     ut_memset((unsigned char *)&queue,0,sizeof(struct queue_struct));
-	sc_register_waitqueue(&queue.waitq ,"netRx_BH");
+	ipc_register_waitqueue(&queue.waitq ,"netRx_BH");
 	ret = sc_createKernelThread(netRx_BH, 0, (unsigned char *)"netRx_BH");
 	return 1;
 }
@@ -139,19 +139,19 @@ int register_to_socketLayer(struct Socket_API *api){
 	return 1;
 }
 
-int networkSockClose(struct file *file){
+int socket_close(struct file *file){
 	if (socketLayerRegistered==0) return 0; /* TCP/IP sockets are not supported */
 	if (socket_api->close == 0) return 0;
 	return socket_api->close(file->private);
 }
 
-int networkSockRead(struct file *file, unsigned char *buff, unsigned long len){
+int socket_read(struct file *file, unsigned char *buff, unsigned long len){
 	if (socketLayerRegistered==0) return 0; /* TCP/IP sockets are not supported */
 	if (socket_api->read == 0) return 0;
 	return socket_api->read(file->private, buff, len);
 }
 
-int networkSockWrite(struct file *file, unsigned char *buff, unsigned long len){
+int socket_write(struct file *file, unsigned char *buff, unsigned long len){
 	if (socketLayerRegistered==0) return 0; /* TCP/IP sockets are not supported */
 	if (socket_api->write == 0) return 0;
 	return socket_api->write(file->private, buff, len);
@@ -171,6 +171,7 @@ int SYS_socket(int family,int type, int z){
 	}
 
 	int i= SYS_fs_open("/dev/sockets",0,0);
+	if (i<0) return i;
 	struct file *file = g_current_task->mm->fs.filep[i];
 	if (file == 0){
 		socket_api->close(conn);
@@ -181,10 +182,11 @@ int SYS_socket(int family,int type, int z){
 }
 
 int SYS_bind(int fd, struct sockaddr  *addr, int len){
-	if (socketLayerRegistered==0) return 0; /* TCP/IP sockets are not supported */
+	SYSCALL_DEBUG("bind %d \n",fd);
+	if (socketLayerRegistered==0 || socket_api==0) return 0; /* TCP/IP sockets are not supported */
 	SYSCALL_DEBUG("Bind fd:%d addr:%x len\n",fd,addr,len);
 	if (socket_api->bind == 0) return 0;
-
+    if (fd > MAX_FDS || fd <0 ) return 0;
 	struct file *file = g_current_task->mm->fs.filep[fd];
 	if (file==0) return -1;
 	return socket_api->bind(file->private, addr);
@@ -192,8 +194,9 @@ int SYS_bind(int fd, struct sockaddr  *addr, int len){
 
 int SYS_accept(int fd){
 	struct file *file;
-	if (socketLayerRegistered==0) return 0; /* TCP/IP sockets are not supported */
 	SYSCALL_DEBUG("accept %d \n",fd);
+	if (socketLayerRegistered==0) return 0; /* TCP/IP sockets are not supported */
+
 	if (socket_api->accept == 0) return 0;
 	file = g_current_task->mm->fs.filep[fd];
 	if (file==0) return -1;
@@ -210,21 +213,38 @@ int SYS_accept(int fd){
 
 int SYS_listen(int fd,int length){
 	SYSCALL_DEBUG("listen fd:%d len:%d\n",fd,length);
-	if (socketLayerRegistered==0) return 0; /* TCP/IP sockets are not supported */
+	if (socketLayerRegistered==0 || socket_api==0) return 0; /* TCP/IP sockets are not supported */
     return 1;
 }
-int SYS_connect(fd) /* TODO */
-{
-	SYSCALL_DEBUG("connect : TODO\n");
-return 1;
+int SYS_connect(int fd, struct sockaddr  *addr, int len) {
+	int ret;
+	struct sockaddr ksock_addr;
+
+	SYSCALL_DEBUG("connect %d  addr:%x len:%d\n",fd, addr, len);
+	if (socketLayerRegistered==0 || socket_api==0) return 0; /* TCP/IP sockets are not supported */
+
+	if (socket_api->connect == 0) return 0;
+    if (fd > MAX_FDS || fd <0 ) return 0;
+	struct file *file = g_current_task->mm->fs.filep[fd];
+	if (file==0) return -1;
+	ksock_addr.addr = addr->addr;
+
+	ret = socket_api->connect(file->private, &(ksock_addr.addr), addr->sin_port);
+	SYSCALL_DEBUG("connect ret:%d  addr:%x\n",ret,ksock_addr.addr);
+	return ret;
+
 }
-int SYS_sendto(fd) /* TODO */
-{
-	SYSCALL_DEBUG("SENDTO fd:%d\n",fd);
-return 1;
+unsigned long SYS_sendto(int sockfd, const void *buf, size_t len, int flags,  const struct sockaddr *dest_addr, int addrlen){
+	SYSCALL_DEBUG("SENDTO fd:%d buf:%x len:%d flags:%x dest_addr:%x addrlen:%d\n",sockfd, buf, len, flags, dest_addr, addrlen);
+	if (socketLayerRegistered==0 || socket_api==0 || g_current_task->mm->fs.filep[sockfd]==0) return 0;
+	struct file *file = g_current_task->mm->fs.filep[sockfd];
+	if (dest_addr !=0)
+	     socket_api->bind(file->private, dest_addr);
+	return (socket_api->write(file->private, buf, len));
 }
+
 int SYS_recvfrom(fd) /* TODO */
 {
-	SYSCALL_DEBUG("SENDTO fd:%d \n",fd);
-return 1;
+	SYSCALL_DEBUG("RECVfrom fd:%d TODO\n",fd);
+    return 1;
 }

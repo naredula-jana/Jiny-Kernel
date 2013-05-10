@@ -53,9 +53,9 @@ static int send_to_memballoon(unsigned long *v, int inflate) {
 	if (inflate ==0) queue_id=1;
 	out=1;
 	in=0;
-	virtqueue_enable_cb(memb_dev->vq[queue_id]);
-	virtqueue_add_buf_gfp(memb_dev->vq[queue_id], sg, out, in, sg[0].page_link, 0);
-	virtqueue_kick(memb_dev->vq[queue_id]);
+	virtio_enable_cb(memb_dev->vq[queue_id]);
+	virtio_add_buf_to_queue(memb_dev->vq[queue_id], sg, out, in, sg[0].page_link, 0);
+	virtio_queue_kick(memb_dev->vq[queue_id]);
 
 	return 0;
 }

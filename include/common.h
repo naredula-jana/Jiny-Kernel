@@ -11,8 +11,6 @@
 #include "task.h"
 #include "spinlock.h"
 
-
-
 #ifndef NULL
 #define NULL ((void *) 0)
 #endif
@@ -30,9 +28,14 @@ extern spinlock_t g_global_lock;
 	if (g_conf_syscall_debug==1)	{\
 		unsigned long flags; \
 		spin_lock_irqsave(&g_userspace_stdio_lock, flags); \
-		ut_printf("SYSCALL(%x :%d uip: %x) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip); ut_printf(x);\
-		spin_unlock_irqrestore(&g_userspace_stdio_lock, flags); \
-	} \
+		ut_printf("SYSCALL(%x :%d uip: %x) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip); ut_printf(x); \
+    	spin_unlock_irqrestore(&g_userspace_stdio_lock, flags); \
+	}else if (g_conf_syscall_debug==2) {\
+		unsigned long flags; \
+				spin_lock_irqsave(&g_userspace_stdio_lock, flags); \
+				ut_log("SYSCALL(%x :%d uip: %x) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip); ut_log(x); Jcmd_logflush(0,0);\
+		    	spin_unlock_irqrestore(&g_userspace_stdio_lock, flags); \
+	}\
 } while (0) 
 
  //#define DEBUG_ENABLE 1
@@ -51,8 +54,9 @@ extern int brk_pnt;
 
 #define MAX_SYMBOLLEN 40
 #define MAX_FILELEN 50
-#define SYMBOL_TEXT 0
+#define SYMBOL_GTEXT 0
 #define SYMBOL_DATA 1
+#define SYMBOL_LTEXT 2
 #define SYMBOL_CMD 10
 #define SYMBOL_CONF 12
 typedef struct {
@@ -60,6 +64,7 @@ typedef struct {
 	char type;
 	unsigned char name[MAX_SYMBOLLEN];
 	char file_lineno[MAX_FILELEN];
+	unsigned long subsystem_type;
 }symb_table_t ;
 extern symb_table_t *g_symbol_table;
 extern unsigned long g_total_symbols;
@@ -99,7 +104,7 @@ do {                                                           \
 // first parameter.
 typedef int (*isr_t)();
 extern int g_serial_output;
-extern spinlock_t g_inode_lock;
+extern void *g_inode_lock;
 #define printk ut_printf
 unsigned char kb_getchar();
 void register_interrupt_handler(uint8_t n, isr_t handler);

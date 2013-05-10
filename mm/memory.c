@@ -295,19 +295,18 @@ int mm_putFreePages(unsigned long addr, unsigned long order) {
 	BUG();
 	return 0;
 }
-unsigned long mm_getFreePages(int gfp_mask, unsigned long order)
-{
-        unsigned long flags;
+unsigned long mm_getFreePages(int gfp_mask, unsigned long order) {
+	unsigned long flags;
 
-        if (order >= NR_MEM_LISTS)
-                goto nopage;
+	if (order >= NR_MEM_LISTS)
+		goto nopage;
 
-        spin_lock_irqsave(&free_area_lock, flags);
-        RMQUEUE(order, gfp_mask);
-        spin_unlock_irqrestore(&free_area_lock, flags);
+	spin_lock_irqsave(&free_area_lock, flags);
+	RMQUEUE(order, gfp_mask);
+	spin_unlock_irqrestore(&free_area_lock, flags);
 
 nopage:
-        return 0;
+	return 0;
 }
 extern unsigned long VIDEO;
 extern unsigned long g_multiboot_mod_addr;

@@ -70,9 +70,11 @@ signed char sys_mbox_new(sys_mbox_t *mbox, int size) {
 		size = 2;
 	mbox->count = size + 1; /* this is to create one empty slot , so as always  writer and reader does not meet*/
 	mbox->messages = mm_malloc(sizeof(void*) * (size + 1), 0);
-	sys_sem_new(&mbox->read_sem, 0);
+	mbox->read_sem.name =  "sem_lwip_read" ;
+	ipc_sem_new(&mbox->read_sem, 0);
 	mbox->reader = 0;
-	sys_sem_new(&mbox->write_sem, size);
+	mbox->write_sem.name =  "sem_lwip_write";
+	ipc_sem_new(&mbox->write_sem, size);
 	mbox->writer = 0;
 	mbox->valid_entry = 1;
 	return 0; /* should return zero if everything is ok */

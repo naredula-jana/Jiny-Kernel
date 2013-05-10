@@ -7,8 +7,7 @@
 #include "device.h"
 
 typedef unsigned int u32;
-extern int addBufToQueue(struct virtqueue *vq, unsigned char *buf,
-		unsigned long len);
+
 
 static uint16_t ip_sum_calc(uint16_t len_ip_header, unsigned char buff[]) {
 	uint16_t word16;

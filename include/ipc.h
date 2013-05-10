@@ -5,52 +5,69 @@
 //#include "spinlock.h"
 
 #define SPINLOCK_DEBUG 1
+//#define RECURSIVE_SPINLOCK 1   TODO need to cover for mutex
 typedef struct {
         volatile unsigned int lock;
         unsigned long stat_count;
 #ifdef SPINLOCK_DEBUG
 #define MAX_SPIN_LOG 100
+        unsigned char *name;
         unsigned long stat_locks;
         unsigned long stat_unlocks;
-        unsigned char *name;
+        unsigned long stat_recursive_locks;
+        unsigned long recursive_count;
         int linked; /* linked this structure to stats */
         unsigned long pid;
         unsigned long contention;
         unsigned int log_length;
         struct {
             int line;
-            unsigned int process_id;
+            unsigned int pid;
             unsigned int cpuid;
             unsigned long spins;
         }log[MAX_SPIN_LOG];
 #endif
 } spinlock_t;
 
-
 #define IPC_TIMEOUT 0xffffffffUL
-typedef struct queue{
+
+typedef struct wait_queue {
 	struct list_head head;
 	char *name;
-}queue_t;
+	void *used_for; /* it can be used for semaphore/mutex  or raw waitqueue */
+} wait_queue_t;
 
-struct semaphore
-{
+struct semaphore {
 	int count;
 	spinlock_t sem_lock; /* this is to protect count */
-	queue_t wait_queue;
+	wait_queue_t wait_queue;
 	int valid_entry;
+	unsigned char *name;
+	unsigned long owner_pid; /* pid that is owning */
+	unsigned int stat_line;
 };
 
 typedef struct semaphore sys_sem_t;
-/* ipc */
 
-void *mutexCreate();
-int mutexLock(void *p);
-int mutexUnLock(void *p);
-int mutexDestroy(void *p);
+void *ipc_mutex_create(unsigned char *name);
+int ipc_mutex_lock(void *p, int line);
+int ipc_mutex_unlock(void *p, int line);
+int ipc_mutex_destroy(void *p);
 
-signed char sys_sem_new(sys_sem_t *sem,uint8_t count);
-void sys_sem_free(sys_sem_t *sem);
-void sys_sem_signal(sys_sem_t *sem);
-uint32_t sys_arch_sem_wait(sys_sem_t *sem, unsigned int timeout);
+signed char ipc_sem_new(sys_sem_t *sem,uint8_t count);
+void ipc_sem_free(sys_sem_t *sem);
+void ipc_sem_signal(sys_sem_t *sem);
+uint32_t ipc_sem_wait(sys_sem_t *sem, unsigned int timeout);
+
+
+#define mutexCreate ipc_mutex_create
+#define mutexLock(p)      do { ipc_mutex_lock((void *)p,__LINE__); } while (0)
+#define mutexUnLock(p)      do { ipc_mutex_unlock((void *)p,__LINE__); } while (0)
+#define mutexDestroy ipc_mutex_destroy
+#define sys_sem_new ipc_sem_new
+#define sys_sem_free ipc_sem_free
+#define sys_sem_signal ipc_sem_signal
+#define sys_arch_sem_wait ipc_sem_wait
+
+
 #endif

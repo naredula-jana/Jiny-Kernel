@@ -186,7 +186,7 @@ typedef struct cpucache_s {
  */
 
 #define CACHE_NAMELEN	20	/* max name length for a slab cache */
-void * kmem_cache_alloc (kmem_cache_t *cachep, int flags);
+void * mm_slab_cache_alloc (kmem_cache_t *cachep, int flags);
 #if 1
 
 struct kmem_cache_s {
@@ -600,7 +600,7 @@ static void kmem_slab_destroy (kmem_cache_t *cachep, slab_t *slabp)
 
 	kmem_freepages(cachep, slabp->s_mem-slabp->colouroff);
 	if (OFF_SLAB(cachep))
-		kmem_cache_free(cachep->slabp_cache, slabp);
+		mm_slab_cache_free(cachep->slabp_cache, slabp);
 }
 
 /**
@@ -684,7 +684,7 @@ kmem_cache_create (const char *name, size_t size, size_t offset,
 	BUG_ON(flags & ~CREATE_MASK);
 
 	/* Get cache's description obj. */
-	cachep = (kmem_cache_t *) kmem_cache_alloc(&cache_cache, SLAB_KERNEL);
+	cachep = (kmem_cache_t *) mm_slab_cache_alloc(&cache_cache, SLAB_KERNEL);
 	if (!cachep)
 		goto opps;
 	ut_memset((unsigned char *)cachep, 0, sizeof(kmem_cache_t));
@@ -768,7 +768,7 @@ next:
 
 	if (!cachep->num) {
 		printk("kmem_cache_create: couldn't create cache %s.\n", name);
-		kmem_cache_free(&cache_cache, cachep);
+		mm_slab_cache_free(&cache_cache, cachep);
 		cachep = NULL;
 		goto opps;
 	}
@@ -1038,7 +1038,7 @@ int kmem_cache_destroy (kmem_cache_t * cachep)
 			mm_free(cachep->cpudata[i]);
 	}
 #endif
-	kmem_cache_free(&cache_cache, cachep);
+	mm_slab_cache_free(&cache_cache, cachep);
 
 	return 0;
 }
@@ -1051,7 +1051,7 @@ static inline slab_t * kmem_cache_slabmgmt (kmem_cache_t *cachep,
 	
 	if (OFF_SLAB(cachep)) {
 		/* Slab management obj is off-slab. */
-		slabp = kmem_cache_alloc(cachep->slabp_cache, local_flags);
+		slabp = mm_slab_cache_alloc(cachep->slabp_cache, local_flags);
 		if (!slabp)
 			return NULL;
 	} else {
@@ -1550,7 +1550,7 @@ static inline void __kmem_cache_free (kmem_cache_t *cachep, void* objp)
  * Allocate an object from this cache.  The flags are only relevant
  * if the cache has no available objects.
  */
-void * kmem_cache_alloc (kmem_cache_t *cachep, int flags)
+void * mm_slab_cache_alloc (kmem_cache_t *cachep, int flags)
 {
 	return __kmem_cache_alloc(cachep, flags);
 }
@@ -1597,7 +1597,7 @@ void * mm_malloc (size_t size, int flags)
  * Free an object which was previously allocated from this
  * cache.
  */
-void kmem_cache_free (kmem_cache_t *cachep, void *objp)
+void mm_slab_cache_free (kmem_cache_t *cachep, void *objp)
 {
 	unsigned long flags;
 #if SLAB_DEBUG

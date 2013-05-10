@@ -1,1 +1,1 @@
-gcc -static symbol_table.c -o gen_symboltbl
+gcc -g -static symbol_table.c -o gen_symboltbl

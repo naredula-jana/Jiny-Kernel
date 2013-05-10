@@ -154,7 +154,7 @@ int Jcmd_logflush(char *arg1, char *arg2) {
 		fs_fdatasync(fp);
 		if (ret > 0) {
 			start_offset = start_offset + ret;
-		}else{
+		} else {
 			break;
 		}
 	}
@@ -346,22 +346,6 @@ void ut_printf(const char *format, ...) {
 	spin_unlock_irqrestore(&printf_lock, flags);
 }
 
-#if 0
-void ut_snprintf(unsigned char *buff, int len, const char *format, ...) {
-	struct writer_struct writer;
-	unsigned long flags;
-	spin_lock_irqsave(&printf_lock, flags);
-	va_list vl;
-	va_start(vl,format);
-
-	writer.type=2;
-	writer.buf=buff;
-	writer.len=len;
-	format_string(&writer,format,vl);
-
-	spin_unlock_irqrestore(&printf_lock, flags);
-}
-#endif
 
 void ut_log(const char *format, ...){
 	struct writer_struct writer;

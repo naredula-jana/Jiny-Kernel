@@ -71,7 +71,7 @@ static int vma_link(struct mm_struct *mm, struct vm_area_struct *vma) {
 }
 
 /************************** API function *****************/
-extern queue_t task_queue;
+extern task_queue_t g_task_queue;
 int Jcmd_maps(char *arg1, char *arg2) {
 	struct list_head *pos;
 	struct task_struct *task;
@@ -93,8 +93,8 @@ int Jcmd_maps(char *arg1, char *arg2) {
 		task = g_current_task;
 	} else {
 		pid=ut_atoi(arg1);
-		list_for_each(pos, &task_queue.head) {
-			task = list_entry(pos, struct task_struct, task_link);
+		list_for_each(pos, &g_task_queue.head) {
+			task = list_entry(pos, struct task_struct, task_queue);
 			if (task->pid == pid) {
 				break;
 			}
@@ -159,7 +159,7 @@ unsigned long vm_dup_vmaps(struct mm_struct *src_mm,struct mm_struct *dest_mm){ 
 
 	vma = src_mm->mmap;
 	while (vma) {
-		new_vma = kmem_cache_alloc(vm_area_cachep, 0);
+		new_vma = mm_slab_cache_alloc(vm_area_cachep, 0);
 		if (new_vma == 0){
 			BUG();
 			return 0;
@@ -186,7 +186,7 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, 
 	if (vma)
 		return 0;
 
-	vma = kmem_cache_alloc(vm_area_cachep, 0);
+	vma = mm_slab_cache_alloc(vm_area_cachep, 0);
 	if (vma == 0)
 		return 0;
 
@@ -273,7 +273,7 @@ int vm_munmap(struct mm_struct *mm, unsigned long addr, unsigned long len) {
 			start_addr = vma->vm_start;
 			end_addr = vma->vm_end;
 			ret = vma_unlink(mm, vma);
-			kmem_cache_free(vm_area_cachep, vma);
+			mm_slab_cache_free(vm_area_cachep, vma);
 			ar_pageTableCleanup(mm, start_addr, end_addr - start_addr);
 			ret++;
 			DEBUG("VMA unlink : clearing the tables :start:%x leb:%x \n",start_addr,end_addr-start_addr);

@@ -31,7 +31,7 @@ extern void print_vq(struct virtqueue *_vq);
 static int netdriver_xmit(unsigned char* data, unsigned int len,
 		void *private_data);
 
-int addBufToQueue(struct virtqueue *vq, unsigned char *buf, unsigned long len) {
+static int addBufToQueue(struct virtqueue *vq, unsigned char *buf, unsigned long len) {
 	struct scatterlist sg[2];
 	int ret;
 
@@ -54,9 +54,9 @@ int addBufToQueue(struct virtqueue *vq, unsigned char *buf, unsigned long len) {
 	sg[1].offset = 0;
 	//DEBUG(" scatter gather-0: %x:%x sg-1 :%x:%x \n",sg[0].page_link,__pa(sg[0].page_link),sg[1].page_link,__pa(sg[1].page_link));
 	if (vq->qType == 1) {
-		ret = virtqueue_add_buf_gfp(vq, sg, 0, 2, (void *) sg[0].page_link, 0);/* recv q*/
+		ret = virtio_add_buf_to_queue(vq, sg, 0, 2, (void *) sg[0].page_link, 0);/* recv q*/
 	} else {
-		ret = virtqueue_add_buf_gfp(vq, sg, 2, 0, (void *) sg[0].page_link, 0);/* send q */
+		ret = virtio_add_buf_to_queue(vq, sg, 2, 0, (void *) sg[0].page_link, 0);/* send q */
 	}
 
 	return ret;
@@ -116,7 +116,7 @@ static int attach_virtio_net_pci(device_t *pci_dev) {
 		outw(virtio_dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 1);
 		outw(virtio_dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 0xffff);
 	}
-	virtqueue_disable_cb(virtio_dev->vq[1]); /* disable interrupts on sending side */
+	virtio_disable_cb(virtio_dev->vq[1]); /* disable interrupts on sending side */
 	if (msi_vector > 0) {
 		for (i = 0; i < 3; i++)
 			ar_registerInterrupt(msi_vector + i, virtio_net_interrupt,
@@ -131,7 +131,7 @@ static int attach_virtio_net_pci(device_t *pci_dev) {
 		addBufToQueue(virtio_dev->vq[0], 0, 4096);
 
 	inb(virtio_dev->pci_ioaddr + VIRTIO_PCI_ISR);
-	virtqueue_kick(virtio_dev->vq[0]);
+	virtio_queue_kick(virtio_dev->vq[0]);
 
 	registerNetworkHandler(NETWORK_DRIVER, netdriver_xmit, (void *) pci_dev);
 	return 1;
@@ -160,7 +160,7 @@ static void virtio_net_interrupt(registers_t regs, void *private_data) {
 	if (addr != 0)
 		netif_rx(addr, len);
 	addBufToQueue(dev->vq[0], 0, 4096);
-    virtqueue_kick(dev->vq[0]);
+    virtio_queue_kick(dev->vq[0]);
 }
 
 int virtio_send_errors = 0;
@@ -190,7 +190,7 @@ static int netdriver_xmit(unsigned char* data, unsigned int len,
 	}
 
 	send_pkts = 0;
-	virtqueue_kick(dev->vq[1]);
+	virtio_queue_kick(dev->vq[1]);
 
 #if 1
 	i = 0;

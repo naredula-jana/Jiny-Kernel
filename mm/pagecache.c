@@ -149,7 +149,7 @@ static page_struct_t *_pagelist_remove(page_list_t *list)
 	unsigned long  flags;
 
 	spin_lock_irqsave(&pc_lock, flags);
-        node=list->head.next;
+    node=list->head.next;
 	if (node == &list->head) goto last;
 
 	list_del(node); /* delete the node from free list */
@@ -177,12 +177,12 @@ static int put_into_freelist(struct page *page)
 		BUG();
 	}
 
-	spin_lock_irqsave(&g_inode_lock, flags);
+	mutexLock(g_inode_lock);
 	list_del(&(page->list));
 	inode=page->inode;
 	if (inode == 0) BUG();
 	inode->nrpages--;
-	spin_unlock_irqrestore(&g_inode_lock, flags);
+	mutexUnLock(g_inode_lock);
 
 	page->inode=0;
 	pc_putFreePage(page);
@@ -191,16 +191,17 @@ static int put_into_freelist(struct page *page)
 static int reclaim_freepages()
 {
 	struct page *page;
+	int i;
 
-	DEBUG(" In the RECLAIN FRee pages \n");
-	page=_pagelist_remove(&inactive_list);
-	if (page == 0)
-	{
-		page=_pagelist_remove(&active_list);
-	}
-	if (page != 0)
-	{
-		put_into_freelist(page);
+	DEBUG(" In the RECLAIM Free pages \n");
+	for (i = 0; i < 10; i++) {
+		page = _pagelist_remove(&inactive_list);
+		if (page == 0) {
+			page = _pagelist_remove(&active_list);
+		}
+		if (page != 0) {
+			put_into_freelist(page);
+		}
 	}
 	return 1;
 }
@@ -225,6 +226,7 @@ int pc_init(unsigned char *start_addr,unsigned long len)
 	init_pagelist(&active_list,ACTIVE_LIST);
 	init_pagelist(&dirty_list,DIRTY_LIST);
 	init_pagelist(&inactive_list,INACTIVE_LIST);
+
 
 	for( i=0; i<total_pages; i++)
 	{
@@ -261,6 +263,7 @@ int Jcmd_pc(char *arg1,char *arg2)
 	ut_printf(" Active clean List: %3d %3d \n",active_list.count.counter,list_count(&active_list.head));
 	ut_printf(" Dirty List       : %3d %3d\n",dirty_list.count.counter,list_count(&dirty_list.head));
 	ut_printf(" Inactive List    : %3d %3d\n",inactive_list.count.counter,list_count(&inactive_list.head));
+	ut_printf(" Total Inuse Pages : %d \n",(active_list.count.counter+inactive_list.count.counter+dirty_list.count.counter));
 	return 1;
 }
 int pc_pageDirted(struct page *page) /* TODO : split the dirty list into LRU and MRU */
@@ -311,18 +314,18 @@ struct page *pc_getInodePage(struct inode *inode,unsigned long offset)
 	unsigned long page_offset=(offset/PC_PAGESIZE)*PC_PAGESIZE ;
 
 	i=0;
-	spin_lock_irqsave(&g_inode_lock, flags);
+	mutexLock(g_inode_lock);
 	list_for_each(p, &(inode->page_list)) {
 		page=list_entry(p, struct page, list);
 		i++;
 		//	DEBUG(" %d: get page address: %x  addr:%x offset :%d \n",i,page,to_ptr(page),page->offset);
 		if (page->offset == page_offset)
 		{
-			spin_unlock_irqrestore(&g_inode_lock, flags);
+			mutexUnLock(g_inode_lock);
 			return page;
 		}
 	} 
-	spin_unlock_irqrestore(&g_inode_lock, flags);
+	mutexUnLock(g_inode_lock);
 	return NULL;
 
 }
@@ -347,7 +350,7 @@ int pc_insertPage(struct inode *inode,struct page *page)
 		BUG();
 	}
 	/*  1. link the page to inode */
-	spin_lock_irqsave(&g_inode_lock, flags);
+	mutexLock(g_inode_lock);
 	list_for_each(p, &(inode->page_list))
 	{
 		tmp_page=list_entry(p, struct page, list);
@@ -368,7 +371,7 @@ int pc_insertPage(struct inode *inode,struct page *page)
 		list_add_tail(&page->list, &(inode->page_list)); 
 		ret=1;
 	}
-	spin_unlock_irqrestore(&g_inode_lock, flags);
+	mutexUnLock(g_inode_lock);
 	/* 2. link the page to active or inactive list */
 	if (ret == 1)
 	{
@@ -405,6 +408,9 @@ page_struct_t *pc_getFreePage()
 	{
 		reclaim_freepages();
 		p=_pagelist_remove(&free_list);
+		if (p==NULL){
+			BUG();
+		}
 	}
 	if (p)
 		page_init(p);

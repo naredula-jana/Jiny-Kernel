@@ -14,14 +14,16 @@
 #include "vfs.h"
 #include "interface.h"
 
-
 static struct filesystem *vfs_fs = 0;
 static kmem_cache_t *slab_inodep;
 static LIST_HEAD(inode_list);
-spinlock_t g_inode_lock = SPIN_LOCK_UNLOCKED("inode"); /* protects inode_list */
+void *g_inode_lock=0; /* protects inode_list */
+spinlock_t g_userspace_stdio_lock = SPIN_LOCK_UNLOCKED("userspace_stdio");
+
 #define OFFSET_ALIGN(x) ((x/PC_PAGESIZE)*PC_PAGESIZE) /* the following 2 need to be removed */
 
 kmem_cache_t *g_slab_filep;
+static void inode_sync(struct inode *inode);
 
 static int inode_init(struct inode *inode, char *filename, struct filesystem *vfs) {
 	unsigned long flags;
@@ -46,37 +48,80 @@ static int inode_init(struct inode *inode, char *filename, struct filesystem *vf
 	INIT_LIST_HEAD(&(inode->inode_link));
 	DEBUG(" inode init filename:%s: :%x  :%x \n",filename,&inode->page_list,&(inode->page_list));
 
-	spin_lock_irqsave(&g_inode_lock, flags);
+	mutexLock(g_inode_lock);
 	list_add(&inode->inode_link, &inode_list);
-	spin_unlock_irqrestore(&g_inode_lock, flags);
+	mutexUnLock(g_inode_lock);
 
 	return 1;
 }
 
 /*************************** API functions ************************/
+/* TODO :  inode lock need to used in all the places where inode is used */
 
 int Jcmd_ls(char *arg1, char *arg2) {
 	struct inode *tmp_inode;
 	struct list_head *p;
 
+	int total_pages=0;
+
 	ut_printf("usagecount nrpages length  inode_no type  name\n");
+
+    mutexLock(g_inode_lock);
 	list_for_each(p, &inode_list) {
 		tmp_inode = list_entry(p, struct inode, inode_link);
 		ut_printf(" %4d %4d %8d %8d %2x %s\n", tmp_inode->count,
 				tmp_inode->nrpages, tmp_inode->file_size, tmp_inode->inode_no,tmp_inode->file_type, tmp_inode->filename);
+		total_pages = total_pages + tmp_inode->nrpages;
 	}
+	mutexUnLock(g_inode_lock);
+
+
+	ut_printf(" Total pages :%d\n",total_pages);
 	return 1;
 }
 int Jcmd_clear_pagecache(){
 	struct inode *tmp_inode;
 	struct list_head *p;
 
+
+    mutexLock(g_inode_lock);
 	list_for_each(p, &inode_list) {
 		tmp_inode = list_entry(p, struct inode, inode_link);
 		ut_printf("%s %d %d %d \n", tmp_inode->filename, tmp_inode->count,
 				tmp_inode->nrpages, tmp_inode->file_size);
 		fs_fadvise(tmp_inode, 0, 0, POSIX_FADV_DONTNEED);
 	}
+	mutexUnLock(g_inode_lock);
+
+	return 1;
+}
+int Jcmd_sync(){
+	struct inode *tmp_inode;
+	struct list_head *p;
+	struct fileStat stat;
+
+ //TODO : need to add recursive mutex   mutexLock(g_inode_lock);
+	list_for_each(p, &inode_list) {
+		tmp_inode = list_entry(p, struct inode, inode_link);
+
+		inode_sync(tmp_inode);
+	}
+//	mutexUnLock(g_inode_lock);
+
+restart:
+
+  //  mutexLock(g_inode_lock);
+	list_for_each(p, &inode_list) {
+		tmp_inode = list_entry(p, struct inode, inode_link);
+		if (vfs_fs->stat(tmp_inode, &stat) != 1){
+			if (fs_putInode(tmp_inode)){
+				mutexUnLock(g_inode_lock);
+				goto restart;
+			}
+		}
+	}
+	//mutexUnLock(g_inode_lock);
+
 	return 1;
 }
 static void transform_filename(unsigned char *arg_filename, char *filename){
@@ -112,31 +157,29 @@ static void transform_filename(unsigned char *arg_filename, char *filename){
 static struct inode *fs_getInode(char *arg_filename, int flags, int mode) {
 	struct inode *ret_inode,*tmp_inode;
 	struct list_head *p;
-	unsigned long lock_flags;
 	int ret;
 	unsigned char filename[MAX_FILENAME];
-
 
 	ret_inode = 0;
 
 	transform_filename(arg_filename, filename);
 
-	spin_lock_irqsave(&g_inode_lock, lock_flags);
+	mutexLock(g_inode_lock);
 	list_for_each(p, &inode_list) {
 		ret_inode = list_entry(p, struct inode, inode_link);
 		if (ut_strcmp((unsigned char *)filename, ret_inode->filename) == 0) {
 			atomic_inc(&ret_inode->count);
-			spin_unlock_irqrestore(&g_inode_lock, lock_flags);
+			mutexUnLock(g_inode_lock);
 			goto last;
 		}
 	}
-	spin_unlock_irqrestore(&g_inode_lock, lock_flags);
+	mutexUnLock(g_inode_lock);
 
-	ret_inode = kmem_cache_alloc(slab_inodep, 0);
+	ret_inode = mm_slab_cache_alloc(slab_inodep, 0);
 	if (ret_inode != 0) {
 		struct fileStat stat;
-		inode_init(ret_inode, filename, vfs_fs);
 
+		inode_init(ret_inode, filename, vfs_fs);
 #if 1
 		ret = vfs_fs->open(ret_inode, flags, mode);
 		if (ret < 0){
@@ -147,16 +190,16 @@ static struct inode *fs_getInode(char *arg_filename, int flags, int mode) {
 			ret_inode = 0;
 			goto last;
 		}
-
+		DEBUG(" filename:%s: %x\n",ret_inode->filename,ret_inode);
 		if (vfs_fs->stat(ret_inode, &stat) == 1) { /* this is to get inode number */
 			ret_inode->inode_no = stat.inode_no;
 			ret_inode->file_size = stat.st_size;
-			DEBUG("get_inode file :%s: inode_no:%d: size:%d: \n",filename,stat.inode_no,stat.st_size);
+
 			list_for_each(p, &inode_list) {
 				tmp_inode = list_entry(p, struct inode, inode_link);
 				if (tmp_inode == ret_inode)
 					continue;
-				if (ret_inode->inode_no == tmp_inode->inode_no) {
+				if (ret_inode->inode_no == tmp_inode->inode_no && ut_strcmp(ret_inode->filename,tmp_inode->filename)==0) {
 					ret_inode->count.counter = 0;
 					if (fs_putInode(ret_inode) == 0) {
 						BUG();
@@ -177,31 +220,32 @@ last:
 }
 
 unsigned long fs_putInode(struct inode *inode) {
-	unsigned long flags;
 	int ret = 0;
 
-	spin_lock_irqsave(&g_inode_lock, flags);
-	if (inode != 0 && inode->nrpages == 0 && inode->count.counter == 0) {
+	mutexLock(g_inode_lock);
+	if (inode != 0 && inode->nrpages == 0 && inode->count.counter <= 0) {
 		list_del(&inode->inode_link);
 		ret = 1;
 	}else{
 		if (inode != 0)
 		  atomic_dec(&inode->count);
 	}
-	spin_unlock_irqrestore(&g_inode_lock, flags);
+	mutexUnLock(g_inode_lock);
 
 	if (ret == 1)
-		kmem_cache_free(slab_inodep, inode);
+		mm_slab_cache_free(slab_inodep, inode);
 
 	return ret;
 }
 
-static struct file *vfsOpen(unsigned char *filename, int flags, int mode) {
+struct file *fs_open(unsigned char *filename, int flags, int mode) {
 	struct file *filep;
 	struct inode *inodep;
-	//int ret;
 
-	filep = kmem_cache_alloc(g_slab_filep, 0);
+	if (vfs_fs == 0 || filename==0)
+		return 0;
+
+	filep = mm_slab_cache_alloc(g_slab_filep, 0);
 	if (filep == 0)
 		goto error;
 	if (filename != 0) {
@@ -224,22 +268,22 @@ static struct file *vfsOpen(unsigned char *filename, int flags, int mode) {
 		goto error;
 
 	filep->inode = inodep;
-	filep->offset = 0;
+	if (flags&O_APPEND){
+		filep->offset = inodep->file_size ;
+	}else{
+		filep->offset = 0;
+	}
 	return filep;
 
 error:
     if (filep != NULL)
-		kmem_cache_free(g_slab_filep, filep);
+		mm_slab_cache_free(g_slab_filep, filep);
 	if (inodep != NULL) {
 		fs_putInode(inodep);
 	}
 	return 0;
 }
-unsigned long fs_open(unsigned char *filename, int flags, int mode) {
-	if (vfs_fs == 0 || filename==0)
-		return 0;
-	return (unsigned long)vfsOpen(filename, flags, mode);
-}
+
 
 unsigned long SYS_fs_open(char *filename, int mode, int flags) {
 	struct file *filep;
@@ -263,7 +307,7 @@ unsigned long SYS_fs_open(char *filename, int mode, int flags) {
 		g_current_task->mm->fs.filep[i] = filep;
 		if (i > total)
 			g_current_task->mm->fs.total = i;
-		SYSCALL_DEBUG(" return value: %d \n", i);
+		SYSCALL_DEBUG("open return value: %d \n", i);
 		return i;
 	}
 last:
@@ -273,21 +317,11 @@ last:
 	return -1;
 }
 
-unsigned long SYS_fs_fdatasync(unsigned long fd) {
-	struct file *file;
-
-	SYSCALL_DEBUG("fdatasync fd:%d \n",fd);
-	file = fd_to_file(fd);
-	return fs_fdatasync(file);
-}
-static int vfsDataSync(struct file *filep)
-{
+static void inode_sync(struct inode *inode){
 	struct list_head *p;
 	struct page *page;
-	struct inode *inode;
 	int ret;
 
-	inode=filep->inode;
 	list_for_each(p, &(inode->page_list)) {
 		page=list_entry(p, struct page, list);
 		if (PageDirty(page))
@@ -313,12 +347,25 @@ static int vfsDataSync(struct file *filep)
 			DEBUG(" Page cleaned :%x \n",page);
 		}
 	}
+}
+unsigned long fs_fdatasync(struct file *filep)
+{
+	struct inode *inode;
+	int ret;
+	if (vfs_fs == 0 || filep == 0)
+		return 0;
+
+	inode=filep->inode;
+	inode_sync(inode);
+
 	return 0;
 }
-unsigned long fs_fdatasync(struct file *file) {
-	if (vfs_fs == 0 || file == 0)
-		return 0;
-	return vfsDataSync(file);
+unsigned long SYS_fs_fdatasync(unsigned long fd) {
+	struct file *file;
+
+	SYSCALL_DEBUG("fdatasync fd:%d \n",fd);
+	file = fd_to_file(fd);
+	return fs_fdatasync(file);
 }
 unsigned long fs_lseek(struct file *file, unsigned long offset, int whence) {
 	if (vfs_fs == 0)
@@ -332,6 +379,9 @@ unsigned long fs_readdir(struct file *file, struct dirEntry *dir_ent, int max_di
 		return 0;
 	if (file == 0)
 		return 0;
+	if (file->inode && file->inode->file_type != DIRECTORY_FILE){
+		BUG();
+	}
 	return vfs_fs->readDir(file->inode, dir_ent, max_dir);
 }
 unsigned long SYS_fs_lseek(unsigned long fd, unsigned long offset, int whence) {
@@ -387,16 +437,22 @@ long SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt) {
 	}
 	last: return ret;
 }
-static long vfswrite(struct file *filep, unsigned char *buff, unsigned long len) {
+long fs_write(struct file *filep, unsigned char *buff, unsigned long len) {
 	int ret;
 	int tmp_len, size, page_offset;
 	struct page *page;
 
 	ret = 0;
-	if (filep == 0)
+
+	if (vfs_fs == 0 || (vfs_fs->write==0) || (filep == 0))
 		return 0;
+
 	DEBUG("Write  filename from hs  :%s: offset:%d inode:%x \n",filep->filename,filep->offset,filep->inode);
 	tmp_len = 0;
+
+	if (filep->inode && filep->inode->file_type == DIRECTORY_FILE){//TODO : check for testing
+		BUG();
+	}
 
 	while (tmp_len < len) {
 		page = pc_getInodePage(filep->inode, filep->offset);
@@ -427,7 +483,8 @@ static long vfswrite(struct file *filep, unsigned char *buff, unsigned long len)
 	error:
 	return tmp_len;
 }
-spinlock_t g_userspace_stdio_lock = SPIN_LOCK_UNLOCKED("userspace_stdio");
+
+
 long SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
 	struct file *file;
 	int i;
@@ -447,17 +504,11 @@ long SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
 	file = fd_to_file(fd);
 	if (file==0) return 0;
 	if (file->type == NETWORK_FILE){
-		return networkSockWrite(file,buff,len);
+		return socket_write(file,buff,len);
 	}
 	return fs_write(file, buff, len);
 }
-long fs_write(struct file *file, unsigned char *buff, unsigned long len) {
-	if (vfs_fs == 0 || (vfs_fs->write==0))
-		return 0;
-	if (file == 0)
-		return 0;
-	return vfswrite(file, buff, len);
-}
+
 
 struct page *fs_genericRead(struct inode *inode, unsigned long offset) {
 	struct page *page;
@@ -495,15 +546,18 @@ struct page *fs_genericRead(struct inode *inode, unsigned long offset) {
 	}
 	return page;
 }
-static long vfsread(struct file *filep, unsigned char *buff, unsigned long len)
+
+long fs_read(struct file *filep, unsigned char *buff, unsigned long len)
 {
 	int ret;
 	struct page *page;
 	struct inode *inode;
 
 	ret = 0;
-	if (filep == 0)
+
+	if ((vfs_fs == 0) || (filep == 0))
 		return 0;
+
 	DEBUG("Read filename from hs  :%s: offset:%d inode:%x buff:%x len:%x \n",filep->filename,filep->offset,filep->inode,buff,len);
 	inode = filep->inode;
 	//TODO 	if (inode->length <= filep->offset) return 0;
@@ -530,18 +584,11 @@ static long vfsread(struct file *filep, unsigned char *buff, unsigned long len)
 	}
 	return ret;
 }
-long fs_read(struct file *file, unsigned char *buff, unsigned long len) {
-	if (vfs_fs == 0)
-		return 0;
-	if (file == 0)
-		return 0;
-	return vfsread(file, buff, len);
-}
 
 long SYS_fs_read(unsigned long fd, unsigned char *buff, unsigned long len) {
 	struct file *file;
 
-//	SYSCALL_DEBUG("read fd:%d buff:%x len:%x \n",fd,buff,len);
+	//SYSCALL_DEBUG("read fd:%d buff:%x len:%x \n",fd,buff,len);
 	if (fd ==0 ){
 		if (buff==0 || len==0) return 0;
 		buff[0]=dr_kbGetchar(g_current_task->mm->fs.input_device);
@@ -555,35 +602,29 @@ long SYS_fs_read(unsigned long fd, unsigned char *buff, unsigned long len) {
 	if (file == 0)
 		return 0;
 	if (file->type == NETWORK_FILE){
-		return networkSockRead(file,buff,len);
+		return socket_read(file,buff,len);
 	}
 	if ((vfs_fs == 0) || (vfs_fs->read==0))
 		return 0;
 
-	return vfsread(file, buff, len);
+	return fs_read(file, buff, len);
 }
 
-static int vfsClose(struct file *filep)
+int fs_close(struct file *filep)
 {
     int ret;
-    if (filep == 0) return 0;
+    if (filep == 0 || vfs_fs == 0) return 0;
 	if (filep->type == REGULAR_FILE) {
 		if (filep->inode != 0) {
 			//ret = vfs_fs->close(filep->inode);
 			fs_putInode(filep->inode);
 		}
 	} else {
-		networkSockClose(filep);
+		socket_close(filep);
 	}
 	filep->inode=0;
-	kmem_cache_free(g_slab_filep, filep);
+	mm_slab_cache_free(g_slab_filep, filep);
 	return 1;
-}
-
-int fs_close(struct file *file) {
-	if (vfs_fs == 0)
-		return 0;
-	return vfsClose(file);
 }
 
 unsigned long SYS_fs_close(unsigned long fd) {
@@ -604,7 +645,7 @@ static int vfsRemove(struct file *filep)
 	if (ret == 1) {
 		if (filep->inode != 0) fs_putInode(filep->inode);
 		filep->inode=0;
-		kmem_cache_free(g_slab_filep, filep);
+		mm_slab_cache_free(g_slab_filep, filep);
 	}
 	return ret;
 }
@@ -614,9 +655,11 @@ int fs_remove(struct file *file) {
 		return 0;
 	return vfsRemove(file);
 }
-static int vfsStat(struct file *filep, struct fileStat *stat)
+int fs_stat(struct file *filep, struct fileStat *stat)
 {
     int ret;
+	if (vfs_fs == 0 || filep==0)
+		return 0;
 
 	ret = vfs_fs->stat(filep->inode,stat);
 	if (ret == 1) {
@@ -625,12 +668,6 @@ static int vfsStat(struct file *filep, struct fileStat *stat)
 	return ret;
 }
 
-int fs_stat(struct file *file, struct fileStat *stat) {
-	if (vfs_fs == 0)
-		return 0;
-
-	return vfsStat(file, stat);
-}
 unsigned long fs_fadvise(struct inode *inode, unsigned long offset,
 		unsigned long len, int advise) {
 	struct page *page;
@@ -673,6 +710,7 @@ void init_vfs() {
 			NULL, NULL);
 	slab_inodep = kmem_cache_create("inode_struct", sizeof(struct inode), 0, 0,
 			NULL, NULL);
+	g_inode_lock = mutexCreate("mutex_vfs");
 
 	return;
 }

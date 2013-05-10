@@ -15,11 +15,11 @@ JINY KERNEL   (JINY : Jana's tINY  toy kernel)
 ------------------------------------------
 
 The goals of the project are:
-	1) It should be monalitic unlix based kernel with a small footprint. 
+	1) It should be monalitic unix based kernel with a small footprint. 
 	2) powerful command line and debug environment.
-	3) Higly modularise:  To define well defined interface between subsystems , so as any subsystems can be replaced by keeping the interface same. (see include/interface.h for more details.
-	4) Virtualization friendly: Rich virtualization features like virtio,xen para drivers, hot cpu plugin, hot mem plugin, hot network plugin.
-	5) Running directly linux based application like  Busy box on top of jiny as it is, for this need support almost all system call. (partially completed).
+	3) Higly modularise:  To define well defined interface between subsystems.
+	4) Virtualization features:  Virtualization features like virtio,xen para drivers, Elastic CPU and Elastic memory.
+	5) Running directly linux application like  Busy box on top of jiny as it is, for this need support almost all system call. (partially completed).
 
 ------------------------------------------
 Feature Currently Available:

@@ -58,7 +58,7 @@ static inline int kvm_para_available(void) {
 		*p = cpuid_ret[3];
 
 		signature[12] = 0;
-		ut_printf(" KVM Signature :%s: \n", signature);
+		ut_printf(" KVM Clock Signature :%s: \n", signature);
 		if (ut_strcmp(signature, "KVMKVMKVM") != 0)
 			return 0;
 
@@ -74,13 +74,16 @@ static inline int kvm_para_available(void) {
 
 	return 0;
 }
-
+int get_wallclock(unsigned long *time){
+	msr_write(MSR_KVM_WALL_CLOCK_NEW, __pa(&wall_clock));
+	*time = wall_clock.sec + vpcu_time.system_time/1000000000;
+	return 1;
+}
 int Jcmd_clock() {
 
 	ut_printf("system time  ts :%x system time :%x:%d  jiffies :%d sec version:%x errors:%d \n",
 			vpcu_time.tsc_timestamp, vpcu_time.system_time,vpcu_time.system_time/1000000000, g_jiffies/100,vpcu_time.version);
 	ut_printf(" jiifies :%d  clock:%d errors:%d \n",g_jiffie_tick,get_kvm_clock(),g_jiffie_errors);
-	//msr_write(MSR_KVM_WALL_CLOCK_NEW, __pa(&wall_clock));
 	return 1;
 }
 

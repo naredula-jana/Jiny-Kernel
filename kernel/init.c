@@ -22,13 +22,27 @@ kmem_cache_t *vm_area_cachep;
 kmem_cache_t *mm_cachep;
 int brk_pnt=0;
 uint32_t g_cpu_features;
+
+#if 0
+typedef struct {
+	void *func;
+	unsigned long arg1;
+	unsigned *comment;
+} inittable_t;
+
+static inittable_t inittable[] = {
+		{init_descriptor_tables,0,"ISR and Descriptors"},
+		{init_memory,0,           "Main memory"},
+		{init_kmem_cache,0,       "kmem cache"},
+		0
+};
+#endif
+
 int init_kernel(unsigned long end_addr)
 {
 	int ret;
-	ut_printf("Initialising: ISR descriptors.. \n");
+	ut_printf("Init: ISR descriptors.. \n");
 	init_descriptor_tables();
-
-
 
 	ut_printf("Initialising: MEMORY physical memory highest addrss:%x \n",end_addr);
 	init_memory(end_addr);
@@ -73,7 +87,7 @@ int init_kernel(unsigned long end_addr)
 	ut_printf("Initalising: VFS.. cpudid:%d \n",getcpuid());
 	init_vfs();
 
-//	init_networking();
+	init_networking();
 
 
 	init_clock();

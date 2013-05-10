@@ -1,26 +1,22 @@
+#include <stdio.h>
 
-
-unsigned long printf (const char *format, ...);
 unsigned char buf[2048];
 
-main()
+main(int argc , char **argv)
 {
-	int fp,wp;
+	int wp,i;
 	unsigned long ret;
-int i;
-	fp=open("input",0);
-	wp=open("output",1);
-	printf("LATEST  NEW Read file :%x outfile: %x \n",fp,wp);
-	if (fp != 0)
+
+	wp=open(argv[1],1);
+
+	printf("LATEST  NEW  outfile: %x :% \n",wp);
+	for (i=0; i<1000000000; i++){
+	if (wp != 0)
 	{
-		ret=read(fp,buf,1024);	
-		printf(" LATEST Bytes read from file : %d \n ",ret);
-		if (ret > 0)
-		{
-			write(wp,buf,ret);
-		}
+          strcpy(buf,"test12");
+		write(wp,buf,3);
 	}		
-	close(fp);
 	fdatasync(wp);
+	}
 	close(wp);
 }

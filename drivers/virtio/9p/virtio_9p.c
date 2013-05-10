@@ -11,7 +11,7 @@
 #include "9p.h"
 #include "mach_dep.h"
 
-static queue_t p9_waitq;
+static wait_queue_t p9_waitq;
 virtio_dev_t *p9_dev = 0;
 static void virtio_9p_interrupt(registers_t regs);
 static int virtio_addToP9Queue(struct virtqueue *vq, unsigned long buf,
@@ -66,7 +66,7 @@ static int attach_virtio_9p_pci(device_t *pci_dev) {
 	DEBUG(" NEW Initializing.9P INPUT  VIRTIO PCI COMPLETED with driver ok :%x \n", vp_get_status(virtio_dev));
 	inb(virtio_dev->pci_ioaddr + VIRTIO_PCI_ISR);
 
-	sc_register_waitqueue(&p9_waitq, "p9");
+	ipc_register_waitqueue(&p9_waitq, "waitq_p9");
 	p9_dev = virtio_dev;
 	p9_initFs();
 	return 1;
@@ -78,11 +78,11 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 	va_list ap;
 	va_start(ap, fmt);
 
-	p9pdu_init(&pdu, client->type, client->tag, client, client->pkt_buf,
+	p9_pdu_init(&pdu, client->type, client->tag, client, client->pkt_buf,
 			client->pkt_len);
-	ret = p9pdu_write(&pdu, fmt, ap);
+	ret = p9_pdu_write(&pdu, fmt, ap);
 	va_end(ap);
-	p9pdu_finalize(&pdu);
+	p9_pdu_finalize(&pdu);
 
 	struct scatterlist sg[4];
 	unsigned int out, in;
@@ -115,11 +115,11 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 		sg[1].offset = 0;
 		in = 1;
 	}
-	virtqueue_enable_cb(p9_dev->vq[0]);
-	virtqueue_add_buf_gfp(p9_dev->vq[0], sg, out, in, sg[0].page_link, 0);
-	virtqueue_kick(p9_dev->vq[0]);
+	virtio_enable_cb(p9_dev->vq[0]);
+	virtio_add_buf_to_queue(p9_dev->vq[0], sg, out, in, sg[0].page_link, 0);
+	virtio_queue_kick(p9_dev->vq[0]);
 
-	sc_wait(&p9_waitq, 50);
+	ipc_waiton_waitqueue(&p9_waitq, 50);
 	unsigned int len;
 	len = 0;
 	i = 0;
@@ -151,10 +151,10 @@ int p9_read_rpc(p9_client_t *client, const char *fmt, ...) {
 	va_start(ap, fmt);
 
 	recv = client->pkt_buf + 1024;
-	p9pdu_init(&pdu, 0, 0, client, recv, 1024);
-	ret = p9pdu_read_v(&pdu, "dbw", &total_len, &type, &tag);
+	p9_pdu_init(&pdu, 0, 0, client, recv, 1024);
+	ret = p9_pdu_read_v(&pdu, "dbw", &total_len, &type, &tag);
 	client->recv_type = type;
-	ret = p9pdu_read(&pdu, fmt, ap);
+	ret = p9_pdu_read(&pdu, fmt, ap);
 	va_end(ap);
 	DEBUG("Recv Header ret:%x:%d total len :%x stype:%x(%d) rtype:%x(%d) tag:%x \n", ret,ret, total_len, client->type, client->type, type, type, tag);
 	if (type == 107) { // TODO better way of handling other and this error
@@ -172,6 +172,6 @@ static void virtio_9p_interrupt(registers_t regs) { // TODO: handling similar  t
 
 	if (p9_dev->msi == 0)
 		isr = inb(p9_dev->pci_ioaddr + VIRTIO_PCI_ISR);
-	ret = sc_wakeUp(&p9_waitq); /* wake all the waiting processes */
+	ret = ipc_wakeup_waitqueue(&p9_waitq); /* wake all the waiting processes */
 }
 DEFINE_DRIVER(virtio_9p_pci, virtio_pci, probe_virtio_9p_pci, attach_virtio_9p_pci, dettach_virtio_9p_pci);

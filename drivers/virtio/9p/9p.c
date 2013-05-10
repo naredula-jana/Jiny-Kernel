@@ -23,7 +23,7 @@ static size_t pdu_write(struct p9_fcall *pdu, const void *data, size_t size) {
 	return size - len;
 }
 
-int p9pdu_init(struct p9_fcall *pdu, uint8_t type, uint16_t tag, p9_client_t *client, unsigned long addr, unsigned long len) {
+int p9_pdu_init(struct p9_fcall *pdu, uint8_t type, uint16_t tag, p9_client_t *client, unsigned long addr, unsigned long len) {
     pdu->client= client;
 	pdu->capacity = len;
 	pdu->sdata = (unsigned char *)addr;
@@ -40,22 +40,22 @@ int p9pdu_init(struct p9_fcall *pdu, uint8_t type, uint16_t tag, p9_client_t *cl
 
 	return 1;
 }
-int p9pdu_read_v(struct p9_fcall *pdu, const char *fmt, ...) {
+int p9_pdu_read_v(struct p9_fcall *pdu, const char *fmt, ...) {
 	va_list ap;
 	va_start(ap,fmt);
-	return p9pdu_read(pdu, fmt, ap);
+	return p9_pdu_read(pdu, fmt, ap);
 }
-int p9pdu_write_v(struct p9_fcall *pdu, const char *fmt, ...) {
+int p9_pdu_write_v(struct p9_fcall *pdu, const char *fmt, ...) {
 	va_list ap;
 	va_start(ap,fmt);
-	return p9pdu_write(pdu, fmt, ap);
+	return p9_pdu_write(pdu, fmt, ap);
 }
-int p9pdu_finalize(struct p9_fcall *pdu) {
+int p9_pdu_finalize(struct p9_fcall *pdu) {
 	int size = pdu->size;
 	int err;
 
 	pdu->size = 0;
-	err = p9pdu_write_v(pdu, "dbw", size, pdu->type, pdu->tag);
+	err = p9_pdu_write_v(pdu, "dbw", size, pdu->type, pdu->tag);
 	if (pdu->client->type == P9_TYPE_TWRITE)
 		pdu->size = size + pdu->client->userdata_len;
 	else
@@ -72,7 +72,7 @@ int p9pdu_finalize(struct p9_fcall *pdu) {
 	return err;
 }
 
-int p9pdu_read(struct p9_fcall *pdu, const char *fmt, va_list ap) {
+int p9_pdu_read(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 	const char *ptr;
 	int errcode = 0;
 
@@ -122,7 +122,7 @@ int p9pdu_read(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 			char *sptr =(char *) va_arg(ap, char **);
 			uint16_t len;
 
-			errcode = p9pdu_read_v(pdu, "w", &len);
+			errcode = p9_pdu_read_v(pdu, "w", &len);
 			if (errcode)
 				break;
 
@@ -139,7 +139,7 @@ int p9pdu_read(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 
 	return errcode;
 }
-int p9pdu_write(struct p9_fcall *pdu, const char *fmt, va_list ap) {
+int p9_pdu_write(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 	const char *ptr;
 	int errcode = 0;
 
@@ -184,7 +184,7 @@ int p9pdu_write(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 				//len = min_t(uint16_t, strlen(sptr),
 				//                       USHRT_MAX);
 			}
-			errcode = p9pdu_write_v(pdu, "w", len);
+			errcode = p9_pdu_write_v(pdu, "w", len);
 			if (!errcode && pdu_write(pdu, sptr, len))
 				errcode = -1;
 			DEBUG(" s:%s",sptr);

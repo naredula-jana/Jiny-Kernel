@@ -115,12 +115,12 @@ typedef struct p9_fcall {
 
 
 
-extern int p9pdu_init(p9_fcall_t *pdu, uint8_t type, uint16_t tag, p9_client_t *client, unsigned long addr, unsigned long len);
-extern int p9pdu_read_v(p9_fcall_t *pdu, const char *fmt, ...);
-extern int p9pdu_read(p9_fcall_t *pdu, const char *fmt, va_list ap);
-extern int p9pdu_write(p9_fcall_t *pdu,  const char *fmt, va_list ap);
+extern int p9_pdu_init(p9_fcall_t *pdu, uint8_t type, uint16_t tag, p9_client_t *client, unsigned long addr, unsigned long len);
+extern int p9_pdu_read_v(p9_fcall_t *pdu, const char *fmt, ...);
+extern int p9_pdu_read(p9_fcall_t *pdu, const char *fmt, va_list ap);
+extern int p9_pdu_write(p9_fcall_t *pdu,  const char *fmt, va_list ap);
 extern unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...);
 extern int p9_read_rpc(p9_client_t *client, const char *fmt, ...);
-extern int p9pdu_finalize(p9_fcall_t *pdu);
+extern int p9_pdu_finalize(p9_fcall_t *pdu);
 
 #endif

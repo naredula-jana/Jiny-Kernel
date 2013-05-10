@@ -35,7 +35,7 @@ static int sh_sync(unsigned char *arg1, unsigned char *arg2);
 static int sh_del(unsigned char *arg1, unsigned char *arg2);
 static int sh_vmcore_test(unsigned char *arg1, unsigned char *arg2);
 
-static int sh_test1(unsigned char *arg1, unsigned char *arg2);
+static int Jcmd_memleak(unsigned char *arg1, unsigned char *arg2);
 static int sh_mmap(unsigned char *arg1, unsigned char *arg2);
 static int sh_pci(unsigned char *arg1, unsigned char *arg2);
 
@@ -50,9 +50,9 @@ int conf_set(unsigned char *arg1,unsigned char *arg2) {
 
 	if (arg1 == 0) {
 		ut_printf("Conf variables:\n");
-		display_symbols(SYMBOL_CONF);
+		ut_symbol_show(SYMBOL_CONF);
 	} else {
-		ret = execute_symbol(SYMBOL_CONF, arg1, arg2);
+		ret = ut_symbol_execute(SYMBOL_CONF, arg1, arg2);
 	}
 	return ret;
 }
@@ -62,21 +62,20 @@ int cmd(unsigned char *arg1,unsigned  char *arg2) {
 
 	if (arg1 == 0) {
 		ut_printf("Command list:\n");
-		ret = display_symbols(SYMBOL_CMD);
+		ret = ut_symbol_show(SYMBOL_CMD);
 	} else {
-		ret = execute_symbol(SYMBOL_CMD, arg1, arg2);
+		ret = ut_symbol_execute(SYMBOL_CMD, arg1, arg2);
 	}
 	if (ret == 0)
 		ut_printf("Not Found: %s\n", arg1);
 	return ret;
 }
 commands_t cmd_list[] = { { "help      ", "HELP MENU", "help", sh_create },
-		{ "t1 ", "t1 file", "t1", sh_test1 },
+		{ "t1 ", "t1 file", "t1", Jcmd_memleak },
 		{ "vmcore      ", "vmcore", "vmcore", sh_vmcore_test },
 		{"set  <var> <value>", "set config variables", "set", conf_set },
 		{"debug  ", "debug ", "debug", debug_trace },
 		{"cmd  <cmd> <arg1> <arg2>", "execute commands", "cmd", cmd },
-		{"c <prog>  ", "Create test thread", "c", sh_create },
 		{ "kill <pid> ","kill process", "kill", sh_kill },
 		{ "scan        ", "scan page cache ", "scan", scan_pagetable },
 		{ "mmap <file> <addr>", "mmap file", "mmap",sh_mmap },
@@ -138,7 +137,7 @@ static int sh_cp(unsigned char *arg1, unsigned char *arg2) {
 	return 0;
 }
 static void ipc_thr(){
-	ipc_test1();
+//	ipc_test1();
 	SYS_sc_exit(22);
 }
 int start_debugtrace();
@@ -182,7 +181,7 @@ void t22() {
 		i2++;
 }
 static unsigned long test_mp;
-static int sh_test1(unsigned char *arg1, unsigned char *arg2) {
+static int Jcmd_memleak(unsigned char *arg1, unsigned char *arg2) {
 	struct file *wfp;
 	struct fileStat fstat;
 	int i, k, ret, wret;

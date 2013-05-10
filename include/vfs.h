@@ -65,14 +65,14 @@ TYPE_SHORTLIVED=1,
 TYPE_LONGLIVED=2
 };
 extern unsigned long g_hostShmLen;
-//extern kmem_cache_t *g_slab_inodep;
-//extern kmem_cache_t *g_slab_filep;
+
 struct file;
 struct inode;
 
 enum {
-	REGULAR_FILE=0x8000,
 	NETWORK_FILE=2,
+
+	REGULAR_FILE=0x8000,
 	DIRECTORY_FILE=0x4000,
 	SYM_LINK_FILE=0xA000
 };
@@ -86,7 +86,7 @@ struct file {
 	unsigned char filename[MAX_FILENAME];
 	int type;
 	uint64_t offset;
-	addr_t *addr;
+
 	struct inode *inode;
 	void *private;
 };

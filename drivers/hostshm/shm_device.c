@@ -10,13 +10,13 @@ unsigned long g_hostShmLen = 0;
 unsigned long g_hostShmPhyAddr = 0;
 
 
-queue_t g_hfs_waitqueue;
+wait_queue_t g_hfs_waitqueue;
 static void host_shm_interrupt(registers_t regs) {
 	uint32_t  *p, ret;
 
 	p = (unsigned char *) HOST_SHM_CTL_ADDR + 4;
 	*p = 0; /* reset the irq by resetting the status  */
-	ret = sc_wakeUp(&g_hfs_waitqueue); /* wake all the waiting processes */
+	ret = ipc_wakeup_waitqueue(&g_hfs_waitqueue); /* wake all the waiting processes */
 	ut_printf(" GOT HOST SHM INTERRUPT  :%x:  wakedup :%d \n", p, ret);
 }
 extern init_HostFs();
@@ -62,7 +62,7 @@ int init_host_shm(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len, int
 	}else{
 		return 0;
 	}
-	sc_register_waitqueue(&g_hfs_waitqueue,"Hfs");
+	ipc_register_waitqueue(&g_hfs_waitqueue,"Hfs");
 	if (pci_hdr->interrupt_line > 0) {
 		int k;
 #if 1

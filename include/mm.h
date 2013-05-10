@@ -16,6 +16,7 @@
 #define USERSTACK_ADDR 0x30000000
 #define USERSTACK_LEN  0x100000
 
+
 #define virt_to_page(kaddr)	(g_mem_map + (__pa(kaddr) >> PAGE_SHIFT))
 /*
  * vm_flags..
@@ -25,8 +26,9 @@
 #define VM_EXEC         0x00000004
 #define VM_SHARED       0x00000008
 
-#define MEM_CLEAR 0x8000000 
-#define MEM_FOR_CACHE 0x4000000
+#define MEM_CLEAR      0x8000000
+#define MEM_FOR_CACHE  0x4000000
+//#define MEM_FOR_GLOBAL 0x2000000  /* pages for global , not allocated from task context */
 
 #define PROT_READ       0x1             /* page can be read */
 #define PROT_WRITE      0x2             /* page can be written */

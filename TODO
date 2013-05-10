@@ -1,24 +1,4 @@
-Short term :
-- cleaning defines 
-- including header files in .S files
-- locking @ inode level  
 
-Long term :	
-- implementing useful system calls 
-- enhancing debugging,logging and shell features 	
-
----------------------------------------------------------
-fixes:
- 1) when system call number more then max limit, raising pagefault
- 2) argv strings in sys_execve should be multiples of 8 , otherwise stack pointer is not getting the multiples of 8
-
-------------------------------
-p9 :
-  - fseek, closing fids, 
-  - interpreting qid 
-  - ERROR in writing
-
-----------------------------------  
 executing userland program(busybox ):
 1) pagecache: freeing and allocating pagecache page by incrementing/decrementing usage count.
 2) fs_seek in loading elf not implemented
@@ -29,61 +9,55 @@ executing userland program(busybox ):
 7) thread clean when exit/context switch: 
             a) xmm registers are cleaned
             b) es,ds registers are used by user threads , need to reload back to kernel when it switched to kernel threads
-            
-            
+    
 8) Handling swapgs when the control is moving from level 0 to 3 and viceversa:  This may be cause for problem-4(getting stuck while reading p9 data)
 
-Dealing with the swapgs instruction is especially tricky.  Swapgs
-toggles whether gs is the kernel gs or the user gs.  The swapgs
-instruction is rather fragile: it must nest perfectly and only in
-single depth, it should only be used if entering from user mode to
-kernel mode and then when returning to user-space, and precisely
-so. If we mess that up even slightly, we crash.
-
-So when we have a secondary entry, already in kernel mode, we *must
-not* use SWAPGS blindly - nor must we forget doing a SWAPGS when it's
-not switched/swapped yet.
-
-Now, there's a secondary complication: there's a cheap way to test
-which mode the CPU is in and an expensive way.
-
-The cheap way is to pick this info off the entry frame on the kernel
-stack, from the CS of the ptregs area of the kernel stack:
-
-	xorl %ebx,%ebx
-	testl $3,CS+8(%rsp)
-	je error_kernelspace
-	SWAPGS
-
-The expensive (paranoid) way is to read back the MSR_GS_BASE value
-(which is what SWAPGS modifies):
-
-	movl $1,%ebx
-	movl $MSR_GS_BASE,%ecx
-	rdmsr
-	testl %edx,%edx
-	js 1f   /* negative -> in kernel */
-	SWAPGS
-	xorl %ebx,%ebx
-1:	ret
 ----------------------------------------------------------
 Task.c or scheduler
 1) moving architecture depended code in architecture specific area.
 2) standising exit errors(currently SYS_sys_exit(..), storing exit error in task
 ---------------------------------------------------------
 Running user app BusyBox, long term solution :
-1) wait4 redesign 
-2) CTRL-C and CTRL-D not working
-3) soft link are detected but cannot able to execute
+1) CTRL-C and CTRL-D not working
+2) hard link : redesign of VFS by introducing directory entry between file and inode layers.
+3) if there are more entries in directory, empty is returning.
 
 ---------------------------------------------------------
 Display 
 1) checking validty of virtual addresses presence in pagetable before displaying, otherwise a junk address in ut_printf can cause a pagefault with spinlock(printf_lock) on.
 --------------------------------------
- 
 
-------------------------------------------------------------
-LWIP TODO
-- spinlock debugging as disabled because of the confligs in global variable in header file while integrating latest lwip.
+LWIP /Network
 - arch api need to re-implement to suit newer version
 - delition of buffer while sending and recving the packet.
+- network app like telnet not working.
+---------------------------------------------------------
+fixes:
+ 1) when system call number more then max limit, raising pagefault
+ 2) argv strings in sys_execve should be multiples of 8 , otherwise stack pointer is not getting the multiples of 8
+
+------------------------------
+p9 :
+  - fseek, closing fids, 
+  - interpreting qid 
+  - ERROR in writing
+ -------------------------------
+ Userspace Related:
+  -retreving large number of files from the directory fails.
+  -implementing pipe and redirecting to file for user space.
+  - protect kernel space when user space task is running, user thread can access kernel space, 
+----------------------------------
+debug:
+   - printing arguments at the start of function
+   - uninstalling breakpoint on the fly from user shell, currently it thoughs error
+   - call_stats : to seggregate base on the submodules 
+-------------------------------
+   - implementing dmesg
+   - cleaning init path and proper printing
+   - when log is enabled to file, the content is overwriting in to someother pages that causing execute to fail to load by elf.
+
+----------------------------------   
+High CPU consumption:
+ -after running some application that consume high cpu , APIC timer(248) stop receving on some cores, this stopped after recving any intterupt like keyboard, till that point the cpu consumpton is very 
+ high.
+-----------------------------------------

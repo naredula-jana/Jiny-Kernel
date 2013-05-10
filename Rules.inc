@@ -1,5 +1,5 @@
 SOURCE_ROOT=/opt_src/Jiny-Kernel/
-NETWORKING =1 
+# NETWORKING =1 
 SMP=1
 # MEMLEAK_TOOL=1
 INCLUDE=. -DNETWORKING -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURCE_ROOT)/drivers/lwip/ -I $(SOURCE_ROOT)/arch/x86_64/

@@ -10,30 +10,27 @@
  */
 //#define DEBUG_ENABLE 1
 #include "common.h"
-
 #include "descriptor_tables.h"
-#define MAGIC_CHAR 0xab
-#define MAGIC_LONG 0xabababababababab
+
 
 struct mm_struct *g_kernel_mm = 0;
-
-static queue_t run_queue;
-queue_t task_queue;
-static queue_t timer_queue;
-
+task_queue_t g_task_queue;
 spinlock_t g_global_lock = SPIN_LOCK_UNLOCKED("global");
-unsigned long g_pid = 0;
 unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles per second  */
+
+static unsigned long free_pid_no = 1;  // TODO need to make unique when  wrap around
+static task_queue_t run_queue;
+static wait_queue_t timer_queue;
 
 
 extern long *g_idle_stack;
-void init_timer();
+
 static int free_mm(struct mm_struct *mm);
 static unsigned long push_to_userland();
 static unsigned long _schedule(unsigned long flags);
 static void schedule_kernelSecondHalf();
 static void schedule_userSecondHalf();
-static int release_resources(struct task_struct *task);
+static int release_resources(struct task_struct *task, int attach_to_parent);
 
 static struct task_struct *alloc_task_struct(void) {
 	return (struct task_struct *) mm_getFreePages(0, 2); /*WARNING: do not change the size it is related TASK_SIZE, 4*4k=16k page size */
@@ -45,7 +42,7 @@ static void free_task_struct(struct task_struct *p) {
 }
 /************************************************
   All the below function should be called with holding lock
-  *********************************************** */
+  ************************************************/
 static inline int _add_to_runqueue(struct task_struct * p) /* Add at the first */
 {
 	if (p->magic_numbers[0] != MAGIC_LONG || p->magic_numbers[1] != MAGIC_LONG) /* safety check */
@@ -53,28 +50,18 @@ static inline int _add_to_runqueue(struct task_struct * p) /* Add at the first *
 		ut_printf(" Task Stack Got CORRUPTED task:%x :%x :%x \n", p, p->magic_numbers[0], p->magic_numbers[1]);
 		BUG();
 	}
-	if (p->run_link.next == 0 && p->cpu == 0xffff) { /* Avoid adding self adding in to runqueue */
-		list_add_tail(&p->run_link, &run_queue.head);
+	if (p->run_queue.next == 0 && p->cpu == 0xffff) { /* Avoid adding self adding in to runqueue */
+		list_add_tail(&p->run_queue, &run_queue.head);
 		return 1;
 	}
 
 	return 0;
 }
 
-static inline struct task_struct *_get_from_runqueue() {
-	struct task_struct *p;
-	struct list_head *node;
-
-	if (run_queue.head.next == &run_queue.head) {
-		return 0;
-	}
-	node = run_queue.head.next;
-	p = list_entry(node,struct task_struct, run_link);
-	if (p == 0)
-		BUG();
-	return p;
+int sc_add_to_runqueue(struct task_struct *task){
+	return _add_to_runqueue(task);
 }
-static inline struct task_struct *_del_from_runqueue(struct task_struct * p) {
+static inline struct task_struct *_del_from_runqueue(struct task_struct *p) {
 	if (p == 0) {
 		struct list_head *node;
 
@@ -83,170 +70,16 @@ static inline struct task_struct *_del_from_runqueue(struct task_struct * p) {
 			return 0;
 		}
 
-		p = list_entry(node,struct task_struct, run_link);
+		p = list_entry(node,struct task_struct, run_queue);
 		if (p == 0)
 			BUG();
 	}
-	list_del(&p->run_link);
+	list_del(&p->run_queue);
 	return p;
 }
 
-/******************************************  WAIT QUEUE *******************/
-static void inline init_waitqueue(queue_t *waitqueue, char *name) {
-	INIT_LIST_HEAD(&(waitqueue->head));
-	waitqueue->name = name;
-	return;
-}
-
-static void _add_to_waitqueue(queue_t *waitqueue, struct task_struct * p, long ticks) {
-
-	long cum_ticks, prev_cum_ticks;
-	struct list_head *pos, *prev_pos;
-	struct task_struct *task;
 
 
-	cum_ticks = 0;
-	prev_cum_ticks = 0;
-	if (p == g_cpu_state[0].idle_task  || p == g_cpu_state[1].idle_task ){
-		BUG();
-	}
-	if (waitqueue->head.next == &waitqueue->head) {
-		p->sleep_ticks = ticks;
-		list_add_tail(&p->wait_queue, &waitqueue->head);
-	} else {
-		prev_pos = &waitqueue->head;
-		list_for_each(pos, &waitqueue->head) {
-			task = list_entry(pos, struct task_struct, wait_queue);
-			prev_cum_ticks = cum_ticks;
-			cum_ticks = cum_ticks + task->sleep_ticks;
-
-			if (cum_ticks > ticks) {
-				p->sleep_ticks = (ticks - prev_cum_ticks);
-				task->sleep_ticks = task->sleep_ticks - p->sleep_ticks;
-				list_add(&p->wait_queue, prev_pos);
-				goto last;
-			}
-			prev_pos = pos;
-		}
-		p->sleep_ticks = (ticks - cum_ticks);
-		list_add_tail(&p->wait_queue, &waitqueue->head);
-	}
-
-last: ;
-
-}
-
-/* delete from the  wait queue */
-static int _del_from_waitqueue(queue_t *waitqueue, struct task_struct *p) {
-	struct list_head *pos;
-	struct task_struct *task;
-	int ret = 0;
-
-	if (p==0 || waitqueue==0) return 0;
-
-	list_for_each(pos, &waitqueue->head) {
-		task = list_entry(pos, struct task_struct, wait_queue);
-
-		if (p == task) {
-			if(pos == 0){
-				BUG();
-			}
-			pos = pos->next;
-			if (pos != &waitqueue->head) {
-				if (p<0x100 || p->magic_numbers[0] != MAGIC_LONG){
-					BUG();
-				}
-				task = list_entry(pos, struct task_struct, wait_queue);
-
-				if ( task<0x100 || task>0xfffffffffffff000){
-					BUG();
-				}
-				task->sleep_ticks = task->sleep_ticks + p->sleep_ticks;
-			}
-			p->sleep_ticks = 0;
-			ret = 1;
-			list_del(&p->wait_queue);//TODO crash happening */
-			return 1;
-		}
-	}
-
-	return ret;
-}
-
-#define MAX_WAIT_QUEUES 500
-static queue_t *wait_queues[MAX_WAIT_QUEUES]; /* TODO : this need to be locked */
-int stat_wq_count = 0;
-int sc_register_waitqueue(queue_t *waitqueue, char *name) {
-	int i;
-	unsigned long flags;
-
-	spin_lock_irqsave(&g_global_lock, flags);
-	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
-		if (wait_queues[i] == 0) {
-#if 0
-			if (i==8) {
-				BRK;
-			}
-#endif
-			init_waitqueue(waitqueue, name);
-			wait_queues[i] = waitqueue;
-			stat_wq_count++;
-			goto last;
-		}
-	}
-last:
-    spin_unlock_irqrestore(&g_global_lock, flags);
-	return -1;
-}
-/* TODO It should be called from all the places where sc_register_waitqueue is called, currently it is unregister is called only from few places*/
-int sc_unregister_waitqueue(queue_t *waitqueue) {
-	int i;
-	unsigned long flags;
-
-	spin_lock_irqsave(&g_global_lock, flags);
-	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
-		if (wait_queues[i] == waitqueue) {
-			/*TODO:  remove the tasks present in the queue */
-			wait_queues[i] = 0;
-			stat_wq_count--;
-			goto last;
-		}
-	}
-last:
-    spin_unlock_irqrestore(&g_global_lock, flags);
-	return -1;
-}
-int sc_wakeUp(queue_t *waitqueue ) {
-	int ret = 0;
-	struct task_struct *task;
-
-	unsigned long flags;
-	if (waitqueue == NULL)
-		waitqueue = &timer_queue;
-
-	spin_lock_irqsave(&g_global_lock, flags);
-	while (waitqueue->head.next != &waitqueue->head) {
-		task = list_entry(waitqueue->head.next, struct task_struct, wait_queue);
-		if (_del_from_waitqueue(waitqueue, task) == 1) {
-			task->state = TASK_RUNNING;
-			if (task->run_link.next == 0 )
-				_add_to_runqueue(task);
-			ret++;
-		}
-	}
-	spin_unlock_irqrestore(&g_global_lock, flags);
-	if (ret>0){/* wakeup any other idle cpus to serve the runqueue  */
-		int i;
-		for (i=0; i<getmaxcpus(); i++){
-			if (g_current_task->cpu != i && g_cpu_state[i].current_task==g_cpu_state[i].idle_task){
-				apic_send_ipi_vector(i,IPI_INTERRUPT);
-				return ret;
-			}
-		}
-	}
-
-	return ret;
-}
 void Jcmd_ipi(unsigned char *arg1,unsigned char *arg2){
 	int i,j;
 
@@ -256,25 +89,12 @@ void Jcmd_ipi(unsigned char *arg1,unsigned char *arg2){
 	for (j=0; j<50; j++)
 	apic_send_ipi_vector(i,IPI_INTERRUPT);
 }
-int sc_wait(queue_t *waitqueue, unsigned long ticks) {
-	unsigned long flags;
 
-	spin_lock_irqsave(&g_global_lock, flags);
-	g_current_task->state = TASK_INTERRUPTIBLE;
-	_add_to_waitqueue(waitqueue, g_current_task, ticks);
-	spin_unlock_irqrestore(&g_global_lock, flags);
-
-	sc_schedule();
-	if (g_current_task->sleep_ticks <= 0)
-		return 0;
-	else
-		return g_current_task->sleep_ticks;
-}
 int sc_sleep(long ticks) /* each tick is 100HZ or 10ms */
 /* TODO : return number ticks elapsed  instead of 1*/
 /* TODO : when multiple user level thread sleep it is not returning in correct time , it may be because the idle thread halting*/
 {
-	return sc_wait(&timer_queue, ticks);
+	return ipc_waiton_waitqueue(&timer_queue, ticks);
 }
 int Jcmd_ps(char *arg1, char *arg2) {
 	unsigned long flags;
@@ -284,33 +104,23 @@ int Jcmd_ps(char *arg1, char *arg2) {
 
 	ut_printf("pid state generation ticks sleep_ticks mm mm_count name cpu\n");
 	spin_lock_irqsave(&g_global_lock, flags);
-	list_for_each(pos, &task_queue.head) {
-		task = list_entry(pos, struct task_struct, task_link);
+	list_for_each(pos, &g_task_queue.head) {
+		task = list_entry(pos, struct task_struct, task_queue);
 		if (is_kernelThread(task))
 			ut_printf("[%2x]", task->pid);
 		else
 			ut_printf("(%2x)", task->pid);
 
-		ut_printf("%3d %3d %5x  %5x %4d %7s sleeptick(%3d:%d) cpu:%3d :%s:\n",task->state, task->cpu_contexts, task->ticks, task->mm, task->mm->count.counter, task->name, task->sleep_ticks,
-				task->stats.ticks_consumed,task->cpu,task->mm->fs.cwd);
-	}
-	spin_unlock_irqrestore(&g_global_lock, flags);
-
-	spin_lock_irqsave(&g_global_lock, flags);
-	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
-		if (wait_queues[i] == 0) continue;
-		ut_printf(" %s: ",wait_queues[i]->name);
-		list_for_each(pos, &wait_queues[i]->head) {
-			task = list_entry(pos, struct task_struct, wait_queue);
-			ut_printf(" %x(%s),",task->pid,task->name);
-		}
-		ut_printf("\n");
+		ut_printf("%3d %3d %5x  %5x %4d %7s sleeptick(%3d:%d) cpu:%3d :%s: count:%d\n",task->state, task->cpu_contexts, task->ticks, task->mm, task->mm->count.counter, task->name, task->sleep_ticks,
+				task->stats.ticks_consumed,task->cpu,task->mm->fs.cwd,task->count.counter);
 	}
 	ut_printf(" CPU Processors:  cpuid contexts <state 0=idle, intr-disabled > name pid\n");
 	for (i=0; i<getmaxcpus(); i++){
 			ut_printf("%2d:%4d <%d-%d> %7s(%d)\n",i,g_cpu_state[i].cpu_contexts,g_cpu_state[i].active,g_cpu_state[i].intr_disabled,g_cpu_state[i].current_task->name,g_cpu_state[i].current_task->pid);
 	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
+
+
 	return 1;
 }
 
@@ -398,8 +208,8 @@ error: mm_putFreePages((unsigned long)stack, 0);
 	return 0;
 }
 void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **env) {
-
 	struct mm_struct *mm,*old_mm;
+	unsigned long flags;
 	unsigned long main_func;
 	unsigned long t_argc, t_argv, stack_len, tmp_stack, tmp_aux;
 
@@ -413,7 +223,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	}
 
 	/* delete old vm and create a new one */
-	mm = kmem_cache_alloc(mm_cachep, 0);
+	mm = mm_slab_cache_alloc(mm_cachep, 0);
 	if (mm == 0)
 		BUG();
 	ut_memset((unsigned char *)mm,0,sizeof(struct mm_struct)); /* clear the mm struct */
@@ -433,7 +243,9 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	mm->exec_fp = (struct file *)fs_open(file, 0, 0);
 	ut_strncpy(g_current_task->name, file, MAX_TASK_NAME);
 
-	release_resources(g_current_task);
+
+	release_resources(g_current_task, 0);
+
 	old_mm=g_current_task->mm;
 	g_current_task->mm = mm;
 
@@ -458,14 +270,14 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	if (mm->exec_fp == 0) {
 		mm_putFreePages(tmp_stack, 0);
 		ut_printf("Error execve : Failed to open the file \n");
-		SYS_sc_exit(100);
+		SYS_sc_exit(101);
 		return;
 	}
 	main_func = fs_loadElfLibrary(mm->exec_fp, tmp_stack + (PAGE_SIZE - stack_len), stack_len, tmp_aux);
 	if (main_func == 0) {
 		mm_putFreePages(tmp_stack, 0);
 		ut_printf("Error execve : ELF load Failed \n");
-		SYS_sc_exit(100);
+		SYS_sc_exit(103);
 		return ;
 	}
 	mm_putFreePages(tmp_stack, 0);
@@ -525,10 +337,11 @@ static unsigned long push_to_userland() {
 	p->isf.cs = GDT_SEL(UCODE_DESCR) | SEG_DPL_USER;
 	p->isf.ss = GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
 
+
 	g_cpu_state[cpuid].md_state.user_fs = 0;
 	g_cpu_state[cpuid].md_state.user_gs = 0;
 	g_cpu_state[cpuid].md_state.user_fs_base = 0;
-
+	g_current_task->callstack_top =0;
 	enter_userspace();
 	return 0;
 }
@@ -550,11 +363,12 @@ static unsigned long clone_push_to_userland() {
 	    p->isf.rsp = g_current_task->thread.userland.sp;
 	p->isf.cs = GDT_SEL(UCODE_DESCR) | SEG_DPL_USER;
 	p->isf.ss = GDT_SEL(UDATA_DESCR) | SEG_DPL_USER;
-
+	g_current_task->callstack_top =0;
 	enter_userspace();
 	return 0;
 }
 static int free_mm(struct mm_struct *mm) {
+	int ret;
 	DEBUG("freeing the mm :%x counter:%x \n",mm,mm->count.counter);
 
 	if (mm->count.counter == 0)
@@ -566,9 +380,12 @@ static int free_mm(struct mm_struct *mm) {
 	unsigned long vm_space_size = ~0;
 	vm_munmap(mm, 0, vm_space_size);
 	DEBUG(" tid:%x Freeing the final PAGE TABLE :%x\n",g_current_task->pid,vm_space_size);
-	ar_pageTableCleanup(mm, 0, vm_space_size);
+	ret=ar_pageTableCleanup(mm, 0, vm_space_size);
+	if (ret != 1 ){
+		ut_printf("ERROR : clear the pagetables :%d: \n",ret);
+	}
 
-	kmem_cache_free(mm_cachep, mm);
+	mm_slab_cache_free(mm_cachep, mm);
 	return 1;
 }
 #define CLONE_VM 0x100
@@ -583,8 +400,8 @@ unsigned long sc_createKernelThread(int(*fn)(void *), unsigned char *args, unsig
 	if (thread_name == 0)
 		return pid;
 	spin_lock_irqsave(&g_global_lock, flags);
-	list_for_each(pos, &task_queue.head) {
-		task = list_entry(pos, struct task_struct, task_link);
+	list_for_each(pos, &g_task_queue.head) {
+		task = list_entry(pos, struct task_struct, task_queue);
 		if (task->pid == pid) {
 			ut_strncpy(task->name, thread_name, MAX_TASK_NAME);
 			goto last;
@@ -609,6 +426,8 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void 
 	if (p == 0)
 		BUG();
 	ut_memset((unsigned char *) p, MAGIC_CHAR, TASK_SIZE);
+	atomic_set(&p->count,1);
+
 	/* Initialize mm */
 	if (clone_flags & CLONE_VM) /* parent and child run in the same vm */
 	{
@@ -617,7 +436,7 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void 
 		DEBUG("clone  CLONE_VM the mm :%x counter:%x \n",mm,mm->count.counter);
 	} else {
 		int i;
-		mm = kmem_cache_alloc(mm_cachep, 0);
+		mm = mm_slab_cache_alloc(mm_cachep, 0);
 		if (mm == 0)
 			BUG();
 		ut_memset(mm,0,sizeof(struct mm_struct));
@@ -641,9 +460,12 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void 
 	}
 	/* initialize task struct */
 	p->mm = mm;
+	p->locks_held = 0;
 	p->trace_on = 0;
+	p->callstack_top = 0;
 	p->ticks = 0;
 	p->cpu_contexts = 0;
+	INIT_LIST_HEAD(&(p->dead_tasks.head));
 	p->pending_signal = 0;
 	p->exit_code = 0;
 	p->cpu = getcpuid();
@@ -674,22 +496,22 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void 
 	ut_strncpy(p->name, g_current_task->name, MAX_TASK_NAME);
 
 	/* link to queue */
-	g_pid++;
-	if (g_pid==0) g_pid++;
-	p->pid = g_pid;
+	free_pid_no++;
+	if (free_pid_no==0) free_pid_no++;
+	p->pid = free_pid_no;
 	p->cpu =0xffff;
 	p->ppid = g_current_task->pid;
 	p->trace_stack_length = 10; /* some initial stack length, we do not know at what point tracing starts */
-	p->run_link.next = 0;
-	p->run_link.prev = 0;
-	p->task_link.next = 0;
-	p->task_link.prev = 0;
+	p->run_queue.next = 0;
+	p->run_queue.prev = 0;
+	p->task_queue.next = 0;
+	p->task_queue.prev = 0;
 	p->wait_queue.next = p->wait_queue.prev = NULL;
 	p->stats.ticks_consumed = 0;
 
 	ret_pid=p->pid;
 	spin_lock_irqsave(&g_global_lock, flags);
-	list_add_tail(&p->task_link, &task_queue.head);
+	list_add_tail(&p->task_queue, &g_task_queue.head);
 	if (_add_to_runqueue(p)==0) {
 		BUG();
 	}
@@ -702,12 +524,12 @@ unsigned long SYS_sc_fork() {
 	SYSCALL_DEBUG("fork \n");
 	return SYS_sc_clone(CLONE_VM, 0, 0,  0, 0);
 }
-static int release_resources(struct task_struct *child_task){
+static int release_resources(struct task_struct *child_task, int attach_to_parent){
 	int i;
 	struct mm_struct *mm;
-	unsigned long flags;
 	struct list_head *pos;
 	struct task_struct *task;
+	unsigned long flags;
 
 	mm = child_task->mm;
  	if (mm->count.counter > 1) return 0;
@@ -720,18 +542,36 @@ static int release_resources(struct task_struct *child_task){
 
 	mm->fs.total = 0;
 	mm->exec_fp=0;
+	if (child_task->locks_held > 0){ // TODO : need to check the mutex held
+		ut_log("ERROR:  lock held by the process: %s \n",task->name);
+		ipc_release_resources(child_task);
+	}
+
+	if (attach_to_parent == 0) return 1;
 
 	spin_lock_irqsave(&g_global_lock, flags);
-	list_for_each(pos, &task_queue.head) {
-		task = list_entry(pos, struct task_struct, task_link);
-		if (task->pid == child_task->ppid) {
-			task->wait_child_id = child_task->pid;
+	child_task->state = TASK_DEAD;
+	list_for_each(pos, &g_task_queue.head) {
+		task = list_entry(pos, struct task_struct, task_queue);
+		if (task->pid == child_task->ppid && task->state!=TASK_DEAD) {
+			atomic_inc(&child_task->count);
+			list_del(&child_task->wait_queue);
+			list_add_tail(&child_task->wait_queue, &(task->dead_tasks.head)); /* wait queue is overloaded */
+
+			while(1){
+				if (list_empty(&(child_task->dead_tasks.head.next))) {
+					break;
+				} else {
+					list_move(&(child_task->dead_tasks.head), &(task->dead_tasks.head));
+				}
+			}
+
 			goto last;
 		}
 	}
 last:
-	spin_unlock_irqrestore(&g_global_lock, flags);
-
+    spin_unlock_irqrestore(&g_global_lock, flags);
+    DEBUG("dead child attached to parent\n");
 	return 1;
 }
 int SYS_sc_exit(int status) {
@@ -739,7 +579,7 @@ int SYS_sc_exit(int status) {
 	SYSCALL_DEBUG("sys exit : status:%d \n",status);
 	ar_updateCpuState(g_current_task);
 
-	release_resources(g_current_task);
+	release_resources(g_current_task, 1);
 
 	spin_lock_irqsave(&g_global_lock, flags);
 	g_current_task->state = TASK_DEAD; /* this should be last statement before schedule */
@@ -758,8 +598,8 @@ int SYS_sc_kill(unsigned long pid, unsigned long signal) {
 	SYSCALL_DEBUG("kill pid:%d signal:%d \n",pid,signal);
 
 	spin_lock_irqsave(&g_global_lock, flags);
-	list_for_each(pos, &task_queue.head) {
-		task = list_entry(pos, struct task_struct, task_link);
+	list_for_each(pos, &g_task_queue.head) {
+		task = list_entry(pos, struct task_struct, task_queue);
 		if (task->pid == pid) {
 			task->pending_signal = 1;
 			ret = SYSCALL_SUCCESS;
@@ -846,16 +686,15 @@ void init_tasking() {
 	int i;
 	unsigned long task_addr;
 
-	g_kernel_mm = kmem_cache_alloc(mm_cachep, 0);
+	g_kernel_mm = mm_slab_cache_alloc(mm_cachep, 0);
 	if (g_kernel_mm == 0)
 		return;
-	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
-		wait_queues[i] = 0;
-	}
+
+	init_ipc();
 
 	INIT_LIST_HEAD(&(run_queue.head));
-	INIT_LIST_HEAD(&(task_queue.head));
-	sc_register_waitqueue(&timer_queue,"timer");
+	INIT_LIST_HEAD(&(g_task_queue.head));
+	ipc_register_waitqueue(&timer_queue,"timer");
 
 	atomic_set(&g_kernel_mm->count,1);
 	g_kernel_mm->mmap = 0x0;
@@ -865,7 +704,7 @@ void init_tasking() {
 	g_kernel_mm->fs.output_device = DEVICE_DISPLAY_VGI;
 	ut_strcpy(g_kernel_mm->fs.cwd,"/");
 
-	g_pid = 0;
+	free_pid_no = 1; /* pid should never be 0 */
     task_addr=(unsigned long )((unsigned long )(&g_idle_stack)+TASK_SIZE) & (~((unsigned long )(TASK_SIZE-1)));
     ut_printf(" Task Addr start :%x  stack:%x current:%x\n",task_addr,&task_addr,g_current_task);
 	for (i = 0; i < MAX_CPUS; i++) {
@@ -875,7 +714,7 @@ void init_tasking() {
 		g_cpu_state[i].idle_task->magic_numbers[0] = g_cpu_state[i].idle_task->magic_numbers[1] = MAGIC_LONG;
 		g_cpu_state[i].idle_task->stats.ticks_consumed = 0;
 		g_cpu_state[i].idle_task->state = TASK_RUNNING;
-		g_cpu_state[i].idle_task->pid = g_pid;
+		g_cpu_state[i].idle_task->pid = free_pid_no;
 		g_cpu_state[i].idle_task->cpu = i;
 		g_cpu_state[i].idle_task->mm = g_kernel_mm; /* TODO increase the corresponding count */
 		g_cpu_state[i].current_task = g_cpu_state[i].idle_task;
@@ -884,9 +723,8 @@ void init_tasking() {
 		g_cpu_state[i].active = 1; /* by default when the system starts all the cpu are in active state */
 		g_cpu_state[i].intr_disabled = 0; /* interrupts are active */
 		ut_strncpy(g_cpu_state[i].idle_task->name, (unsigned char *)"idle", MAX_TASK_NAME);
-		g_pid++;
+		free_pid_no++;
 	}
-
     g_current_task->cpu=0;
 
 	ar_archSetUserFS(0);
@@ -894,21 +732,51 @@ void init_tasking() {
 	ar_registerInterrupt(IPI_INTERRUPT, &ipi_interrupt, "IPI", NULL);
 }
 /* This function should not block, if it block then the idle thread may block */
-static void delete_task(struct task_struct *task) {
+void sc_delete_task(struct task_struct *task) {
 	unsigned long intr_flags;
 
 	if (task ==0) return;
-    DEBUG("DELETING TASK :%x\n",task->pid);
+	atomic_dec(&task->count);
+	if (task->count.counter != 0){
+		DEBUG("Not deleted Task :%d\n",task->pid);
+		return;
+	}
+
+	DEBUG("DELETING TASK :%x\n",task->pid);
 
 	spin_lock_irqsave(&g_global_lock, intr_flags);
 	list_del(&task->wait_queue);
-	list_del(&task->run_link);
-	list_del(&task->task_link);
+	list_del(&task->run_queue);
+	list_del(&task->task_queue);
+	while (1) {
+		struct list_head *node;
+		struct task_struct *child_task = 0;
+
+		node = task->dead_tasks.head.next;
+		if (list_empty(&(task->dead_tasks.head.next))) {
+			break;
+		} else {
+			child_task = list_entry(node,struct task_struct, wait_queue);
+			if (child_task == 0)
+				BUG();
+			list_del(&child_task->wait_queue);
+		}
+
+		spin_unlock_irqrestore(&g_global_lock, intr_flags);
+		sc_delete_task(child_task);
+		spin_lock_irqsave(&g_global_lock, intr_flags);
+
+		if (!list_empty(&(task->dead_tasks.head.next))) {
+			BUG();
+		}
+	}
+
 	spin_unlock_irqrestore(&g_global_lock, intr_flags);
 
 	free_mm(task->mm);
 	free_task_struct(task);
 }
+
 #ifdef SMP
 /* getcpuid func is defined in smp code */
 #else
@@ -919,6 +787,7 @@ int getmaxcpus(){
 	return 1;
 }
 #endif
+
 static struct task_struct * _get_dead_task(){
 	struct task_struct *task=0;
 
@@ -935,7 +804,7 @@ static void schedule_userSecondHalf(){ /* user thread second Half: _schedule fun
 	struct task_struct *task = _get_dead_task();
 	spin_unlock_irqrestore(&g_global_lock, g_current_task->flags);
 	if (task != 0)
-		delete_task(task);
+		sc_delete_task(task);
 
 	ar_updateCpuState(g_current_task);
 	clone_push_to_userland();
@@ -944,7 +813,7 @@ static void schedule_kernelSecondHalf(){ /* kernel thread second half:_schedule 
 	struct task_struct *task = _get_dead_task();
 	spin_unlock_irqrestore(&g_global_lock, g_current_task->flags);
 	if (task != 0)
-		delete_task(task);
+		sc_delete_task(task);
 	g_current_task->thread.real_ip(0);
 }
 void sc_schedule() { /* _schedule function task can land here. */
@@ -968,11 +837,22 @@ void sc_schedule() { /* _schedule function task can land here. */
 	struct task_struct *task = _get_dead_task();
 	spin_unlock_irqrestore(&g_global_lock, intr_flags);
 
-	if (task != 0)
-		delete_task(task);
-
+	if (task != 0){
+		if (task->state == TASK_KILL){
+			task->state = TASK_DEAD;
+			release_resources(task, 1);
+			sc_delete_task(task);
+		}else if (task->state == TASK_DEAD){
+			sc_delete_task(task);
+		}else{
+			BUG();
+		}
+	}
 }
-void sc_check_signal() {
+void sc_before_syscall() {
+	g_current_task->callstack_top = 0;
+}
+void sc_after_syscall() {
 
 	/* Handle any pending signal */
 	if (g_current_task->pending_signal == 0) {
@@ -986,6 +866,7 @@ void sc_check_signal() {
 		return;
 	}
 	g_current_task->pending_signal = 0;
+	g_current_task->callstack_top = 0;
     sc_schedule();
 }
 void Jcmd_cpu_active(unsigned char *arg1,unsigned char *arg2){
@@ -1002,10 +883,8 @@ void Jcmd_cpu_active(unsigned char *arg1,unsigned char *arg2){
 	}
 	if (state == 1 && g_cpu_state[cpu].active==0){
 		g_cpu_state[cpu].active = state;
-
-
 	}else{
-	   g_cpu_state[cpu].active = state;
+	    g_cpu_state[cpu].active = state;
 	}
     ut_printf(" CPU %d changed state to %d \n",cpu,state);
 	return ;
@@ -1017,7 +896,7 @@ static unsigned long  _schedule(unsigned long flags) {
 	g_current_task->ticks++;
 	prev = g_current_task;
 	if (prev->pending_signal != 0){ /* TODO: need handle the signal properly, need to merge this code with sc_check_signal, sc_check_signal may not be called if there is no syscall  */
-		prev->state = TASK_DEAD;
+		prev->state = TASK_KILL;
 		prev->exit_code = 9;
 	}
 
@@ -1063,16 +942,16 @@ static unsigned long  _schedule(unsigned long flags) {
 	{
 		flush_tlb(next->mm->pgd);
 	}
-	if (prev->state == TASK_DEAD) {
+	if (prev->state == TASK_DEAD || prev->state == TASK_KILL) {
 		if (g_cpu_state[cpuid].dead_task != NULL){
 			BUG(); //Hitting
 		}
 		g_cpu_state[cpuid].dead_task = prev;
 	}else if (prev!=g_cpu_state[cpuid].idle_task && prev->state==TASK_RUNNING){ /* some other cpu  can pickup this task , running task and idle task should not be in a run equeue even though there state is running */
-		if (prev->run_link.next != 0){ /* Prev should not be on the runqueue */
+		if (prev->run_queue.next != 0){ /* Prev should not be on the runqueue */
 			BUG();
 		}
-		list_add_tail(&prev->run_link, &run_queue.head);
+		list_add_tail(&prev->run_queue, &run_queue.head);
     }
 	next->cpu = cpuid; /* get cpuid based on this */
 	next->cpu_contexts++;
@@ -1115,28 +994,9 @@ void timer_callback(registers_t regs) {
 	g_current_task->counter--;
 	g_current_task->stats.ticks_consumed++;
 
-	spin_lock_irqsave(&g_global_lock, flags);
-
 	/* 2. Test of wait queues for any expiry. time queue is one of the wait queue  */
-	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
-		if (wait_queues[i] == 0)
-			continue;
-		if (wait_queues[i]->head.next != &(wait_queues[i]->head)) {
-			struct task_struct *task;
-			task = list_entry(wait_queues[i]->head.next, struct task_struct, wait_queue);
+	ipc_check_waitqueues();
 
-			task->sleep_ticks--;
-			if (task->sleep_ticks <= 0) {
-				_del_from_waitqueue(wait_queues[i], task);
-				task->state = TASK_RUNNING;
-				if (task->run_link.next == 0)
-					_add_to_runqueue(task);
-				else
-					BUG();
-			}
-		}
-	}
-	spin_unlock_irqrestore(&g_global_lock, flags);
 	do_softirq();
 }
 

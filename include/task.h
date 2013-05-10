@@ -11,16 +11,16 @@
 #ifndef TASK_H
 #define TASK_H
 
-//#include "common.h"
 #include "mm.h"
 #include "ipc.h"
 #include "descriptor_tables.h"
-//#include  "vfs.h"
+
 
 #define TASK_RUNNING            0
 #define TASK_INTERRUPTIBLE      1
 #define TASK_UNINTERRUPTIBLE    2
 #define TASK_STOPPED            4
+#define TASK_KILL               8
 #define TASK_DEAD               64
 
 struct user_regs {
@@ -63,17 +63,24 @@ struct mm_struct {
 	unsigned long anonymous_addr;
 };
 
-
 // This structure defines a 'task' - a process.
 #define MAX_TASK_NAME 40
 
+#define MAGIC_CHAR 0xab
+#define MAGIC_LONG 0xabababababababab
+
+typedef struct task_queue {
+	struct list_head head;
+	char *name;
+} task_queue_t;
 /*
  - task can be on run queue or in wait queues */
 struct task_struct {
 	volatile long state;    /* -1 unrunnable, 0 runnable, >0 stopped */
 	unsigned long flags;    /* per process flags, defined below */
 	unsigned long pending_signal;	
-	int exit_code;
+	atomic_t count; /* usage count */
+
 	unsigned long pid,ppid;
 	unsigned char name[MAX_TASK_NAME+1];
 	int cpu;
@@ -83,29 +90,37 @@ struct task_struct {
 	unsigned long ticks;	
 	struct thread_struct thread;
 	struct mm_struct *mm;
+	int locks_held;
 
+#define MAX_DEBUG_CALLSTACK 10
 	int trace_stack_length; /* used for trace purpose */
 	char trace_on; /* used for trace */
+	void *callstack[MAX_DEBUG_CALLSTACK];  /* current function when collecting call graph */
+	int callstack_top;
 
-	unsigned long wait_child_id; /* TODO : need to look for permanent solution */
+	task_queue_t dead_tasks;
+	int exit_code;
 
-	struct list_head run_link; /* run queue */
-	struct list_head task_link; /* task queue */
+	struct list_head run_queue; /* run queue */
+	struct list_head task_queue; /* task queue */
 	struct list_head wait_queue; /* wait queue */
 
 	struct {
 		unsigned long ticks_consumed;
+		unsigned long mem_consumed;
 	} stats;
 
 	unsigned long magic_numbers[4]; /* already stack is default fill with magic numbers */
 }; 
 struct cpu_state {
 	struct md_cpu_state md_state; /* This should be at the first location */
+
 	struct task_struct *current_task;
 	struct task_struct *dead_task;
 	struct task_struct *idle_task;
+
 	int active; /* only active cpu will pickup the tasks , otherwise they can only run idle threads */
-	int intr_disabled; /* interrupts disabled */
+	int intr_disabled; /* interrupts disabled except apic timer */
 
 	unsigned long cpu_contexts;
 }; /* TODO : align to 64 */

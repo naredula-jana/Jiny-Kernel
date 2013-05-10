@@ -41,7 +41,7 @@
  */
 
 #define __types_h
-//#define DEBUG_ENABLE 1
+#define DEBUG_ENABLE 1
 #include "lwip/opt.h"
 #include "lwip/def.h"
 #include "lwip/mem.h"
@@ -304,6 +304,9 @@ void *lwip_sock_open(int type) {
 int lwip_sock_read(void *conn, unsigned char *buff, unsigned long len) {
 	return 1; /*TODO */
 }
+int lwip_sock_connect(void *conn, unsigned long *addr, uint16_t port) {
+	return netconn_connect(conn, addr, port);
+}
 int lwip_sock_write(void *conn, unsigned char *buff, unsigned long len) {
 	return netconn_write(conn, buff, len, NETCONN_COPY);
 }
@@ -363,7 +366,8 @@ int load_LwipTcpIpStack() {
 	network_started = 1;
 
 	DEBUG("LWIP: Waiting for network.\n");
-	sys_sem_new(&tcpip_is_up, 0); /* TODO : need to free the sem */
+	tcpip_is_up.name = "sem_tcpip";
+	ipc_sem_new(&tcpip_is_up, 0 ); /* TODO : need to free the sem */
 
 	DEBUG(
 			"LWIP: IP %x netmask %x gateway %x.\n", ntohl(ipaddr.addr), ntohl(netmask.addr), ntohl(gw.addr));
@@ -398,6 +402,7 @@ int load_LwipTcpIpStack() {
 	lwip_socket_api.bind = lwip_sock_bind;
 	lwip_socket_api.accept = lwip_sock_accept;
 	lwip_socket_api.open = lwip_sock_open;
+	lwip_socket_api.connect = lwip_sock_connect;
 	register_to_socketLayer(&lwip_socket_api);
 	return 1;
 }
@@ -412,4 +417,3 @@ int stat_LwipTcpIpStack() {
 
 DEFINE_MODULE(LwipTcpIpStack, root, load_LwipTcpIpStack, unload_LwipTcpIpStack, stat_LwipTcpIpStack);
 
-static int kkk=0;
