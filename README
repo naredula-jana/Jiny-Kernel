@@ -55,8 +55,8 @@ Networking:
    - KVM + LWIP4.0
 
 User level:
-   - user app(ring-3) can run in user mode without libc and without shared libs.
-   - bustbox can shell command and file related apps.
+   - Statically compiled user app can be launched from kernel shell or busy box.
+   - bustbox shell can successfully run on top of Jiny.
 
     
 TODO Features:

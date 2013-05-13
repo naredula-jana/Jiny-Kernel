@@ -48,7 +48,7 @@ clean:
 	make SOURCE_ROOT=$$PWD -C kernel clean
 	make SOURCE_ROOT=$$PWD -C drivers clean
 	make SOURCE_ROOT=$$PWD -C drivers/xen clean
-	make SOURCE_ROOT=$$PWD -C drivers/lwip clean
+#	make SOURCE_ROOT=$$PWD -C drivers/lwip clean
 	make SOURCE_ROOT=$$PWD -C drivers/hostshm clean
 	make SOURCE_ROOT=$$PWD -C drivers/virtio clean
 	make SOURCE_ROOT=$$PWD -C drivers/virtio/9p clean

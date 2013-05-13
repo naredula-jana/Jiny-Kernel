@@ -6,19 +6,17 @@ Installing :
  -------------------------
 Compiling Source Code:
  cd /opt_src/Jiny-Kernel
- ./build_g2image      
+ ./build_g2image       -- updates kernel in to g2_image file .
  ----------------------------
-Running:
-1)  virtio+net:
+Running configs:
+1)  virtio+net: (with Networking)
    ./qemu-system-x86_64 -gdb tcp::1236 -m 1024M -hda /opt_src/Jiny-Kernel/bin/g2_bootdisk -hdb /opt_src/Jiny-Kernel/bin/g2_image -enable-kvm   -vnc :7 -netdev tap,id=guest0,vhost=on,vhostforce -smp 2 -device virtio-net-pci,mac=00:30:48:DB:5E:06,netdev=guest0 -serial telnet::50008,server,nowait -fsdev local,security_model=passthrough,id=fsdev0,path=/opt_src/Jiny-Kernel/test/root/ -device virtio-9p-pci,id=fs0,fsdev=fsdev0,mount_tag=hostshare -monitor tcp::51008,server,nowait,nodelay
    test client:
      test/udp_test/a.out 10.209.129.123 1024 200000
    
- 2) virtio+p9:
-    ./qemu-system-x86_64 -s -m 1024M -hda /opt_src/Jiny-Kernel/bin/g2_bootdisk -hdb /opt_src/Jiny-Kernel/bin/g2_image -enable-kvm   -vnc :4 -fsdev local,security_model=passthrough,id=fsdev0,path=/home/jana -device virtio-9p-pci,id=fs0,fsdev=fsdev0,mount_tag=hostshare   
-     
-     Testing P9:
-        cat test_file
+ 2) virtio+p9: (with p9 Filesystems )
+    ./qemu-system-x86_64 -s -m 1024M -hda /opt_src/Jiny-Kernel/bin/g2_bootdisk -hdb /opt_src/Jiny-Kernel/bin/g2_image -enable-kvm   -vnc :4 -fsdev local,security_model=passthrough,id=fsdev0,path=/home/jana -device virtio-9p-pci,id=fs0,fsdev=fsdev0,mount_tag=hostshare   -serial telnet::50008,server,nowait -fsdev local,security_model=passthrough,id=fsdev0,path=/opt_src/Jiny-Kernel/test/root/ -device virtio-9p-pci,id=fs0,fsdev=fsdev0,mount_tag=hostshare -monitor tcp::51008,server,nowait,nodelay   
+    telnet localhost  50008  /* this will open in to busybox shell on Jiny OS */
 ------------------------------
 Using Gdb:
 gdb -x ./gdb_init
@@ -39,6 +37,7 @@ sudo grub-install --force  /dev/loop0
 -------------------------------
 WorkAround:
     - use old image as bootable disk for grub, use second disk to store the kernel.
+    
 -----------------------------------
 Running on KVM:
 

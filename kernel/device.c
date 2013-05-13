@@ -52,7 +52,7 @@ static void scan_devices(){
 		}
 	}
 }
-int init_devClasses() {
+int init_devClasses(unsigned long unused) {
 	device_t *dev;
 	device_class_t *devClass;
 	int (*probe)(device_t *dev);
@@ -81,11 +81,11 @@ int init_devClasses() {
 			devClass = devClass->sibling;
 		}
 		if (ret == 0) {
-			ut_printf("Unable to attach the device to any driver: bus:dev;fun:%x:%x:%x devdor:device:id:%x-%x \n",dev->pci_addr.bus, dev->pci_addr.device, dev->pci_addr.function,dev->pci_hdr.vendor_id, dev->pci_hdr.device_id);
+			ut_log("	Unable to attach the device to any driver: bus:dev;fun:%x:%x:%x devdor:device:id:%x-%x \n",dev->pci_addr.bus, dev->pci_addr.device, dev->pci_addr.function,dev->pci_hdr.vendor_id, dev->pci_hdr.device_id);
 			ut_free(dev);
 		}
 	}
-	return 1;
+	return 0;
 }
 static int list_devClasses(device_class_t *parent, int level){
 	int count=0;
@@ -121,7 +121,7 @@ int add_module(void *addr){
     return 1;
 }
 
-int init_modules() {
+int init_modules(unsigned long unused) {
 	module_t *module;
 
 	module = MODULE_root.children;
@@ -129,7 +129,7 @@ int init_modules() {
 		module->load();
 		module = module->sibling;
 	}
-	return 1;
+	return 0;
 }
 static int list_modules(module_t *parent, int level){
 	int count=0;

@@ -93,10 +93,11 @@ unsigned long SYS_poll(struct pollfd *fds, int nfds, int timeout);
 unsigned long SYS_nanosleep(const struct timespec *req, struct timespec *rem);
 unsigned long SYS_getcwd(unsigned char *buf, int len);
 unsigned long SYS_chdir(unsigned char *filename);
-unsigned long SYS_fs_fcntl(int fd, int cmd, void *args);
+unsigned long SYS_fs_fcntl(int fd, int cmd, int args);
 unsigned long SYS_setsockopt(int sockfd, int level, int optname,
 		const void *optval, int optlen);
 unsigned long SYS_gettimeofday(time_t *tv, struct timezone *tz);
+unsigned long SYS_pipe(unsigned int *fds);
 
 typedef struct {
 	void *func;
@@ -108,7 +109,7 @@ syscalltable_t syscalltable[] = {
 { SYS_fs_stat }, { SYS_poll }, { snull }, { SYS_vm_mmap }, { SYS_vm_mprotect },/* 10 */
 { SYS_vm_munmap }, { SYS_vm_brk }, { SYS_rt_sigaction }, { snull }, { snull }, /* 15 */
 { SYS_ioctl }, { snull }, { snull }, { SYS_fs_readv }, { SYS_fs_writev }, /* 20 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 25 */
+{ snull }, { SYS_pipe }, { snull }, { snull }, { snull }, /* 25 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 30 */
 { snull }, { snull }, { SYS_fs_dup2 }, { snull }, { SYS_nanosleep }, /* 35 = nanosleep */
 { snull }, { snull }, { snull }, { SYS_getpid }, { snull }, /* 40 */
@@ -217,7 +218,7 @@ unsigned long SYS_nanosleep(const struct timespec *req, struct timespec *rem) {
 	ticks = req->tv_sec * 100;
 	ticks = ticks + (req->tv_nsec / 100000);
 	sc_sleep(ticks); /* units of 10ms */
-	return 0;
+	return SYSCALL_SUCCESS;
 }
 unsigned long SYS_getppid() {
 	SYSCALL_DEBUG("getppid :\n");
@@ -229,7 +230,7 @@ unsigned long snull(unsigned long *args) {
 	asm volatile("movq %%rax,%0" : "=r" (syscall_no));
 	ut_printf("ERROR: SYSCALL null as hit :%d \n", syscall_no);
 	SYS_sc_exit(123);
-	return 1;
+	return -1;
 }
 
 long int SYS_time(__time_t *time) {
@@ -287,7 +288,7 @@ unsigned long SYS_rt_sigaction() {
 	return SYSCALL_SUCCESS;
 }
 #define TIOCSPGRP 0x5410
-unsigned long SYS_ioctl(int d, int request, unsigned long *addr) {
+unsigned long SYS_ioctl(int d, int request, unsigned long *addr) {//TODO
 	SYSCALL_DEBUG("ioctl(Dummy) d:%x request:%x addr:%x\n", d, request, addr);
 	if (request == TIOCSPGRP && addr != 0) {
 		*addr = temp_pgid;
@@ -296,7 +297,7 @@ unsigned long SYS_ioctl(int d, int request, unsigned long *addr) {
 	if (addr != 0) {
 		*addr = 0x123;
 	}
-	return 0;
+	return SYSCALL_SUCCESS;
 }
 unsigned long SYS_fs_readlink(unsigned char *path, char *buf, int bufsiz) {
 	struct file *fp;
@@ -442,21 +443,83 @@ unsigned long SYS_getdents(unsigned int fd, unsigned char *user_buf, int size) {
 	return ret;
 }
 /*********************** end of getdents *************************/
-unsigned long SYS_fs_dup2(int fd1, int fd2) {
-	SYSCALL_DEBUG("dup2(hardcoded)  fd1:%x fd2:%x \n", fd1, fd2);
-	return fd2;
-}
-unsigned long SYS_fs_fstat(int fd, void *buf) {
-	struct file *fp;
-	SYSCALL_DEBUG("fstat  fd:%x buf:%x \n", fd, buf);
 
-	fp = fd_to_file(fd);
-	if (fp <= 0 || buf == 0)
+kmem_cache_t *g_slab_filep;
+unsigned long SYS_fs_fcntl(int fd, int cmd, int args) {
+	struct file *fp_old,*fp_new;
+	int i;
+	int new_fd=args;
+
+	SYSCALL_DEBUG("fcntl(Partial)  fd:%x cmd:%x args:%x\n", fd, cmd, args);
+	if (cmd == F_DUPFD){
+		fp_old = fd_to_file(fd);
+		if (fp_old==0 ) return -1;
+		fp_new = mm_slab_cache_alloc(g_slab_filep, 0);
+		if (fp_new==0 ) return -1;
+
+		if (new_fd > g_current_task->mm->fs.total && new_fd<MAX_FDS){
+			g_current_task->mm->fs.total = new_fd +1;
+			g_current_task->mm->fs.filep[new_fd]=fp_new;
+			fs_dup(fp_old,fp_new);
+			return new_fd;
+		}
+		for (i = new_fd; i < MAX_FDS; i++) {
+			if (g_current_task->mm->fs.filep[i] == 0) {
+				if (i >= g_current_task->mm->fs.total ){
+					g_current_task->mm->fs.total = i+1;
+				}
+				g_current_task->mm->fs.filep[i]=fp_new;
+				fs_dup(fp_old,fp_new);
+				return i;
+			}
+		}
+		mm_slab_cache_free(g_slab_filep, fp_new);
 		return -1;
-	return fs_stat(fp, buf);
+	}
+	return -1;
 }
+struct file *fs_create_filep(int *fd){
+	int i;
+	struct file *fp;
 
-unsigned long SYS_futex(unsigned long *a) {
+	for (i = 3; i < MAX_FDS; i++) {
+		if (g_current_task->mm->fs.filep[i] == 0) {
+			fp = mm_slab_cache_alloc(g_slab_filep, 0);
+			if (fp ==0) return 0;
+			if (i >= g_current_task->mm->fs.total ){
+				g_current_task->mm->fs.total = i+1;
+			}
+			g_current_task->mm->fs.filep[i]=fp;
+			*fd = i;
+			return fp;
+		}
+	}
+}
+unsigned long SYS_pipe(unsigned int *fds){
+	struct file *wfp,*rfp;
+
+	SYSCALL_DEBUG("pipe  fds:%x \n", fds);
+	if (fds==0) return -1;
+	return -1;// TODO : currently not supported
+
+
+	wfp = fs_create_filep(&fds[0]);
+	if (wfp != 0) {
+		rfp = fs_create_filep(&fds[1]);
+		if (rfp ==0){
+			mm_slab_cache_free(g_slab_filep, wfp);
+			return -1;
+		}
+	}else{
+		return -1;
+	}
+	wfp->type = OUT_FILE;
+	rfp->type = IN_FILE;
+	/* TODO: Create kernel buffer between two fds and change file type */
+
+	return SYSCALL_SUCCESS;
+}
+unsigned long SYS_futex(unsigned long *a) {//TODO
 	SYSCALL_DEBUG("futex  addr:%x \n", a);
 	*a = 0;
 	return 1;
@@ -500,10 +563,6 @@ unsigned long SYS_sysctl(struct __sysctl_args *args) {
 	return SYSCALL_SUCCESS; /* success */
 }
 
-unsigned long SYS_fs_fcntl(int fd, int cmd, void *args) {
-	SYSCALL_DEBUG("fcntl(Dummy)  fd:%x cmd:%x args:%x\n", fd, cmd, args);
-	return 0;
-}
 unsigned long SYS_wait4(int pid, void *status, unsigned long option,
 		void *rusage) {
 	//SYSCALL_DEBUG("wait4(Dummy)  pid:%x status:%x option:%x rusage:%x\n",pid,status,option,rusage);
@@ -526,9 +585,9 @@ unsigned long SYS_wait4(int pid, void *status, unsigned long option,
 
 	if (child_task != 0) {
 		child_id = child_task->pid;
+		ut_log("wait child exited :%s: exitcode:%d \n",child_task->name,child_task->exit_code);
 		sc_delete_task(child_task);
-		SYSCALL_DEBUG(
-				" wait returning the child id :%d(%x) \n", child_id, child_id);
+		SYSCALL_DEBUG(" wait returning the child id :%d(%x) \n", child_id, child_id);
 		return child_id;
 	} else {
 		return 0;
@@ -558,7 +617,7 @@ unsigned long SYS_getcwd(unsigned char *buf, int len) {
 
 	SYSCALL_DEBUG("getcwd  buf:%x len:%d  \n", buf, len);
 	if (buf == 0)
-		return 0;
+		return ret;
 	ut_strncpy(buf, g_current_task->mm->fs.cwd, len);
 	ret = ut_strlen(buf);
 
@@ -590,6 +649,6 @@ unsigned long SYS_setsockopt(int sockfd, int level, int optname,
 unsigned long SYS_exit_group() {
 	SYSCALL_DEBUG("exit_group :\n");
 	SYS_sc_exit(103);
-	return 0;
+	return SYSCALL_SUCCESS;
 }
 

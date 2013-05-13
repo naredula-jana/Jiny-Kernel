@@ -124,7 +124,7 @@ int init_networking(){
     ut_memset((unsigned char *)&queue,0,sizeof(struct queue_struct));
 	ipc_register_waitqueue(&queue.waitq ,"netRx_BH");
 	ret = sc_createKernelThread(netRx_BH, 0, (unsigned char *)"netRx_BH");
-	return 1;
+	return 0;
 }
 /*******************************************************************************************
 Socket layer

@@ -82,6 +82,7 @@ int Jcmd_maps(char *arg1, char *arg2) {
 	int len=PAGE_SIZE;
 	int ret;
 	int pid;
+	int found=0;
 
 	buf = mm_getFreePages(0, 0);
 	if (buf == 0)
@@ -90,17 +91,19 @@ int Jcmd_maps(char *arg1, char *arg2) {
 	spin_lock_irqsave(&g_global_lock, flags);
 
 	if (arg1 == 0) {
+		found=1;
 		task = g_current_task;
 	} else {
 		pid=ut_atoi(arg1);
 		list_for_each(pos, &g_task_queue.head) {
 			task = list_entry(pos, struct task_struct, task_queue);
 			if (task->pid == pid) {
+				found =1;
 				break;
 			}
 		}
 	}
-	if (task == 0) {
+	if (task == 0 || found==0) {
 		goto last;
 	}
 	mm = task->mm;
@@ -126,7 +129,7 @@ int Jcmd_maps(char *arg1, char *arg2) {
 		if (len <0) goto last;
 		vma = vma->vm_next;
 	}
-	last:
+last:
 	spin_unlock_irqrestore(&g_global_lock, flags);
     ut_printf(buf);
 	mm_putFreePages(buf, 0);

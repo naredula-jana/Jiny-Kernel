@@ -23,14 +23,14 @@ idt_ptr_t   idt_ptr;
 
 // Initialisation routine - zeroes all the interrupt service routines,
 // initialises the GDT and IDT.
-void init_descriptor_tables()
+int init_descriptor_tables()
 {
 
 	// Initialise the global descriptor table.
 	init_gdt();
 	// Initialise the interrupt descriptor table.
 	init_idt();
-
+	return 0;
 }
 
 static void init_gdt()

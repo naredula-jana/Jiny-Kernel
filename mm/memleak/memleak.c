@@ -970,7 +970,7 @@ extern int memleakHook_copyFromEarlylog(void (*palloc)(const void *ptr, int size
 /*
  * Kmemleak initialization.
  */
-void kmemleak_init(void) {
+int init_kmemleak(void) {
 	unsigned long flags;
 	int i;
 
@@ -995,7 +995,7 @@ void kmemleak_init(void) {
 	local_irq_save(flags);
 	if (atomic_read(&kmemleak_error)) {
 		local_irq_restore(flags);
-		return;
+		return -1;
 	} else
 		atomic_set(&kmemleak_enabled, 1);
 	local_irq_restore(flags);
@@ -1006,5 +1006,6 @@ void kmemleak_init(void) {
 	}
 	pr_debug("Init kmemleak code: %x-%x data: %x-%x  OBJECT CACHE:%x\n",code_region_start,data_region_start,data_region_start,data_region_end,object_cache);
 	pr_debug("Init kmemleak max objects:%d total objects:%d  object size:%d\n",MAX_STATIC_OBJS,stat_obj_count,sizeof(struct kmemleak_object));
+	return 0;
 }
 

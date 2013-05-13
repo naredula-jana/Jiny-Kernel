@@ -292,10 +292,16 @@ static void add_processor(imps_processor *proc) {
  */
 
 int init_smp_force(int ncpus) {
-	int apicid, i;
+	int apicid, i,ret;
 	imps_processor p;
 
 	KERNEL_PRINT(("SMP: Intel MultiProcessor \"Force\" Support\n"));
+	/* 0xfee00000 - 0xfef00000 for lapic */
+	if ((ret=vm_mmap(0,(unsigned long)__va(0xFee00000) ,0x100000,PROT_WRITE,MAP_FIXED,0xFee00000)) == 0) /* this is for SMP */
+	{
+		ut_printf("SMP: ERROR : mmap fails for \n");
+		return 0;
+	}
 
 	imps_lapic_addr = (READ_MSR_LO(0x1b) & 0xFFFFF000);
 	imps_lapic_addr = (unsigned long)PHYS_TO_VIRTUAL(imps_lapic_addr);
@@ -336,6 +342,9 @@ int init_smp_force(int ncpus) {
 
 	wait_non_bootcpus = 0; /* from this point onwards  all non-boot cpus starts */
 
+	KERNEL_PRINT("NEW SMP: completed, ret:%d maxcpus: %d \n",imps_num_cpus,getmaxcpus());
+	KERNEL_PRINT("SECOND SMP: completed, ret:%d maxcpus: %d \n",imps_num_cpus,getmaxcpus());
+	cli();
 	return imps_num_cpus;
 }
 

@@ -56,6 +56,8 @@
 #endif
 
 
+#define F_DUPFD         0       /* dup */
+
 enum {
 POSIX_FADV_DONTNEED=4
 };
@@ -71,6 +73,11 @@ struct inode;
 
 enum {
 	NETWORK_FILE=2,
+
+	OUT_FILE=3,  /* special in/out files */
+	IN_FILE=4,
+	OUT_PIPE_FILE=5,
+	IN_PIPE_FILE=6,
 
 	REGULAR_FILE=0x8000,
 	DIRECTORY_FILE=0x4000,
@@ -137,7 +144,7 @@ struct filesystem {
 	int (*fdatasync)(struct inode *inodep);
 };
 
-#define fd_to_file(fd) (fd > 2 && g_current_task->mm->fs.total >= fd) ? (g_current_task->mm->fs.filep[fd]) : ((struct file *)0)
+#define fd_to_file(fd) (fd >= 0 && g_current_task->mm->fs.total > fd) ? (g_current_task->mm->fs.filep[fd]) : ((struct file *)0)
 
 
 #endif

@@ -35,7 +35,7 @@ unsigned long g_total_symbols = 0;
  *
  */
 static unsigned char *subsystems[]={"SYS_","sc_","ut_","fs_","p9_","ipc_","pc_","ar_","mm_","vm_","Jcmd_","virtio_",0};
-int init_symbol_table() {
+int init_symbol_table(unsigned long unused) {
 	int i,j;
 	int confs = 0;
 	int stats = 0;
@@ -87,11 +87,10 @@ int init_symbol_table() {
 			continue;
 		}
 	}
-	ut_printf(
-			"Symbol Intilization:  confs:%d stats:%d cmds:%d  totalsymbols:%d \n",
-			confs, cmds, stats, g_total_symbols);
+	ut_log("	confs:%d  cmds:%d  totalsymbols:%d \n",
+			confs, cmds, g_total_symbols);
 	init_breakpoints();
-	return 1;
+	return 0;
 }
 
 int ut_symbol_show(int type){

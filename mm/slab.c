@@ -17,8 +17,8 @@
 #define __init  /* TODO */
 #define KERN_ERR  /* TODO */
 /* prototypes */
-extern void kmem_cache_init(void);
-extern void kmem_cache_sizes_init(void);
+static void kmem_cache_init(void);
+static void kmem_cache_sizes_init(void);
 
 
 #ifdef CONFIG_DEBUG_SLAB
@@ -420,7 +420,7 @@ static void kmem_cache_estimate (unsigned long gfporder, size_t size,
 }
 
 /* Initialisation - setup the `cache' cache. */
-void kmem_cache_init(void)
+static void kmem_cache_init(void)
 {
 	size_t left_over;
 
@@ -441,7 +441,7 @@ void kmem_cache_init(void)
 /* Initialisation - setup remaining internal and general caches.
  * Called after the gfp() functions have been enabled, and before smp_init().
  */
-void kmem_cache_sizes_init(void)
+static void kmem_cache_sizes_init(void)
 {
 	cache_sizes_t *sizes = cache_sizes;
 	char name[20];
@@ -482,7 +482,11 @@ ut_printf(" In the kmem_cache_sizes_init \n");
 	} while (sizes->cs_size);
 ut_printf("kmem_cache_size_init DONE \n");
 }
-
+int init_kmem_cache(unsigned long arg1){
+	kmem_cache_init();
+	kmem_cache_sizes_init();
+	return 0;
+}
 int __init kmem_cpucache_init(void)
 {
 #ifdef CONFIG_SMP
@@ -1380,10 +1384,10 @@ try_again:
 	}
 #else
 	objp = kmem_cache_alloc_one(cachep);
+#endif
 	if (objp != 0){
 		ut_memset(objp,0,cachep->objsize);
 	}
-#endif
 	local_irq_restore(save_flags);
 #ifdef MEMLEAK_TOOL
 	memleakHook_alloc(objp, cachep->objsize, 0, cachep);

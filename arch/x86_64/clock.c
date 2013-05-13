@@ -93,5 +93,5 @@ int init_clock() {
 	if (kvm_para_available() == 0)
 		return 0;
 
-	return 1;
+	return 0;
 }

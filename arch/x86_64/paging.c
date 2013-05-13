@@ -200,7 +200,7 @@ void ar_pageFault(struct fault_ctx *ctx) {
 	}
 	if (g_current_task->mm != g_kernel_mm) /* user level thread */
 	{
-		SYS_sc_exit(101);
+		SYS_sc_exit(901);
 		return;
 	}
 	BUG();
@@ -507,7 +507,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 		if ( user == 1)
 		{
 			ut_printf("ERROR: user program Segmentaion Fault addr:%x  ip:%x \n",addr,faulting_ip);
-			SYS_sc_exit(102);
+			SYS_sc_exit(902);
 			return 1;
 		}
 		BUG();
@@ -569,7 +569,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 	{
 		v=(unsigned long *)mm_getFreePages(MEM_CLEAR,0); /* get page of 4k size for actual page */
 		if ( v==0 ) { /* No Memory: kill the current process */
-			SYS_sc_exit(999);
+			SYS_sc_exit(903);
 			return 1;
 		}
 		p=(unsigned long *)__pa(v);

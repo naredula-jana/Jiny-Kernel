@@ -16,6 +16,7 @@ executing userland program(busybox ):
 Task.c or scheduler
 1) moving architecture depended code in architecture specific area.
 2) standising exit errors(currently SYS_sys_exit(..), storing exit error in task
+
 ---------------------------------------------------------
 Running user app BusyBox, long term solution :
 1) CTRL-C and CTRL-D not working
@@ -25,16 +26,21 @@ Running user app BusyBox, long term solution :
 ---------------------------------------------------------
 Display 
 1) checking validty of virtual addresses presence in pagetable before displaying, otherwise a junk address in ut_printf can cause a pagefault with spinlock(printf_lock) on.
---------------------------------------
 
+--------------------------------------
 LWIP /Network
 - arch api need to re-implement to suit newer version
 - delition of buffer while sending and recving the packet.
 - network app like telnet not working.
+
 ---------------------------------------------------------
 fixes:
  1) when system call number more then max limit, raising pagefault
  2) argv strings in sys_execve should be multiples of 8 , otherwise stack pointer is not getting the multiples of 8
+
+---------------------------------
+-memory slab (slab.c)  making SMP aware.
+-standardising the return values of all the functions, especially for vfs layer, using defines instead of hardcording 
 
 ------------------------------
 p9 :
@@ -44,20 +50,19 @@ p9 :
  -------------------------------
  Userspace Related:
   -retreving large number of files from the directory fails.
-  -implementing pipe and redirecting to file for user space.
-  - protect kernel space when user space task is running, user thread can access kernel space, 
+  -implementing pipe (partially done)
+
 ----------------------------------
 debug:
    - printing arguments at the start of function
    - uninstalling breakpoint on the fly from user shell, currently it thoughs error
    - call_stats : to seggregate base on the submodules 
 -------------------------------
-   - implementing dmesg
-   - cleaning init path and proper printing
    - when log is enabled to file, the content is overwriting in to someother pages that causing execute to fail to load by elf.
 
 ----------------------------------   
 High CPU consumption:
- -after running some application that consume high cpu , APIC timer(248) stop receving on some cores, this stopped after recving any intterupt like keyboard, till that point the cpu consumpton is very 
+ -after running some application that consume high cpu , APIC timer(248) stop receving on some cores, this stopped after receving any intterupt like keyboard, till that point the cpu consumpton is very 
  high.
+
 -----------------------------------------

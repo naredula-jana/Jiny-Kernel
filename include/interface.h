@@ -140,18 +140,16 @@ int read_apic_isr(int isr);
 void local_apic_send_eoi(void);
 
 /**************  init functions *********/
-int init_kernel(unsigned long end_addr);
-void init_memory(unsigned long phy_end_addr);
-void kmem_cache_init(void);
-void kmem_cache_sizes_init(void);
-void init_descriptor_tables();
+int init_kernel();
+int init_memory(unsigned long unused);
+int init_descriptor_tables();
 int init_driver_keyboard();
-void init_tasking();
-void init_serial();
+int init_tasking(unsigned long unused);
+int init_serial(unsigned long unused);
 int init_symbol_table();
-void init_vfs();
+int init_vfs();
 int init_smp_force(int ncpus);
-void init_syscall(int cpuid);
+int init_syscall(int cpuid);
 int init_networking();
 
 /**************************  Networking ***/

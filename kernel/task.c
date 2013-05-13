@@ -210,6 +210,7 @@ error: mm_putFreePages((unsigned long)stack, 0);
 void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **env) {
 	struct mm_struct *mm,*old_mm;
 	unsigned long flags;
+	int i;
 	unsigned long main_func;
 	unsigned long t_argc, t_argv, stack_len, tmp_stack, tmp_aux;
 
@@ -231,7 +232,10 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	mm->pgd = 0;
 	mm->mmap = 0;
 	/* these are for user level threads */
-	mm->fs.total = 3;
+	for (i=0; i<g_current_task->mm->fs.total;i++){
+		mm->fs.filep[i]=fs_dup(g_current_task->mm->fs.filep[i],0);
+	}
+	mm->fs.total = g_current_task->mm->fs.total;
 	mm->fs.input_device = DEVICE_SERIAL;
 	mm->fs.output_device = 	DEVICE_SERIAL;
 	ut_strcpy(mm->fs.cwd,g_current_task->mm->fs.cwd);
@@ -270,14 +274,14 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	if (mm->exec_fp == 0) {
 		mm_putFreePages(tmp_stack, 0);
 		ut_printf("Error execve : Failed to open the file \n");
-		SYS_sc_exit(101);
+		SYS_sc_exit(701);
 		return;
 	}
 	main_func = fs_loadElfLibrary(mm->exec_fp, tmp_stack + (PAGE_SIZE - stack_len), stack_len, tmp_aux);
 	if (main_func == 0) {
 		mm_putFreePages(tmp_stack, 0);
 		ut_printf("Error execve : ELF load Failed \n");
-		SYS_sc_exit(103);
+		SYS_sc_exit(703);
 		return ;
 	}
 	mm_putFreePages(tmp_stack, 0);
@@ -444,9 +448,10 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void 
 		DEBUG("clone  the mm :%x counter:%x \n",mm,mm->count.counter);
 		mm->pgd = 0;
 		mm->mmap = 0;
-		for (i=0; i<MAX_FDS;i++)
-			mm->fs.filep[i]=0;
-		mm->fs.total = 3;
+		for (i=0; i<g_current_task->mm->fs.total;i++){
+			mm->fs.filep[i]=fs_dup(g_current_task->mm->fs.filep[i],0);
+		}
+		mm->fs.total = g_current_task->mm->fs.total;
 		mm->fs.input_device = g_current_task->mm->fs.input_device;
 		mm->fs.output_device = g_current_task->mm->fs.output_device;
 		ut_strcpy(mm->fs.cwd,g_current_task->mm->fs.cwd);
@@ -531,9 +536,10 @@ static int release_resources(struct task_struct *child_task, int attach_to_paren
 	struct task_struct *task;
 	unsigned long flags;
 
+	/* 1. release files */
 	mm = child_task->mm;
  	if (mm->count.counter > 1) return 0;
-	for (i = 3; i < mm->fs.total; i++) {
+	for (i = 0; i < mm->fs.total; i++) {
 		DEBUG("FREEing the files :%d \n",i);
 		fs_close(mm->fs.filep[i]);
 	}
@@ -542,6 +548,8 @@ static int release_resources(struct task_struct *child_task, int attach_to_paren
 
 	mm->fs.total = 0;
 	mm->exec_fp=0;
+
+	/* 2. relase locks */
 	if (child_task->locks_held > 0){ // TODO : need to check the mutex held
 		ut_log("ERROR:  lock held by the process: %s \n",task->name);
 		ipc_release_resources(child_task);
@@ -682,13 +690,17 @@ __POP(rdi) __POP(rsi)
 void ipi_interrupt(){ /* Do nothing, this is just wake up the core when it is executing HLT instruction  */
 
 }
-void init_tasking() {
+extern kmem_cache_t *g_slab_filep;
+int init_tasking(unsigned long unused) {
 	int i;
 	unsigned long task_addr;
 
+	vm_area_cachep = kmem_cache_create("vm_area_struct",sizeof(struct vm_area_struct), 0,0, NULL, NULL);
+	mm_cachep = kmem_cache_create("mm_struct",sizeof(struct mm_struct), 0,0,NULL,NULL);
+
 	g_kernel_mm = mm_slab_cache_alloc(mm_cachep, 0);
 	if (g_kernel_mm == 0)
-		return;
+		return -1;
 
 	init_ipc();
 
@@ -700,13 +712,21 @@ void init_tasking() {
 	g_kernel_mm->mmap = 0x0;
 	g_kernel_mm->pgd =  g_kernel_page_dir;
 	g_kernel_mm->fs.total = 3;
+	for (i=0; i<g_kernel_mm->fs.total; i++){
+		g_kernel_mm->fs.filep[i]=mm_slab_cache_alloc(g_slab_filep, 0);
+		if (i==0){
+			g_kernel_mm->fs.filep[i]->type = IN_FILE;
+		}else{
+			g_kernel_mm->fs.filep[i]->type = OUT_FILE;
+		}
+	}
 	g_kernel_mm->fs.input_device = DEVICE_KEYBOARD;
 	g_kernel_mm->fs.output_device = DEVICE_DISPLAY_VGI;
 	ut_strcpy(g_kernel_mm->fs.cwd,"/");
 
 	free_pid_no = 1; /* pid should never be 0 */
     task_addr=(unsigned long )((unsigned long )(&g_idle_stack)+TASK_SIZE) & (~((unsigned long )(TASK_SIZE-1)));
-    ut_printf(" Task Addr start :%x  stack:%x current:%x\n",task_addr,&task_addr,g_current_task);
+    ut_log("	Task Addr start :%x  stack:%x current:%x\n",task_addr,&task_addr,g_current_task);
 	for (i = 0; i < MAX_CPUS; i++) {
 		g_cpu_state[i].md_state.cpu_id = i;
 		g_cpu_state[i].idle_task = (unsigned char *)(task_addr)+i*TASK_SIZE;
@@ -730,6 +750,8 @@ void init_tasking() {
 	ar_archSetUserFS(0);
 //	init_timer(); //currently apic timer is in use
 	ar_registerInterrupt(IPI_INTERRUPT, &ipi_interrupt, "IPI", NULL);
+
+	return 0;
 }
 /* This function should not block, if it block then the idle thread may block */
 void sc_delete_task(struct task_struct *task) {

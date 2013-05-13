@@ -136,7 +136,7 @@ static void keyboard_handler(registers_t regs) {
 	outb(0x61, control_kbd); /* write back the original control value */
 
 }
-int init_driver_keyboard() {
+int init_driver_keyboard(unsigned long unused) {
 	int i;
 
 	for (i = 0; i < MAX_INPUT_DEVICES; i++) {
@@ -155,5 +155,5 @@ int init_driver_keyboard() {
 	}
 
 	ar_registerInterrupt(33, keyboard_handler, "keyboard", NULL);
-	return 1;
+	return 0;
 }

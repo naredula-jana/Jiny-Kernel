@@ -67,8 +67,6 @@
 #define HW_INTERRUPT_CTX_RFLAGS_OFFT  0x10
 #ifndef __ASM__
 #include "common.h"
-// Initialisation function is publicly accessible.
-void init_descriptor_tables();
 
 typedef struct gdt_entry_struct {
   unsigned seg_limit_low     :16;

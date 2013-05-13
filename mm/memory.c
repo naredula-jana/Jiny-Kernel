@@ -311,14 +311,16 @@ nopage:
 extern unsigned long VIDEO;
 extern unsigned long g_multiboot_mod_addr;
 extern unsigned long g_multiboot_mod_len;
-void init_memory(unsigned long phy_end_addr)
+extern unsigned long g_phy_mem_size;
+int init_memory(unsigned long arg1)
 {
 	unsigned long virt_start_addr,virt_end_addr;
 
-	ut_printf(" Initializing memory phy_endaddr : %x video:%x \n",phy_end_addr,VIDEO);
+	unsigned long phy_end_addr = g_phy_mem_size;
+	ut_log("	Initializing memory phy_endaddr : %x video:%x \n",phy_end_addr,VIDEO);
 	virt_start_addr=initialise_paging( phy_end_addr);
 	virt_end_addr=(unsigned long)__va(phy_end_addr);
-	ut_printf(" After Paging initialized start_addr: %x endaddr: %x video:%x \n",virt_start_addr,virt_end_addr,VIDEO);
+	ut_log("	After Paging initialized start_addr: %x endaddr: %x video:%x \n",virt_start_addr,virt_end_addr,VIDEO);
 
 	if (g_multiboot_mod_len > 0) /* symbol file  reside at the end of memory, it can acess only when page table is initialised */
 	{
@@ -326,12 +328,13 @@ void init_memory(unsigned long phy_end_addr)
 		g_total_symbols=(g_multiboot_mod_len)/sizeof(symb_table_t);
 		ut_memcpy((unsigned char *)g_symbol_table,(unsigned char *)g_multiboot_mod_addr,g_multiboot_mod_len);
 		virt_start_addr=(unsigned long)virt_start_addr+g_multiboot_mod_len;
-		ut_printf(" symbol:  %x : %d  :%d :%x : \n", g_symbol_table,g_total_symbols,sizeof(symb_table_t),g_symbol_table[5].address);
-		ut_printf(" symbol:  %s \n",&g_symbol_table[5].name[0]);
+		ut_log("	symbol:  %x : %d  :%d :%x : \n", g_symbol_table,g_total_symbols,sizeof(symb_table_t),g_symbol_table[5].address);
+		ut_log("	symbol:  %s \n",&g_symbol_table[5].name[0]);
 	}
 
 	virt_start_addr=init_free_area( virt_start_addr, virt_end_addr);
 	pc_init((unsigned char *)virt_start_addr,0x10000000); /* TODO: currently page cache uses 10M, this may be using 2M pages, this need to move to use 4K size pages */
 	virt_start_addr=virt_start_addr+0x10000000;
 	init_mem(virt_start_addr, virt_end_addr);
+	return 0;
 }

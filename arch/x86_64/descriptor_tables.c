@@ -20,12 +20,13 @@ static tss_t tss[MAX_CPUS];
 
 // Initialisation routine - zeroes all the interrupt service routines,
 // initialises the GDT and IDT.
-void init_descriptor_tables() {
+int init_descriptor_tables() {
 
 	// Initialise the global descriptor table.
 	init_gdt(0);
 	// Initialise the interrupt descriptor table.
 	init_idt();
+	return 0;
 }
 static inline void seg_descr_set_base(gdt_entry_t *descr, uint32_t base) {
 	descr->base_address_low = base & 0xffffff;

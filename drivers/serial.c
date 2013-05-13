@@ -24,7 +24,7 @@ static void serial_input_handler(registers_t regs)
 	//ut_printf(" Received the char from serial %x %c \n",c,c);
 	outb(INT_ENABLE_REG(SERIAL_PORT), 0x01);             // Issue an interrupt when input buffer is full.
 }
-void init_serial()
+int init_serial(unsigned long unsed_arg)
 {
 	int portno = SERIAL_PORT ;
 	int reg;
@@ -51,7 +51,7 @@ void init_serial()
 	outb(MODEM_CTRL_REG(portno), 0x0B);             // No modem support
 	outb(INT_ENABLE_REG(portno), 0x01);             // Issue an interrupt when input buffer is full.
 	ar_registerInterrupt(36,serial_input_handler,"serial",NULL);
-
+	return 0;
 }
 static spinlock_t serial_lock  = SPIN_LOCK_UNLOCKED("serial");
 int dr_serialWrite( char *buf , int len)

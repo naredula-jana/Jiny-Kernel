@@ -128,7 +128,7 @@ static void scroll() {
 	refresh_screen();
 }
 
-unsigned char g_dmesg[MAX_DMESG_LOG+1];
+unsigned char g_dmesg[MAX_DMESG_LOG+2];
 unsigned long g_dmesg_index = 0;
 int Jcmd_logflush(char *arg1, char *arg2) {
 	static int init = 0;
@@ -169,9 +169,18 @@ static spinlock_t putchar_lock = SPIN_LOCK_UNLOCKED("putchar");
 static void log_putchar(int c){
 	unsigned long flags;
 	spin_lock_irqsave(&putchar_lock, flags);
-	g_dmesg_index++;
+
 	g_dmesg[g_dmesg_index % MAX_DMESG_LOG] = (unsigned char) c;
+	g_dmesg[(g_dmesg_index+1) % MAX_DMESG_LOG]=0;
+	g_dmesg_index++;
+
 	spin_unlock_irqrestore(&putchar_lock, flags);
+}
+int Jcmd_dmesg(unsigned char *arg1){
+	ut_printf("Size/Max : %d / %d \n",g_dmesg_index,MAX_DMESG_LOG);
+	g_dmesg[MAX_DMESG_LOG]=0;
+	ut_printf("%s\n",g_dmesg);
+	return 0;
 }
 
 void ut_putchar(int c) {
@@ -197,7 +206,7 @@ void ut_putchar(int c) {
 	}
 
 	//2. VGI output
-	log_putchar(c);
+	//log_putchar(c);
 
 	video_g = (unsigned char *) VIDEO;
 	spin_lock_irqsave(&putchar_lock, flags);
@@ -237,6 +246,8 @@ struct writer_struct{
 static int str_writer(struct writer_struct *writer,int c){
 	if (writer->type==1){
 		log_putchar(c);
+		if (is_kernel_thread)
+			ut_putchar(c);
 		return 1;
 	}else if (writer->type==0){
 	    ut_putchar(c);

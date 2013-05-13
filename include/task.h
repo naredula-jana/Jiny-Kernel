@@ -139,6 +139,7 @@ static inline struct task_struct *current_task(void)
     return (struct task_struct *)addr;
 }
 #define g_current_task current_task()
+#define is_kernel_thread (g_current_task->mm == g_kernel_mm)
 
 
 #endif
