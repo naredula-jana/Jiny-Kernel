@@ -9,9 +9,12 @@
  *
  */
 #include "interface.h"
+static int ipc_init_done=0;
 void *ipc_mutex_create(unsigned char *name) {
 	struct semaphore *sem = mm_malloc(sizeof(struct semaphore), 0);
-
+	if (ipc_init_done ==0){
+		BUG();
+	}
 	if (sem == 0) {
 		return 0;
 	}
@@ -21,13 +24,21 @@ void *ipc_mutex_create(unsigned char *name) {
 	return sem;
 }
 int ipc_mutex_lock(void *p, int line) {
+	sys_sem_t *sem = p;
+
 	if (p == 0)
 		return 0;
+	if ((sem->owner_pid == g_current_task->pid) && sem->recursive_count != 0){
+		//ut_log("mutex_lock Recursive mutex: thread:%s  count:%d line:%d \n",g_current_task->name,sem->recursive_count,line);
+		sem->recursive_count++;
+		return 1;
+	}
 	while (ipc_sem_wait(p, 100) != 1)
 		;
 
-	sys_sem_t *sem = p;
+
 	sem->owner_pid = g_current_task->pid;
+	sem->recursive_count =1;
 	g_current_task->locks_held++;
 	sem->stat_line = line;
 	return 1;
@@ -37,7 +48,13 @@ int ipc_mutex_unlock(void *p, int line) {
 
 	if (p == 0)
 		return 0;
+	if ((sem->owner_pid == g_current_task->pid) && sem->recursive_count > 1){
+		//ut_log("mutex_unlock Recursive mutex: thread:%s  recursive count:%d line:%d \n",g_current_task->name,sem->recursive_count,line);
+		sem->recursive_count--;
+		return 1;
+	}
 	sem->owner_pid = 0;
+	sem->recursive_count =0;
 	g_current_task->locks_held--;
 	sem->stat_line = -line;
 	ipc_sem_signal(p);
@@ -132,6 +149,7 @@ int init_ipc(){
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
 		wait_queues[i] = 0;
 	}
+	ipc_init_done =1;
 	return 1;
 }
 static void _add_to_waitqueue(wait_queue_t *waitqueue, struct task_struct * p, long ticks) {

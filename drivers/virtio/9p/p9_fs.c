@@ -266,6 +266,49 @@ static uint32_t p9_read(uint32_t fid, uint64_t offset, unsigned char *data,
 
 	return read_len;
 }
+/* Attribute flags */
+#define P9_ATTR_MODE       (1 << 0)
+#define P9_ATTR_UID        (1 << 1)
+#define P9_ATTR_GID        (1 << 2)
+#define P9_ATTR_SIZE       (1 << 3)
+#define P9_ATTR_ATIME      (1 << 4)
+#define P9_ATTR_MTIME      (1 << 5)
+#define P9_ATTR_CTIME      (1 << 6)
+#define P9_ATTR_ATIME_SET  (1 << 7)
+#define P9_ATTR_MTIME_SET  (1 << 8)
+
+#if 0
+typedef struct V9fsIattr
+{
+    int32_t valid;
+    int32_t mode;
+    int32_t uid;
+    int32_t gid;
+    int64_t size;
+    int64_t atime_sec;
+    int64_t atime_nsec;
+    int64_t mtime_sec;
+    int64_t mtime_nsec;
+} V9fsIattr;
+#endif
+static uint32_t p9_setattr(uint32_t fid, uint64_t size) {
+	unsigned long addr;
+	int i, ret = 0;
+
+	client.type = P9_TYPE_TSETATTR;
+	client.user_data = 0;
+	client.userdata_len = 0;
+
+	/* TODO : currently only truncate/set size is implemented */
+	addr = p9_write_rpc(&client, "dddddqqqqq", fid,P9_ATTR_SIZE,0,0,0,size,0,0,0,0 );
+	if (addr != 0) {
+		ret = p9_read_rpc(&client, "");
+		if (client.recv_type == P9_TYPE_RSETATTR) {
+			ret = 1;
+		}
+	}
+	return ret;
+}
 
 static uint32_t p9_write(uint32_t fid, uint64_t offset, unsigned char *data, uint32_t data_len) {
 	unsigned long addr;
@@ -433,6 +476,12 @@ static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, u
 	}else if (type == REQUEST_READDIR) {
 		fid = inode->fs_private;
 		ret = p9_readdir(fid,data,data_len);
+	}else if (type == REQUEST_SETATTR) {
+		fid = inode->fs_private;
+		ret = p9_setattr(fid,offset);
+		if (ret == 1){
+			inode->file_size = offset;
+		}
 	}
 
 
@@ -484,6 +533,11 @@ static int p9Close(struct inode *inodep) {
     return  p9Request(REQUEST_CLOSE, inodep, 0, 0, 0, 0, 0);
 }
 
+static int p9Setattr(struct inode *inodep,uint64_t size) {
+	p9ClientInit();
+    return  p9Request(REQUEST_SETATTR, inodep, size, 0, 0, 0, 0);
+}
+
 int p9_initFs() {
 //	p9ClientInit(); /* TODO need to include here */
 	p9_fs.open = p9Open;
@@ -495,6 +549,7 @@ int p9_initFs() {
 	p9_fs.stat = p9Stat;
 	p9_fs.fdatasync = p9Fdatasync; //TODO
 	p9_fs.lseek = p9Lseek; //TODO
+	p9_fs.setattr = p9Setattr; //TODO
 
 	fs_registerFileSystem(&p9_fs);
 

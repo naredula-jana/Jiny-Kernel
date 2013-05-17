@@ -704,6 +704,8 @@ int init_tasking(unsigned long unused) {
 
 	init_ipc();
 
+	g_inode_lock = mutexCreate("mutex_vfs");
+
 	INIT_LIST_HEAD(&(run_queue.head));
 	INIT_LIST_HEAD(&(g_task_queue.head));
 	ipc_register_waitqueue(&timer_queue,"timer");
@@ -895,6 +897,7 @@ void Jcmd_cpu_active(unsigned char *arg1,unsigned char *arg2){
 	int cpu,state;
 
 	if (arg1==0 || arg2==0){
+		ut_printf(" cpu_active <cpu> <active=0/1>")
 		return ;
 	}
 	cpu=ut_atoi(arg1);

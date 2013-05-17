@@ -44,6 +44,7 @@ struct semaphore {
 	int valid_entry;
 	unsigned char *name;
 	unsigned long owner_pid; /* pid that is owning */
+	int recursive_count;
 	unsigned int stat_line;
 };
 

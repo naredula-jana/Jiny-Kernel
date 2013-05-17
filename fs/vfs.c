@@ -23,7 +23,14 @@ spinlock_t g_userspace_stdio_lock = SPIN_LOCK_UNLOCKED("userspace_stdio");
 #define OFFSET_ALIGN(x) ((x/PC_PAGESIZE)*PC_PAGESIZE) /* the following 2 need to be removed */
 
 kmem_cache_t *g_slab_filep;
-static void inode_sync(struct inode *inode);
+static void inode_sync(struct inode *inode, unsigned long truncate);
+
+static int fs_create_pipe(struct file *wfp, struct file *rfp);
+static int fs_dup_pipe(struct file *fp);
+static int fs_destroy_pipe(struct file *fp);
+static int fs_recv_from_pipe(struct file *fp, unsigned char *buf, int len);
+static int fs_send_to_pipe(struct file *fp,unsigned char *buf, int len);
+
 
 static int inode_init(struct inode *inode, char *filename,
 		struct filesystem *vfs) {
@@ -85,7 +92,7 @@ int Jcmd_clear_pagecache() {
 	struct inode *tmp_inode;
 	struct list_head *p;
 
-	mutexLock(g_inode_lock);
+	mutexLock(g_inode_lock);  // Need to implement Recursive lock
 	list_for_each(p, &inode_list) {
 		tmp_inode = list_entry(p, struct inode, inode_link);
 		ut_printf("%s %d %d %d \n", tmp_inode->filename, tmp_inode->count,
@@ -96,22 +103,24 @@ int Jcmd_clear_pagecache() {
 
 	return 1;
 }
-int Jcmd_sync() {
+
+int fs_sync(){
 	struct inode *tmp_inode;
 	struct list_head *p;
 	struct fileStat stat;
 
-	//TODO : need to add recursive mutex   mutexLock(g_inode_lock);
+	/* sync the pages in inode */
+	mutexLock(g_inode_lock);
 	list_for_each(p, &inode_list) {
 		tmp_inode = list_entry(p, struct inode, inode_link);
-
-		inode_sync(tmp_inode);
+		inode_sync(tmp_inode,0);
 	}
-//	mutexUnLock(g_inode_lock);
+	mutexUnLock(g_inode_lock);
 
-	restart:
+restart:
 
-	//  mutexLock(g_inode_lock);
+   /* sync the file system with host */
+	mutexLock(g_inode_lock);
 	list_for_each(p, &inode_list) {
 		tmp_inode = list_entry(p, struct inode, inode_link);
 		if (vfs_fs->stat(tmp_inode, &stat) != 1) {
@@ -121,9 +130,15 @@ int Jcmd_sync() {
 			}
 		}
 	}
-	//mutexUnLock(g_inode_lock);
+	mutexUnLock(g_inode_lock);
 
-	return 1;
+	return SYSCALL_SUCCESS;
+}
+int SYS_sync(){
+	return fs_sync();
+}
+int Jcmd_sync() {
+	return fs_sync();
 }
 /************************************************************************************************/
 static void transform_filename(unsigned char *arg_filename, char *filename) {
@@ -278,6 +293,11 @@ struct file *fs_open(unsigned char *filename, int flags, int mode) {
 	} else {
 		filep->offset = 0;
 	}
+	if (flags & O_CREAT) {
+		if ((inodep->file_size >0) && (filep->offset==0)){
+			inode_sync(inodep,1); /* truncate the file */
+		}
+	}
 	return filep;
 
 	error: if (filep != NULL)
@@ -321,10 +341,16 @@ unsigned long SYS_fs_open(char *filename, int mode, int flags) {
 	return -1;
 }
 /*********************************************************************************************/
-static void inode_sync(struct inode *inode) {
+static void inode_sync(struct inode *inode, unsigned long truncate) {
 	struct list_head *p;
 	struct page *page;
 	int ret;
+
+	if (truncate){
+		ret = vfs_fs->setattr(inode, 0);
+		fs_fadvise(inode,0,0,POSIX_FADV_DONTNEED);
+		return;
+	}
 
 	list_for_each(p, &(inode->page_list)) {
 		page = list_entry(p, struct page, list);
@@ -354,7 +380,7 @@ unsigned long fs_fdatasync(struct file *filep) {
 		return 0;
 
 	inode = filep->inode;
-	inode_sync(inode);
+	inode_sync(inode,0);
 
 	return 0;
 }
@@ -398,7 +424,7 @@ unsigned long fs_readdir(struct file *file, struct dirEntry *dir_ent,
 }
 /************************************************************************************************/
 
-long fs_write(struct file *filep, unsigned char *buff, unsigned long len) {
+int fs_write(struct file *filep, unsigned char *buff, unsigned long len) {
 	int i, ret;
 	int tmp_len, size, page_offset;
 	struct page *page;
@@ -415,16 +441,20 @@ long fs_write(struct file *filep, unsigned char *buff, unsigned long len) {
 		}
 		spin_unlock_irqrestore(&g_userspace_stdio_lock, flags);
 		return len;
+	}else if (filep->type == OUT_PIPE_FILE) {
+		return fs_send_to_pipe(filep, buff, len);
+	}else if (filep->type == IN_PIPE_FILE ){
+		ut_log(" ERROR: Using INPIPE instead of OUTPIPE\n");
+		return -1;
 	}
 
-	DEBUG(
-			"Write  filename from hs  :%s: offset:%d inode:%x \n", filep->filename, filep->offset, filep->inode);
+	DEBUG("Write  filename from hs  :%s: offset:%d inode:%x \n", filep->filename, filep->offset, filep->inode);
 	tmp_len = 0;
 
 	if (filep->inode && filep->inode->file_type == DIRECTORY_FILE) { //TODO : check for testing
 		BUG();
 	}
-
+	if (filep->offset > (filep->inode->file_size)) return -1;
 	while (tmp_len < len) {
 		page = pc_getInodePage(filep->inode, filep->offset);
 		if (page == NULL) {
@@ -454,9 +484,8 @@ long fs_write(struct file *filep, unsigned char *buff, unsigned long len) {
 	error: return tmp_len;
 }
 
-long SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
+int SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
 	struct file *file;
-	int i;
 
 	SYSCALL_DEBUG("write fd:%d buff:%x len:%x :%s:\n", fd, buff, len, buff);
 	file = fd_to_file(fd);
@@ -550,6 +579,11 @@ long fs_read(struct file *filep, unsigned char *buff, unsigned long len) {
 		ut_printf("%s", buff);
 		//	SYSCALL_DEBUG("read char :%s: %x:\n",buff,buff[0]);
 		return 1;
+	}else if (filep->type == IN_PIPE_FILE) {
+		return fs_recv_from_pipe(filep, buff, len);
+	}if (filep->type == OUT_PIPE_FILE) {
+		ut_log(" ERROR: looks like using OUT_PIPE_FILE instead of IN_PIPE_FILE \n");
+		return -1;
 	}
 
 	DEBUG("Read filename from hs  :%s: offset:%d inode:%x buff:%x len:%x \n", filep->filename, filep->offset, filep->inode, buff, len);
@@ -597,7 +631,7 @@ long SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt) {
 	}
 	last: return ret;
 }
-long SYS_fs_read(unsigned long fd, unsigned char *buff, unsigned long len) {
+int SYS_fs_read(unsigned long fd, unsigned char *buff, unsigned long len) {
 	struct file *file;
 
 	//SYSCALL_DEBUG("read fd:%d buff:%x len:%x \n",fd,buff,len);
@@ -626,12 +660,16 @@ struct file *fs_dup(struct file *old_filep, struct file *new_filep) {
 	/* 1. close the resources of  new */
 	if (new_filep->type == REGULAR_FILE) {
 		fs_putInode(new_filep->inode);
+	}else if (new_filep->type == OUT_PIPE_FILE || new_filep->type == IN_PIPE_FILE) {
+		fs_destroy_pipe(new_filep);
 	}
 
 	/* 2. copy from old */
 	ut_memcpy(new_filep, old_filep, sizeof(struct file));
 	if (new_filep->type == REGULAR_FILE && new_filep->inode != 0) {
 		atomic_inc(&new_filep->inode->count);
+	}else if (new_filep->type == OUT_PIPE_FILE || new_filep->type == IN_PIPE_FILE) {
+		fs_dup_pipe(new_filep);
 	}
 	return new_filep;
 }
@@ -661,11 +699,12 @@ int fs_close(struct file *filep) {
 	} else if (filep->type == OUT_FILE || filep->type == IN_FILE) { /* nothng todo */
 		//ut_log("Closing the IO file :%x name :%s: \n",filep,g_current_task->name);
 	} else if (filep->type == OUT_PIPE_FILE || filep->type == IN_PIPE_FILE) {
+		fs_destroy_pipe(filep);
 // TODO : need to release kernel resource
 	}
 	filep->inode = 0;
 	mm_slab_cache_free(g_slab_filep, filep);
-	return 1;
+	return SYSCALL_SUCCESS;
 }
 
 unsigned long SYS_fs_close(unsigned long fd) {
@@ -710,6 +749,7 @@ int fs_stat(struct file *filep, struct fileStat *stat) {
 
 	ret = vfs_fs->stat(filep->inode, stat);
 	if (ret == 1) {
+		stat->st_size = filep->inode->file_size;
 //TODO
 	}
 	return ret;
@@ -756,6 +796,255 @@ unsigned long SYS_fs_fadvise(unsigned long fd, unsigned long offset,
 	inode = file->inode;
 	return fs_fadvise(inode, offset, len, advise);
 }
+/***************************************** pipe ****************************************/
+#define MAX_PIPES 100
+struct {
+#define MAX_PIPE_BUFS 20
+	struct {
+		unsigned char *data;
+		int size;
+		int start_offset;
+	} bufs[MAX_PIPE_BUFS];
+	int in_index, out_index;
+	int count;
+} pipes[MAX_PIPES];
+static int init_pipe_done = 0;
+
+struct file *fs_create_filep(int *fd) {
+	int i;
+	struct file *fp;
+
+	for (i = 3; i < MAX_FDS; i++) {
+		if (g_current_task->mm->fs.filep[i] == 0) {
+			fp = mm_slab_cache_alloc(g_slab_filep, 0);
+			if (fp == 0)
+				return 0;
+			if (i >= g_current_task->mm->fs.total) {
+				g_current_task->mm->fs.total = i + 1;
+			}
+			g_current_task->mm->fs.filep[i] = fp;
+			*fd = i;
+			return fp;
+		}
+	}
+	return 0;
+}
+int fs_destroy_filep(int fd) {
+	struct file *fp;
+	if (fd < 0 || fd > MAX_FDS) {
+		return -1;
+	}
+	fp = g_current_task->mm->fs.filep[fd];
+	g_current_task->mm->fs.filep[fd] = 0;
+	mm_slab_cache_free(g_slab_filep, fp);
+	return 0;
+}
+unsigned long SYS_pipe(unsigned int *fds) {
+	struct file *wfp, *rfp;
+	int ret;
+
+	SYSCALL_DEBUG("pipe  fds:%x \n", fds);
+	if (fds == 0)
+		return -1;
+
+	wfp = fs_create_filep(&fds[1]);
+	if (wfp != 0) {
+		rfp = fs_create_filep(&fds[0]);
+		if (rfp == 0) {
+			mm_slab_cache_free(g_slab_filep, wfp);
+			return -1;
+		}
+	} else {
+		return -1;
+	}
+	wfp->type = OUT_PIPE_FILE;
+	rfp->type = IN_PIPE_FILE;
+	ret = fs_create_pipe(wfp, rfp);
+	if (ret != SYSCALL_SUCCESS) {
+		fs_destroy_filep(fds[0]);
+		fs_destroy_filep(fds[1]);
+		fds[0] = -1;
+		fds[1] = -1;
+	}
+	if (ret == SYSCALL_SUCCESS){
+		SYSCALL_DEBUG("pipe  fds: fd1: %d fd2 :%d  \n", fds[0],fds[1]);
+	}
+
+	return ret;
+}
+static void init_pipes(){
+	int i,j;
+	for (i = 0; i < MAX_PIPES; i++) {
+		pipes[i].in_index = 0;
+		pipes[i].out_index = 0;
+		pipes[i].count = 0;
+
+		for (j = 0; j < MAX_PIPE_BUFS; j++) {
+			pipes[i].bufs[j].data = 0;
+			pipes[i].bufs[j].size = 0;
+			pipes[i].bufs[j].start_offset = 0;
+		}
+	}
+	init_pipe_done = 1;
+	return ;
+}
+static int fs_create_pipe(struct file *wfp, struct file *rfp) {
+	int i, j, found;
+	int ret=-1;
+
+	if (init_pipe_done == 0) {
+		init_pipes();
+	}
+	if (wfp==0 || rfp==0) return ret;
+
+	mutexLock(g_inode_lock);
+	for (i = 0; i < MAX_PIPES; i++) {
+		if (pipes[i].count == 0) {
+			found = 1;
+			pipes[i].in_index = 0;
+			pipes[i].out_index = 0;
+			pipes[i].count = 2;
+			rfp->private = i;
+			wfp->private = i;
+			for (j = 0; j < MAX_PIPE_BUFS; j++) {
+				pipes[i].bufs[j].data = 0;
+				pipes[i].bufs[j].size = 0;
+				pipes[i].bufs[j].start_offset = 0;
+			}
+			ret = SYSCALL_SUCCESS;
+			goto last;
+		}
+	}
+last:
+	mutexUnLock(g_inode_lock);
+
+	return ret;
+}
+static int fs_dup_pipe(struct file *fp) {
+	int i = fp->private;
+
+	if (i < 0 || i >= MAX_PIPES)
+		return -1;
+
+	if (pipes[i].count==0){
+		return -1;
+	}
+	mutexLock(g_inode_lock);
+	pipes[i].count++;
+	mutexUnLock(g_inode_lock);
+	return SYSCALL_SUCCESS;
+}
+static int fs_destroy_pipe(struct file *fp) {
+	int ret = -1;
+	int j;
+	int i = fp->private;
+
+	if (i < 0 || i >= MAX_PIPES)
+		return -1;
+
+	mutexLock(g_inode_lock);
+	pipes[i].count--;
+	ret = SYSCALL_SUCCESS;
+	if ( pipes[i].count == 0 ) {
+		for (j = 0; j < MAX_PIPE_BUFS; j++) {
+			if (pipes[i].bufs[j].data != 0)
+				mm_putFreePages((unsigned long) pipes[i].bufs[j].data, 0);
+			pipes[i].bufs[j].data = 0;
+			pipes[i].bufs[j].size = 0;
+			pipes[i].bufs[j].start_offset = 0;
+		}
+	}
+	mutexUnLock(g_inode_lock);
+
+	return ret;
+}
+#define ENOSPC          28      /* No space left on device */
+static int fs_send_to_pipe(struct file *fp, unsigned char *buf, int len) {
+	int max_size = PAGE_SIZE ;
+	int ret;
+
+	int i = fp->private;
+	if (i < 0 || i >= MAX_PIPES)
+		return -1;
+
+restart:
+	mutexLock(g_inode_lock);
+	int out = pipes[i].out_index;
+	if (pipes[i].bufs[out].data == 0) {
+		pipes[i].bufs[out].data = mm_getFreePages(0, 0);
+		pipes[i].bufs[out].size = 0;
+		pipes[i].bufs[out].start_offset = 0;
+	} else {
+#if 0
+		ret = -ENOSPC;
+		goto last;
+#else
+		mutexUnLock(g_inode_lock);
+		if (pipes[i].count > 1) { /* wait if there is more then thread operating pipe */
+			sc_sleep(2);
+			goto restart;
+		}
+		return 0;
+#endif
+	}
+
+	if (len < max_size)
+		max_size = len;
+	ut_memcpy(pipes[i].bufs[out].data, buf, max_size);
+	pipes[i].bufs[out].size = max_size;
+	pipes[i].bufs[out].start_offset = 0;
+	pipes[i].out_index = (pipes[i].out_index + 1) % MAX_PIPE_BUFS;
+	ret=max_size;
+
+last:
+	mutexUnLock(g_inode_lock);
+	//ut_printf(" sending in :%s: to pipe-%d : %d\n",g_current_task->name, i,ret);
+
+	return ret;
+}
+#define EAGAIN          11      /* Try again */
+static int fs_recv_from_pipe(struct file *fp, unsigned char *buf, int len) {
+	int i = fp->private;
+	int in, max_size;
+	int ret = -1;
+
+	if (i < 0 || i >= MAX_PIPES)
+		return -1;
+restart:
+	mutexLock(g_inode_lock);
+	in = pipes[i].in_index;
+	if (pipes[i].bufs[in].data != 0) {
+		max_size = pipes[i].bufs[in].size - pipes[i].bufs[in].start_offset;
+		if (len < max_size)
+			max_size = len;
+		ut_memcpy(buf, pipes[i].bufs[in].data + pipes[i].bufs[in].start_offset,
+				max_size);
+		pipes[i].bufs[in].start_offset = pipes[i].bufs[in].start_offset
+				+ max_size;
+		if (pipes[i].bufs[in].start_offset == pipes[i].bufs[in].size) {
+			mm_putFreePages((unsigned long) pipes[i].bufs[in].data, 0);
+			pipes[i].bufs[in].data = 0;
+			pipes[i].bufs[in].start_offset = 0;
+			pipes[i].bufs[in].size = 0;
+			pipes[i].in_index = (pipes[i].in_index + 1) % MAX_PIPE_BUFS;
+		}
+		ret = max_size;
+	} else {
+		ret=0;
+		//ret = -EAGAIN;
+		mutexUnLock(g_inode_lock);
+		if (pipes[i].count > 1) { /* wait if there is more then thread operating pipe */
+			sc_sleep(2);
+			goto restart;
+		}
+		return ret;
+	}
+	mutexUnLock(g_inode_lock);
+
+	//ut_printf(" recv from :%s: pipe-%d : %d\n",g_current_task->name, i,ret);
+	return ret;
+}
+
 /***************************************************************************************/
 unsigned long fs_registerFileSystem(struct filesystem *fs) {
 	vfs_fs = fs; // TODO : currently only one lowelevel filsystem is hardwired to vfs.
@@ -767,7 +1056,7 @@ int init_vfs() {
 			NULL, NULL);
 	slab_inodep = kmem_cache_create("inode_struct", sizeof(struct inode), 0, 0,
 			NULL, NULL);
-	g_inode_lock = mutexCreate("mutex_vfs");
+
 
 	return 0;
 }

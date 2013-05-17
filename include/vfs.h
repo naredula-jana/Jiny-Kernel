@@ -142,6 +142,7 @@ struct filesystem {
 	int (*stat)(struct inode *inode, struct fileStat *stat);
 	int (*close)(struct inode *inodep);
 	int (*fdatasync)(struct inode *inodep);
+	int (*setattr)(struct inode *inode, uint64_t size);//TODO : currently used for truncate, later need to expand
 };
 
 #define fd_to_file(fd) (fd >= 0 && g_current_task->mm->fs.total > fd) ? (g_current_task->mm->fs.filep[fd]) : ((struct file *)0)

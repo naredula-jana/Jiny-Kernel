@@ -13,6 +13,8 @@
 
 static wait_queue_t p9_waitq;
 virtio_dev_t *p9_dev = 0;
+static int stat_request=0;
+static int stat_intr=0;
 static void virtio_9p_interrupt(registers_t regs);
 static int virtio_addToP9Queue(struct virtqueue *vq, unsigned long buf,
 		unsigned long out_len, unsigned long in_len);
@@ -42,8 +44,7 @@ static int attach_virtio_9p_pci(device_t *pci_dev) {
 
 	vp_set_status(virtio_dev,
 			vp_get_status(virtio_dev) + VIRTIO_CONFIG_S_ACKNOWLEDGE);
-	DEBUG(
-			"Initializing VIRTIO PCI p9 status :%x :  \n", vp_get_status(virtio_dev));
+	DEBUG("Initializing VIRTIO PCI p9 status :%x :  \n", vp_get_status(virtio_dev));
 
 	vp_set_status(virtio_dev,
 			vp_get_status(virtio_dev) + VIRTIO_CONFIG_S_DRIVER);
@@ -80,6 +81,7 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 
 	p9_pdu_init(&pdu, client->type, client->tag, client, client->pkt_buf,
 			client->pkt_len);
+	stat_request++;
 	ret = p9_pdu_write(&pdu, fmt, ap);
 	va_end(ap);
 	p9_pdu_finalize(&pdu);
@@ -124,12 +126,14 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 	len = 0;
 	i = 0;
 	addr = 0;
-	while (i < 3 && addr == 0) {
+	while (i < 30 && addr == 0) {
 		addr = virtio_removeFromQueue(p9_dev->vq[0], &len); /* TODO : here sometime returns zero because of some race condition, the packet is not recevied */
 		i++;
 		if (addr == 0) {
-			ut_printf(" RACE CONDITION in P9 so sleeping for while \n");
-			sc_sleep(300);
+			//ut_log(" RACE CONDITION in P9 so sleeping for while  ...\n");
+			ut_log(" RACE CONDITION in P9 so sleeping for while requests:%d intr:%d\n",stat_request,stat_intr);
+			//sc_sleep(300);
+			ipc_waiton_waitqueue(&p9_waitq, 30);
 		}
 	}
 	if (addr != (unsigned long)client->pkt_buf) {
@@ -172,6 +176,11 @@ static void virtio_9p_interrupt(registers_t regs) { // TODO: handling similar  t
 
 	if (p9_dev->msi == 0)
 		isr = inb(p9_dev->pci_ioaddr + VIRTIO_PCI_ISR);
+	stat_intr++;
 	ret = ipc_wakeup_waitqueue(&p9_waitq); /* wake all the waiting processes */
+	if (ret==0){
+		//ut_log("ERROR: p9 wait No one is waiting...\n");
+		ut_log("ERROR:New  p9 wait No one is waiting requests:%d intr:%d\n",stat_request,stat_intr);
+	}
 }
 DEFINE_DRIVER(virtio_9p_pci, virtio_pci, probe_virtio_9p_pci, attach_virtio_9p_pci, dettach_virtio_9p_pci);

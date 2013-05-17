@@ -98,6 +98,7 @@ unsigned long SYS_setsockopt(int sockfd, int level, int optname,
 		const void *optval, int optlen);
 unsigned long SYS_gettimeofday(time_t *tv, struct timezone *tz);
 unsigned long SYS_pipe(unsigned int *fds);
+int SYS_sync();
 
 typedef struct {
 	void *func;
@@ -137,7 +138,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 150 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 155 */
 { SYS_sysctl }, { snull }, { SYS_arch_prctl }, { snull }, { snull }, /* 160 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 165 */
+{ snull }, { SYS_sync }, { snull }, { snull }, { snull }, /* 165 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 170 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 175 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 180 */
@@ -478,47 +479,7 @@ unsigned long SYS_fs_fcntl(int fd, int cmd, int args) {
 	}
 	return -1;
 }
-struct file *fs_create_filep(int *fd){
-	int i;
-	struct file *fp;
 
-	for (i = 3; i < MAX_FDS; i++) {
-		if (g_current_task->mm->fs.filep[i] == 0) {
-			fp = mm_slab_cache_alloc(g_slab_filep, 0);
-			if (fp ==0) return 0;
-			if (i >= g_current_task->mm->fs.total ){
-				g_current_task->mm->fs.total = i+1;
-			}
-			g_current_task->mm->fs.filep[i]=fp;
-			*fd = i;
-			return fp;
-		}
-	}
-}
-unsigned long SYS_pipe(unsigned int *fds){
-	struct file *wfp,*rfp;
-
-	SYSCALL_DEBUG("pipe  fds:%x \n", fds);
-	if (fds==0) return -1;
-	return -1;// TODO : currently not supported
-
-
-	wfp = fs_create_filep(&fds[0]);
-	if (wfp != 0) {
-		rfp = fs_create_filep(&fds[1]);
-		if (rfp ==0){
-			mm_slab_cache_free(g_slab_filep, wfp);
-			return -1;
-		}
-	}else{
-		return -1;
-	}
-	wfp->type = OUT_FILE;
-	rfp->type = IN_FILE;
-	/* TODO: Create kernel buffer between two fds and change file type */
-
-	return SYSCALL_SUCCESS;
-}
 unsigned long SYS_futex(unsigned long *a) {//TODO
 	SYSCALL_DEBUG("futex  addr:%x \n", a);
 	*a = 0;
