@@ -32,6 +32,7 @@ extern int init_clock(unsigned long arg1);
 extern int init_symbol_table(unsigned long arg1);
 extern int init_devClasses(unsigned long arg1);
 extern int init_modules(unsigned long arg1);
+extern int  init_log_file(unsigned long arg1);
 
 typedef struct {
 	int (*func)(unsigned long arg);
@@ -55,11 +56,14 @@ static inittable_t inittable[] = {
 #ifdef SMP
 		{init_smp_force,4,       "kmemleak"},
 #endif
+#ifdef NETWORKING
 		{init_networking,0,       "networking"},
+#endif
 		{init_clock,0,       "clock"},
 		{init_symbol_table,0,       "symboltable"},
 		{init_devClasses,0,       "devicesclasses"},
 		{init_modules,0,       "modules"},
+//		{init_log_file,0, "log file "},
 		{0,0,0}
 };
 
@@ -129,6 +133,24 @@ void idleTask_func() {
 		sc_schedule();
 	}
 }
+/****************************************House Keeper *******************************************/
+Jcmd_initlog(){
+	init_log_file(0);
+}
+#define MAX_PAGES_SYNC 100
+void housekeeper_thread(){
+	int ret;
+	sc_sleep(3000);  /* TODO : need to wait some part of initilization*/
+	init_log_file(0);
+	while(1){
+		sc_sleep(50);
+		ret=MAX_PAGES_SYNC;
+		while (ret == MAX_PAGES_SYNC) ret=fs_data_sync(MAX_PAGES_SYNC);
+
+	}
+}
+/*************************************************************************************************/
+int g_boot_completed=0;
 extern int shell_main(void *arg);
 void cmain() {  /* This is the first c function to be executed */
 	multiboot_info_t *mbi;
@@ -151,10 +173,16 @@ void cmain() {  /* This is the first c function to be executed */
 	do_cpuid(1,val);
 	ut_log("	cpuid result %x : %x :%x :%x \n",val[0],val[1],val[2],val[3]);
 	g_cpu_features=val[3]; /* edx */
+	if ((ret=vm_mmap(0,(unsigned long)KERNEL_ADDR_START ,g_phy_mem_size,PROT_WRITE,MAP_FIXED,KERNEL_ADDR_START)) == 0) /* this is for SMP */
+	{
+		ut_log("ERROR: kernel address map Fails \n");
+	}
 
 
 	sc_createKernelThread(shell_main, 0, (unsigned char *)"shell_main");
+	sc_createKernelThread(housekeeper_thread, 0, (unsigned char *)"house_keeper");
 	sti(); /* start the interrupts finally */
+	g_boot_completed=1;
 	idleTask_func();
 	return;
 }

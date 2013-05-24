@@ -20,13 +20,13 @@
 #define sti() __sti()
 #define save_flags(x) __save_flags(x)
 #define restore_flags(x) __restore_flags(x)
-
+#define SPIN_BUG() while(1)
 
 #define __SPINLOCK_LOCKED   1
 #define __SPINLOCK_UNLOCKED 0
 
 #ifdef SPINLOCK_DEBUG
-#define SPIN_LOCK_UNLOCKED(x) (spinlock_t) { __SPINLOCK_UNLOCKED,0,x,0,0,0,0,-1}
+#define SPIN_LOCK_UNLOCKED(x) (spinlock_t) { __SPINLOCK_UNLOCKED,0,x,0,0,0,0,-1,1,0,0,0}
 #define MAX_SPINLOCKS 100
 extern spinlock_t *g_spinlocks[MAX_SPINLOCKS];
 extern int g_spinlock_count;
@@ -34,18 +34,32 @@ extern int g_spinlock_count;
 #define SPIN_LOCK_UNLOCKED (spinlock_t) { __SPINLOCK_UNLOCKED }
 #endif
 
+static inline void arch_spinlock_transfer(spinlock_t *lock,
+		struct task_struct *prev, struct task_struct *next) {
+	if (lock->recursion_allowed == 1) SPIN_BUG();
+	if (lock->recursion_allowed == 0 && prev->pid != lock->pid) {
+		SPIN_BUG();
+	}
+	prev->locks_nonsleepable--;
+	next->locks_nonsleepable++;
+	lock->pid = next->pid;
+}
 
 static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 #ifdef SPINLOCK_DEBUG
 #ifdef RECURSIVE_SPINLOCK
-	if (lock->pid == g_current_task->pid  && g_current_task->pid!=0) {
+	if (lock->recursion_allowed==1 && lock->pid == g_current_task->pid  && g_current_task->pid!=0) {
 		lock->recursive_count++;
 		lock->stat_recursive_locks++;
+		return;
 	}else{
-#else
+		if (lock->recursion_allowed==0 && lock->pid == g_current_task->pid){ /* already owning the lock */
+			SPIN_BUG();
+		}
+	}
+#endif
+#endif /* DEBUG*/
 	if (1){
-#endif
-#endif
 	__asm__ __volatile__( "movq $0,%%rbx\n"
 			"mov  %0,%%edx\n"
 			"spin:addq $1,%%rbx\n"
@@ -71,12 +85,15 @@ static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 	lock->log[lock->log_length].line = line;
 	lock->log[lock->log_length].pid = g_current_task->pid;
 	lock->log[lock->log_length].cpuid = g_current_task->cpu;
+	lock->log[lock->log_length].name = g_current_task->name;
 	lock->log[lock->log_length].spins = 1 + (lock->stat_count/10);
 	lock->log_length++;
 	lock->pid = g_current_task->pid;
+	g_current_task->locks_nonsleepable++;
+
 	lock->contention=lock->contention+(lock->stat_count/10);
-  }/* toplevel if */
 #endif
+	  }/* toplevel if */
 }
 static inline void arch_spinlock_unregister(spinlock_t *lock){
 
@@ -95,31 +112,35 @@ static inline void arch_spinlock_unregister(spinlock_t *lock){
 static inline void arch_spinlock_unlock(spinlock_t *lock, int line) {
 #ifdef SPINLOCK_DEBUG
 #ifdef RECURSIVE_SPINLOCK
-	if (lock->pid == g_current_task->pid && lock->recursive_count>0) {
+	if (lock->recursion_allowed==1 && lock->pid == g_current_task->pid && lock->recursive_count>0) {
 		lock->recursive_count--;
+		return;
 	} else {
-#else
-	if (1){
+		if (lock->recursion_allowed==0 && lock->pid != g_current_task->pid){
+			SPIN_BUG();
+		}
+	}
 #endif
-
+	if (1){
 		lock->stat_unlocks++;
 		if (lock->log_length >= MAX_SPIN_LOG) lock->log_length=0;
 		lock->log[lock->log_length].line = line;
 		lock->log[lock->log_length].pid = g_current_task->pid;
 		lock->log[lock->log_length].cpuid = g_current_task->cpu;
+		lock->log[lock->log_length].name = g_current_task->name;
 		lock->log[lock->log_length].spins = 0;
 		lock->log_length++;
 		lock->pid = 0;
 		lock->recursive_count = 0;
+		g_current_task->locks_nonsleepable--;
+	}
 #endif
 
 	__asm__ __volatile__( __LOCK_PREFIX "xchgl %0, %1\n"
 			:: "r"(__SPINLOCK_UNLOCKED), "m"( lock->lock )
 			: "memory" );
 #ifdef SPINLOCK_DEBUG
-     } /* top level if */
 #endif
-
 }
 
 

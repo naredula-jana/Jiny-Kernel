@@ -33,13 +33,18 @@ int ipc_mutex_lock(void *p, int line) {
 		sem->recursive_count++;
 		return 1;
 	}
+	if (g_current_task->locks_nonsleepable > 0){
+		BUG();
+	}
 	while (ipc_sem_wait(p, 100) != 1)
 		;
 
-
 	sem->owner_pid = g_current_task->pid;
 	sem->recursive_count =1;
-	g_current_task->locks_held++;
+	g_current_task->locks_sleepable++;
+	if (g_current_task->locks_nonsleepable > 0){
+		BUG();
+	}
 	sem->stat_line = line;
 	return 1;
 }
@@ -55,7 +60,7 @@ int ipc_mutex_unlock(void *p, int line) {
 	}
 	sem->owner_pid = 0;
 	sem->recursive_count =0;
-	g_current_task->locks_held--;
+	g_current_task->locks_sleepable--;
 	sem->stat_line = -line;
 	ipc_sem_signal(p);
 
@@ -159,6 +164,7 @@ static void _add_to_waitqueue(wait_queue_t *waitqueue, struct task_struct * p, l
 
 	cum_ticks = 0;
 	prev_cum_ticks = 0;
+
 	if (p == g_cpu_state[0].idle_task  || p == g_cpu_state[1].idle_task ){
 		BUG();
 	}
@@ -362,12 +368,14 @@ void ipc_release_resources(struct task_struct *task){
 #ifdef SPINLOCK_DEBUG
 spinlock_t *g_spinlocks[MAX_SPINLOCKS];
 int g_spinlock_count = 0;
-#if 1
+
 int Jcmd_locks(char *arg1, char *arg2) {
 	int i;
 	unsigned long flags;
 	struct list_head *pos;
 	struct task_struct *task;
+	int len;
+	unsigned char *buf;
 
 	ut_printf("SPIN LOCKS:  Name  pid count contention(rate) recursive# \n");
 	for (i = 0; i < g_spinlock_count; i++) {
@@ -379,25 +387,40 @@ int Jcmd_locks(char *arg1, char *arg2) {
 	}
 
 	ut_printf("Wait queue: \n");
+
+	buf=mm_getFreePages(0,0);
+	len = PAGE_SIZE;
 	spin_lock_irqsave(&g_global_lock, flags);
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
+		struct semaphore *sem=0;
 		if (wait_queues[i] == 0)
 			continue;
 		if (wait_queues[i]->used_for == 0)
-			ut_printf(" %8s : ", wait_queues[i]->name);
-		else
-			ut_printf("[%8s]: ", wait_queues[i]->name);
+			len = len - ut_snprintf(buf+PAGE_SIZE-len,len," %8s : ", wait_queues[i]->name);
+		else {
+			len = len - ut_snprintf(buf+PAGE_SIZE-len,len,"[%8s]: ", wait_queues[i]->name);
+			sem = wait_queues[i]->used_for;
+			if (sem){
+				if (sem->owner_pid != 0)
+					len = len - ut_snprintf(buf+PAGE_SIZE-len,len," [%x] ", sem->owner_pid);
+			}
+		}
+		if (len <= 0) break;
 		list_for_each(pos, &wait_queues[i]->head) {
 			task = list_entry(pos, struct task_struct, wait_queue);
-			ut_printf(" %x(%s),", task->pid, task->name);
+			len = len - ut_snprintf(buf+PAGE_SIZE-len,len," %x(%s),", task->pid, task->name);
 		}
-		ut_printf("\n");
+
+		len = len - ut_snprintf(buf+PAGE_SIZE-len,len,"\n");
+		if (len <= 0) break;
 	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
 
+	ut_printf("%s",buf);
+	mm_putFreePages(buf,0);
 	return 1;
 }
-#endif
+
 #endif
 
 /**********************************************/

@@ -40,12 +40,16 @@ static int inode_init(struct inode *inode, char *filename,
 		return 0;
 	inode->count.counter = 1;
 	inode->nrpages = 0;
+	inode->stat_locked_pages.counter = 0;
+#if 0
 	if (filename && filename[0] == 't') /* TODO : temporary solution need to replace with fadvise call */
 	{
-		inode->type = TYPE_SHORTLIVED;
+		inode->flags = TYPE_SHORTLIVED;
 	} else {
-		inode->type = TYPE_LONGLIVED;
+		inode->flags = TYPE_LONGLIVED;
 	}
+#endif
+	inode->flags = TYPE_LONGLIVED;
 	inode->file_size = 0;
 	inode->fs_private = 0;
 	inode->inode_no = 0;
@@ -53,9 +57,9 @@ static int inode_init(struct inode *inode, char *filename,
 	inode->vfs = vfs;
 	ut_strcpy(inode->filename, (unsigned char *) filename);
 	INIT_LIST_HEAD(&(inode->page_list));
+	INIT_LIST_HEAD(&(inode->vma_list));
 	INIT_LIST_HEAD(&(inode->inode_link));
-	DEBUG(
-			" inode init filename:%s: :%x  :%x \n", filename, &inode->page_list, &(inode->page_list));
+	DEBUG(" inode init filename:%s: :%x  :%x \n", filename, &inode->page_list, &(inode->page_list));
 
 	mutexLock(g_inode_lock);
 	list_add(&inode->inode_link, &inode_list);
@@ -70,21 +74,30 @@ static int inode_init(struct inode *inode, char *filename,
 int Jcmd_ls(char *arg1, char *arg2) {
 	struct inode *tmp_inode;
 	struct list_head *p;
-
+	int i,ret,len;
+	unsigned char *buf;
 	int total_pages = 0;
+	unsigned char *type;
 
 	ut_printf("usagecount nrpages length  inode_no type  name\n");
+	buf=mm_getFreePages(0,0);
+	len = PAGE_SIZE;
 
 	mutexLock(g_inode_lock);
 	list_for_each(p, &inode_list) {
 		tmp_inode = list_entry(p, struct inode, inode_link);
-		ut_printf(" %4d %4d %8d %8d %2x %s\n", tmp_inode->count,
-				tmp_inode->nrpages, tmp_inode->file_size, tmp_inode->inode_no,
-				tmp_inode->file_type, tmp_inode->filename);
+		if (tmp_inode->flags & TYPE_EXECUTABLE) type="*" ;
+		else type=" ";
+
+		len = len - ut_snprintf(buf+PAGE_SIZE-len,len," %4d %4d(%2d) %8d %8d %2x %s%s\n", tmp_inode->count,
+				tmp_inode->nrpages,tmp_inode->stat_locked_pages.counter, tmp_inode->file_size, tmp_inode->inode_no,
+				tmp_inode->file_type, type,tmp_inode->filename);
 		total_pages = total_pages + tmp_inode->nrpages;
 	}
 	mutexUnLock(g_inode_lock);
 
+	ut_printf("%s",buf);
+	mm_putFreePages(buf,0);
 	ut_printf(" Total pages :%d\n", total_pages);
 	return 1;
 }
@@ -103,19 +116,43 @@ int Jcmd_clear_pagecache() {
 
 	return 1;
 }
+int fs_data_sync(int num_pages) {
+	int ret;
+	page_struct_t *page;
+	int write_count=0;
+
+	while (1) {
+		page = pc_get_dirty_page();
+		if (page == 0){
+			goto last;
+		}
+		struct inode *inode = page->inode;
+		uint64_t len = inode->file_size;
+		if (len < (page->offset + PC_PAGESIZE)) {
+			len = len - page->offset;
+		} else {
+			len = PC_PAGESIZE;
+		}
+		ret = vfs_fs->write(page->inode, page->offset, pcPageToPtr(page), len);
+		if (ret == len) {
+			pc_pagecleaned(page);
+			write_count++;
+		}
+		pc_put_page(page);
+		if (num_pages>0 && write_count>num_pages){
+			goto last;
+		}
+	}
+last:
+	return write_count;
+}
 
 int fs_sync(){
 	struct inode *tmp_inode;
 	struct list_head *p;
 	struct fileStat stat;
 
-	/* sync the pages in inode */
-	mutexLock(g_inode_lock);
-	list_for_each(p, &inode_list) {
-		tmp_inode = list_entry(p, struct inode, inode_link);
-		inode_sync(tmp_inode,0);
-	}
-	mutexUnLock(g_inode_lock);
+	fs_data_sync(0);
 
 restart:
 
@@ -123,7 +160,7 @@ restart:
 	mutexLock(g_inode_lock);
 	list_for_each(p, &inode_list) {
 		tmp_inode = list_entry(p, struct inode, inode_link);
-		if (vfs_fs->stat(tmp_inode, &stat) != 1) {
+		if (vfs_fs->stat(tmp_inode, &stat) != JSUCCESS) {
 			if (fs_putInode(tmp_inode)) {
 				mutexUnLock(g_inode_lock);
 				goto restart;
@@ -134,6 +171,7 @@ restart:
 
 	return SYSCALL_SUCCESS;
 }
+
 int SYS_sync(){
 	return fs_sync();
 }
@@ -198,7 +236,7 @@ static struct inode *fs_getInode(char *arg_filename, int flags, int mode) {
 		inode_init(ret_inode, filename, vfs_fs);
 #if 1
 		ret = vfs_fs->open(ret_inode, flags, mode);
-		if (ret < 0) {
+		if (ret == JFAIL) {
 			ret_inode->count.counter = 0;
 			if (fs_putInode(ret_inode) == 0) {
 				BUG();
@@ -210,7 +248,7 @@ static struct inode *fs_getInode(char *arg_filename, int flags, int mode) {
 		if (vfs_fs->stat(ret_inode, &stat) == 1) { /* this is to get inode number */
 			ret_inode->inode_no = stat.inode_no;
 			ret_inode->file_size = stat.st_size;
-
+			mutexLock(g_inode_lock);
 			list_for_each(p, &inode_list) {
 				tmp_inode = list_entry(p, struct inode, inode_link);
 				if (tmp_inode == ret_inode)
@@ -225,6 +263,7 @@ static struct inode *fs_getInode(char *arg_filename, int flags, int mode) {
 					ret_inode = tmp_inode;
 				}
 			}
+			mutexUnLock(g_inode_lock);
 		} else {
 			ut_printf("ERROR: cannot able to get STAT\n");
 		}
@@ -352,30 +391,37 @@ static void inode_sync(struct inode *inode, unsigned long truncate) {
 		return;
 	}
 
+restart:
+	mutexLock(g_inode_lock);
 	list_for_each(p, &(inode->page_list)) {
 		page = list_entry(p, struct page, list);
 		if (PageDirty(page)) {
+			pc_get_page(page);
 			uint64_t len = inode->file_size;
 			if (len < (page->offset + PC_PAGESIZE)) {
 				len = len - page->offset;
 			} else {
 				len = PC_PAGESIZE;
 			}
+			mutexUnLock(g_inode_lock);
 			if (len > 0) {
-				ret = vfs_fs->write(inode, page->offset, pcPageToPtr(page),
-						len);
+				ret = vfs_fs->write(inode, page->offset, pcPageToPtr(page),len);
 				if (ret == len) {
 					pc_pagecleaned(page);
 				}
 			}
+			pc_put_page(page);
+			goto restart;
 		} else {
 			DEBUG(" Page cleaned :%x \n", page);
 		}
 	}
+	mutexUnLock(g_inode_lock);
 }
+
 unsigned long fs_fdatasync(struct file *filep) {
 	struct inode *inode;
-	int ret;
+
 	if (vfs_fs == 0 || filep == 0)
 		return 0;
 
@@ -456,6 +502,7 @@ int fs_write(struct file *filep, unsigned char *buff, unsigned long len) {
 	}
 	if (filep->offset > (filep->inode->file_size)) return -1;
 	while (tmp_len < len) {
+		try_again:
 		page = pc_getInodePage(filep->inode, filep->offset);
 		if (page == NULL) {
 			page = pc_getFreePage();
@@ -464,8 +511,10 @@ int fs_write(struct file *filep, unsigned char *buff, unsigned long len) {
 				goto error;
 			}
 			page->offset = OFFSET_ALIGN(filep->offset);
-			if (pc_insertPage(filep->inode, page) == 0) {
+			if (pc_insertPage(filep->inode, page) == JFAIL) {
 				BUG();
+			}else{
+				goto try_again;
 			}
 		}
 		size = PC_PAGESIZE;
@@ -474,6 +523,8 @@ int fs_write(struct file *filep, unsigned char *buff, unsigned long len) {
 		page_offset = filep->offset - page->offset;
 		ut_memcpy(pcPageToPtr(page) + page_offset, buff + tmp_len, size);
 		pc_pageDirted(page);
+		pc_put_page(page);
+
 		filep->offset = filep->offset + size;
 		struct inode *inode = filep->inode;
 		if (inode->file_size < filep->offset)
@@ -481,20 +532,25 @@ int fs_write(struct file *filep, unsigned char *buff, unsigned long len) {
 		tmp_len = tmp_len + size;
 		DEBUG("write memcpy :%x %x  %d \n", buff, pcPageToPtr(page), size);
 	}
-	error: return tmp_len;
+error:
+
+	return tmp_len;
 }
 
 int SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
 	struct file *file;
 
-	SYSCALL_DEBUG("write fd:%d buff:%x len:%x :%s:\n", fd, buff, len, buff);
+	SYSCALL_DEBUG("write fd:%d buff:%x len:%x \n", fd, buff, len);
 	file = fd_to_file(fd);
 
-	if (file == 0)
-		return len; // TODO : temporary
+	if (file == 0){
+		ut_log("ERROR write fd:%d buff:%x len:%x \n", fd, buff, len);
+		return -1; // TODO : temporary
+	}
 	if (file->type == NETWORK_FILE) {
 		return socket_write(file, buff, len);
 	}
+
 	return fs_write(file, buff, len);
 }
 long SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt) {
@@ -526,6 +582,7 @@ struct page *fs_genericRead(struct inode *inode, unsigned long offset) {
 	int tret;
 	int err = 0;
 
+retry_again:  /* the purpose to retry is to get again from the page cache with page count incr */
 	page = pc_getInodePage(inode, offset);
 	if (page == NULL) {
 		page = pc_getFreePage();
@@ -539,7 +596,7 @@ struct page *fs_genericRead(struct inode *inode, unsigned long offset) {
 				PC_PAGESIZE);
 
 		if (tret > 0) {
-			if (pc_insertPage(inode, page) == 0) {
+			if (pc_insertPage(inode, page) == JFAIL) {
 				pc_putFreePage(page);
 				err = -5;
 				goto error;
@@ -551,6 +608,7 @@ struct page *fs_genericRead(struct inode *inode, unsigned long offset) {
 			err = -4;
 			goto error;
 		}
+		goto retry_again;
 	}
 
 	error: if (err < 0) {
@@ -591,8 +649,9 @@ long fs_read(struct file *filep, unsigned char *buff, unsigned long len) {
 	//TODO 	if (inode->length <= filep->offset) return 0;
 
 	page = fs_genericRead(filep->inode, filep->offset);
-	if (page == 0)
-		return 0;
+	if (page == 0){
+		goto last;
+	}
 
 	ret = PC_PAGESIZE;
 	ret = ret - (filep->offset - OFFSET_ALIGN(filep->offset));
@@ -605,12 +664,14 @@ long fs_read(struct file *filep, unsigned char *buff, unsigned long len) {
 			ret = r;
 	}
 	if (page > 0 && ret > 0) {
-		ut_memcpy(buff,
-				pcPageToPtr(page)
+		ut_memcpy(buff, pcPageToPtr(page)
 						+ (filep->offset - OFFSET_ALIGN(filep->offset)), ret);
 		filep->offset = filep->offset + ret;
 		DEBUG(" memcpy :%x %x  %d \n", buff, pcPageToPtr(page), ret);
 	}
+	pc_put_page(page);
+
+last:
 	return ret;
 }
 
@@ -637,8 +698,10 @@ int SYS_fs_read(unsigned long fd, unsigned char *buff, unsigned long len) {
 	//SYSCALL_DEBUG("read fd:%d buff:%x len:%x \n",fd,buff,len);
 
 	file = fd_to_file(fd);
-	if (file == 0)
+	if (file == 0){
+		ut_log("ERRO read fd:%d buff:%x len:%x \n", fd, buff, len);
 		return 0;
+	}
 
 	if (file->type == NETWORK_FILE) {
 		return socket_read(file, buff, len);
@@ -748,7 +811,7 @@ int fs_stat(struct file *filep, struct fileStat *stat) {
 		return 0;
 
 	ret = vfs_fs->stat(filep->inode, stat);
-	if (ret == 1) {
+	if (ret == JSUCCESS) {
 		stat->st_size = filep->inode->file_size;
 //TODO
 	}
@@ -768,16 +831,23 @@ unsigned long fs_fadvise(struct inode *inode, unsigned long offset,
 		unsigned long len, int advise) {
 	struct page *page;
 	struct list_head *p;
+	int ret;
+
 	//TODO : implementing other advise types
 	if (advise == POSIX_FADV_DONTNEED && len == 0) {
 		while (1) /* delete all the pages in the inode */
 		{
+			ret  = JFAIL;
+			mutexLock(g_inode_lock);
 			p = inode->page_list.next;
-			if (p == &inode->page_list)
-				return 1;
-			page = list_entry(p, struct page, list);
-			/* TODO:  check the things like lock for page to delete */
-			pc_removePage(page);
+			if (p != &inode->page_list) {
+				page = list_entry(p, struct page, list);
+				ret = pc_removePage(page);
+			}
+			mutexUnLock(g_inode_lock);
+			if (ret == JFAIL){
+					return 1;
+			}
 		}
 	}
 	return 0;
@@ -795,6 +865,24 @@ unsigned long SYS_fs_fadvise(unsigned long fd, unsigned long offset,
 		return 0;
 	inode = file->inode;
 	return fs_fadvise(inode, offset, len, advise);
+}
+/******************************************************************************/
+unsigned long fs_getVmaPage(struct vm_area_struct *vma, unsigned long offset) {
+	struct page *page;
+	struct inode *inode;
+	unsigned long ret;
+
+	inode = vma->vm_inode;
+	page = fs_genericRead(inode, offset);
+	if (page == NULL)
+		return 0;
+	pc_put_page(page); /* The file will be marked as executable, the pages will be locked at the file level */
+
+	ret = pc_page_to_ptr(page);
+	ret = __pa(ret);
+	DEBUG(
+			" mapInodepage phy addr :%x  hostphyaddr:%x offset:%x diff:%x \n", ret, g_hostShmPhyAddr, offset, (to_ptr(page)-pc_startaddr));
+	return ret; /* return physical address */
 }
 /***************************************** pipe ****************************************/
 #define MAX_PIPES 100

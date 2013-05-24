@@ -1,3 +1,13 @@
+/*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+*   include/vfs.h
+*   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
+*
+*/
 #ifndef __VFS_H__
 #define __VFS_H__
 #include "common.h"
@@ -63,8 +73,9 @@ POSIX_FADV_DONTNEED=4
 };
 
 enum {
-TYPE_SHORTLIVED=1,
-TYPE_LONGLIVED=2
+TYPE_SHORTLIVED=0x1,
+TYPE_LONGLIVED=0x2,
+TYPE_EXECUTABLE=0x4
 };
 extern unsigned long g_hostShmLen;
 
@@ -100,8 +111,10 @@ struct file {
 
 struct inode {
 	atomic_t count; /* usage count */
-	int nrpages;	
-	int type; /* short leaved (MRU) or long leaved (LRU) */
+	int nrpages;	/* total pages */
+	atomic_t stat_locked_pages;
+
+	int flags; /* short leaved (MRU) or long leaved (LRU) */
 	time_t mtime; /* last modified time */
 	unsigned long fs_private;
 	struct filesystem *vfs;

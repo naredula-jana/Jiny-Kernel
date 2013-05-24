@@ -1,3 +1,13 @@
+/*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+*   include/mm.h
+*   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
+*
+*/
 #ifndef __MM_H__
 #define __MM_H__
 
@@ -7,15 +17,17 @@
 #include "../util/host_fs/filecache_schema.h"
 #define PAGE_MASK       (~(PAGE_SIZE-1))
 #define PAGE_ALIGN(addr)	(((addr)+PAGE_SIZE-1)&PAGE_MASK)
+
+
+
 #define KERNEL_ADDR_START (0x40000000) /* Note This should be multiples 1GB , otherwise page tables copying will break */
+#define USERANONYMOUS_ADDR 0x20000000
+#define USERSTACK_ADDR     0x30000000
+#define USERSTACK_LEN  0x100000
+
 #define __pa(x)                 ((unsigned long)(x)-KERNEL_ADDR_START)
 #define __va(x)                 ((void *)((unsigned long)(x)+KERNEL_ADDR_START))
 #define MAP_NR(addr)            (__pa(addr) >> PAGE_SHIFT)
-
-#define USERANONYMOUS_ADDR 0x20000000
-#define USERSTACK_ADDR 0x30000000
-#define USERSTACK_LEN  0x100000
-
 
 #define virt_to_page(kaddr)	(g_mem_map + (__pa(kaddr) >> PAGE_SHIFT))
 /*
@@ -30,9 +42,10 @@
 #define MEM_FOR_CACHE  0x4000000
 //#define MEM_FOR_GLOBAL 0x2000000  /* pages for global , not allocated from task context */
 
-#define PROT_READ       0x1             /* page can be read */
+/* protection flags matches to that elf flags */
+#define PROT_READ       0x4             /* page can be read */
 #define PROT_WRITE      0x2             /* page can be written */
-#define PROT_EXEC       0x4             /* page can be executed */
+#define PROT_EXEC       0x1             /* page can be executed */
 #define PROT_NONE       0x0             /* page can not be accessed */
 
 #define MAP_SHARED      0x01            /* Share changes */

@@ -62,7 +62,10 @@ int dr_serialWrite( char *buf , int len)
 	spin_lock_irqsave(&serial_lock, flags);
 	for (i=0; i<len; i++)
 	{
-		outb(DATA_REG(SERIAL_PORT), buf[i]);
+		if (buf[i]>=0x20  || buf[i]==0xa || buf[i]==0xd || buf[i]==9 || buf[i]==0x1b)
+			outb(DATA_REG(SERIAL_PORT), buf[i]);
+		else
+			ut_log(" Special character eaten Up :%x: \n",buf[i]);
 	}
 	spin_unlock_irqrestore(&serial_lock, flags);
 }

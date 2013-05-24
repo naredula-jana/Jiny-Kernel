@@ -5,8 +5,8 @@
 //#include "spinlock.h"
 
 #define SPINLOCK_DEBUG 1
-//#define RECURSIVE_SPINLOCK 1   TODO need to cover for mutex
-typedef struct {
+#define RECURSIVE_SPINLOCK 1
+typedef struct {  /* Do not change the order , initilization will break */
         volatile unsigned int lock;
         unsigned long stat_count;
 #ifdef SPINLOCK_DEBUG
@@ -17,6 +17,7 @@ typedef struct {
         unsigned long stat_recursive_locks;
         unsigned long recursive_count;
         int linked; /* linked this structure to stats */
+        int recursion_allowed;
         unsigned long pid;
         unsigned long contention;
         unsigned int log_length;
@@ -25,6 +26,7 @@ typedef struct {
             unsigned int pid;
             unsigned int cpuid;
             unsigned long spins;
+            unsigned char *name;
         }log[MAX_SPIN_LOG];
 #endif
 } spinlock_t;

@@ -125,7 +125,7 @@ unsigned long fs_loadElfLibrary(struct file *file, unsigned long tmp_stack, unsi
 	{
 		if (eppnt->p_type != PT_LOAD)
 			continue;
-		DEBUG("%d: LOAD section: vaddr:%x filesz:%x offset:%x flags:%x  \n",i,ELF_PAGESTART(eppnt->p_vaddr),eppnt->p_filesz,eppnt->p_offset,eppnt->p_flags);
+		//ut_log("%d: LOAD section: vaddr:%x filesz:%x offset:%x flags:%x  \n",i,ELF_PAGESTART(eppnt->p_vaddr),eppnt->p_filesz,eppnt->p_offset,eppnt->p_flags);
 		/* Now use mmap to map the library into memory. */
 		error = 1;
 		if (eppnt->p_filesz > 0) {
@@ -157,7 +157,7 @@ unsigned long fs_loadElfLibrary(struct file *file, unsigned long tmp_stack, unsi
 	mm_free(elf_phdata);
  out:
 	if (error != 0) {
-		DEBUG(" ERROR in elf loader :%d\n",-error);
+		ut_log(" ERROR in elf loader filename :%s :%d\n",file->filename,-error);
 	} else {
 		vm_mmap(0, USERSTACK_ADDR, USERSTACK_LEN, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0);
 		if (stack_len > 0) {

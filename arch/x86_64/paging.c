@@ -484,6 +484,38 @@ int ar_dup_pageTable(struct mm_struct *src_mm,struct mm_struct *dest_mm)
 	return 1;
 }
 
+int ar_check_valid_address(unsigned long addr) {
+
+	addr_t *v; /* virtual address */
+	addr_t *pl4, *pl3, *pl2, *pl1, *p; /* physical address */
+	struct vm_area_struct *vma;
+
+//	return 1;
+
+	if (g_boot_completed == 0)
+		return 1; /* ignore checking while booting */
+	struct mm_struct *mm = g_current_task->mm;
+
+//	if (mm==0 || mm==g_kernel_mm) return 1;
+
+	/* 1. check for the kernel address */
+	vma = vm_findVma(g_kernel_mm, (addr & PAGE_MASK), 4); /* check kernel addr */
+	if (vma != 0)
+		return JSUCCESS;
+
+	/* If it is kernel thread then we have reached to fail point */
+	if (mm == g_kernel_mm)
+		return JFAIL;
+
+	/* 2. check for user level space */
+	vma = vm_findVma(mm, (addr & PAGE_MASK), 4);
+	if (vma != 0) {
+		return JSUCCESS;
+	}
+
+//	while (1) ;
+	return JFAIL;
+}
 static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_fault)
 {
 	struct mm_struct *mm;
@@ -501,12 +533,17 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 
 	if (mm==0 || mm->pgd == 0) BUG();
 
+	asm volatile("sti");
 	vma=vm_findVma(mm,(addr & PAGE_MASK),8); /* length changed to just 8 bytes at maximum , instead of entire page*/
+	asm volatile("cli");
+
 	if (vma == 0) 
 	{
 		if ( user == 1)
 		{
-			ut_printf("ERROR: user program Segmentaion Fault addr:%x  ip:%x \n",addr,faulting_ip);
+		//	ut_printf("ERROR: user program Segmentaion Fault addr:%x  ip:%x :%s\n",addr,faulting_ip,g_current_task->name);
+			Jcmd_maps(0,0);
+			BUG();
 			SYS_sc_exit(902);
 			return 1;
 		}
@@ -579,11 +616,11 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 		if ( vma->vm_inode != NULL)
 		{
 			asm volatile("sti");
-			p=(unsigned long *)pc_getVmaPage(vma,vma->vm_private_data+(addr-vma->vm_start));
+			p=(unsigned long *)fs_getVmaPage(vma,vma->vm_private_data+(addr-vma->vm_start));
 			if (write_fault && (writeFlag!= 0)) {
 				addr_t *fp;
 				fp=(unsigned long *)mm_getFreePages(MEM_CLEAR,0);
-				ut_memcpy((unsigned char *)fp,(unsigned char *)__va(p),4096);
+				ut_memcpy((unsigned char *)fp,(unsigned char *)__va(p),PAGE_SIZE);
 				p=(unsigned long *)__pa(fp);
 				writeFlag = 1 ;
 			}else{
@@ -611,6 +648,11 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 
 	ar_flushTlbGlobal();
 	flush_tlb_entry(addr);
+	if (addr >= 0x810000 &&  addr <= 0x811000){
+		unsigned long *test_ptr=0x810ec0;
+
+
+	}
 	DEBUG("Finally Inserted addr:%x  Pl4: %x pl3:%x  p12:%x pl1:%x p:%x \n",addr,pl4,pl3,pl2,pl1,p);	
 	return 1;	
 }

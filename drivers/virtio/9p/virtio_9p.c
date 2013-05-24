@@ -130,8 +130,7 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 		addr = virtio_removeFromQueue(p9_dev->vq[0], &len); /* TODO : here sometime returns zero because of some race condition, the packet is not recevied */
 		i++;
 		if (addr == 0) {
-			//ut_log(" RACE CONDITION in P9 so sleeping for while  ...\n");
-			ut_log(" RACE CONDITION in P9 so sleeping for while requests:%d intr:%d\n",stat_request,stat_intr);
+			ut_log("sleep in P9 so sleeping for while requests:%d intr:%d\n",stat_request,stat_intr);
 			//sc_sleep(300);
 			ipc_waiton_waitqueue(&p9_waitq, 30);
 		}
@@ -160,7 +159,7 @@ int p9_read_rpc(p9_client_t *client, const char *fmt, ...) {
 	client->recv_type = type;
 	ret = p9_pdu_read(&pdu, fmt, ap);
 	va_end(ap);
-	DEBUG("Recv Header ret:%x:%d total len :%x stype:%x(%d) rtype:%x(%d) tag:%x \n", ret,ret, total_len, client->type, client->type, type, type, tag);
+	//ut_log("Recv Header ret:%x:%d total len :%x stype:%x(%d) rtype:%x(%d) tag:%x \n", ret,ret, total_len, client->type, client->type, type, type, tag);
 	if (type == 107) { // TODO better way of handling other and this error
 		recv[100] = '\0';
 		DEBUG(" recv error data :%s: \n ", &recv[9]);

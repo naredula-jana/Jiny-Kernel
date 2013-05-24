@@ -89,7 +89,6 @@ commands_t cmd_list[] = { { "help      ", "HELP MENU", "help", sh_create },
 				0, 0, 0, cmd } /* at last check for command */
 };
 
-extern void ut_putchar(int c);
 
 
 static char buf[26024];
@@ -494,7 +493,7 @@ static int get_cmd(unsigned char *line) {
 			line[i] = '\0';
 			break;
 		}
-		ut_putchar((int) line[i]);
+		ut_putchar( line[i]);
 		i++;
 	}
 	line[i] = '\0';

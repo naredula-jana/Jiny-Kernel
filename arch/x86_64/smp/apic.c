@@ -587,7 +587,7 @@ int local_bsp_apic_init(void)
 }
 
 /********************************** ELASTIC CPU ****************************/
-void apic_disable_partially(){// TODO sometimes cpu stop recving the interrupt interrupt
+void apic_disable_partially(){// TODO sometimes cpu stop recving the timer interrupt
 
 	/* 1. disable all external interrupt except timer */
 	  apic_lvt_lint_t lvt_lint=local_apic->lvt_lint0;

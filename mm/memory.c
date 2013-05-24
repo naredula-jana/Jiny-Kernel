@@ -315,6 +315,7 @@ extern unsigned long g_phy_mem_size;
 int init_memory(unsigned long arg1)
 {
 	unsigned long virt_start_addr,virt_end_addr;
+	unsigned long pc_size;
 
 	unsigned long phy_end_addr = g_phy_mem_size;
 	ut_log("	Initializing memory phy_endaddr : %x video:%x \n",phy_end_addr,VIDEO);
@@ -333,8 +334,9 @@ int init_memory(unsigned long arg1)
 	}
 
 	virt_start_addr=init_free_area( virt_start_addr, virt_end_addr);
-	pc_init((unsigned char *)virt_start_addr,0x10000000); /* TODO: currently page cache uses 10M, this may be using 2M pages, this need to move to use 4K size pages */
-	virt_start_addr=virt_start_addr+0x10000000;
+	pc_size = 0x10000000 ;
+	pc_init((unsigned char *)virt_start_addr,pc_size); /* TODO: currently page cache uses 10M, this may be using 2M pages, this need to move to use 4K size pages */
+	virt_start_addr=virt_start_addr+pc_size;
 	init_mem(virt_start_addr, virt_end_addr);
 	return 0;
 }

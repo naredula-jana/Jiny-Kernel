@@ -9,7 +9,13 @@
 #define OFFSET_ALIGN(x) ((x/PC_PAGESIZE)*PC_PAGESIZE) /* the following 2 need to be removed */
 
 static p9_client_t client;
+static int stat_reads=0;
+static int stat_writes=0;
 
+int Jcmd_p9(){
+	ut_printf("P9 reads:%d writes:%d  \n",stat_reads,stat_writes);
+	return 1;
+}
 static int p9ClientInit() {
 	static int init = 0;
 	uint32_t msg_size;
@@ -53,7 +59,7 @@ static int p9_open(uint32_t fid, unsigned char *filename, int flags, int arg_mod
 	unsigned long addr;
 	uint8_t mode_b;
 	uint32_t perm;
-	int i,ret=-1;
+	int i,ret= JFAIL;
 
 	for (i = 0; i < MAX_P9_FILES; i++) {
 		if (client.files[i].fid ==fid) {
@@ -62,14 +68,6 @@ static int p9_open(uint32_t fid, unsigned char *filename, int flags, int arg_mod
 			break;
 		}
 	}
-#if 0
-	if (flags & O_RDONLY)
-		mode_b = 0;
-	else if ((flags & O_WRONLY) || (flags & O_APPEND)){
-		mode_b = 1;
-	} else if (flags & O_RDWR)
-		mode_b = 2;
-#endif
 
 	mode_b = 2; /* every file is opened as RDWR with p9 filesystem, since the open file will use for all the files( read file, write file etc) in vfs */
 	if (flags & O_CREAT) {
@@ -86,7 +84,10 @@ static int p9_open(uint32_t fid, unsigned char *filename, int flags, int arg_mod
 
 	if (addr != 0) {
 		ret = p9_read_rpc(&client, "");
-		ret = 1;
+		if (client.recv_type == P9_TYPE_ROPEN || client.recv_type == P9_TYPE_RCREATE) {
+			ret = JSUCCESS;
+		}
+		//ut_log(" p9fs OPEN fid:%d  return type :%d \n",fid,client.recv_type);
 	}
 	return ret;
 }
@@ -257,10 +258,15 @@ static uint32_t p9_read(uint32_t fid, uint64_t offset, unsigned char *data,
 		client.type = P9_TYPE_TREAD;
 		client.user_data = data;
 		client.userdata_len = data_len;
-
+		stat_reads++;
 		addr = p9_write_rpc(&client, "dqd", fid, offset, data_len);
 		if (addr != 0) {
 			ret = p9_read_rpc(&client, "d", &read_len);
+			if (client.recv_type != P9_TYPE_RREAD) {
+				read_len = 0;
+				ut_log("ERROR Read fid:%d max_size:%d read_len:%d ret%d recvtype:%d \n",fid,data_len,read_len,ret,client.recv_type);
+			}
+
 		}
 	}
 
@@ -293,7 +299,7 @@ typedef struct V9fsIattr
 #endif
 static uint32_t p9_setattr(uint32_t fid, uint64_t size) {
 	unsigned long addr;
-	int i, ret = 0;
+	int i, ret = JFAIL;
 
 	client.type = P9_TYPE_TSETATTR;
 	client.user_data = 0;
@@ -304,7 +310,7 @@ static uint32_t p9_setattr(uint32_t fid, uint64_t size) {
 	if (addr != 0) {
 		ret = p9_read_rpc(&client, "");
 		if (client.recv_type == P9_TYPE_RSETATTR) {
-			ret = 1;
+			ret = JSUCCESS;
 		}
 	}
 	return ret;
@@ -320,9 +326,14 @@ static uint32_t p9_write(uint32_t fid, uint64_t offset, unsigned char *data, uin
 	client.user_data = data;
 	client.userdata_len = data_len;
 
+	stat_writes++;
 	addr = p9_write_rpc(&client, "dqd", fid, offset, data_len);
 	if (addr != 0) {
 		ret = p9_read_rpc(&client, "d", &write_len);
+		if (client.recv_type != P9_TYPE_RWRITE) {
+			write_len = 0;
+			ut_log("ERROR Write fid:%d max_size:%d read_len:%d ret%d recvtype:%d \n",fid,data_len,write_len,ret,client.recv_type);
+		}
 	}
 
 	rd = client.pkt_buf+1024+10;
@@ -337,7 +348,7 @@ static uint32_t p9_write(uint32_t fid, uint64_t offset, unsigned char *data, uin
 
 static uint32_t p9_remove(uint32_t fid) {
 	unsigned long addr;
-	int i,ret=0;
+	int i,ret=JFAIL;
 
 	client.type = P9_TYPE_TREMOVE;
 	client.user_data = 0;
@@ -347,7 +358,7 @@ static uint32_t p9_remove(uint32_t fid) {
 	if (addr != 0) {
 		ret = p9_read_rpc(&client, "");
 		if (client.recv_type == P9_TYPE_RREMOVE) {
-			ret = 1;
+			ret = JSUCCESS;
 			for (i = 0; i < MAX_P9_FILES; i++) {
 				if (client.files[i].fid ==fid) { /* remove the fid as the file is sucessfully removed */
 					client.files[i].fid = 0;
@@ -360,7 +371,7 @@ static uint32_t p9_remove(uint32_t fid) {
 }
 static uint32_t p9_close(uint32_t fid) {
 	unsigned long addr;
-	int i, ret = 0;
+	int i, ret = JFAIL;
 
 	client.type = P9_TYPE_TCLUNK;
 	client.user_data = 0;
@@ -370,7 +381,7 @@ static uint32_t p9_close(uint32_t fid) {
 	if (addr != 0) {
 		ret = p9_read_rpc(&client, "");
 		if (client.recv_type == P9_TYPE_RCLUNK) {
-			ret = 1;
+			ret = JSUCCESS;
 			for (i = 0; i < MAX_P9_FILES; i++) {
 				if (client.files[i].fid == fid) { /* remove the fid as the file is sucessfully closed */
 					client.files[i].fid = 0;
@@ -384,12 +395,11 @@ static uint32_t p9_close(uint32_t fid) {
 
 static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
 	unsigned long addr;
-	int ret=0;
-	//uint64_t dummyq;
+	int ret=JFAIL;
 	uint32_t dummyd;
 	uint16_t dummyw1,dummyw2,dummyw3;
-	//uint8_t dummyb;
 	unsigned char type;
+	uint32_t ret_zero,stat_size;
 
 	client.type = P9_TYPE_TSTAT;
 	client.user_data = 0;
@@ -400,24 +410,26 @@ static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
 		//"wwdbdqdddqssss?sddd"
 		//Q=bdq
 		//"wwdQdddqsssssddd"
-		ret = p9_read_rpc(&client, "wwwdbdqdddq",&dummyw1,&dummyw2,&dummyw3,&stat->blk_size,&type,&dummyd,&stat->inode_no,&stat->mode,&stat->atime,&stat->mtime,&stat->st_size);
-		//DEBUG("stats length :%x \n",stat->st_size);
-		//ut_printf("w1:%x w2 :%x w3:%x file mode :%x type %x\n",dummyw1,dummyw2,dummyw3,stat->mode,type);
-		if (1) {
-			stat->type = 0;
-			if (type == 0) { /* Regular file */
-				stat->type = REGULAR_FILE;
-			} else if (type == 0x80) { /* directory */
-				stat->type = DIRECTORY_FILE;
-			} else if (type == 2) { /* soft link */
-				stat->type = SYM_LINK_FILE;
-			} else {
-				return 0;
-			}
+		ret = p9_read_rpc(&client, "wwwdbdqdddq", &ret_zero, &stat_size,
+				&dummyw3, &stat->blk_size, &type, &dummyd, &stat->inode_no,
+				&stat->mode, &stat->atime, &stat->mtime, &stat->st_size);
 
-			if (client.recv_type == P9_TYPE_RSTAT) {
-				ret = 1;
-			}
+	//	ut_log(" fid:%d ret_zero:%d stat size :%x:  inode:%d:  size:%d recv_type:%d\n",
+	//		fid, ret_zero, stat_size, stat->inode_no, stat->st_size,
+	//			client.recv_type);
+
+		stat->type = 0;
+		if (type == 0) { /* Regular file */
+			stat->type = REGULAR_FILE;
+		} else if (type == 0x80) { /* directory */
+			stat->type = DIRECTORY_FILE;
+		} else if (type == 2) { /* soft link */
+			stat->type = SYM_LINK_FILE;
+		} else {
+			return JFAIL;
+		}
+		if (client.recv_type == P9_TYPE_RSTAT) {
+			ret = JSUCCESS;
 		}
 	}
 
@@ -436,21 +448,20 @@ extern void *p9_dev;
 static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, unsigned char *data, int data_len, int flags, int mode) {
 	uint32_t fid;
 	unsigned char *createFilename;
-	int ret = -1 ;
+	int ret = JFAIL ;
 
 	if (inode == 0 || p9_dev == 0)
 		return ret;
 
 	mutexLock(client.lock);
 	if (type == REQUEST_OPEN) {
-
 		fid = p9_walk(inode->filename, flags, &createFilename);
 		DEBUG("P9 open filename :%s: flags:%x mode:%x  createfilename :%s:\n",inode->filename,flags,mode,createFilename);
 		if (fid > 0) {
 			inode->fs_private = fid;
 			ret = p9_open(fid, createFilename, flags, mode);
 		} else {
-            ret = -1;
+            ret = JFAIL;
 		}
 	} else if (type == REQUEST_READ) {
 		fid = inode->fs_private;
@@ -467,7 +478,7 @@ static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, u
 		struct fileStat *fp = data;
 		fid = inode->fs_private;
 		ret = p9_stat(fid, fp);
-		if (ret==1){
+		if (ret==JSUCCESS){
 			inode->file_type = fp->type;
 		}
 	} else if (type == REQUEST_CLOSE) {
@@ -479,7 +490,7 @@ static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, u
 	}else if (type == REQUEST_SETATTR) {
 		fid = inode->fs_private;
 		ret = p9_setattr(fid,offset);
-		if (ret == 1){
+		if (ret == JSUCCESS){
 			inode->file_size = offset;
 		}
 	}

@@ -20,7 +20,7 @@
 #define TASK_INTERRUPTIBLE      1
 #define TASK_UNINTERRUPTIBLE    2
 #define TASK_STOPPED            4
-#define TASK_KILL               8
+#define TASK_KILLING            8
 #define TASK_DEAD               64
 
 struct user_regs {
@@ -90,7 +90,9 @@ struct task_struct {
 	unsigned long ticks;	
 	struct thread_struct thread;
 	struct mm_struct *mm;
-	int locks_held;
+	int locks_sleepable;
+	int locks_nonsleepable;
+
 
 #define MAX_DEBUG_CALLSTACK 10
 	int trace_stack_length; /* used for trace purpose */
@@ -128,6 +130,7 @@ struct cpu_state {
 struct cpu_state g_cpu_state[];
 #define is_kernelThread(task) (task->mm == g_kernel_mm)
 #define IPI_INTERRUPT 200
+#define IPI_CLEARPAGETABLE 201
 extern int getcpuid();
 
 static inline struct task_struct *current_task(void)

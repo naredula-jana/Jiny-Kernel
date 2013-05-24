@@ -16,9 +16,15 @@
 #endif
 #define POW2(n) (1 << (n))
 
+/* return to system calls */
 #define SYSCALL_SUCCESS 0
 #define SYSCALL_FAIL -1
 
+/* return from different subsystems */
+#define JSUCCESS 1
+#define JFAIL 0
+
+extern int g_boot_completed;
 extern int g_conf_syscall_debug;
 extern int g_conf_debug_level;
 extern spinlock_t g_userspace_stdio_lock;
@@ -33,7 +39,7 @@ extern spinlock_t g_global_lock;
 	}else if (g_conf_syscall_debug==2) {\
 		unsigned long flags; \
 				spin_lock_irqsave(&g_userspace_stdio_lock, flags); \
-				ut_log("SYSCALL(%x :%d uip: %x) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip); ut_log(x); Jcmd_logflush(0,0);\
+				ut_log("SYSCALL(%x :%d uip: %x) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip); ut_log(x); \
 		    	spin_unlock_irqrestore(&g_userspace_stdio_lock, flags); \
 	}\
 } while (0) 

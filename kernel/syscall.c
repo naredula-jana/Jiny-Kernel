@@ -483,7 +483,7 @@ unsigned long SYS_fs_fcntl(int fd, int cmd, int args) {
 unsigned long SYS_futex(unsigned long *a) {//TODO
 	SYSCALL_DEBUG("futex  addr:%x \n", a);
 	*a = 0;
-	return 1;
+	return -1;
 }
 
 unsigned long SYS_sysctl(struct __sysctl_args *args) {
@@ -530,19 +530,22 @@ unsigned long SYS_wait4(int pid, void *status, unsigned long option,
 	unsigned long child_id;
 	unsigned long flags;
 	struct task_struct *child_task = 0;
+#define WNOHANG 1
 
-	spin_lock_irqsave(&g_global_lock, flags);
 	struct list_head *node;
 	node = g_current_task->dead_tasks.head.next;
 	if (list_empty(&(g_current_task->dead_tasks.head.next))) {
-
+		if (!(option & WNOHANG)){
+			sc_sleep(50);
+		}
 	} else {
+		spin_lock_irqsave(&g_global_lock, flags);
 		child_task = list_entry(node,struct task_struct, wait_queue);
 		if (child_task == 0)
 			BUG();
 		list_del(&child_task->wait_queue);
+		spin_unlock_irqrestore(&g_global_lock, flags);
 	}
-	spin_unlock_irqrestore(&g_global_lock, flags);
 
 	if (child_task != 0) {
 		child_id = child_task->pid;

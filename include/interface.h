@@ -69,7 +69,7 @@ int Jcmd_pagecache_stat(char *arg1,char *arg2);
 int pc_pageDirted(struct page *p);
 int pc_pagecleaned(struct page *page);
 struct page *pc_getInodePage(struct inode *inode,unsigned long offset);
-unsigned long pc_getVmaPage(struct vm_area_struct *vma,unsigned long offset);
+unsigned long fs_getVmaPage(struct vm_area_struct *vma,unsigned long offset);
 int pc_insertPage(struct inode *inode,struct page *page);
 int pc_removePage(struct page *page);
 int pc_putFreePage(struct page *page);
@@ -135,7 +135,7 @@ int getmaxcpus();
 int apic_send_ipi_vector(int cpu, uint8_t vector);
 
 unsigned char dr_kbGetchar();
-void ut_putchar(int c);
+void ut_putchar(unsigned char c);
 int read_apic_isr(int isr);
 void local_apic_send_eoi(void);
 
