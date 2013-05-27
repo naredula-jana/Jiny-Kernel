@@ -167,7 +167,7 @@ static int put_into_freelist(struct page *page) {
 	struct inode *inode;
 	unsigned long flags;
 
-	if (page->count.counter!=0){ /* the page is  active */
+	if (page->count.counter!=0 || (page->inode->flags&INODE_EXECUTING)){ /* the page is  active */
 		return JFAIL;
 	}
 	if (page->lru_link.next != 0 || page->lru_link.prev != 0) {
@@ -329,7 +329,7 @@ int pc_pagecleaned(struct page *page) {
 	inode = page->inode;
 	if (inode == 0)
 		BUG();
-	if (inode->flags & TYPE_SHORTLIVED) {
+	if (inode->flags & INODE_SHORTLIVED) {
 		ret = _pagelist_move(page, &active_list);
 	} else {
 		ret = _pagelist_move(page, &inactive_list);
@@ -346,7 +346,7 @@ struct page *pc_getInodePage(struct inode *inode, unsigned long offset) {
 	unsigned long page_offset = (offset / PC_PAGESIZE) * PC_PAGESIZE;
 
 	i = 0;
-	mutexLock(g_inode_lock);
+	mutexLock(g_inode_lock); // TODO: lot of lock contention/waiting because of singly linked list for a big file
 	list_for_each(p, &(inode->page_list)) {
 		page = list_entry(p, struct page, list);
 		i++;
@@ -380,7 +380,7 @@ int pc_insertPage(struct inode *inode, struct page *page) {
 		BUG();
 	}
 	/*  1. link the page to inode */
-	mutexLock(g_inode_lock);
+	mutexLock(g_inode_lock);  // TODO: lot of lock contention/waiting
 	list_for_each(p, &(inode->page_list)) {
 		tmp_page = list_entry(p, struct page, list);
 		i++;
@@ -403,7 +403,7 @@ int pc_insertPage(struct inode *inode, struct page *page) {
 	/* 2. link the page to active or inactive list */
 	if (ret == JSUCCESS) {
 		page->inode = inode;
-		if (inode->flags & TYPE_EXECUTABLE) {
+		if (inode->flags & INODE_EXECUTING) {
 			page->age = AGE_YOUNGEST;
 			_pagelist_add(page, &active_list, TAIL); /* add to the tail of ACTIVE list */
 		} else {
@@ -445,7 +445,39 @@ restart:
 		page_init(p);
 	return p;
 }
+#define MAX_PAGES_SYNC 100
+#define TARGET_FREELIST (0.10*pc_totalpages)
+#define TARGET_INACTIVELIST (0.40*pc_totalpages)
+#define TARGET_DIRTYLIST (0.20*pc_totalpages)
+int pc_housekeep(){
+	int ret;
+	page_struct_t *page;
 
+	/* sync the dirty pages if the level of free pages fall below the target or dirtlist exceed a limit*/
+	ret=MAX_PAGES_SYNC;
+	while (ret == MAX_PAGES_SYNC && (free_list.count.counter<TARGET_FREELIST || dirty_list.count.counter>TARGET_DIRTYLIST)){
+		ret=fs_data_sync(MAX_PAGES_SYNC);
+	}
+
+	/* moves the page from active to inactive if inactive capacity falls below target */
+    if (inactive_list.count.counter < TARGET_INACTIVELIST){
+    	int i;
+    	for (i=0; i<(0.10*active_list.count.counter); i++){
+    		unsigned long flags;
+    		mutexLock(g_inode_lock);
+			page = _pagelist_remove(&active_list);
+			if (page->inode->flags & INODE_EXECUTING){ /* TODO : other parameters like age of page need to be included */
+				_pagelist_add(page, &active_list, TAIL);
+			}else{
+				_pagelist_add(page, &inactive_list, TAIL);
+			}
+    		mutexUnLock(g_inode_lock);
+    	}
+    }
+
+
+	return 1;
+}
 /***************************** House keeping functionality ********************************/
 static struct addr_list acc_list;
 

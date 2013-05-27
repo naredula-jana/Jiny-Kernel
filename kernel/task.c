@@ -252,7 +252,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 
 	mm->exec_fp = (struct file *)fs_open(file, 0, 0);
 	if (mm->exec_fp != 0 && mm->exec_fp->inode!= 0)
-		mm->exec_fp->inode->flags = mm->exec_fp->inode->flags | TYPE_EXECUTABLE ;
+		mm->exec_fp->inode->flags = mm->exec_fp->inode->flags | INODE_EXECUTING ;
 	ut_strncpy(g_current_task->name, file, MAX_TASK_NAME);
 
 
@@ -704,6 +704,7 @@ void ipi_interrupt(){ /* Do nothing, this is just wake up the core when it is ex
 }
 extern kmem_cache_t *g_slab_filep;
 extern void ipi_pagetable_interrupt();
+extern void *g_print_lock;
 int init_tasking(unsigned long unused) {
 	int i;
 	unsigned long task_addr;
@@ -720,6 +721,7 @@ int init_tasking(unsigned long unused) {
 	init_ipc();
 
 	g_inode_lock = mutexCreate("mutex_vfs");
+	g_print_lock = mutexCreate("mutex_print");
 
 	INIT_LIST_HEAD(&(run_queue.head));
 	INIT_LIST_HEAD(&(g_task_queue.head));

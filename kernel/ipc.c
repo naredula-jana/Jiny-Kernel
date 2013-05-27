@@ -12,9 +12,8 @@
 static int ipc_init_done=0;
 void *ipc_mutex_create(unsigned char *name) {
 	struct semaphore *sem = mm_malloc(sizeof(struct semaphore), 0);
-	if (ipc_init_done ==0){
-		BUG();
-	}
+	assert (ipc_init_done !=0);
+
 	if (sem == 0) {
 		return 0;
 	}
@@ -31,20 +30,20 @@ int ipc_mutex_lock(void *p, int line) {
 	if ((sem->owner_pid == g_current_task->pid) && sem->recursive_count != 0){
 		//ut_log("mutex_lock Recursive mutex: thread:%s  count:%d line:%d \n",g_current_task->name,sem->recursive_count,line);
 		sem->recursive_count++;
+		sem->stat_recursive_count++;
 		return 1;
 	}
-	if (g_current_task->locks_nonsleepable > 0){
-		BUG();
-	}
+	assert (g_current_task->locks_nonsleepable == 0);
+
+	g_current_task->stats.wait_line_no = line;
 	while (ipc_sem_wait(p, 100) != 1)
 		;
 
 	sem->owner_pid = g_current_task->pid;
 	sem->recursive_count =1;
 	g_current_task->locks_sleepable++;
-	if (g_current_task->locks_nonsleepable > 0){
-		BUG();
-	}
+	assert (g_current_task->locks_nonsleepable == 0);
+
 	sem->stat_line = line;
 	return 1;
 }
@@ -165,9 +164,8 @@ static void _add_to_waitqueue(wait_queue_t *waitqueue, struct task_struct * p, l
 	cum_ticks = 0;
 	prev_cum_ticks = 0;
 
-	if (p == g_cpu_state[0].idle_task  || p == g_cpu_state[1].idle_task ){
-		BUG();
-	}
+	assert (p != g_cpu_state[getcpuid()].idle_task ) ;
+
 	if (waitqueue->head.next == &waitqueue->head) {
 		p->sleep_ticks = ticks;
 		list_add_tail(&p->wait_queue, &waitqueue->head);
@@ -307,10 +305,14 @@ int ipc_waiton_waitqueue(wait_queue_t *waitqueue, unsigned long ticks) {
 
 	spin_lock_irqsave(&g_global_lock, flags);
 	g_current_task->state = TASK_INTERRUPTIBLE;
+	g_current_task->stats.wait_start_tick_no = g_jiffies ;
+	waitqueue->stat_wait_count++;
 	_add_to_waitqueue(waitqueue, g_current_task, ticks);
 	spin_unlock_irqrestore(&g_global_lock, flags);
 
 	sc_schedule();
+
+	waitqueue->stat_wait_ticks = waitqueue->stat_wait_ticks + (g_jiffies-g_current_task->stats.wait_start_tick_no);
 	if (g_current_task->sleep_ticks <= 0)
 		return 0;
 	else
@@ -326,8 +328,8 @@ void ipc_check_waitqueues() {
 			continue;
 		if (wait_queues[i]->head.next != &(wait_queues[i]->head)) {
 			struct task_struct *task;
-			task =
-					list_entry(wait_queues[i]->head.next, struct task_struct, wait_queue);
+			task =list_entry(wait_queues[i]->head.next, struct task_struct, wait_queue);
+			assert(task!=0);
 
 			task->sleep_ticks--;
 			if (task->sleep_ticks <= 0) {
@@ -386,29 +388,35 @@ int Jcmd_locks(char *arg1, char *arg2) {
 				g_spinlocks[i]->stat_recursive_locks);
 	}
 
-	ut_printf("Wait queue: \n");
+	ut_printf("Wait queue: name: [owner pid] (wait_ticks/count:recursive_count) : waiting pid(name-line_no)\n");
 
 	buf=mm_getFreePages(0,0);
 	len = PAGE_SIZE;
 	spin_lock_irqsave(&g_global_lock, flags);
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
 		struct semaphore *sem=0;
+		int recursive_count=0;
 		if (wait_queues[i] == 0)
 			continue;
 		if (wait_queues[i]->used_for == 0)
-			len = len - ut_snprintf(buf+PAGE_SIZE-len,len," %8s : ", wait_queues[i]->name);
+			len = len - ut_snprintf(buf+PAGE_SIZE-len,len," %9s : ", wait_queues[i]->name);
 		else {
-			len = len - ut_snprintf(buf+PAGE_SIZE-len,len,"[%8s]: ", wait_queues[i]->name);
+			len = len - ut_snprintf(buf+PAGE_SIZE-len,len,"[%9s]: ", wait_queues[i]->name);
 			sem = wait_queues[i]->used_for;
 			if (sem){
+				recursive_count = sem->stat_recursive_count;
 				if (sem->owner_pid != 0)
 					len = len - ut_snprintf(buf+PAGE_SIZE-len,len," [%x] ", sem->owner_pid);
 			}
 		}
+		len = len - ut_snprintf(buf+PAGE_SIZE-len,len," (%d/%d:%d) ", wait_queues[i]->stat_wait_ticks,wait_queues[i]->stat_wait_count,recursive_count);
+
 		if (len <= 0) break;
 		list_for_each(pos, &wait_queues[i]->head) {
+			int wait_line=0;
 			task = list_entry(pos, struct task_struct, wait_queue);
-			len = len - ut_snprintf(buf+PAGE_SIZE-len,len," %x(%s),", task->pid, task->name);
+			if (sem!=0) wait_line=task->stats.wait_line_no;
+			len = len - ut_snprintf(buf+PAGE_SIZE-len,len,":%x(%s-%d),", task->pid, task->name,wait_line);
 		}
 
 		len = len - ut_snprintf(buf+PAGE_SIZE-len,len,"\n");

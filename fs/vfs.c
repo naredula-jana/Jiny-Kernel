@@ -18,7 +18,7 @@ static struct filesystem *vfs_fs = 0;
 static kmem_cache_t *slab_inodep;
 static LIST_HEAD(inode_list);
 void *g_inode_lock = 0; /* protects inode_list */
-spinlock_t g_userspace_stdio_lock = SPIN_LOCK_UNLOCKED("userspace_stdio");
+//spinlock_t g_userspace_stdio_lock = SPIN_LOCK_UNLOCKED("userspace_stdio");
 
 #define OFFSET_ALIGN(x) ((x/PC_PAGESIZE)*PC_PAGESIZE) /* the following 2 need to be removed */
 
@@ -46,10 +46,10 @@ static int inode_init(struct inode *inode, char *filename,
 	{
 		inode->flags = TYPE_SHORTLIVED;
 	} else {
-		inode->flags = TYPE_LONGLIVED;
+		inode->flags = INODE_LONGLIVED;
 	}
 #endif
-	inode->flags = TYPE_LONGLIVED;
+	inode->flags = INODE_LONGLIVED;
 	inode->file_size = 0;
 	inode->fs_private = 0;
 	inode->inode_no = 0;
@@ -77,28 +77,32 @@ int Jcmd_ls(char *arg1, char *arg2) {
 	int i,ret,len;
 	unsigned char *buf;
 	int total_pages = 0;
-	unsigned char *type;
+	unsigned char *type,*bp;
 
-	ut_printf("usagecount nrpages length  inode_no type  name\n");
-	buf=mm_getFreePages(0,0);
-	len = PAGE_SIZE;
+	ut_printf("usagecount nrpages length  inode_no type/type  name\n");
+	buf=mm_getFreePages(0,1);
+	len = PAGE_SIZE*2;
+	bp = buf+len;
 
 	mutexLock(g_inode_lock);
 	list_for_each(p, &inode_list) {
 		tmp_inode = list_entry(p, struct inode, inode_link);
-		if (tmp_inode->flags & TYPE_EXECUTABLE) type="*" ;
+		if (tmp_inode->flags & INODE_EXECUTING) type="*" ;
 		else type=" ";
 
-		len = len - ut_snprintf(buf+PAGE_SIZE-len,len," %4d %4d(%2d) %8d %8d %2x %s%s\n", tmp_inode->count,
+		len = len - ut_snprintf(bp-len,len," %4d %4d(%2d) %8d %8d %2x/%x %s%s\n", tmp_inode->count,
 				tmp_inode->nrpages,tmp_inode->stat_locked_pages.counter, tmp_inode->file_size, tmp_inode->inode_no,
-				tmp_inode->file_type, type,tmp_inode->filename);
+				tmp_inode->file_type, tmp_inode->flags, type,tmp_inode->filename);
 		total_pages = total_pages + tmp_inode->nrpages;
 	}
 	mutexUnLock(g_inode_lock);
+	len = len - ut_snprintf(bp-len, len,"Total pages :%d\n", total_pages);
 
-	ut_printf("%s",buf);
-	mm_putFreePages(buf,0);
-	ut_printf(" Total pages :%d\n", total_pages);
+	len = ut_strlen(buf);
+	SYS_fs_write(1,buf,len);
+
+	mm_putFreePages(buf,1);
+
 	return 1;
 }
 int Jcmd_clear_pagecache() {
@@ -288,6 +292,9 @@ unsigned long fs_putInode(struct inode *inode) {
 		if (inode != 0)
 			atomic_dec(&inode->count);
 	}
+	if (inode->count.counter==1){
+		inode->flags = inode->flags & (~INODE_EXECUTING);
+	}
 	mutexUnLock(g_inode_lock);
 
 	if (ret == 1)
@@ -458,7 +465,7 @@ unsigned long SYS_fs_lseek(unsigned long fd, unsigned long offset, int whence) {
 	return vfs_fs->lseek(file, offset, whence);
 }
 unsigned long fs_readdir(struct file *file, struct dirEntry *dir_ent,
-		int max_dir) {
+		int len, int *offset) {
 	if (vfs_fs == 0)
 		return 0;
 	if (file == 0)
@@ -466,7 +473,7 @@ unsigned long fs_readdir(struct file *file, struct dirEntry *dir_ent,
 	if (file->inode && file->inode->file_type != DIRECTORY_FILE) {
 		BUG();
 	}
-	return vfs_fs->readDir(file->inode, dir_ent, max_dir);
+	return vfs_fs->readDir(file->inode, dir_ent, len,  offset);
 }
 /************************************************************************************************/
 
@@ -481,11 +488,11 @@ int fs_write(struct file *filep, unsigned char *buff, unsigned long len) {
 
 	if (filep->type == OUT_FILE) {
 		unsigned long flags;
-		spin_lock_irqsave(&g_userspace_stdio_lock, flags);
+	//	spin_lock_irqsave(&g_userspace_stdio_lock, flags);
 		for (i = 0; i < len; i++) {
 			ut_putchar((int) buff[i]);
 		}
-		spin_unlock_irqrestore(&g_userspace_stdio_lock, flags);
+	//	spin_unlock_irqrestore(&g_userspace_stdio_lock, flags);
 		return len;
 	}else if (filep->type == OUT_PIPE_FILE) {
 		return fs_send_to_pipe(filep, buff, len);
@@ -832,25 +839,30 @@ unsigned long fs_fadvise(struct inode *inode, unsigned long offset,
 	struct page *page;
 	struct list_head *p;
 	int ret;
+	int count=0;
 
 	//TODO : implementing other advise types
 	if (advise == POSIX_FADV_DONTNEED && len == 0) {
-		while (1) /* delete all the pages in the inode */
+		while (offset < inode->file_size) /* delete all the pages in the inode */
 		{
 			ret  = JFAIL;
+
+			page = pc_getInodePage(inode,offset);
+			offset=offset+PAGE_SIZE;
+			if (page == 0) continue;
+
 			mutexLock(g_inode_lock);
-			p = inode->page_list.next;
-			if (p != &inode->page_list) {
-				page = list_entry(p, struct page, list);
-				ret = pc_removePage(page);
-			}
+			pc_put_page(page);
+			ret = pc_removePage(page);
 			mutexUnLock(g_inode_lock);
-			if (ret == JFAIL){
-					return 1;
+
+			if (ret==JSUCCESS){
+				count++;
 			}
+
 		}
 	}
-	return 0;
+	return count;
 }
 
 unsigned long SYS_fs_fadvise(unsigned long fd, unsigned long offset,

@@ -48,7 +48,7 @@ int vma_page_remove(struct page *page){
 
 	inode=page->inode;
 	if (inode ==0) return found;
-	if (inode->flags & TYPE_EXECUTABLE) return 1;
+	if (inode->flags & INODE_EXECUTING) return 1;
 	list_for_each(p, &(inode->vma_list)) {
 		vma=list_entry(p, struct vm_area_struct, inode_vma_link);
 		mm=vma->vm_mm;
@@ -94,7 +94,7 @@ last:
 	if (ret == 1){ /* success case */
 		if (vma->vm_inode != 0){
 			list_del( &(vma->inode_vma_link));
-			atomic_dec(&vma->vm_inode->count);
+			fs_putInode(vma->vm_inode);
 		}
 	}
 	return ret;

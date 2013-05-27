@@ -78,7 +78,7 @@ typedef struct {
 	uint32_t parent_fid,fid;
 	uint32_t opened;
 }p9_file_t;
-#define MAX_P9_FILES 100
+#define MAX_P9_FILES 600
 typedef struct  {
 	uint16_t tag;
 	uint8_t type,recv_type;

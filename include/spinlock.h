@@ -43,6 +43,12 @@ static inline void arch_spinlock_transfer(spinlock_t *lock,
 	prev->locks_nonsleepable--;
 	next->locks_nonsleepable++;
 	lock->pid = next->pid;
+	if (lock->log_length >= MAX_SPIN_LOG) lock->log_length=0;
+	lock->log[lock->log_length].line = 99999;
+	lock->log[lock->log_length].pid = prev->pid;
+	lock->log[lock->log_length].cpuid = next->cpu;
+	lock->log_length++;
+
 }
 
 static inline void arch_spinlock_lock(spinlock_t *lock, int line) {

@@ -90,6 +90,7 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 	unsigned int out, in;
 	sg[0].page_link = (unsigned long)client->pkt_buf;
 	sg[0].length = 1024;
+	//sg[0].length = client->pkt_len/2;
 	sg[0].offset = 0;
 	out = 1;
 	if (client->type == P9_TYPE_TREAD) {
@@ -107,13 +108,13 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 		sg[0].length = 23; /* this for header , eventhough it is having space pick the data from sg[1] */
 
 		sg[2].page_link = client->pkt_buf + 1024;
-		sg[2].length = 1024;
+		sg[2].length = client->pkt_len-1024;
 		sg[2].offset = 0;
 		out = 2;
 		in = 1;
 	} else {
 		sg[1].page_link = client->pkt_buf + 1024;
-		sg[1].length = 1024;
+		sg[1].length = client->pkt_len-1024;
 		sg[1].offset = 0;
 		in = 1;
 	}

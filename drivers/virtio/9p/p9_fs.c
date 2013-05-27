@@ -27,8 +27,9 @@ static int p9ClientInit() {
 		return 1;
 	init = 1;
 
-	client.pkt_buf = (unsigned char *) mm_getFreePages(MEM_CLEAR, 0);
-	client.pkt_len = 4098;
+	client.pkt_buf = (unsigned char *) mm_getFreePages(MEM_CLEAR, 3);
+	client.pkt_len = 4098*8;
+	ut_memset(client.pkt_buf,0,client.pkt_len);
 
 	client.lock = mutexCreate("mutex_p9");
     if (client.lock == 0) return 0;
@@ -185,38 +186,59 @@ static uint32_t p9_walk(unsigned char *filename, int flags, unsigned char **crea
 	return ret_fd;
 }
 
-static int p9_get_dir_entries(p9_client_t *client, struct dirEntry *dir_ent, int max_dir) {
+static int p9_get_dir_entries(p9_client_t *client, struct dirEntry *dir_ent, int max_len, int *offset) {
 	unsigned char *recv;
 	p9_fcall_t pdu;
-	int i, ret;
+	int i, ret=0;
+	int total_len=0;
 	uint32_t total_len1,total_len2;
-	unsigned char type1, type2;
+	unsigned char p9_ret,type1, type2;
 	uint32_t dummyd;
 	uint16_t tag;
-
 	uint64_t inode, dummyi;
+	int prev_len,len=0;
+	struct dirEntry  *dir_p=dir_ent;
+	unsigned char *p;
 
 	recv = client->pkt_buf + 1024;
-	p9_pdu_init(&pdu, 0, 0, client, recv, 1024);
-	ret = p9_pdu_read_v(&pdu, "dbw", &total_len1, &type1, &tag);
+	p9_pdu_init(&pdu, 0, 0, client, recv, client->pkt_len-1024);
+	ret = p9_pdu_read_v(&pdu, "dbw", &total_len1, &p9_ret, &tag);
 	ret = p9_pdu_read_v(&pdu, "d", &total_len2);
-	//ut_printf(" readir len1: %d len2:%d \n",total_len1,total_len2);
+	//ut_printf(" readir len1: %d len2:%d tag:%d type:%d \n",total_len1,total_len2,tag,p9_ret);
 
-	for (i = 0; (i<max_dir) && ret==0; i++) {
-		ret = p9_pdu_read_v(&pdu, "bdqqbs", &type1, &dummyd, &dir_ent[i].inode_no, &dummyi,
-				&type2, dir_ent[i].filename);
-		if (dir_ent[i].inode_no==0 || (type2!=4 && type2!=10 && type2!=8)){ /* check for soft link, dir,regular file */
+	if (p9_ret != P9_TYPE_RREADDIR){ /* cannot read directory entries */
+		return 0;
+	}
+	p=dir_p;
+	for (i = 0; (total_len<max_len) && ret==0; i++) {
+		ret = p9_pdu_read_v(&pdu, "bdqqbs", &type1, &dummyd, &dir_p->inode_no, &dummyi,
+				&type2, dir_p->filename);
+	//	ut_printf(" ret :%d :inode:%d   name :%s:  total_len:%d\n",ret,dir_p->inode_no,dir_p->filename,total_len);
+		len = 2 * (sizeof(unsigned long)) + sizeof(unsigned short) + ut_strlen(dir_p->filename) + 2;
+
+		if (dir_p->inode_no==0 || (type2!=4 && type2!=10 && type2!=8)){ /* check for soft link, dir,regular file */
 			break;
 		}
-	//	ut_printf(" NEW dir dir : %s: INODE:%x:%d type:%d %d dummyd:%x ret:%d total_len:%d\n", dir_ent[i].filename,
-	//			dir_ent[i].inode_no, dir_ent[i].inode_no,type1, type2, dummyd,ret,total_len1);
+		if ( i< *offset) continue;
+		dir_p->d_reclen = (len / 8) * 8;
+		if ((dir_p->d_reclen) < len)
+			dir_p->d_reclen = dir_p->d_reclen + 8;
+		p = p + dir_p->d_reclen;
+		total_len = total_len + dir_p->d_reclen;
+		dir_p->next_offset = p;
+		dir_p=p;
 	}
 
-	return i;
+	if (offset){
+		*offset=i;
+	}
+	//ut_printf(" Total_LEn:%d  offset:%d\n",total_len,i);
+
+	return total_len;
 }
-static unsigned char dir_data[4000]; //TODO : should not be global
+static unsigned char dir_data[28000]; //TODO : should not be global
 static uint32_t p9_readdir(uint32_t fid, unsigned char *data,
-		uint32_t data_len) {
+		uint32_t data_len, int *offset) {
 	unsigned long addr;
 	int ret;
 	uint32_t read_len = 0;
@@ -226,11 +248,11 @@ static uint32_t p9_readdir(uint32_t fid, unsigned char *data,
 
 	client.type = P9_TYPE_TREADDIR;
 	client.user_data = dir_data;
-	client.userdata_len = 4000;
+	client.userdata_len = 28000;
 
-	addr = p9_write_rpc(&client, "dqd", fid, 0, 3500);
+	addr = p9_write_rpc(&client, "dqd", fid, 0, 28000);
 
-	ret=p9_get_dir_entries(&client,data,data_len);
+	ret=p9_get_dir_entries(&client,data,data_len, offset);
 	return ret;
 }
 static unsigned char test1[1000];
@@ -486,7 +508,7 @@ static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, u
 		ret = p9_close(fid);
 	}else if (type == REQUEST_READDIR) {
 		fid = inode->fs_private;
-		ret = p9_readdir(fid,data,data_len);
+		ret = p9_readdir(fid,data,data_len, offset);
 	}else if (type == REQUEST_SETATTR) {
 		fid = inode->fs_private;
 		ret = p9_setattr(fid,offset);
@@ -524,9 +546,9 @@ static long p9Read(struct inode *inodep, uint64_t offset, unsigned char *data, u
     return  (long)p9Request(REQUEST_READ, inodep, offset, data, data_len, 0, 0);
 }
 
-static long p9ReadDir(struct inode *inodep, struct dirEntry *dir_ptr, unsigned long dir_max) {
+static long p9ReadDir(struct inode *inodep, struct dirEntry *dir_ptr, unsigned long dir_max, int *offset) {
 	p9ClientInit();
-    return  (long)p9Request(REQUEST_READDIR, inodep, 0, dir_ptr, dir_max, 0, 0);
+    return  (long)p9Request(REQUEST_READDIR, inodep, offset, dir_ptr, dir_max, 0, 0);
 }
 
 static int p9Remove(struct inode *inodep) {

@@ -23,6 +23,7 @@ kmem_cache_t *mm_cachep;
 
 int brk_pnt=0;
 uint32_t g_cpu_features;
+void *g_print_lock=0;
 
 extern int init_physical_memory(unsigned long unused);
 extern int init_kmem_cache(unsigned long arg1);
@@ -134,19 +135,14 @@ void idleTask_func() {
 	}
 }
 /****************************************House Keeper *******************************************/
-Jcmd_initlog(){
-	init_log_file(0);
-}
-#define MAX_PAGES_SYNC 100
+
 void housekeeper_thread(){
 	int ret;
 	sc_sleep(3000);  /* TODO : need to wait some part of initilization*/
 	init_log_file(0);
 	while(1){
 		sc_sleep(50);
-		ret=MAX_PAGES_SYNC;
-		while (ret == MAX_PAGES_SYNC) ret=fs_data_sync(MAX_PAGES_SYNC);
-
+		pc_housekeep();
 	}
 }
 /*************************************************************************************************/
@@ -173,7 +169,7 @@ void cmain() {  /* This is the first c function to be executed */
 	do_cpuid(1,val);
 	ut_log("	cpuid result %x : %x :%x :%x \n",val[0],val[1],val[2],val[3]);
 	g_cpu_features=val[3]; /* edx */
-	if ((ret=vm_mmap(0,(unsigned long)KERNEL_ADDR_START ,g_phy_mem_size,PROT_WRITE,MAP_FIXED,KERNEL_ADDR_START)) == 0) /* this is for SMP */
+	if ((ret=vm_mmap(0,(unsigned long)KERNEL_ADDR_START ,g_phy_mem_size,PROT_WRITE,MAP_FIXED,KERNEL_ADDR_START)) == 0)
 	{
 		ut_log("ERROR: kernel address map Fails \n");
 	}

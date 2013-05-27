@@ -543,7 +543,8 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 		{
 		//	ut_printf("ERROR: user program Segmentaion Fault addr:%x  ip:%x :%s\n",addr,faulting_ip,g_current_task->name);
 			Jcmd_maps(0,0);
-			BUG();
+			ut_log("page fault addr:%x ip:%x  \n",addr,faulting_ip);
+			//BUG();
 			SYS_sc_exit(902);
 			return 1;
 		}
@@ -558,7 +559,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 	if (pl3==0)
 	{
 		v=(unsigned long *)mm_getFreePages(MEM_CLEAR,0); /* get page of 4k size for page table */
-		if (v ==0) BUG();
+		assert(v!=0);
 		ut_memset((unsigned char *)v,0,4096);
 		pl3=(unsigned long *)__pa(v);
 		p=(pl4+(L4_INDEX(addr))); /* insert into l4 */
@@ -590,7 +591,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 	if (pl1==0)
 	{
 		v=(unsigned long *)mm_getFreePages(MEM_CLEAR,0); /* get page of 4k size for page table */
-		if (v ==0) BUG();
+		assert (v !=0);
 		ut_memset((unsigned char *)v,0,4096);
 		pl1=(unsigned long *)__pa(v);
 		p=(unsigned long *)(pl2+(L2_INDEX(addr)));
@@ -639,7 +640,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 		ut_printf("ERROR: unknown vm_flag: %x \n",vma->vm_flags);
 		BUG();
 	}
-	if (p==0) BUG();
+	assert(p!=0);
 	pl1=(pl1+(L1_INDEX(addr)));
 	if (addr > KERNEL_ADDR_START && user==0) /* then it is kernel address */
 		mk_pte(__va(pl1),((addr_t)p>>12),1,0,1);/* global=on, user=off rw=on*/

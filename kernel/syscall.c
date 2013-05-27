@@ -386,12 +386,6 @@ struct linux_dirent {
 	unsigned long d_off; /* Offset to next linux_dirent */
 	unsigned short d_reclen; /* Length of this linux_dirent */
 	char d_name[]; /* Filename (null-terminated) */
-/* length is actually (d_reclen - 2 -
- offsetof(struct linux_dirent, d_name) */
-/*
- // char           pad;       // Zero padding byte
- // char           d_type;    // File type (only since Linux 2.6.4;
- */ // offset is (d_reclen - 1))
 };
 
 unsigned long SYS_getdents(unsigned int fd, unsigned char *user_buf, int size) {
@@ -406,41 +400,11 @@ unsigned long SYS_getdents(unsigned int fd, unsigned char *user_buf, int size) {
 	fp = fd_to_file(fd);
 	if (fp <= 0 || user_buf == 0) {
 		ret = -1;
-		goto last;
+		return ret;
 	}
 
-	temp_buf = mm_getFreePages(0, 1);
-
-	tret = fs_readdir(fp, temp_buf, (2 * PAGE_SIZE) / sizeof(struct dirEntry));
-	if (tret <= 0) {
-		goto last;
-	}
-
-	dir_ent = temp_buf;
-	ret = 0;
-	for (i = fp->offset; (i < tret) && ((ret + 220) < size); i++) {
-		dirp = user_buf;
-		dirp->d_ino = dir_ent[i].inode_no;
-		ut_strncpy(dirp->d_name, dir_ent[i].filename, MAX_FILENAME - 1);
-		len = 2 * (sizeof(unsigned long)) + sizeof(unsigned short)
-				+ ut_strlen(dirp->d_name) + 2;
-		dirp->d_reclen = (len / 8) * 8;
-		if ((dirp->d_reclen) < len)
-			dirp->d_reclen = dirp->d_reclen + 8;
-		user_buf = user_buf + dirp->d_reclen;
-		ret = ret + dirp->d_reclen;
-
-		SYSCALL_DEBUG(
-				"    getident :%s:  :%d: d_reclen:%d tret:%d \n", dirp->d_name, dirp->d_ino, dirp->d_reclen, tret);
-		dirp->d_off = user_buf;
-	}
-	fp->offset = i;
-
-	last: if (temp_buf != 0) {
-		mm_putFreePages(temp_buf, 1);
-	}
-	SYSCALL_DEBUG("getidents Ret :%d  tret:%d \n", ret, tret);
-
+	ret = fs_readdir(fp, user_buf, size,&fp->offset);
+last:
 	return ret;
 }
 /*********************** end of getdents *************************/

@@ -37,6 +37,9 @@ typedef struct wait_queue {
 	struct list_head head;
 	char *name;
 	void *used_for; /* it can be used for semaphore/mutex  or raw waitqueue */
+
+	int stat_wait_count;
+	int stat_wait_ticks;
 } wait_queue_t;
 
 struct semaphore {
@@ -47,7 +50,9 @@ struct semaphore {
 	unsigned char *name;
 	unsigned long owner_pid; /* pid that is owning */
 	int recursive_count;
+
 	unsigned int stat_line;
+	unsigned int stat_recursive_count;
 };
 
 typedef struct semaphore sys_sem_t;

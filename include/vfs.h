@@ -72,17 +72,17 @@ enum {
 POSIX_FADV_DONTNEED=4
 };
 
-enum {
-TYPE_SHORTLIVED=0x1,
-TYPE_LONGLIVED=0x2,
-TYPE_EXECUTABLE=0x4
+enum {  /* inode flags */
+INODE_SHORTLIVED=0x1,
+INODE_LONGLIVED=0x2,
+INODE_EXECUTING=0x4
 };
 extern unsigned long g_hostShmLen;
 
 struct file;
 struct inode;
 
-enum {
+enum { /* Inode types*/
 	NETWORK_FILE=2,
 
 	OUT_FILE=3,  /* special in/out files */
@@ -138,10 +138,11 @@ struct fileStat {
 	uint32_t blk_size;
 };
 
-struct dirEntry {
-	unsigned char filename[MAX_FILENAME];
-	int file_type;
-	uint64_t inode_no;
+struct dirEntry { /* Do not change the entries , the size of struct is caluclated */
+	unsigned long inode_no; /* Inode number */
+	unsigned long next_offset; /* Offset to next dirent */
+	unsigned short d_reclen; /* Length of this dirent */
+	char filename[]; /* Filename (null-terminated) */
 };
 
 typedef struct fileStat fileStat_t;
@@ -150,7 +151,7 @@ struct filesystem {
 	int (*lseek)(struct file *file,  unsigned long offset, int whence);
 	long (*write)(struct inode *inode, uint64_t offset, unsigned char *buff, unsigned long len);
 	long (*read)(struct inode *inode, uint64_t offset,  unsigned char *buff, unsigned long len);
-	long (*readDir)(struct inode *inode, struct dirEntry *dir_ptr, unsigned long dir_max);
+	long (*readDir)(struct inode *inode, struct dirEntry *dir_ptr, unsigned long dir_max, int *offset);
 	int (*remove)(struct inode *inode);
 	int (*stat)(struct inode *inode, struct fileStat *stat);
 	int (*close)(struct inode *inodep);

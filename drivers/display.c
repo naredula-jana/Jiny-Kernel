@@ -29,7 +29,7 @@ void cls(void);
 static void itoa(char *buf, int buf_len, int base, unsigned long d);
 void ut_printf(const char *format, ...);
 void ut_log(const char *format, ...);
-
+extern void *g_print_lock;
 /* Clear the screen and initialize VIDEO, XPOS and YPOS.  */
 int ut_cls(void) {
 	int i;
@@ -130,40 +130,6 @@ static void scroll() {
 unsigned char g_dmesg[MAX_DMESG_LOG+2];
 unsigned long g_dmesg_index = 0;
 
-#if 0
-int Jcmd_logflush(char *arg1, char *arg2) {
-	static int init = 0;
-	static unsigned long start_offset = 0;
-	static struct file *fp;
-	int ret;
-
-	if (init == 0) {
-		fp = (struct file *) fs_open((unsigned char *) "jiny.log", O_APPEND, 0);
-		if (fp == 0)
-			return 0;
-		init = 1;
-	}
-	if (fp == 0)
-		return 0;
-	while ((g_dmesg_index - start_offset) > 0) {
-		int index, len;
-		index = start_offset % MAX_DMESG_LOG;
-		len = MAX_DMESG_LOG - index;
-		if (((g_dmesg_index - start_offset)) < len)
-			len = (g_dmesg_index - start_offset);
-		ret = fs_write(fp, &g_dmesg[start_offset % MAX_DMESG_LOG], len);
-		fs_fdatasync(fp);
-		if (ret > 0) {
-			start_offset = start_offset + ret;
-		} else {
-			break;
-		}
-	}
-	return 1;
-}
-#endif
-
-
 extern int dr_serialWrite( char *buf , int len);
 /* Put the character C on the screen.  */
 static spinlock_t putchar_lock = SPIN_LOCK_UNLOCKED("putchar");
@@ -187,18 +153,14 @@ static void log_putchar(unsigned char c){
 	unsigned long flags;
 
 	spin_lock_irqsave(&putchar_lock, flags);
+	//if (g_boot_completed) mutexLock(g_print_lock);
 
 	g_dmesg[g_dmesg_index % MAX_DMESG_LOG] = (unsigned char) c;
 	g_dmesg[(g_dmesg_index+1) % MAX_DMESG_LOG]=0;
 	g_dmesg_index++;
+
+	//if (g_boot_completed) mutexUnLock(g_print_lock);
 	spin_unlock_irqrestore(&putchar_lock, flags);
-#if 0
-	if (init_log_file_done==1){
-		unsigned char buf[8];
-		buf[0]=c;
-		fs_write(log_fp, buf, 1);
-	}
-#endif
 }
 int Jcmd_dmesg(unsigned char *arg1){
 	ut_printf("Size/Max : %d / %d \n",g_dmesg_index,MAX_DMESG_LOG);
@@ -234,6 +196,7 @@ void ut_putchar(unsigned char c) {
 
 	video_g = (unsigned char *) VIDEO;
 	spin_lock_irqsave(&putchar_lock, flags);
+//	if (g_boot_completed) mutexLock(g_print_lock);
 	ptr = &(video_buffer_g[0][0]);
 	if (c == '\n' || c == '\r') {
 		newline: xpos = 0;
@@ -246,6 +209,7 @@ void ut_putchar(unsigned char c) {
 				ypos = 0;
 			}
 		}
+		//if (g_boot_completed) mutexUnLock(g_print_lock);
 		spin_unlock_irqrestore(&putchar_lock, flags);
 		return;
 	}
@@ -258,9 +222,10 @@ void ut_putchar(unsigned char c) {
 	xpos++;
 	if (xpos >= COLUMNS)
 		goto newline;
+
+//	if (g_boot_completed) mutexUnLock(g_print_lock);
 	spin_unlock_irqrestore(&putchar_lock, flags);
 }
-static spinlock_t printf_lock = SPIN_LOCK_UNLOCKED("printf");
 
 struct writer_struct{
 	int type;
@@ -363,17 +328,18 @@ static void format_string(struct writer_struct *writer, const char *format, va_l
 		}
 	}
 }
+
 void ut_printf(const char *format, ...) {
 	struct writer_struct writer;
 	unsigned long flags;
-//	spin_lock_irqsave(&printf_lock, flags);
+	//if (g_boot_completed) mutexLock(g_print_lock);  Cannot be used because idle threads may issue print from isrs
 	va_list vl;
 	va_start(vl,format);
 
 	writer.type=0;
 	format_string(&writer,format,vl);
 
-//	spin_unlock_irqrestore(&printf_lock, flags);
+	//if (g_boot_completed) mutexUnLock(g_print_lock);
 }
 
 
@@ -381,7 +347,8 @@ void ut_log(const char *format, ...){
 	struct writer_struct writer;
 	unsigned long flags;
 	char buf[80];
-//	spin_lock_irqsave(&printf_lock, flags);
+//	if (g_boot_completed) mutexLock(g_print_lock);
+
 	va_list vl;
 	va_start(vl,format);
 
@@ -395,5 +362,5 @@ void ut_log(const char *format, ...){
 	writer.type=1;
 	format_string(&writer,format,vl);
 
-//	spin_unlock_irqrestore(&printf_lock, flags);
+//	if (g_boot_completed) mutexUnLock(g_print_lock);
 }

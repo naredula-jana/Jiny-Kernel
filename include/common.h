@@ -33,16 +33,14 @@ extern spinlock_t g_global_lock;
 #define SYSCALL_DEBUG(x...) do { \
 	if (g_conf_syscall_debug==1)	{\
 		unsigned long flags; \
-		spin_lock_irqsave(&g_userspace_stdio_lock, flags); \
 		ut_printf("SYSCALL(%x :%d uip: %x) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip); ut_printf(x); \
-    	spin_unlock_irqrestore(&g_userspace_stdio_lock, flags); \
 	}else if (g_conf_syscall_debug==2) {\
 		unsigned long flags; \
-				spin_lock_irqsave(&g_userspace_stdio_lock, flags); \
 				ut_log("SYSCALL(%x :%d uip: %x) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip); ut_log(x); \
-		    	spin_unlock_irqrestore(&g_userspace_stdio_lock, flags); \
 	}\
 } while (0) 
+
+#define assert(x) do {  if (!(x)) { BUG() ;} } while(0)
 
  //#define DEBUG_ENABLE 1
 #ifdef DEBUG_ENABLE 
@@ -90,20 +88,10 @@ typedef struct {
 }time_t;
 
 #define unlikely(x)     (x) /* TODO */
-#define BUG() do { unsigned long stack_var; ut_printf(" Kernel BUG  file : %s : line :%d \n",__FILE__,__LINE__);  \
+#define BUG() do { unsigned long stack_var;  \
 	cli(); ut_showTrace(&stack_var);while(1) ; } while(0)
 #define BUG_ON(condition) do { if (unlikely((condition)!=0)) BUG(); } while(0)
 
-#define ASSERT(x)                                              \
-do {                                                           \
-        if (!(x)) {                                                \
-                printk("ASSERTION FAILED: %s at %s:%d.\n",             \
-                           # x ,                                           \
-                           __FILE__,                                       \
-                           __LINE__);                                      \
-        BUG();                                                 \
-        }                                                          \
-} while(0)
 
 // Enables registration of callbacks for interrupts or IRQs.
 // For IRQs, to ease confusion, use the #defines above as the

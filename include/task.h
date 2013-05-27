@@ -110,6 +110,8 @@ struct task_struct {
 	struct {
 		unsigned long ticks_consumed;
 		unsigned long mem_consumed;
+		unsigned wait_start_tick_no;
+		int wait_line_no; /* line number where mutex lock as triggered */
 	} stats;
 
 	unsigned long magic_numbers[4]; /* already stack is default fill with magic numbers */
