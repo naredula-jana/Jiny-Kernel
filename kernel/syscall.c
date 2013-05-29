@@ -107,7 +107,7 @@ typedef struct {
 syscalltable_t syscalltable[] = {
 /* 0 */
 { SYS_fs_read },/* 0 */{ SYS_fs_write }, { SYS_fs_open }, { SYS_fs_close }, { SYS_fs_stat }, { SYS_fs_fstat }, /* 5 */
-{ SYS_fs_stat }, { SYS_poll }, { snull }, { SYS_vm_mmap }, { SYS_vm_mprotect },/* 10 */
+{ SYS_fs_stat }, { SYS_poll }, { SYS_fs_lseek }, { SYS_vm_mmap }, { SYS_vm_mprotect },/* 10 */
 { SYS_vm_munmap }, { SYS_vm_brk }, { SYS_rt_sigaction }, { snull }, { snull }, /* 15 */
 { SYS_ioctl }, { snull }, { snull }, { SYS_fs_readv }, { SYS_fs_writev }, /* 20 */
 { snull }, { SYS_pipe }, { snull }, { snull }, { snull }, /* 25 */

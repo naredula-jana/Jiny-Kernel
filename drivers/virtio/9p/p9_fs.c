@@ -27,8 +27,8 @@ static int p9ClientInit() {
 		return 1;
 	init = 1;
 
-	client.pkt_buf = (unsigned char *) mm_getFreePages(MEM_CLEAR, 3);
-	client.pkt_len = 4098*8;
+	client.pkt_buf = (unsigned char *) mm_getFreePages(MEM_CLEAR, 2);
+	client.pkt_len = 4098*4; /* this should be above 4090*2 */
 	ut_memset(client.pkt_buf,0,client.pkt_len);
 
 	client.lock = mutexCreate("mutex_p9");
@@ -40,6 +40,7 @@ static int p9ClientInit() {
 	if (addr != 0) {
 		ret = p9_read_rpc(&client, "ds", &msg_size, version);
 	}
+	ut_log("p9 init read msgsize:%d  version:%s: \n",msg_size,version);
 	DEBUG("New cmd:%x size:%x version:%s  pkt_buf:%x\n",ret, msg_size,version,client.pkt_buf);
 
 	client.type = P9_TYPE_TATTACH;
@@ -204,7 +205,7 @@ static int p9_get_dir_entries(p9_client_t *client, struct dirEntry *dir_ent, int
 	p9_pdu_init(&pdu, 0, 0, client, recv, client->pkt_len-1024);
 	ret = p9_pdu_read_v(&pdu, "dbw", &total_len1, &p9_ret, &tag);
 	ret = p9_pdu_read_v(&pdu, "d", &total_len2);
-	//ut_printf(" readir len1: %d len2:%d tag:%d type:%d \n",total_len1,total_len2,tag,p9_ret);
+	//ut_printf("New readir len1: %d len2:%d tag:%d type:%d  maxbuflen:%d\n",total_len1,total_len2,tag,p9_ret,client->pkt_len-1024);
 
 	if (p9_ret != P9_TYPE_RREADDIR){ /* cannot read directory entries */
 		return 0;
@@ -236,7 +237,7 @@ static int p9_get_dir_entries(p9_client_t *client, struct dirEntry *dir_ent, int
 
 	return total_len;
 }
-static unsigned char dir_data[28000]; //TODO : should not be global
+
 static uint32_t p9_readdir(uint32_t fid, unsigned char *data,
 		uint32_t data_len, int *offset) {
 	unsigned long addr;
@@ -247,8 +248,8 @@ static uint32_t p9_readdir(uint32_t fid, unsigned char *data,
 	stat = &fstat;
 
 	client.type = P9_TYPE_TREADDIR;
-	client.user_data = dir_data;
-	client.userdata_len = 28000;
+	client.user_data = 0;
+	client.userdata_len = 0;
 
 	addr = p9_write_rpc(&client, "dqd", fid, 0, 28000);
 

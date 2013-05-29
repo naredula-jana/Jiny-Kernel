@@ -237,7 +237,12 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, 
 
 	}
 	ret=vma_link(mm, vma);
-	return vma->vm_start;
+	if (ret < 0){
+		mm_slab_cache_free(vm_area_cachep, vma);
+		return -1;
+	}else{
+		return vma->vm_start;
+	}
 }
 
 long SYS_vm_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff) {

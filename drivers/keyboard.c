@@ -95,7 +95,7 @@ unsigned char dr_kbGetchar(int device_id) {
 			input_devices[i].read_pos = 0;
 		}
 #if 0
-		ut_log(" key value :%x: \n",c);
+	//	ut_log(" key value :%x: \n",c);
 #define CTRL_C 3
 #define CTRL_D 4
 		if (c == 'C') {

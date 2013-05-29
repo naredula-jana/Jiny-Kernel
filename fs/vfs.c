@@ -80,8 +80,8 @@ int Jcmd_ls(char *arg1, char *arg2) {
 	unsigned char *type,*bp;
 
 	ut_printf("usagecount nrpages length  inode_no type/type  name\n");
-	buf=mm_getFreePages(0,1);
-	len = PAGE_SIZE*2;
+	buf=mm_getFreePages(0,2);
+	len = PAGE_SIZE*4;
 	bp = buf+len;
 
 	mutexLock(g_inode_lock);
@@ -94,6 +94,7 @@ int Jcmd_ls(char *arg1, char *arg2) {
 				tmp_inode->nrpages,tmp_inode->stat_locked_pages.counter, tmp_inode->file_size, tmp_inode->inode_no,
 				tmp_inode->file_type, tmp_inode->flags, type,tmp_inode->filename);
 		total_pages = total_pages + tmp_inode->nrpages;
+		if (len < 500) break;
 	}
 	mutexUnLock(g_inode_lock);
 	len = len - ut_snprintf(bp-len, len,"Total pages :%d\n", total_pages);
@@ -458,11 +459,16 @@ unsigned long SYS_fs_lseek(unsigned long fd, unsigned long offset, int whence) {
 
 	SYSCALL_DEBUG("lseek fd:%d offset:%x whence:%x \n", fd, offset, whence);
 	file = fd_to_file(fd);
-	if (vfs_fs == 0)
-		return 0;
-	if (file == 0)
-		return 0;
-	return vfs_fs->lseek(file, offset, whence);
+	if (vfs_fs == 0 || file == 0)
+		return -1;
+	if (whence == SEEK_SET) {
+		file->offset = offset;
+	} else if (whence == SEEK_CUR) {
+		file->offset = file->offset + offset;
+	} else
+		return -1;
+
+	return file->offset;
 }
 unsigned long fs_readdir(struct file *file, struct dirEntry *dir_ent,
 		int len, int *offset) {
@@ -625,6 +631,8 @@ retry_again:  /* the purpose to retry is to get again from the page cache with p
 	return page;
 }
 
+#define CTRL_C 3
+#define CTRL_D 4
 long fs_read(struct file *filep, unsigned char *buff, unsigned long len) {
 	int ret;
 	struct page *page;
@@ -638,6 +646,14 @@ long fs_read(struct file *filep, unsigned char *buff, unsigned long len) {
 		if (buff == 0 || len == 0)
 			return 0;
 		buff[0] = dr_kbGetchar(g_current_task->mm->fs.input_device);
+
+		if (buff[0]==CTRL_D || buff[0]==CTRL_C){
+			ut_log(" RECVIED special character :%x thread name :%s:\n",buff[0],g_current_task->name);
+		}
+
+		if (buff[0]==CTRL_D || buff[0]==CTRL_C){/* for CTRL-D */
+			return 0;
+		}
 		if (buff[0] == 0xd)
 			buff[0] = '\n';
 		buff[1] = '\0';
