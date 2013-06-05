@@ -93,7 +93,6 @@ struct task_struct {
 	int locks_sleepable;
 	int locks_nonsleepable;
 
-
 #define MAX_DEBUG_CALLSTACK 10
 	int trace_stack_length; /* used for trace purpose */
 	char trace_on; /* used for trace */
@@ -126,7 +125,8 @@ struct cpu_state {
 	int active; /* only active cpu will pickup the tasks , otherwise they can only run idle threads */
 	int intr_disabled; /* interrupts disabled except apic timer */
 
-	unsigned long cpu_contexts;
+	unsigned long stat_total_contexts;
+	unsigned long stat_nonidle_contexts;
 }; /* TODO : align to 64 */
 //}__aligned(64);
 struct cpu_state g_cpu_state[];

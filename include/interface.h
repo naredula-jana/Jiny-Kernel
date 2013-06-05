@@ -71,7 +71,7 @@ int pc_pagecleaned(struct page *page);
 struct page *pc_getInodePage(struct inode *inode,unsigned long offset);
 unsigned long fs_getVmaPage(struct vm_area_struct *vma,unsigned long offset);
 int pc_insertPage(struct inode *inode,struct page *page);
-int pc_removePage(struct page *page);
+int pc_deletePage(struct page *page);
 int pc_putFreePage(struct page *page);
 page_struct_t *pc_getFreePage();
 

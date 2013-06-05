@@ -62,6 +62,7 @@ long fault_error_g=0;
 long fault_num_g=0;
 struct fault_ctx cpu_ctx;
 static int gpFault(struct fault_ctx *ctx) {
+	int stack_var;
 	fault_ip_g = ctx->istack_frame->rip;
 	fault_error_g = ctx->errcode;
 	fault_num_g = ctx->fault_num;
@@ -70,8 +71,10 @@ static int gpFault(struct fault_ctx *ctx) {
 			" ERROR: cpuid:%d Gp Fault fault ip:%x error code:%x sp:%x fault number:%x taskname:%s:\n",
 			getcpuid(), fault_ip_g, fault_error_g, ctx->istack_frame->rsp,
 			fault_num_g, g_current_task->name);
+	ut_showTrace(&stack_var);
 	if (g_current_task->mm != g_kernel_mm) /* user level thread */
 	{
+		while(1);
 		SYS_sc_exit(100);
 		return 0;
 	}
@@ -102,29 +105,39 @@ void init_handlers()
 	ar_registerInterrupt(13, gpFault,"gpfault", NULL);
 }
 
-int Jcmd_irq(char *arg1,char *arg2)
+int Jcmd_cpu(char *arg1,char *arg2)
 {
 	int i, j;
 
 	ut_printf("         ");
 	for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
-		ut_printf("CPU%d        ", j);
+		ut_printf("  CPU%d        ", j);
 	}
 	ut_printf("\n");
 	for (i = 0; i < MAX_IRQS; i++) {
 		if (g_interrupt_handlers[i].action == 0
 				&& g_interrupt_handlers[i].stat[j].num_error == 0)
 			continue;
-#if 1
+
 		if (i < 32 && g_interrupt_handlers[i].action == gpFault)
 			continue;
-#endif
+
 		ut_printf(" %2d: ",i);
 		for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
-			ut_printf("[%4d %3d] ",g_interrupt_handlers[i].stat[j].num_irqs,g_interrupt_handlers[i].stat[j].num_error);
+			ut_printf("[%6d ] ",g_interrupt_handlers[i].stat[j].num_irqs);
+			if (g_interrupt_handlers[i].stat[j].num_error > 0)
+				ut_printf(" -%3d ",g_interrupt_handlers[i].stat[j].num_error );
 		}
 		ut_printf(":%s \n",g_interrupt_handlers[i].name);
 	}
+	ut_printf("       ");
+	for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
+		if (g_cpu_state[j].stat_total_contexts > 10000)
+			ut_printf("[%3dk/%3dk] ",g_cpu_state[j].stat_nonidle_contexts/1000,g_cpu_state[j].stat_total_contexts/1000);
+		else
+			ut_printf("[%3d/%3d] ",g_cpu_state[j].stat_nonidle_contexts,g_cpu_state[j].stat_total_contexts);
+	}
+	ut_printf(":context switches \n");
 
 	return 1;
 }
@@ -246,21 +259,16 @@ void ar_irqHandler(void *p,unsigned int int_no)
 			handler(g_interrupt_handlers[int_no].private_data);
 		}
 		g_interrupt_handlers[int_no].stat[getcpuid()].num_irqs++;
-
-
-#ifdef SMP
-	local_apic_send_eoi(); // Re-enable the APIC interrupts
-#endif
 	}else
 	{
 		g_interrupt_handlers[int_no].stat[getcpuid()].num_error++;
 		if (int_no != 32)	 {
 			//ut_printf("UNhandled interrupt ..: %d \n",int_no);
 		}
-#ifdef SMP
-	local_apic_send_eoi();  // Re-enable the APIC interrupts
-#endif
 	}
+#ifdef SMP
+	local_apic_send_eoi(); // Re-enable the APIC interrupts
+#endif
 }
 extern void timer_callback(registers_t regs);
 void init_timer() {

@@ -484,24 +484,24 @@ int ar_dup_pageTable(struct mm_struct *src_mm,struct mm_struct *dest_mm)
 	return 1;
 }
 
-int ar_check_valid_address(unsigned long addr) {
+int ar_check_valid_address(unsigned long addr, int len) {
 
 	addr_t *v; /* virtual address */
 	addr_t *pl4, *pl3, *pl2, *pl1, *p; /* physical address */
 	struct vm_area_struct *vma;
 
-//	return 1;
-
 	if (g_boot_completed == 0)
 		return 1; /* ignore checking while booting */
-	struct mm_struct *mm = g_current_task->mm;
 
-//	if (mm==0 || mm==g_kernel_mm) return 1;
+	struct mm_struct *mm = g_current_task->mm;
 
 	/* 1. check for the kernel address */
 	vma = vm_findVma(g_kernel_mm, (addr & PAGE_MASK), 4); /* check kernel addr */
-	if (vma != 0)
-		return JSUCCESS;
+	if (vma != 0){
+		if ((addr+len) <= vma->vm_end){
+			return JSUCCESS;
+		}
+	}
 
 	/* If it is kernel thread then we have reached to fail point */
 	if (mm == g_kernel_mm)
@@ -510,10 +510,11 @@ int ar_check_valid_address(unsigned long addr) {
 	/* 2. check for user level space */
 	vma = vm_findVma(mm, (addr & PAGE_MASK), 4);
 	if (vma != 0) {
-		return JSUCCESS;
+		if ((addr+len) <= vma->vm_end){
+			return JSUCCESS;
+		}
 	}
 
-//	while (1) ;
 	return JFAIL;
 }
 static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_fault)
@@ -541,10 +542,12 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 	{
 		if ( user == 1)
 		{
+			int stack_var;
 		//	ut_printf("ERROR: user program Segmentaion Fault addr:%x  ip:%x :%s\n",addr,faulting_ip,g_current_task->name);
 			Jcmd_maps(0,0);
 			ut_log("page fault addr:%x ip:%x  \n",addr,faulting_ip);
 			//BUG();
+			ut_showTrace(&stack_var);
 			SYS_sc_exit(902);
 			return 1;
 		}

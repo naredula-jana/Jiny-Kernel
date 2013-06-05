@@ -310,11 +310,11 @@ static void format_string(struct writer_struct *writer, const char *format, va_l
 					p=buf;
 				}
 /* TODO: need to check the validity of virtual address, otherwise it will generate page fault with lock */
-				while (ar_check_valid_address(p)==JSUCCESS  && *p){
+				while (ar_check_valid_address(p,1)==JSUCCESS  && *p){
 					if (str_writer(writer, *p) ==0) return;
 					p++;
 				}
-	            if (ar_check_valid_address(p)==JFAIL){
+	            if (ar_check_valid_address(p,1)==JFAIL){
 	            	BUG();
 	            	ut_log("Invalid Address tp display : %x \n",p);
 	            }

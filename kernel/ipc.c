@@ -20,6 +20,7 @@ void *ipc_mutex_create(unsigned char *name) {
 	sem->name = name;
 	ipc_sem_new(sem, 1);
 	sem->wait_queue.used_for = sem;
+	sem->stat_acquired_start_time =0;
 	return sem;
 }
 int ipc_mutex_lock(void *p, int line) {
@@ -45,6 +46,7 @@ int ipc_mutex_lock(void *p, int line) {
 	assert (g_current_task->locks_nonsleepable == 0);
 
 	sem->stat_line = line;
+	sem->stat_acquired_start_time = g_jiffies;
 	return 1;
 }
 int ipc_mutex_unlock(void *p, int line) {
@@ -61,7 +63,9 @@ int ipc_mutex_unlock(void *p, int line) {
 	sem->recursive_count =0;
 	g_current_task->locks_sleepable--;
 	sem->stat_line = -line;
+	sem->stat_total_acquired_time += (g_jiffies-sem->stat_acquired_start_time);
 	ipc_sem_signal(p);
+
 
 	return 1;
 }
@@ -396,6 +400,7 @@ int Jcmd_locks(char *arg1, char *arg2) {
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
 		struct semaphore *sem=0;
 		int recursive_count=0;
+		int total_acquired_time=0;
 		if (wait_queues[i] == 0)
 			continue;
 		if (wait_queues[i]->used_for == 0)
@@ -405,11 +410,12 @@ int Jcmd_locks(char *arg1, char *arg2) {
 			sem = wait_queues[i]->used_for;
 			if (sem){
 				recursive_count = sem->stat_recursive_count;
+				total_acquired_time = sem->stat_total_acquired_time;
 				if (sem->owner_pid != 0)
 					len = len - ut_snprintf(buf+PAGE_SIZE-len,len," [%x] ", sem->owner_pid);
 			}
 		}
-		len = len - ut_snprintf(buf+PAGE_SIZE-len,len," (%d/%d:%d) ", wait_queues[i]->stat_wait_ticks,wait_queues[i]->stat_wait_count,recursive_count);
+		len = len - ut_snprintf(buf+PAGE_SIZE-len,len," (%d/%d:%d: AT:%d) ", wait_queues[i]->stat_wait_ticks,wait_queues[i]->stat_wait_count,recursive_count,total_acquired_time);
 
 		if (len <= 0) break;
 		list_for_each(pos, &wait_queues[i]->head) {

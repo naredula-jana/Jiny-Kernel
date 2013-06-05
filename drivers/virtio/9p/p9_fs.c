@@ -281,6 +281,7 @@ static uint32_t p9_read(uint32_t fid, uint64_t offset, unsigned char *data,
 		client.type = P9_TYPE_TREAD;
 		client.user_data = data;
 		client.userdata_len = data_len;
+		pc_check_valid_addr(data, data_len);
 		stat_reads++;
 		addr = p9_write_rpc(&client, "dqd", fid, offset, data_len);
 		if (addr != 0) {
@@ -348,6 +349,7 @@ static uint32_t p9_write(uint32_t fid, uint64_t offset, unsigned char *data, uin
 	client.type = P9_TYPE_TWRITE;
 	client.user_data = data;
 	client.userdata_len = data_len;
+	pc_check_valid_addr(data, data_len);
 
 	stat_writes++;
 	addr = p9_write_rpc(&client, "dqd", fid, offset, data_len);

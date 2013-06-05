@@ -88,7 +88,7 @@ struct vm_area_struct {
 	unsigned long vm_private_data; /* was vm_pte (shared mem) */
 	struct list_head inode_vma_link; /* vmas connected to inode */
 };
-
+#define PAGE_MAGIC 0xabab123456
 typedef struct page {
 	/* these must be first (free area handling) */
 	struct page *next;
@@ -104,6 +104,7 @@ typedef struct page {
 	struct list_head lru_link; /* LRU list: the page can be in freelist,active or inactive in of the list   */
 	unsigned char list_type; /* LRU list # is stored */
 	struct list_head list; /*TODO: currently used 1)  SLAB 2) pagecache:inodelist  */
+	unsigned long magic_number;
 } page_struct_t;
 
 #define ADDR_LIST_MAX 500

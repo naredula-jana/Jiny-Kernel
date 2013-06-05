@@ -40,7 +40,7 @@ static int sh_mmap(unsigned char *arg1, unsigned char *arg2);
 static int sh_pci(unsigned char *arg1, unsigned char *arg2);
 
 int conf_set(unsigned char *arg1, unsigned char *arg2);
-int scan_pagetable(unsigned char *arg1, unsigned char *arg2);
+
 static int debug_trace(unsigned char *arg1, unsigned char *arg2);
 
 int g_conf_debug_level = 1;
@@ -77,7 +77,6 @@ commands_t cmd_list[] = { { "help      ", "HELP MENU", "help", sh_create },
 		{"debug  ", "debug ", "debug", debug_trace },
 		{"cmd  <cmd> <arg1> <arg2>", "execute commands", "cmd", cmd },
 		{ "kill <pid> ","kill process", "kill", sh_kill },
-		{ "scan        ", "scan page cache ", "scan", scan_pagetable },
 		{ "mmap <file> <addr>", "mmap file", "mmap",sh_mmap },
 		{ "amem <order>", "mem allocate ", "amem", sh_alloc_mem },
 		{"fmem <address>", "mem allocate ", "fmem", sh_free_mem },

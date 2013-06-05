@@ -86,6 +86,11 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 	va_end(ap);
 	p9_pdu_finalize(&pdu);
 
+#if 1
+	if (client->user_data!= 0){
+		pc_check_valid_addr(client->user_data, client->userdata_len);
+	}
+#endif
 	struct scatterlist sg[4];
 	unsigned int out, in;
 	sg[0].page_link = (unsigned long)client->pkt_buf;
@@ -127,16 +132,17 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 	len = 0;
 	i = 0;
 	addr = 0;
-	while (i < 30 && addr == 0) {
+	while (i < 50 && addr == 0) {
 		addr = virtio_removeFromQueue(p9_dev->vq[0], &len); /* TODO : here sometime returns zero because of some race condition, the packet is not recevied */
 		i++;
 		if (addr == 0) {
-			ut_log("sleep in P9 so sleeping for while requests:%d intr:%d\n",stat_request,stat_intr);
+			//ut_log("sleep in P9 so sleeping for while requests:%d intr:%d\n",stat_request,stat_intr);
 			//sc_sleep(300);
 			ipc_waiton_waitqueue(&p9_waitq, 30);
 		}
 	}
 	if (addr != (unsigned long)client->pkt_buf) {
+		BUG();
 		DEBUG("9p write : got invalid address : %x \n", addr);
 		return 0;
 	}
@@ -179,8 +185,7 @@ static void virtio_9p_interrupt(registers_t regs) { // TODO: handling similar  t
 	stat_intr++;
 	ret = ipc_wakeup_waitqueue(&p9_waitq); /* wake all the waiting processes */
 	if (ret==0){
-		//ut_log("ERROR: p9 wait No one is waiting...\n");
-		ut_log("ERROR:New  p9 wait No one is waiting requests:%d intr:%d\n",stat_request,stat_intr);
+		//ut_log("ERROR:New  p9 wait No one is waiting requests:%d intr:%d\n",stat_request,stat_intr);
 	}
 }
 DEFINE_DRIVER(virtio_9p_pci, virtio_pci, probe_virtio_9p_pci, attach_virtio_9p_pci, dettach_virtio_9p_pci);

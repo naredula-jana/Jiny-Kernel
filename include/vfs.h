@@ -115,6 +115,8 @@ struct file {
 	void *private;
 };
 
+#define PAGELIST_HASH_SIZE 40
+#define get_pagelist_index(offset)  ((offset/PAGE_SIZE)%PAGELIST_HASH_SIZE)
 struct inode {
 	atomic_t count; /* usage count */
 	int nrpages;	/* total pages */
@@ -130,7 +132,7 @@ struct inode {
 	uint64_t inode_no;
 
 	unsigned char filename[MAX_FILENAME];
-	struct list_head page_list;	
+	struct list_head page_list[PAGELIST_HASH_SIZE];
 	struct list_head vma_list;	
 	struct list_head inode_link;	
 };

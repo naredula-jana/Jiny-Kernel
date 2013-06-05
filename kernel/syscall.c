@@ -513,7 +513,7 @@ unsigned long SYS_wait4(int pid, void *status, unsigned long option,
 
 	if (child_task != 0) {
 		child_id = child_task->pid;
-		ut_log("wait child exited :%s: exitcode:%d \n",child_task->name,child_task->exit_code);
+	//	ut_log("wait child exited :%s: exitcode:%d \n",child_task->name,child_task->exit_code);
 		sc_delete_task(child_task);
 		SYSCALL_DEBUG(" wait returning the child id :%d(%x) \n", child_id, child_id);
 		return child_id;

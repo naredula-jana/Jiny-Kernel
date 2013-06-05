@@ -43,7 +43,7 @@ unsigned char *pc_startaddr;
 unsigned char *pc_endaddr;
 static int pc_totalpages=0;
 static page_list_t free_list,active_list,dirty_list,inactive_list;
-static spinlock_t pc_lock  = SPIN_LOCK_UNLOCKED("pagecache"); /* protects page cache */
+//static spinlock_t pc_lock  = SPIN_LOCK_UNLOCKED("pagecache"); /* protects page cache */
 /**
 page life:  page moves from free->active->inactive->free
 
@@ -62,13 +62,7 @@ inactive->free :
 
 /*********************** local function *************************/
 static int _pagelist_add(page_struct_t *page, page_list_t *list,int tail);
-unsigned char *pc_page_to_ptr(struct page *p){ /* TODO remove me later the function is duplicated in fs/host_fs.c */
-        unsigned char *addr;
-        unsigned long pn;
-        pn=p-pagecache_map;
-        addr=pc_startaddr+pn*PC_PAGESIZE;
-        return addr;
-}
+
 static inline struct page *to_page(unsigned char *addr){ /* TODO remove me later the function is duplicated in fs/host_fs.c */
 	unsigned long pn;
 	pn = (addr - pc_startaddr) / PC_PAGESIZE;
@@ -90,6 +84,8 @@ static int page_init(page_struct_t *p) {
 	ut_memset(pcPageToPtr(p), 0, PC_PAGESIZE); /* TODO : this is performance penality to clear the page , this is to clear the BSS part of page , it is read part from the disk rest will be junk */
 	return 1;
 }
+
+/* this function does not need lock since it is used only during initlization */
 static int init_pagelist(page_list_t *list, unsigned char type) {
 	INIT_LIST_HEAD(&(list->head));
 	list->count.counter = 0;
@@ -98,8 +94,8 @@ static int init_pagelist(page_list_t *list, unsigned char type) {
 }
 static int _pagelist_move(page_struct_t *page, page_list_t *list) {
 	unsigned long flags;
+	if (page == NULL) return 0;
 
-	spin_lock_irqsave(&pc_lock, flags);
 	if (page->list_type != 0) {
 		list_del(&(page->lru_link));
 		switch (page->list_type) {
@@ -118,7 +114,6 @@ static int _pagelist_move(page_struct_t *page, page_list_t *list) {
 		}
 		page->list_type = 0;
 	}
-	spin_unlock_irqrestore(&pc_lock, flags);
 
 	if (list != 0)
 		return _pagelist_add(page, list, TAIL);
@@ -128,7 +123,8 @@ static int _pagelist_move(page_struct_t *page, page_list_t *list) {
 static int _pagelist_add(page_struct_t *page, page_list_t *list, int tail) {
 	unsigned long flags;
 
-	spin_lock_irqsave(&pc_lock, flags);
+	if (page == NULL) return 0;
+
 	if (tail) {
 		list_add_tail(&page->lru_link, &(list->head));
 	} else {
@@ -136,7 +132,6 @@ static int _pagelist_add(page_struct_t *page, page_list_t *list, int tail) {
 	}
 	page->list_type = list->list_type;
 	atomic_inc(&list->count);
-	spin_unlock_irqrestore(&pc_lock, flags);
 
 //	DEBUG(" List INCREASE :%d: type:%d: \n",list->count.counter,list->list_type);
 	return 1;
@@ -145,9 +140,8 @@ static int _pagelist_add(page_struct_t *page, page_list_t *list, int tail) {
 static page_struct_t *_pagelist_remove(page_list_t *list) {
 	page_struct_t *page = 0;
 	struct list_head *node;
-	unsigned long flags;
 
-	spin_lock_irqsave(&pc_lock, flags);
+
 	node = list->head.next;
 	if (node == &list->head)
 		goto last;
@@ -159,90 +153,89 @@ static page_struct_t *_pagelist_remove(page_list_t *list) {
 	DEBUG(" List DECREASE :%d: type:%d: \n", list->count.counter, list->list_type);
 
 last:
-	spin_unlock_irqrestore(&pc_lock, flags);
 	return page;
 }
-/*  Remove page from page cache */
-static int put_into_freelist(struct page *page) {
-	struct inode *inode;
-	unsigned long flags;
 
-	if (page->count.counter!=0 || (page->inode->flags&INODE_EXECUTING)){ /* the page is  active */
-		return JFAIL;
-	}
-	if (page->lru_link.next != 0 || page->lru_link.prev != 0) {
-		_pagelist_move(page, 0); /* remove page from any list present */
-	}
-	if (page->list.next == 0 || page->list.prev == 0) {
-		BUG();
-	}
-	inode = page->inode;
-	if (inode == 0) {
-		BUG();
-	}
-
-	mutexLock(g_inode_lock);
-	list_del(&(page->list));
-	inode->nrpages--;
-	page->inode = 0;
-	pc_putFreePage(page);
-	mutexUnLock(g_inode_lock);
-
-	return JSUCCESS;
-}
-
-static int _reclaim_freepages() {
+#if 0
+static int _reclaim_freepages(int count) {
 	struct page *page;
 	int i;
-	unsigned long flags;
+	int ret=0;
 
 	DEBUG(" In the RECLAIM Free pages \n");
 
-	mutexLock(g_inode_lock);
-	for (i = 0; i < 100; i++) {
-		spin_lock_irqsave(&pc_lock, flags);
-
+	for (i = 0; i < count; i++) {
 		page = _pagelist_remove(&inactive_list);
 		if (page == 0) {
 			page = _pagelist_remove(&active_list);
 		}
 		if (page != 0  ) {
 			if (page_inuse(page)==0 && vma_page_remove(page) == 0) {
-				if (pc_removePage(page) == JFAIL){
+				if (pc_deletePage(page) == JFAIL){
 					BUG();
 				}
+				ret++;
 			}else{
 				_pagelist_add(page, &active_list, TAIL);
 			}
 		}
-		spin_unlock_irqrestore(&pc_lock, flags);
 	}
-	mutexUnLock(g_inode_lock);
 
 	return 1;
 }
+#endif
 static int list_count(struct list_head *head) {
 	struct list_head *pos;
 	int i = 0;
 
+	mutexLock(g_inode_lock);
 	list_for_each(pos, head) {
 		i++;
 	}
+	mutexUnLock(g_inode_lock);
+
 	return i;
 }
 
 /***************************** API function **********************/
+unsigned char *pc_page_to_ptr(struct page *p){ /* TODO remove me later the function is duplicated in fs/host_fs.c */
+        unsigned char *addr;
+        unsigned long pn;
+        pn=p-pagecache_map;
+        addr=pc_startaddr+pn*PC_PAGESIZE;
+        return addr;
+}
+
+int pc_check_valid_addr(unsigned char *addr, int len){
+	unsigned long pn;
+	struct page *page;
+
+	pn = (addr - pc_startaddr) / PC_PAGESIZE;
+	page = pagecache_map + pn;
+	if (page->magic_number != PAGE_MAGIC){
+		while(1);
+	}
+	if (len > PAGE_SIZE){
+		while(1);
+	}
+	if ((addr<pc_startaddr) || (addr>pc_endaddr)){
+		while(1);
+	}
+	return 1;
+}
 int pc_get_page(struct page *page){
 	unsigned long flags;
 	struct inode *inode;
+
+	mutexLock(g_inode_lock);
 	inode=page->inode;
 	if (inode != 0) {
 		atomic_inc(&(inode->stat_locked_pages));
+	}else{
+		BUG();
 	}
-
-	spin_lock_irqsave(&pc_lock, flags);
 	atomic_inc(&page->count);
-	spin_unlock_irqrestore(&pc_lock, flags);
+	mutexUnLock(g_inode_lock);
 
 	return JSUCCESS;
 }
@@ -250,12 +243,17 @@ int pc_put_page(struct page *page){
 	unsigned long flags;
 	struct inode *inode;
 	inode=page->inode;
+
+	mutexLock(g_inode_lock);
 	if (inode != 0) {
 		atomic_dec(&(inode->stat_locked_pages));
+	}else{
+		BUG();
 	}
-	spin_lock_irqsave(&pc_lock, flags);
+
 	atomic_dec(&page->count);
-	spin_unlock_irqrestore(&pc_lock, flags);
+	mutexUnLock(g_inode_lock);
+
 	return JSUCCESS;
 }
 int page_inuse(struct page *page){
@@ -289,6 +287,7 @@ int pc_init(unsigned char *start_addr, unsigned long len) {
 	for (i = 0; i < total_pages; i++) {
 		p = pagecache_map + i;
 		page_init(p);
+		p->magic_number = PAGE_MAGIC;
 		if (i < ((reserved_size + PC_PAGESIZE) / PC_PAGESIZE)) {
 			p->flags = (1 << PG_reserved);
 		} else {
@@ -301,70 +300,110 @@ int pc_init(unsigned char *start_addr, unsigned long len) {
 			"Pagecache orgstart:%x startaddr: %x endaddr:%x totalpages:%d reserved size:%d \n", s, pc_startaddr, pc_endaddr, total_pages, reserved_size);
 	return 1;
 }
+/*  Remove page from page cache */
+int pc_deletePage(struct page *page) {
+	struct inode *inode;
+	unsigned long flags;
+	int ret=JFAIL;
+
+	mutexLock(g_inode_lock);
+	if (page->count.counter!=0 || (page->inode->flags&INODE_EXECUTING)){ /* the page is  active */
+		goto last;
+	}
+	if (page->lru_link.next != 0 || page->lru_link.prev != 0) {
+		_pagelist_move(page, 0); /* remove page from any list present */
+	}
+	if (page->list.next == 0 || page->list.prev == 0) {
+		BUG();
+	}
+	inode = page->inode;
+	if (inode == 0) {
+		BUG();
+	}
+
+
+	list_del(&(page->list));
+	inode->nrpages--;
+	page->inode = 0;
+	pc_putFreePage(page);
+	ret = JSUCCESS;
+
+last:
+	mutexUnLock(g_inode_lock);
+	return ret;
+}
 page_struct_t *pc_get_dirty_page() {
 	page_struct_t *page = 0;
 	struct list_head *node;
-	unsigned long flags;
 
-	spin_lock_irqsave(&pc_lock, flags);
+	mutexLock(g_inode_lock);
 	node = dirty_list.head.next;
 	if (node != &dirty_list.head) {
 		page = list_entry(node, struct page, lru_link);
 		pc_get_page(page);
 	}
-	spin_unlock_irqrestore(&pc_lock, flags);
+	mutexUnLock(g_inode_lock);
 	return page;
 }
 
 int pc_pageDirted(struct page *page) { /* TODO : split the dirty list into LRU and MRU */
 	int ret;
+	assert(page !=0);
 
+	mutexLock(g_inode_lock);
 	ret = _pagelist_move(page, &dirty_list);
 	PageSetDirty(page);
+	mutexUnLock(g_inode_lock);
 	return 1;
 }
 int pc_pagecleaned(struct page *page) {
 	int ret;
 	struct inode *inode;
+
+	assert(page !=0);
 	inode = page->inode;
-	if (inode == 0)
-		BUG();
+	assert (inode != 0);
+
+	mutexLock(g_inode_lock);
 	if (inode->flags & INODE_SHORTLIVED) {
 		ret = _pagelist_move(page, &active_list);
 	} else {
 		ret = _pagelist_move(page, &inactive_list);
 	}
 	PageClearDirty(page);
+	mutexUnLock(g_inode_lock);
+
 	return 1;
 }
 
 struct page *pc_getInodePage(struct inode *inode, unsigned long offset) {
 	struct list_head *p;
-	struct page *page;
-	int i;
+	struct page *page=NULL;
+	int i,list_index;
 	unsigned long flags;
 	unsigned long page_offset = (offset / PC_PAGESIZE) * PC_PAGESIZE;
 
 	i = 0;
-	mutexLock(g_inode_lock); // TODO: lot of lock contention/waiting because of singly linked list for a big file
-	list_for_each(p, &(inode->page_list)) {
+	mutexLock(g_inode_lock);
+	list_index=get_pagelist_index(offset);
+	list_for_each(p, &(inode->page_list[list_index])) {
 		page = list_entry(p, struct page, list);
 		i++;
 		//	DEBUG(" %d: get page address: %x  addr:%x offset :%d \n",i,page,to_ptr(page),page->offset);
 		if (page->offset == page_offset) {
 			pc_get_page(page);
-			mutexUnLock(g_inode_lock);
-			return page;
+			goto last;
+		}else{
+			page = NULL;
 		}
 	}
+
+last:
 	mutexUnLock(g_inode_lock);
-	return NULL;
+	return page;
 
 }
-/* page leaves from page cache */
-int pc_removePage(struct page *page) {
-	return put_into_freelist(page);
-}
+
 /* page enters in to page cache here */
 int pc_insertPage(struct inode *inode, struct page *page) {
 	struct list_head *p;
@@ -372,6 +411,9 @@ int pc_insertPage(struct inode *inode, struct page *page) {
 	unsigned long flags;
 	int ret = JFAIL;
 	int i = 0;
+	int list_index;
+
+	assert(page!=0);
 
 	if (page->offset > inode->file_size)
 		return ret;
@@ -380,12 +422,16 @@ int pc_insertPage(struct inode *inode, struct page *page) {
 		BUG();
 	}
 	/*  1. link the page to inode */
-	mutexLock(g_inode_lock);  // TODO: lot of lock contention/waiting
-	list_for_each(p, &(inode->page_list)) {
+	mutexLock(g_inode_lock);
+	list_index=get_pagelist_index(page->offset);
+	list_for_each(p, &(inode->page_list[list_index])) {
 		tmp_page = list_entry(p, struct page, list);
 		i++;
-		DEBUG(
-				"%d :insert page addr: %x stack addr:%x task:%x  \n", i, tmp_page, &ret, g_current_task);
+		DEBUG("%d :insert page addr: %x stack addr:%x task:%x  \n", i, tmp_page, &ret, g_current_task);
+		if (page->offset == tmp_page->offset) {
+			mutexUnLock(g_inode_lock);
+			return JFAIL;
+		}
 		if (page->offset < tmp_page->offset) {
 			inode->nrpages++;
 			list_add_tail(&page->list, &tmp_page->list); /* add page before tmp_Page */
@@ -396,7 +442,7 @@ int pc_insertPage(struct inode *inode, struct page *page) {
 	if (ret == JFAIL) {  /* add at the tail */
 		inode->nrpages++;
 		DEBUG("insert page address at end : %x  \n", page);
-		list_add_tail(&page->list, &(inode->page_list));
+		list_add_tail(&page->list, &(inode->page_list[list_index]));
 		ret = JSUCCESS;
 	}
 
@@ -417,8 +463,9 @@ int pc_insertPage(struct inode *inode, struct page *page) {
 }
 
 int pc_putFreePage(struct page *page) {
+	mutexLock(g_inode_lock);
 	_pagelist_add(page, &free_list, TAIL); /* add to the tail of list */
-
+	mutexUnLock(g_inode_lock);
 	return 1;
 }
 
@@ -426,16 +473,16 @@ page_struct_t *pc_getFreePage() {
 	page_struct_t *p;
 	int restarted = 0;
 
-restart:
+	mutexLock(g_inode_lock);
 	p = _pagelist_remove(&free_list);
+	mutexUnLock(g_inode_lock);
+
 	if (p == NULL) {
-		_reclaim_freepages();
+		pc_housekeep();
+
+		mutexLock(g_inode_lock);
 		p = _pagelist_remove(&free_list);
-		if (p == NULL && restarted == 0) {
-			fs_sync();
-			restarted = 1;
-			goto restart;
-		}
+		mutexUnLock(g_inode_lock);
 	}
 
 	if (p == NULL) {
@@ -451,6 +498,7 @@ restart:
 #define TARGET_DIRTYLIST (0.20*pc_totalpages)
 int pc_housekeep(){
 	int ret;
+	int count,count_success;
 	page_struct_t *page;
 
 	/* sync the dirty pages if the level of free pages fall below the target or dirtlist exceed a limit*/
@@ -463,7 +511,7 @@ int pc_housekeep(){
     if (inactive_list.count.counter < TARGET_INACTIVELIST){
     	int i;
     	for (i=0; i<(0.10*active_list.count.counter); i++){
-    		unsigned long flags;
+
     		mutexLock(g_inode_lock);
 			page = _pagelist_remove(&active_list);
 			if (page->inode->flags & INODE_EXECUTING){ /* TODO : other parameters like age of page need to be included */
@@ -475,70 +523,38 @@ int pc_housekeep(){
     	}
     }
 
+    count=0;
+    count_success=0;
+    /* finally move the pages from inactive to freelist */
+    while (free_list.count.counter < TARGET_FREELIST){
+
+    	mutexLock(g_inode_lock);
+		page = _pagelist_remove(&inactive_list);
+		_pagelist_add(page, &inactive_list, TAIL);// add to the the tail and delete the page
+		ret = pc_deletePage(page);
+		mutexUnLock(g_inode_lock);
+		if (ret == JSUCCESS){
+			count_success++;
+		}
+		count++;
+		if (count > inactive_list.count.counter){
+			ut_log(" pc housekeep : count:%d sucess_count:%d \n",count,count_success);
+			return 1;
+		}
+    }
 
 	return 1;
+}
+int pc_is_freepages_available(){
+	if (free_list.count.counter<TARGET_FREELIST){
+		return 0;
+	}else{
+		return 1;
+	}
 }
 /***************************** House keeping functionality ********************************/
-static struct addr_list acc_list;
-
-int scan_pagecache(char *arg1 , char *arg2)
-{
-	int i,ret;
-	acc_list.total=0;
-	ret=ar_scanPtes((unsigned long)pc_startaddr,(unsigned long)pc_endaddr,&acc_list,0);
-	DEBUG(" ScanPtes  ret:%x total:%d \n",ret,acc_list.total);
-	for (i=0; i<acc_list.total; i++)
-	{
-		struct page *p;
-
-		if (!(acc_list.addr[i] >= (unsigned long)pc_startaddr && acc_list.addr[i] <= (unsigned long)pc_endaddr ))
-		{
-			BUG();
-		}
-		p=to_page((unsigned char *)acc_list.addr[i]);
-		p->age=0;
-		DEBUG("%d: page addr :%x \n",i,acc_list.addr[i]);
-	}
-	return 1;
-}
-
-static struct addr_list dirty_page_list;
-int scan_pagetable(char *arg1 , char *arg2)
-{
-	int i,ret;
-	char *test_p;
-	unsigned long start_addr=KERNEL_ADDR_START;
-	unsigned long end_addr=KERNEL_ADDR_START + 0x100000000;
-	acc_list.total=0;
 
 
-	ret=ar_scanPtes((unsigned long)start_addr,(unsigned long)end_addr,&acc_list,&dirty_page_list);
-	ut_printf(" ScanPtes start:%x end:%x ret:%x accesstotal:%d \n",start_addr,end_addr,ret,acc_list.total);
-#if 0
-	for (i=0; i<acc_list.total; i++)
-	{
-		struct page *p;
-
-		if (!(acc_list.addr[i] >= (unsigned long)start_addr && acc_list.addr[i] <= (unsigned long)end_addr ))
-		{
-			BUG();
-		}
-		ut_printf("%d: accessed page addr :%x \n",i,acc_list.addr[i]);
-	}
-#endif
-	ut_printf(" ScanPtes  ret:%x dirtytotal:%d  test page addr:%x\n",ret,dirty_page_list.total,test_p);
-	for (i=0; i<dirty_page_list.total; i++)
-	{
-		struct page *p;
-
-		if (!(dirty_page_list.addr[i] >= (unsigned long)start_addr && dirty_page_list.addr[i] <= (unsigned long)end_addr ))
-		{
-			BUG();
-		}	
-		ut_printf("%d: dirty page addr :%x \n",i,dirty_page_list.addr[i]);
-	}
-	return 1;
-}
 int Jcmd_pc(char *arg1,char *arg2)
 {
 	ut_printf(" PageCache Total Pages : %d = %dM\n",pc_totalpages,(pc_totalpages*4)/1024);

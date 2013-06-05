@@ -53,6 +53,8 @@ struct semaphore {
 
 	unsigned int stat_line;
 	unsigned int stat_recursive_count;
+	unsigned long stat_acquired_start_time;
+	unsigned long stat_total_acquired_time;
 };
 
 typedef struct semaphore sys_sem_t;

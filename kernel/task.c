@@ -82,12 +82,13 @@ static inline struct task_struct *_del_from_runqueue(struct task_struct *p) {
 
 void Jcmd_ipi(unsigned char *arg1,unsigned char *arg2){
 	int i,j;
+	int ret;
 
 	if (arg1==0) return;
 	i=ut_atoi(arg1);
-	ut_printf(" sending 50 IPI's to cpu :%d\n",i);
-	for (j=0; j<50; j++)
-	apic_send_ipi_vector(i,IPI_INTERRUPT);
+	ut_printf(" sending one IPI's from:%d  to cpu :%d\n",getcpuid(),i);
+	ret=apic_send_ipi_vector(i,IPI_CLEARPAGETABLE);
+	ut_printf(" return value of ipi :%d \n",ret);
 }
 
 int sc_sleep(long ticks) /* each tick is 100HZ or 10ms */
@@ -120,7 +121,7 @@ int Jcmd_ps(char *arg1, char *arg2) {
 	}
 	len = len -ut_snprintf(buf+PAGE_SIZE-len,len," CPU Processors:  cpuid contexts <state 0=idle, intr-disabled > name pid\n");
 	for (i=0; i<getmaxcpus(); i++){
-		len = len -ut_snprintf(buf+PAGE_SIZE-len,len,"%2d:%4d <%d-%d> %7s(%d)\n",i,g_cpu_state[i].cpu_contexts,g_cpu_state[i].active,g_cpu_state[i].intr_disabled,g_cpu_state[i].current_task->name,g_cpu_state[i].current_task->pid);
+		len = len -ut_snprintf(buf+PAGE_SIZE-len,len,"%2d:%4d <%d-%d> %7s(%d)\n",i,g_cpu_state[i].stat_total_contexts,g_cpu_state[i].active,g_cpu_state[i].intr_disabled,g_cpu_state[i].current_task->name,g_cpu_state[i].current_task->pid);
 	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
 
@@ -597,6 +598,7 @@ last:
 int SYS_sc_exit(int status) {
 	unsigned long flags;
 	SYSCALL_DEBUG("sys exit : status:%d \n",status);
+	ut_log(" pid:%d existed cause:%d \n",g_current_task->pid,status);
 	ar_updateCpuState(g_current_task);
 
 	release_resources(g_current_task, 1);
@@ -756,7 +758,7 @@ int init_tasking(unsigned long unused) {
 		g_cpu_state[i].idle_task->cpu = i;
 		g_cpu_state[i].current_task = g_cpu_state[i].idle_task;
 		g_cpu_state[i].dead_task = 0;
-		g_cpu_state[i].cpu_contexts = 0;
+		g_cpu_state[i].stat_total_contexts = 0;
 		g_cpu_state[i].active = 1; /* by default when the system starts all the cpu are in active state */
 		g_cpu_state[i].intr_disabled = 0; /* interrupts are active */
 		ut_strncpy(g_cpu_state[i].idle_task->name, (unsigned char *)"idle", MAX_TASK_NAME);
@@ -958,8 +960,9 @@ static unsigned long  _schedule(unsigned long flags) {
 		}
 	}
 
-	if (next == 0 && (prev->state!=TASK_RUNNING))
+	if (next == 0 && (prev->state!=TASK_RUNNING)){
 		next = g_cpu_state[cpuid].idle_task;
+	}
 
 	if (next ==0 ) /* by this point , we will always have some next */
 		next = prev;
@@ -979,6 +982,9 @@ static unsigned long  _schedule(unsigned long flags) {
 	/* if prev and next are same then return */
 	if (prev == next) {
 		return flags;
+	}else{
+		if (next != g_cpu_state[cpuid].idle_task)
+			g_cpu_state[cpuid].stat_nonidle_contexts++;
 	}
 	/* if  prev and next are having same address space , then avoid tlb flush */
 	next->counter = 5; /* 50 ms time slice */
@@ -999,7 +1005,7 @@ static unsigned long  _schedule(unsigned long flags) {
     }
 	next->cpu = cpuid; /* get cpuid based on this */
 	next->cpu_contexts++;
-	g_cpu_state[cpuid].cpu_contexts++;
+	g_cpu_state[cpuid].stat_total_contexts++;
 	arch_spinlock_transfer(&g_global_lock,prev,next);
 	/* update the cpu state  and tss state for system calls */
 	ar_updateCpuState(next);

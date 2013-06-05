@@ -87,6 +87,10 @@ void ut_memcpy(uint8_t *dest, uint8_t *src, long len)
 	uint8_t *dp = (uint8_t *)dest;
 	long i=0;
 
+	if ((ar_check_valid_address(dest,len)==JFAIL) || (ar_check_valid_address(src,len)==JFAIL)){
+		ut_log(" Error Invalid address in ut_memcpy src:%x dest:%x \n",src,dest);
+		BUG();
+	}
 	DEBUG(" src:%x dest:%x len:%x \n",src,dest,len);
 	for(i=len; i>0; i--) 
 	{
