@@ -168,12 +168,13 @@ struct sockaddr {
 };
 struct Socket_API{
 	void* (*open)(int type);
-	int (*bind)(void *conn,struct sockaddr *s);
+	int (*bind)(void *conn,struct sockaddr *s,int sock_type);
 	void* (*accept)(void *conn);
 	int (*listen)(void *conn,int len);
 	int (*connect)(void *conn, uint32_t *addr, uint16_t port);
-    int (*write)(void *conn, unsigned char *buff, unsigned long len);
+    int (*write)(void *conn, unsigned char *buff, unsigned long len, int sock_type);
     int (*read)(void *conn, unsigned char *buff, unsigned long len);
+    int (*read_from)(void *conn, unsigned char *buff, unsigned long len,uint32_t *addr, uint16_t port);
 	int (*close)(void *conn);
 };
 int register_to_socketLayer(struct Socket_API *api);
@@ -187,5 +188,6 @@ int SYS_bind(int fd, struct sockaddr  *addr, int len);
 int SYS_connect(int fd, struct sockaddr  *addr, int len);
 unsigned long SYS_sendto(int sockfd, const void *buf, size_t len, int flags,
                const struct sockaddr *dest_addr, int addrlen);
-int SYS_recvfrom(int fd);
+int SYS_recvfrom(int sockfd, const void *buf, size_t len, int flags,  const struct sockaddr *dest_addr, int addrlen);
+
 #endif

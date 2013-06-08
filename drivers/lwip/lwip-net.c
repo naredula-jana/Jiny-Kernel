@@ -298,36 +298,101 @@ err_t netif_netfront_init(struct netif *netif) {
 	sys_timeout(ARP_TMR_INTERVAL, arp_timer, NULL);
 	return ERR_OK;
 }
+enum sock_type {
+          SOCK_STREAM     = 1,
+          SOCK_DGRAM      = 2
+};
 void *lwip_sock_open(int type) {
-	return netconn_new(NETCONN_TCP);
+	if (type == SOCK_DGRAM) {
+		return netconn_new(NETCONN_UDP);
+	} else if (type == SOCK_STREAM) {
+		return netconn_new(NETCONN_TCP);
+	} else {
+		return 0;
+	}
+}
+
+int lwip_sock_read_from(void *conn, unsigned char *buff, unsigned long len,uint32_t *addr, uint16_t port) {
+	struct netbuf *new_buf=0;
+	unsigned char *data;
+	int data_len=0;
+	int ret;
+
+	ut_log(" SOCK read :%x len:%d \n",buff,len);
+
+repeat:
+	ret=netconn_recv(conn,  &new_buf);
+	if (ret!=ERR_OK){
+		sc_sleep(50);
+		goto repeat;
+		//return 0;
+	}
+	netbuf_data(new_buf,&data,&data_len);
+	if (data_len >  0){
+		ut_memcpy(buff,data,ut_min(data_len,len)); //TODO: need to free the memory
+		return ut_min(data_len,len);
+	}
+	return 0;
 }
 int lwip_sock_read(void *conn, unsigned char *buff, unsigned long len) {
-	return 1; /*TODO */
+	struct netbuf *new_buf=0;
+	unsigned char *data;
+	int data_len=0;
+
+	int ret;
+
+	ut_log(" SOCK read :%x len:%d \n",buff,len);
+	ret=netconn_recv(conn,  &new_buf);
+	if (ret!=ERR_OK){
+		return 0;
+	}
+	netbuf_data(new_buf,&data,&data_len);
+	if (data_len >  0){
+		ut_memcpy(buff,data,ut_min(data_len,len)); //TODO: need to fre the memory
+		return ut_min(data_len,len);
+	}
+	return 0;
 }
 int lwip_sock_connect(void *conn, unsigned long *addr, uint16_t port) {
-	return netconn_connect(conn, addr, port);
+	return netconn_connect(conn, addr, lwip_ntohs(port));
 }
-int lwip_sock_write(void *conn, unsigned char *buff, unsigned long len) {
-	return netconn_write(conn, buff, len, NETCONN_COPY);
+int lwip_sock_write(void *conn, unsigned char *buff, unsigned long len, int type) {
+	if (type == SOCK_DGRAM) {
+		struct netbuf *buf;
+		char * data;
+
+		buf = netbuf_new();
+		data = netbuf_alloc(buf, len+1);
+		ut_memcpy(data, buff, len);
+		netconn_send(conn, buf);
+		netbuf_delete(buf);
+		return len;
+	} else if (type == SOCK_STREAM) {
+		return netconn_write(conn, buff, len, NETCONN_COPY);
+	}
+	return 0;
 }
 int lwip_sock_close(void *session) {
 	netconn_disconnect(session);
 	netconn_delete(session);
 	return 1;
 }
-int lwip_sock_bind(void *session, struct sockaddr *s) {
+int lwip_sock_bind(void *session, struct sockaddr *s, int sock_type) {
 	struct ip_addr listenaddr = { s->addr }; /* TODO */
-	int rc = netconn_bind(session, &listenaddr, s->sin_port);
+	int rc = netconn_bind(session, &listenaddr, lwip_ntohs(s->sin_port));
 	if (rc != ERR_OK) {
 		DEBUG("Failed to bind connection: %i\n", rc);
-		return;
+		return SYSCALL_FAIL;
+	}
+	if (sock_type == SOCK_DGRAM){
+		return SYSCALL_SUCCESS;
 	}
 	rc = netconn_listen(session);
 	if (rc != ERR_OK) {
 		DEBUG("Failed to listen on connection: %i\n", rc);
-		return;
+		return SYSCALL_FAIL;
 	}
-	return 1;
+	return SYSCALL_SUCCESS;
 }
 void *lwip_sock_accept(void *listener, struct sockaddr *s) {
 	void *ret;
@@ -387,8 +452,8 @@ int load_LwipTcpIpStack() {
 	//down(&tcpip_is_up);
 
 	if (1) {
-		struct ip_addr ipaddr = { htonl(0x0ad180b0) }; /* 10.209.128.176  */
-		struct ip_addr netmask = { htonl(0xff000000) };
+		struct ip_addr ipaddr = { htonl(0x0ad181b0) }; /* 10.209.129.176  */
+		struct ip_addr netmask = { htonl(0xffffff00) };
 		struct ip_addr gw = { htonl(0x0ad18001) };
 		networking_set_addr(&ipaddr, &netmask, &gw);
 	}
@@ -397,6 +462,7 @@ int load_LwipTcpIpStack() {
 	start_webserver();
 
 	lwip_socket_api.read = lwip_sock_read;
+	lwip_socket_api.read_from = lwip_sock_read_from;
 	lwip_socket_api.write = lwip_sock_write;
 	lwip_socket_api.close = lwip_sock_close;
 	lwip_socket_api.bind = lwip_sock_bind;

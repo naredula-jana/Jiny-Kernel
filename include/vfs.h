@@ -113,6 +113,7 @@ struct file {
 
 	struct inode *inode;
 	void *private;
+	int sock_type;
 };
 
 #define PAGELIST_HASH_SIZE 40

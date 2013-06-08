@@ -624,7 +624,15 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 			if (write_fault && (writeFlag!= 0)) {
 				addr_t *fp;
 				fp=(unsigned long *)mm_getFreePages(MEM_CLEAR,0);
-				ut_memcpy((unsigned char *)fp,(unsigned char *)__va(p),PAGE_SIZE);
+#if 1
+				int file_len = (vma->vm_end - vma->vm_start) - ((addr&PAGE_MASK) - (vma->vm_start));
+				if (file_len > PAGE_SIZE) file_len = PAGE_SIZE;
+				if (file_len > 0) {
+					ut_memcpy((unsigned char *) fp, (unsigned char *) __va(p), file_len);
+				}
+#else
+				ut_memcpy((unsigned char *) fp, (unsigned char *) __va(p), PAGE_SIZE);
+#endif
 				p=(unsigned long *)__pa(fp);
 				writeFlag = 1 ;
 			}else{

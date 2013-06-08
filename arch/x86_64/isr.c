@@ -138,6 +138,11 @@ int Jcmd_cpu(char *arg1,char *arg2)
 			ut_printf("[%3d/%3d] ",g_cpu_state[j].stat_nonidle_contexts,g_cpu_state[j].stat_total_contexts);
 	}
 	ut_printf(":context switches \n");
+	ut_printf("       ");
+	for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
+		ut_printf("[prio= %3d] ",g_cpu_state[j].cpu_priority);
+	}
+	ut_printf(":priority \n");
 
 	return 1;
 }

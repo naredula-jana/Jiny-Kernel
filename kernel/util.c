@@ -80,6 +80,10 @@ unsigned int ut_atoi(unsigned char *p)
 	}
 	return a;
 }
+int ut_min(int a, int b){
+	if (a<b) return a;
+	else return b;
+}
 // Copy len bytes from src to dest.
 void ut_memcpy(uint8_t *dest, uint8_t *src, long len)
 {

@@ -122,6 +122,7 @@ struct cpu_state {
 	struct task_struct *dead_task;
 	struct task_struct *idle_task;
 
+	unsigned char cpu_priority;
 	int active; /* only active cpu will pickup the tasks , otherwise they can only run idle threads */
 	int intr_disabled; /* interrupts disabled except apic timer */
 

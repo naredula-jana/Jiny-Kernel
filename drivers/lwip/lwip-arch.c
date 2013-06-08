@@ -104,7 +104,7 @@ static void do_mbox_post(sys_mbox_t *mbox, void *msg) {
 	sys_prot_t prot = sys_arch_protect();
 	mbox->messages[mbox->writer] = msg;
 	mbox->writer = (mbox->writer + 1) % mbox->count;
-	ASSERT(mbox->reader != mbox->writer);
+	assert(mbox->reader != mbox->writer);
 	sys_arch_unprotect(prot);
 	sys_sem_signal(&mbox->read_sem);
 }
@@ -142,7 +142,7 @@ static void do_mbox_fetch(sys_mbox_t *mbox, void **msg) {
 	 * reader, but we may still need to prevent concurrency between readers.
 	 * FIXME: can there be concurrent readers? */
 	prot = sys_arch_protect();
-	ASSERT(mbox->reader != mbox->writer);
+	assert(mbox->reader != mbox->writer);
 	// TODO : as Hit once
 	if (msg != NULL)
 		*msg = mbox->messages[mbox->reader];

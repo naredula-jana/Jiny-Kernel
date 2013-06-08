@@ -202,7 +202,7 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, 
 	struct vm_area_struct *vma;
 	int ret;
 
-	//ut_log(" mmap : name:%s file:%x addr:%x len:%x pgoff:%x flags:%x  protection:%x\n",file->filename,file,addr,len,pgoff,flags,prot);
+	ut_log(" mmap : name:%s file:%x addr:%x len:%x pgoff:%x flags:%x  protection:%x\n",file->filename,file,addr,len,pgoff,flags,prot);
 	vma = vm_findVma(mm, addr, len);
 	if (vma)
 		return 0;

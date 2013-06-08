@@ -80,15 +80,33 @@ static inline struct task_struct *_del_from_runqueue(struct task_struct *p) {
 
 
 
-void Jcmd_ipi(unsigned char *arg1,unsigned char *arg2){
-	int i,j;
+void Jcmd_ipi(unsigned char *arg1, unsigned char *arg2) {
+	int i, j;
 	int ret;
 
-	if (arg1==0) return;
-	i=ut_atoi(arg1);
-	ut_printf(" sending one IPI's from:%d  to cpu :%d\n",getcpuid(),i);
-	ret=apic_send_ipi_vector(i,IPI_CLEARPAGETABLE);
-	ut_printf(" return value of ipi :%d \n",ret);
+	if (arg1 == 0)
+		return;
+	i = ut_atoi(arg1);
+	ut_printf(" sending one IPI's from:%d  to cpu :%d\n", getcpuid(), i);
+	ret = apic_send_ipi_vector(i, IPI_CLEARPAGETABLE);
+	ut_printf(" return value of ipi :%d \n", ret);
+}
+void Jcmd_prio(unsigned char *arg1,unsigned char *arg2){
+	int cpu,priority;
+	int ret;
+
+	if (arg1==0 || arg2==0){
+		ut_printf(" set cpu priority usage: prio <cpu> <priority>\n");
+		return;
+	}
+	cpu = ut_atoi(arg1);
+	priority = ut_atoi(arg2);
+	if (cpu<MAX_CPUS && priority<255){
+		g_cpu_state[cpu].cpu_priority = priority;
+	}else{
+		ut_log("Error : Ivalid cpu :%d or priority:%d \n",cpu,priority);
+	}
+
 }
 
 int sc_sleep(long ticks) /* each tick is 100HZ or 10ms */
@@ -761,6 +779,7 @@ int init_tasking(unsigned long unused) {
 		g_cpu_state[i].stat_total_contexts = 0;
 		g_cpu_state[i].active = 1; /* by default when the system starts all the cpu are in active state */
 		g_cpu_state[i].intr_disabled = 0; /* interrupts are active */
+		g_cpu_state[i].cpu_priority = 0;
 		ut_strncpy(g_cpu_state[i].idle_task->name, (unsigned char *)"idle", MAX_TASK_NAME);
 	}
     g_current_task->cpu=0;
@@ -983,8 +1002,12 @@ static unsigned long  _schedule(unsigned long flags) {
 	if (prev == next) {
 		return flags;
 	}else{
-		if (next != g_cpu_state[cpuid].idle_task)
+		if (next != g_cpu_state[cpuid].idle_task){
 			g_cpu_state[cpuid].stat_nonidle_contexts++;
+			  apic_set_task_priority(g_cpu_state[cpuid].cpu_priority);
+		}else{
+			  apic_set_task_priority(g_cpu_state[cpuid].cpu_priority);
+		}
 	}
 	/* if  prev and next are having same address space , then avoid tlb flush */
 	next->counter = 5; /* 50 ms time slice */

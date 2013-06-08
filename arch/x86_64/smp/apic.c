@@ -286,6 +286,7 @@ static int __local_apic_init(bool msgout)
   __disable_apic();
 
   set_apic_dfr_mode(0xf); 
+  ut_log(" APIC id:%d  destination id :%d \n",get_local_apic_id(),(1 << (__apics_number & 7)));
   set_apic_ldr_logdest(1 << (__apics_number & 7));
 	__apics_number++;
 

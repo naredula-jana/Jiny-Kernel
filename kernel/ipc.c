@@ -385,6 +385,7 @@ int Jcmd_locks(char *arg1, char *arg2) {
 
 	ut_printf("SPIN LOCKS:  Name  pid count contention(rate) recursive# \n");
 	for (i = 0; i < g_spinlock_count; i++) {
+		if (g_spinlocks[i]==0) continue;
 		ut_printf(" %9s %3x %5d %5d(%d) %3d\n", g_spinlocks[i]->name,
 				g_spinlocks[i]->pid, g_spinlocks[i]->stat_locks,
 				g_spinlocks[i]->contention,

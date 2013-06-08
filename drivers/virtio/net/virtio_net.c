@@ -140,7 +140,7 @@ static int attach_virtio_net_pci(device_t *pci_dev) {
 static int dettach_virtio_net_pci(device_t *pci_dev) { //TODO
 	return 0;
 }
-
+static spinlock_t virtionet_lock = SPIN_LOCK_UNLOCKED("virtio_net");
 static void virtio_net_interrupt(registers_t regs, void *private_data) {
 	/* reset the irq by resetting the status  */
 	unsigned char isr;
@@ -148,7 +148,9 @@ static void virtio_net_interrupt(registers_t regs, void *private_data) {
 	unsigned char *addr;
 	device_t *pci_dev = (device_t *) private_data;
 	virtio_dev_t *dev;
+	unsigned long flags;
 
+	spin_lock_irqsave(&virtionet_lock, flags);
 
 	dev = (virtio_dev_t *) pci_dev->private_data;
 	if (dev->msi == 0)
@@ -161,6 +163,7 @@ static void virtio_net_interrupt(registers_t regs, void *private_data) {
 		netif_rx(addr, len);
 	addBufToQueue(dev->vq[0], 0, 4096);
     virtio_queue_kick(dev->vq[0]);
+	spin_unlock_irqrestore(&virtionet_lock, flags);
 }
 
 int virtio_send_errors = 0;

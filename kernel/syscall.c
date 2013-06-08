@@ -78,17 +78,25 @@ unsigned long SYS_getpgrp();
 unsigned long SYS_exit_group();
 unsigned long SYS_wait4(int pid, void *status,  unsigned long  option, void *rusage);
 
+
+struct timezone {
+	int tz_minuteswest; /* minutes west of Greenwich */
+	int tz_dsttime; /* type of DST correction */
+};
+/*****************************   POLL related ****************************/
+#define POLLIN          0x0001
+#define POLLPRI         0x0002
+#define POLLOUT         0x0004
+#define POLLERR         0x0008
+#define POLLHUP         0x0010
+#define POLLNVAL        0x0020
 struct pollfd {
 	int fd; /* file descriptor */
 	short events; /* requested events */
 	short revents; /* returned events */
 };
-struct timezone {
-	int tz_minuteswest; /* minutes west of Greenwich */
-	int tz_dsttime; /* type of DST correction */
-};
-
 unsigned long SYS_poll(struct pollfd *fds, int nfds, int timeout);
+/*************************************************************************/
 
 unsigned long SYS_nanosleep(const struct timespec *req, struct timespec *rem);
 unsigned long SYS_getcwd(unsigned char *buf, int len);
@@ -557,10 +565,20 @@ unsigned long SYS_getcwd(unsigned char *buf, int len) {
  * **********************************/
 
 unsigned long SYS_poll(struct pollfd *fds, int nfds, int timeout) {
-	SYSCALL_DEBUG(
-			"poll(partial)  fds:%x nfds:%d timeout:%d  \n", fds, nfds, timeout);
+	int i,fd;
+	struct file *file;
+
+	SYSCALL_DEBUG("poll(partial)  fds:%x nfds:%d timeout:%d  \n", fds, nfds, timeout);
 	if (nfds == 0 || fds == 0 || timeout == 0)
 		return 0;
+	for (i=0; i<nfds; i++){
+		fd=fds[i].fd;
+		file = fd_to_file(fd);
+		if (file==0) continue;
+		if (file->type == NETWORK_FILE){
+			fds[i].revents = POLLIN ;
+		}
+	}
 	return 0;
 }
 unsigned long SYS_setsockopt(int sockfd, int level, int optname,
