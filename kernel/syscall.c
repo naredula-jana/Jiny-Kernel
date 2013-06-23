@@ -24,7 +24,7 @@ struct __sysctl_args {
 unsigned long SYS_sysctl(struct __sysctl_args *args );
 unsigned long SYS_getdents(unsigned int fd, unsigned char *user_buf,int size);
 unsigned long SYS_fork();
-int g_conf_syscall_debug=0;
+int g_conf_syscall_debug=2;
 long SYS_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags,unsigned long fd, unsigned long off);
 unsigned long snull(unsigned long *args);
 unsigned long SYS_uname(unsigned long *args);
@@ -57,9 +57,9 @@ struct stat {
 typedef long int __time_t;
 long int SYS_time(__time_t *time);
 
-unsigned long SYS_fs_fstat(int fd, void *buf);
+unsigned long SYS_fs_fstat(int fd, struct stat *buf);
 unsigned long SYS_fs_stat(const char *path, struct stat *buf);
-unsigned long SYS_fs_fstat(int fd, void *buf);
+
 unsigned long SYS_fs_dup2(int fd1, int fd2);
 unsigned long SYS_fs_readlink(unsigned char *path, char *buf, int bufsiz);
 
@@ -258,7 +258,8 @@ unsigned long SYS_gettimeofday(time_t *tv, struct timezone *tz) {
 	get_wallclock(&(tv->tv_nsec));
 	return SYSCALL_SUCCESS;
 }
-#define TEMP_UID 500
+#define TEMP_UID 26872
+#define TEMP_GID 500
 /*****************************************
  TODO : Below are hardcoded system calls , need to make generic *
  ******************************************/
@@ -268,7 +269,7 @@ unsigned long SYS_getuid() {
 }
 unsigned long SYS_getgid() {
 	SYSCALL_DEBUG("getgid(Hardcoded) :\n");
-	return TEMP_UID;
+	return TEMP_GID;
 }
 unsigned long SYS_setuid(unsigned long uid) {
 	SYSCALL_DEBUG("setuid(Hardcoded) :%x(%d)\n", uid, uid);
@@ -331,7 +332,45 @@ unsigned long SYS_fs_readlink(unsigned char *path, char *buf, int bufsiz) {
 	SYSCALL_DEBUG("RET readlink (ppath:%x(%s) buf:%s: \n", path, path, buf);
 	return ut_strlen(buf);
 }
+static int copy_stat_touser(struct file *fp,struct stat *buf){
+	struct fileStat fstat;
+	int ret;
 
+	ret = fs_stat(fp, &fstat);
+	ut_memset((unsigned char *) buf, 0, sizeof(struct stat));
+	if (fp->type == IN_FILE || fp->type == OUT_FILE) {
+
+	} else {
+		buf->st_size = fstat.st_size;
+		buf->st_ino = fstat.inode_no;
+		buf->st_blksize = 4096; //TODO
+		buf->st_blocks = 8; //TODO
+		buf->st_nlink = 4; //TODO
+	}
+
+	buf->st_mtime.tv_sec = fstat.mtime;
+	buf->st_mtime.tv_nsec = 0;
+	buf->st_atime.tv_sec = fstat.atime;
+	buf->st_atime.tv_nsec = 0;
+
+	buf->st_mode = (fstat.mode | fstat.type) & 0xfffffff;
+	buf->st_dev = 2054;
+	buf->st_rdev = 0;
+
+	/* TODO : fill the rest of the fields from fstat */
+	buf->st_gid = TEMP_GID;
+	buf->st_uid = TEMP_UID;
+
+	buf->__unused[0] = buf->__unused[1] = buf->__unused[2] = 0;
+	buf->__pad0 = 0;
+
+
+	if (fstat.type == SYM_LINK_FILE) {
+		buf->st_blocks = 0; //TODO
+		buf->st_nlink = 1; //TODO
+	}
+	return ret;
+}
 unsigned long SYS_fs_stat(const char *path, struct stat *buf) {
 	struct file *fp;
 	struct fileStat fstat;
@@ -347,34 +386,8 @@ unsigned long SYS_fs_stat(const char *path, struct stat *buf) {
 	if (fp == 0) {
 		return ret;
 	}
-	ret = fs_stat(fp, &fstat);
-	ut_memset((unsigned char *) buf, 0, sizeof(struct stat));
-	buf->st_size = fstat.st_size;
-	buf->st_ino = fstat.inode_no;
 
-	buf->st_mtime.tv_sec = fstat.mtime;
-	buf->st_mtime.tv_nsec = 0;
-	buf->st_atime.tv_sec = fstat.atime;
-	buf->st_atime.tv_nsec = 0;
-
-	buf->st_mode = (fstat.mode | fstat.type) & 0xfffffff;
-	buf->st_dev = 2054;
-	buf->st_rdev = 0;
-
-	/* TODO : fill the rest of the fields from fstat */
-	buf->st_gid = TEMP_UID;
-	buf->st_uid = TEMP_UID;
-
-	buf->__unused[0] = buf->__unused[1] = buf->__unused[2] = 0;
-	buf->__pad0 = 0;
-
-	buf->st_blksize = 4096; //TODO
-	buf->st_blocks = 8; //TODO
-	buf->st_nlink = 4; //TODO
-	if (fstat.type == SYM_LINK_FILE) {
-		buf->st_blocks = 0; //TODO
-		buf->st_nlink = 1; //TODO
-	}
+	ret = copy_stat_touser(fp,buf);
 	fs_close(fp);
 	ret = SYSCALL_SUCCESS;
 	/*
@@ -387,7 +400,21 @@ unsigned long SYS_fs_stat(const char *path, struct stat *buf) {
 			" stat END : st_size: %d st_ino:%d nlink:%x mode:%x uid:%x gid:%x blksize:%x ret:%x mtime: %x :%x sec\n", buf->st_size, buf->st_ino, buf->st_nlink, buf->st_mode, buf->st_uid, buf->st_gid, buf->st_blksize, ret, buf->st_mtime.tv_sec, fstat.mtime);
 	return ret;
 }
+unsigned long SYS_fs_fstat(int fd, struct stat *buf) {
+	struct file *fp;
+	int ret;
+	SYSCALL_DEBUG("fstat  fd:%x buf:%x \n", fd, buf);
 
+	fp = fd_to_file(fd);
+	if (fp <= 0 || buf == 0)
+		return -1;
+
+	ret = copy_stat_touser(fp,buf);
+	if (buf){
+		SYSCALL_DEBUG("fstat ret: file size:%d mode:%x inode:%x  \n",buf->st_size,buf->st_mode,buf->st_ino);
+	}
+	return ret;
+}
 /************************* getdents ******************************/
 struct linux_dirent {
 	unsigned long d_ino; /* Inode number */
@@ -597,4 +624,44 @@ unsigned long SYS_exit_group() {
 	SYS_sc_exit(103);
 	return SYSCALL_SUCCESS;
 }
+/****************************************** syscall debug *********************************************/
 
+static int strace_progress_id=0;
+static unsigned char strace_thread_name[100]="";
+static unsigned int strace_syscall_id=0;
+int strace_wait() {
+	int ret = JFAIL;
+	if (ut_strcmp(g_current_task->name, strace_thread_name) == 0) {
+		int id = strace_progress_id;
+		ret =JSUCCESS;
+		g_current_task->status_info = "waiting @syscall..";
+		while ((id == strace_progress_id) && (g_current_task->curr_syscall_id == strace_syscall_id)){
+			sc_sleep(20);
+		}
+	}
+	g_current_task->status_info = NULL;
+	return ret;
+}
+void Jcmd_strace(unsigned char *arg1,unsigned char *arg2){
+	int sid;
+
+	if (arg1==NULL ){
+		ut_printf(" USAGE : strace <process-name> <syscallid> \n strace n \n");
+		return ;
+	}
+
+	if (ut_strcmp(arg1,"n")==0){
+		strace_progress_id++;
+		ut_printf(" strace made progess \n");
+		return;
+	}else if (arg2==NULL){
+		ut_printf("USAGE: strace <process-name> <syscallid> \n strace n \n");
+		return;
+	}
+
+	sid =  ut_atoi(arg2);
+	ut_printf("Enabled Strace on  syscall id :%d  process name :%s: \n",sid,arg1);
+	ut_strcpy(strace_thread_name,arg1);
+	strace_syscall_id = sid;
+	return;
+}

@@ -101,7 +101,7 @@ static int sh_mmap(unsigned char *arg1,unsigned char *arg2) {  /* TODO the funct
 
 	ut_printf(" filename:%s: addr :%x: \n", arg1, addr);
 
-	vm_mmap(fp, addr, 0, 0, 0, 0);
+	vm_mmap(fp, addr, 0, 0, 0, 0,"test_shell");
 	p = (unsigned char *)addr;
 	p = p + 10;
 	c = *p;

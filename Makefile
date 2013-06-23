@@ -9,7 +9,7 @@ LWIP_OBJ=$(LWIP_USER_OBJ) /opt_src/lwip/src/api/sockets.o /opt_src/lwip/src/api/
 XEN_OBJ=drivers/xen/xen_init.o drivers/xen/xenbus.o drivers/xen/evntchn.o drivers/xen/gntmap.o drivers/xen/gnttab.o drivers/xen/net_front.o 
 VIRTIO_OBJ= drivers/virtio/virtio_ring.o drivers/virtio/virtio_pci.o drivers/virtio/virtio_memballoon.o drivers/virtio/net/virtio_net.o drivers/virtio/net/test_udpserver.o drivers/virtio/9p/virtio_9p.o drivers/virtio/9p/9p.o drivers/virtio/9p/p9_fs.o
 MEMLEAK_OBJ=mm/memleak/memleak.o mm/memleak/os_dep.o mm/memleak/prio_tree.o  mm/memleak/memleak_hook.o
-OBJECTS= arch/$(ARCH_DIR)/boot.o arch/$(ARCH_DIR)/vsyscall_emu_64.o arch/$(ARCH_DIR)/init.o arch/$(ARCH_DIR)/syscall.o arch/$(ARCH_DIR)/clock.o arch/$(ARCH_DIR)/isr.o arch/$(ARCH_DIR)/descriptor_tables.o arch/$(ARCH_DIR)/pci.o arch/$(ARCH_DIR)/msix.o arch/$(ARCH_DIR)/paging.o arch/$(ARCH_DIR)/interrupt.o  drivers/display.o drivers/keyboard.o drivers/serial.o mm/memory.o mm/slab.o mm/mmap.o mm/pagecache.o fs/binfmt_elf.o fs/vfs.o $(MEMLEAK_OBJ) $(VIRTIO_OBJ)
+OBJECTS= arch/$(ARCH_DIR)/boot.o arch/$(ARCH_DIR)/vsyscall_emu_64.o arch/$(ARCH_DIR)/init.o arch/$(ARCH_DIR)/syscall.o arch/$(ARCH_DIR)/clock.o arch/$(ARCH_DIR)/isr.o arch/$(ARCH_DIR)/descriptor_tables.o arch/$(ARCH_DIR)/pci.o arch/$(ARCH_DIR)/msix.o arch/$(ARCH_DIR)/paging.o arch/$(ARCH_DIR)/interrupt.o  drivers/display.o drivers/keyboard.o drivers/serial.o mm/memory.o mm/slab.o mm/jslab.o mm/mmap.o mm/pagecache.o fs/binfmt_elf.o fs/vfs.o $(MEMLEAK_OBJ) $(VIRTIO_OBJ)
 OBJECTS += drivers/hostshm/host_fs.o drivers/hostshm/shm_device.o drivers/hostshm/shm_queue.o
 ifdef SMP
 OBJECTS += arch/$(ARCH_DIR)/smp/smp-imps.o arch/$(ARCH_DIR)/smp/trampoline_64.o arch/$(ARCH_DIR)/smp/head.o arch/$(ARCH_DIR)/smp/apic.o
@@ -40,7 +40,7 @@ all: lwip.a
 	make SOURCE_ROOT=$$PWD -C mm/memleak
 	make SOURCE_ROOT=$$PWD -C fs
 	rm drivers.a  fs.a mm.a $(ARCH_DIR).a
-	gcc -g -I. $(LINK_FLAG)  $(OBJECTS) -nostdlib -Wl,-N -Wl,-Ttext -Wl,40100000 -o bin/kernel_bin
+	gcc -g -I. $(LINK_FLAG)  $(OBJECTS) -nostdlib -Wl,-N -Wl,-Ttext -Wl,40100000 -Tdata=40200000 -o bin/kernel_bin
 	objdump -D -l bin/kernel_bin > bin/obj_file
 	nm -l bin/kernel_bin | sort > util/in
 	util/gen_symboltbl util/in bin/mod_file

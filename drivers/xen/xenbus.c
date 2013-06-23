@@ -65,7 +65,7 @@ void init_xenbus(unsigned long xenstore_phyaddr, uint32_t evtchannel) {
 #define HOST_XEN_STORE_ADDR 0xe3000000
 	xenstore_buf = HOST_XEN_STORE_ADDR;
 	store_evtchannel = evtchannel;
-	vm_mmap(0, xenstore_buf, PAGE_SIZE, PROT_WRITE, MAP_FIXED, xenstore_phyaddr);
+	vm_mmap(0, xenstore_buf, PAGE_SIZE, PROT_WRITE, MAP_FIXED, xenstore_phyaddr,"xen");
 	// create_thread("xenstore", xenbus_thread_func, NULL);
 	DEBUG("buf at %p.\n", xenstore_buf);
 	err = bind_evtchn(evtchannel, xenbus_evtchn_handler, NULL);

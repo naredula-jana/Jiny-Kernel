@@ -45,20 +45,24 @@ extern kmem_cache_t *kmem_cache_create(const char *, size_t,size_t, unsigned lon
 void *mm_slab_cache_alloc (kmem_cache_t *cachep, int flags);
 void *mm_malloc (size_t size, int flags);
 void mm_free (const void *objp);
+extern void *vmalloc(int size, int flags);
+extern void vfree();
 #define alloc_page() mm_getFreePages(0, 0)
+#define free_page(p) mm_putFreePages(p, 0);
 #define memset ut_memset
 #define ut_free mm_free
 #define ut_malloc(x) mm_malloc(x,0)
 
+
 /* vm */
 int Jcmd_vmaps_stat(char *arg1,char *arg2);
 struct vm_area_struct *vm_findVma(struct mm_struct *mm,unsigned long addr, unsigned long len);
-long SYS_vm_mmap(unsigned long fd, unsigned long addr, unsigned long len,unsigned long prot, unsigned long flags, unsigned long pgoff);
+void * SYS_vm_mmap(unsigned long fd, unsigned long addr, unsigned long len,unsigned long prot, unsigned long flags, unsigned long pgoff);
 unsigned long SYS_vm_brk(unsigned long addr);
 int SYS_vm_munmap(unsigned long addr, unsigned long len);
 int SYS_vm_mprotect(const void *addr, int len, int prot);
 unsigned long vm_brk(unsigned long addr, unsigned long len);
-unsigned long vm_mmap(struct file *fp, unsigned long addr, unsigned long len,unsigned long prot, unsigned long flags, unsigned long pgoff);
+unsigned long vm_mmap(struct file *fp, unsigned long addr, unsigned long len,unsigned long prot, unsigned long flags, unsigned long pgoff, const unsigned char *name);
 int vm_munmap(struct mm_struct *mm, unsigned long addr, unsigned long len);
 unsigned long vm_setupBrk(unsigned long addr, unsigned long len);
 unsigned long vm_dup_vmaps(struct mm_struct *src_mm,struct mm_struct *dest_mm);
@@ -73,7 +77,12 @@ unsigned long fs_getVmaPage(struct vm_area_struct *vma,unsigned long offset);
 int pc_insertPage(struct inode *inode,struct page *page);
 int pc_deletePage(struct page *page);
 int pc_putFreePage(struct page *page);
+page_struct_t *pc_get_dirty_page();
+int pc_put_page(struct page *page);
+int pc_is_freepages_available(void);
 page_struct_t *pc_getFreePage();
+unsigned char *pc_page_to_ptr(struct page *p);
+int pc_housekeep(void);
 
 /*vfs */
 unsigned long fs_registerFileSystem(struct filesystem *fs);
@@ -117,6 +126,7 @@ unsigned long ut_atol(unsigned char *p);
 unsigned int ut_atoi(unsigned char *p);
 int ut_sprintf(char * buf, const char *fmt, ...);
 int ut_snprintf(char * buf, size_t size, const char *fmt, ...);
+void ut_log(const char *format, ...);
 
 /* architecture depended */
 void ar_registerInterrupt(uint8_t n, isr_t handler,char *name, void *private_data);
@@ -125,10 +135,12 @@ int ar_dup_pageTable(struct mm_struct *src_mm,struct mm_struct *dest_mm);
 int ar_pageTableCleanup(struct mm_struct *mm,unsigned long addr, unsigned long length);
 int ar_flushTlbGlobal();
 void flush_tlb(unsigned long dir);
-int ar_updateCpuState(struct task_struct *p);
+unsigned long  ar_modifypte(unsigned long addr, struct mm_struct *mm, unsigned char rw);
+int ar_updateCpuState(struct task_struct *next, struct task_struct *prev);
 int ar_archSetUserFS(unsigned long addr);
 void ar_setupTssStack(unsigned long stack);
 int ar_addInputKey(int device_id,unsigned char c);
+int ar_check_valid_address(unsigned long addr, int len);
 
 /**************** misc functions ********/
 int getmaxcpus();
@@ -190,4 +202,6 @@ unsigned long SYS_sendto(int sockfd, const void *buf, size_t len, int flags,
                const struct sockaddr *dest_addr, int addrlen);
 int SYS_recvfrom(int sockfd, const void *buf, size_t len, int flags,  const struct sockaddr *dest_addr, int addrlen);
 
+
 #endif
+

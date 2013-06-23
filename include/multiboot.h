@@ -17,7 +17,7 @@
 #define PAGE_SIZE       (1UL << PAGE_SHIFT)
 /* The size of our stack (16KB).  */
 /*#define TASK_SIZE 4*PAGE_SIZE */
-#define TASK_SIZE 4*(0x1000)
+#define TASK_SIZE 4*(0x1000)  /* duplicate defenition*/
 #ifdef SMP
 #define MAX_CPUS 5
 #else

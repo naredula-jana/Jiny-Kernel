@@ -86,6 +86,7 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 	va_end(ap);
 	p9_pdu_finalize(&pdu);
 
+	//ut_printf(" cd :%x cl:%x pd:%x  \n",client->user_data, client->userdata_len,client->pkt_buf);
 #if 1
 	if (client->user_data!= 0){
 		pc_check_valid_addr(client->user_data, client->userdata_len);

@@ -115,58 +115,86 @@ int sc_sleep(long ticks) /* each tick is 100HZ or 10ms */
 {
 	return ipc_waiton_waitqueue(&timer_queue, ticks);
 }
+static backtrace_t temp_bt;
+
 int Jcmd_ps(char *arg1, char *arg2) {
 	unsigned long flags;
 	struct list_head *pos;
 	struct task_struct *task;
-	int i,ret,len;
+	int i,ret,len,max_len;
 	unsigned char *buf;
 
 	ut_printf("pid state generation ticks sleep_ticks mm mm_count name cpu\n");
-	buf=mm_getFreePages(0,0);
-	len = PAGE_SIZE;
+
+	len = PAGE_SIZE*100;
+	max_len=len;
+	buf = (unsigned char *) vmalloc(len,0);
+	if (buf == 0) {
+		ut_printf(" Unable to get vmalloc memory \n");
+		return 0;
+	}
 
 	spin_lock_irqsave(&g_global_lock, flags);
+
 	list_for_each(pos, &g_task_queue.head) {
 		task = list_entry(pos, struct task_struct, task_queue);
 		if (is_kernelThread(task))
-			len = len - ut_snprintf(buf+PAGE_SIZE-len,len,"[%2x]", task->pid);
+			len = len - ut_snprintf(buf+max_len-len,len,"[%2x]", task->pid);
 		else
-			len = len - ut_snprintf(buf+PAGE_SIZE-len,len,"(%2x)", task->pid);
+			len = len - ut_snprintf(buf+max_len-len,len,"(%2x)", task->pid);
 
-		len = len - ut_snprintf(buf+PAGE_SIZE-len,len,"%3d %3d %5x  %5x %4d %7s sleeptick(%3d:%d) cpu:%3d :%s: count:%d\n",task->state, task->cpu_contexts, task->ticks, task->mm, task->mm->count.counter, task->name, task->sleep_ticks,
-				task->stats.ticks_consumed,task->cpu,task->mm->fs.cwd,task->count.counter);
+		len = len - ut_snprintf(buf+max_len-len,len,"%3d %3d %5x  %5x %4d %7s sleeptick(%3d:%d) cpu:%3d :%s: count:%d status:%s\n",task->state, task->cpu_contexts, task->ticks, task->mm, task->mm->count.counter, task->name, task->sleep_ticks,
+				task->stats.ticks_consumed,task->cpu,task->mm->fs.cwd,task->count.counter,task->status_info);
+		temp_bt.count = 0;
+		if (task->state != TASK_RUNNING) {
+			ut_getBackTrace(task->thread.rbp, task, &temp_bt);
+			for (i = 0; i < temp_bt.count; i++) {
+				len = len - ut_snprintf(buf + max_len - len, len,
+								"          %d: %9s - %x \n", i,
+								temp_bt.entries[i].name,
+								temp_bt.entries[i].ret_addr);
+			}
+		}
+
 	}
-	len = len -ut_snprintf(buf+PAGE_SIZE-len,len," CPU Processors:  cpuid contexts <state 0=idle, intr-disabled > name pid\n");
+	len = len -ut_snprintf(buf+max_len-len,len," CPU Processors:  cpuid contexts <state 0=idle, intr-disabled > name pid\n");
 	for (i=0; i<getmaxcpus(); i++){
-		len = len -ut_snprintf(buf+PAGE_SIZE-len,len,"%2d:%4d <%d-%d> %7s(%d)\n",i,g_cpu_state[i].stat_total_contexts,g_cpu_state[i].active,g_cpu_state[i].intr_disabled,g_cpu_state[i].current_task->name,g_cpu_state[i].current_task->pid);
+		len = len -ut_snprintf(buf+max_len-len,len,"%2d:%4d <%d-%d> %7s(%d)\n",i,g_cpu_state[i].stat_total_contexts,g_cpu_state[i].active,g_cpu_state[i].intr_disabled,g_cpu_state[i].current_task->name,g_cpu_state[i].current_task->pid);
 	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
-
 	ut_printf("%s",buf);
 
-	mm_putFreePages(buf,0);
+	vfree(buf);
 	return 1;
 }
-
+#define MAX_USERSPACE_STACK_TEMPLEN 409600
 static unsigned long setup_userstack(unsigned char **argv, unsigned char **env, unsigned long *stack_len, unsigned long *t_argc, unsigned long *t_argv, unsigned long *p_aux) {
 	int i, len, total_args = 0;
 	int total_envs =0;
 	unsigned char *p, *stack;
 	unsigned long real_stack, addr;
-	unsigned char *target_argv[12];
-	unsigned char *target_env[12];
+	unsigned char **target_argv;
+	unsigned char **target_env;
+	int max_stack_len=MAX_USERSPACE_STACK_TEMPLEN;
+	int max_list_len=(PAGE_SIZE/sizeof(void *))-1;
 
 	if (argv == 0 && env == 0) {
 		ut_printf(" ERROR in setuo_userstack argv:0\n");
 		return 0;
 	}
-	stack = (unsigned char *) mm_getFreePages(MEM_CLEAR, 0);
-	p = stack + PAGE_SIZE;
+
+	target_argv = (unsigned char *) mm_getFreePages(MEM_CLEAR, 0);
+	target_env = (unsigned char *) mm_getFreePages(MEM_CLEAR, 0);
+	stack = (unsigned char *) vmalloc(MAX_USERSPACE_STACK_TEMPLEN,MEM_CLEAR);
+	if (stack ==0){
+		goto error;
+	}
+
+	p = stack + max_stack_len;
 	len = 0;
 	real_stack = USERSTACK_ADDR + USERSTACK_LEN;
 
-	for (i = 0; argv[i] != 0 && i < 10; i++) {
+	for (i = 0; argv[i] != 0 && i < max_list_len; i++) {
 		total_args++;
 		len = ut_strlen(argv[i]);
 		if ((p - len - 1) > stack) {
@@ -181,7 +209,7 @@ static unsigned long setup_userstack(unsigned char **argv, unsigned char **env, 
 	}
 	target_argv[i] = 0;
 
-	for (i = 0; env[i] != 0 && i < 10; i++) {
+	for (i = 0; env[i] != 0 && i < max_list_len; i++) {
 		total_envs++;
 		len = ut_strlen(env[i]);
 		if ((p - len - 1) > stack) {
@@ -202,7 +230,7 @@ static unsigned long setup_userstack(unsigned char **argv, unsigned char **env, 
 
 	p = p - (MAX_AUX_VEC_ENTRIES * 16);
 
-	real_stack = USERSTACK_ADDR + USERSTACK_LEN + p - (stack + PAGE_SIZE);
+	real_stack = USERSTACK_ADDR + USERSTACK_LEN + p - (stack + max_stack_len);
 	*p_aux = (unsigned long)p;
 	len = (1+total_args + 1 + total_envs+1) * 8; /* total_args+args+0+envs+0 */
 	if ((p - len - 1) > stack) {
@@ -224,14 +252,21 @@ static unsigned long setup_userstack(unsigned char **argv, unsigned char **env, 
 		goto error;
 	}
 
-	*stack_len = PAGE_SIZE - (p - stack);
+	*stack_len = max_stack_len - (p - stack);
 	*t_argc = total_args;
 	*t_argv = real_stack ;
+	mm_putFreePages((unsigned long)target_argv, 0);
+	mm_putFreePages((unsigned long)target_env, 0);
 	return (unsigned long)stack;
 
-error: mm_putFreePages((unsigned long)stack, 0);
+error:
+	ut_log(" Error: user stack creation failed :%s:\n",g_current_task->name);
+	mm_putFreePages((unsigned long)stack, 0);
+	mm_putFreePages((unsigned long)target_argv, 0);
+	mm_putFreePages((unsigned long)target_env, 0);
 	return 0;
 }
+
 void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **env) {
 	struct mm_struct *mm,*old_mm;
 	unsigned long flags;
@@ -299,19 +334,19 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 
 	/* populate vm with vmaps */
 	if (mm->exec_fp == 0) {
-		mm_putFreePages(tmp_stack, 0);
+		vfree(tmp_stack);
 		ut_printf("Error execve : Failed to open the file \n");
 		SYS_sc_exit(701);
 		return;
 	}
-	main_func = fs_loadElfLibrary(mm->exec_fp, tmp_stack + (PAGE_SIZE - stack_len), stack_len, tmp_aux);
+	main_func = fs_loadElfLibrary(mm->exec_fp, tmp_stack + (MAX_USERSPACE_STACK_TEMPLEN - stack_len), stack_len, tmp_aux);
 	if (main_func == 0) {
-		mm_putFreePages(tmp_stack, 0);
+		vfree(tmp_stack);
 		ut_printf("Error execve : ELF load Failed \n");
 		SYS_sc_exit(703);
 		return ;
 	}
-	mm_putFreePages(tmp_stack, 0);
+	vfree(tmp_stack);
 
 	//Jcmd_vmaps_stat(0, 0);
 
@@ -327,7 +362,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	g_current_task->thread.userland.user_fs = 0;
 
 	g_current_task->thread.userland.user_fs_base = 0;
-	ar_updateCpuState(g_current_task);
+	ar_updateCpuState(g_current_task,0);
 
 	push_to_userland();
 }
@@ -468,6 +503,7 @@ static void init_task_struct(struct task_struct *p,struct mm_struct *mm){
 	p->task_queue.prev = 0;
 	p->wait_queue.next = p->wait_queue.prev = NULL;
 	p->stats.ticks_consumed = 0;
+	p->status_info = 0;
 	/* link to queue */
 	free_pid_no++;
 	if (free_pid_no==0) free_pid_no++;
@@ -616,8 +652,8 @@ last:
 int SYS_sc_exit(int status) {
 	unsigned long flags;
 	SYSCALL_DEBUG("sys exit : status:%d \n",status);
-	ut_log(" pid:%d existed cause:%d \n",g_current_task->pid,status);
-	ar_updateCpuState(g_current_task);
+	ut_log(" pid:%d existed cause:%d name:%s \n",g_current_task->pid,status,g_current_task->name);
+	ar_updateCpuState(g_current_task, 0);
 
 	release_resources(g_current_task, 1);
 
@@ -685,6 +721,7 @@ __POP(rdi) __POP(rsi)
 		asm volatile("pushfq\n\t"               /* save    flags */     \
 				SAVE_CONTEXT \
 				"pushq %%rbp\n\t"          /* save    EBP   */     \
+				"movq %%rbp,%[prev_rbp]\n\t"        /* save    RBP   */ \
 				"movq %%rsp,%[prev_sp]\n\t"        /* save    ESP   */ \
 				"movq %[next_sp],%%rsp\n\t"        /* restore ESP   */ \
 				"movq $1f,%[prev_ip]\n\t"  /* save    EIP   */     \
@@ -698,6 +735,7 @@ __POP(rdi) __POP(rsi)
 				/* output parameters */                            \
 				: [prev_sp] "=m" (prev->thread.sp),                \
 				[prev_ip] "=m" (prev->thread.ip),                \
+				[prev_rbp] "=m" (prev->thread.rbp),                \
 				"=a" (last),                                     \
 				\
 				/* clobbered output registers: */                \
@@ -866,7 +904,7 @@ static void schedule_userSecondHalf(){ /* user thread second Half: _schedule fun
 	if (task != 0)
 		sc_delete_task(task);
 
-	ar_updateCpuState(g_current_task);
+	ar_updateCpuState(g_current_task,0);
 	clone_push_to_userland();
 }
 static void schedule_kernelSecondHalf(){ /* kernel thread second half:_schedule function task can lands here. */
@@ -917,7 +955,10 @@ void sc_schedule() { /* _schedule function task can land here. */
 		}
 	}
 }
+
+/* NOT do not add any extra code in this function, if any register is used syscalls will not function properly */
 void sc_before_syscall() {
+	g_current_task->curr_syscall_id = g_cpu_state[getcpuid()].md_state.syscall_id;
 	g_current_task->callstack_top = 0;
 }
 void sc_after_syscall() {
@@ -1031,7 +1072,7 @@ static unsigned long  _schedule(unsigned long flags) {
 	g_cpu_state[cpuid].stat_total_contexts++;
 	arch_spinlock_transfer(&g_global_lock,prev,next);
 	/* update the cpu state  and tss state for system calls */
-	ar_updateCpuState(next);
+	ar_updateCpuState(next,prev);
 	ar_setupTssStack((unsigned long) next + TASK_SIZE);
 
 

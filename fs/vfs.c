@@ -14,6 +14,7 @@
 #include "vfs.h"
 #include "interface.h"
 
+
 static struct filesystem *vfs_fs = 0;
 static kmem_cache_t *slab_inodep;
 static LIST_HEAD(inode_list);
@@ -34,7 +35,6 @@ static int fs_send_to_pipe(struct file *fp,unsigned char *buf, int len);
 
 static int inode_init(struct inode *inode, char *filename,
 		struct filesystem *vfs) {
-	unsigned long flags;
 	int i;
 
 	if (inode == NULL)
@@ -69,15 +69,19 @@ static int inode_init(struct inode *inode, char *filename,
 int Jcmd_ls(char *arg1, char *arg2) {
 	struct inode *tmp_inode;
 	struct list_head *p;
-	int i,ret,len;
+	int i,len,max_len;
 	unsigned char *buf;
 	int total_pages = 0;
-	unsigned char *type,*bp;
+	const unsigned char *type;
 
 	ut_printf("usagecount nrpages length  inode_no type/type  name\n");
-	buf=mm_getFreePages(0,2);
-	len = PAGE_SIZE*4;
-	bp = buf+len;
+	len = PAGE_SIZE*100;
+	max_len=len;
+	buf = (unsigned char *) vmalloc(len,0);
+	if (buf == 0) {
+		ut_printf(" Unable to get vmalloc memory\n");
+		return 0;
+	}
 
 	mutexLock(g_inode_lock);
 	list_for_each(p, &inode_list) {
@@ -85,20 +89,20 @@ int Jcmd_ls(char *arg1, char *arg2) {
 		if (tmp_inode->flags & INODE_EXECUTING) type="*" ;
 		else type=" ";
 
-		len = len - ut_snprintf(bp-len,len," %4d %4d(%2d) %8d %8d %2x/%x %s%s\n", tmp_inode->count,
+		len = len - ut_snprintf(buf+max_len-len,len,"%d: %4d %4d(%2d) %8d %8d %2x/%x %s%s\n",i, tmp_inode->count,
 				tmp_inode->nrpages,tmp_inode->stat_locked_pages.counter, tmp_inode->file_size, tmp_inode->inode_no,
 				tmp_inode->file_type, tmp_inode->flags, type,tmp_inode->filename);
 		total_pages = total_pages + tmp_inode->nrpages;
+		i++;
 		if (len < 500) break;
 	}
 	mutexUnLock(g_inode_lock);
-	len = len - ut_snprintf(bp-len, len,"Total pages :%d\n", total_pages);
+	len = len - ut_snprintf(buf+max_len-len, len,"Total pages :%d\n", total_pages);
 
 	len = ut_strlen(buf);
 	SYS_fs_write(1,buf,len);
 
-	mm_putFreePages(buf,2);
-
+	vfree(buf);
 	return 1;
 }
 int Jcmd_clear_pagecache() {
@@ -189,7 +193,7 @@ static void transform_filename(unsigned char *arg_filename, char *filename) {
 
 	filename[0] = 0;
 	if (arg_filename[0] != '/') {
-		ut_strcpy(filename, g_current_task->mm->fs.cwd);
+		ut_strcpy(filename, (const unsigned char *)g_current_task->mm->fs.cwd);
 	}
 	i = 0;
 
@@ -197,13 +201,13 @@ static void transform_filename(unsigned char *arg_filename, char *filename) {
 	if (arg_filename[0] == '.' && arg_filename[1] == '/')
 		i = 2;
 
-	len = ut_strlen(filename);
+	len = ut_strlen((const unsigned char *)filename);
 	if (filename[len - 1] != '/') {
-		ut_strcat(filename, "/");
+		ut_strcat((const unsigned char *)filename, "/");
 	}
 	ut_strcat(filename, &arg_filename[i]); //TODO use strncat
 
-	len = ut_strlen(filename);
+	len = ut_strlen((const unsigned char *)filename);
 
 	/* remove "/" as last character */
 	if (filename[len - 1] == '/') {
@@ -389,7 +393,6 @@ unsigned long SYS_fs_open(char *filename, int mode, int flags) {
 }
 /*********************************************************************************************/
 static void inode_sync(struct inode *inode, unsigned long truncate) {
-	struct list_head *p;
 	struct page *page;
 	int ret;
 	unsigned long offset;
@@ -474,7 +477,9 @@ unsigned long fs_readdir(struct file *file, struct dirEntry *dir_ent,
 	if (file == 0)
 		return 0;
 	if (file->inode && file->inode->file_type != DIRECTORY_FILE) {
-		BUG();
+		ut_log("ERROR: SYS_getdents  file type error\n");
+		return -1;
+		//BUG();
 	}
 	return vfs_fs->readDir(file->inode, dir_ent, len,  offset);
 }
@@ -494,7 +499,6 @@ int fs_write(struct file *filep, unsigned char *buff, unsigned long len) {
 	}
 
 	if (filep->type == OUT_FILE) {
-		unsigned long flags;
 	//	spin_lock_irqsave(&g_userspace_stdio_lock, flags);
 		for (i = 0; i < len; i++) {
 			ut_putchar((int) buff[i]);
@@ -568,8 +572,9 @@ error:
 
 int SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
 	struct file *file;
+	int ret;
 
-	SYSCALL_DEBUG("write fd:%d buff:%x len:%x \n", fd, buff, len);
+	SYSCALL_DEBUG("write fd:%d buff:%x len:%x data:%s:\n", fd, buff, len,buff);
 	file = fd_to_file(fd);
 
 	if (file == 0){
@@ -579,8 +584,9 @@ int SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
 	if (file->type == NETWORK_FILE) {
 		return socket_write(file, buff, len);
 	}
-//fs_sync(); //TODO : remove later
-	return fs_write(file, buff, len);
+	ret = fs_write(file, buff, len);
+	SYSCALL_DEBUG("write return : fd:%d ret:%d \n",fd,ret);
+	return ret;
 }
 long SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt) {
 	int i;
@@ -610,7 +616,9 @@ struct page *fs_genericRead(struct inode *inode, unsigned long offset) {
 	struct page *page;
 	int tret;
 	int err = 0;
-
+	if (inode ==0){
+		BUG();
+	}
 retry_again:  /* the purpose to retry is to get again from the page cache with page count incr */
 	page = pc_getInodePage(inode, offset);
 	if (page == NULL) {
@@ -661,7 +669,9 @@ long fs_read(struct file *filep, unsigned char *buff, unsigned long len) {
 	if (ar_check_valid_address(buff,len)==JFAIL){
 		BUG();
 	}
-
+	if (filep->type == OUT_FILE) {
+		BUG();
+	}
 	if (filep->type == IN_FILE) {
 		if (buff == 0 || len == 0)
 			return 0;
@@ -737,8 +747,9 @@ long SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt) {
 }
 int SYS_fs_read(unsigned long fd, unsigned char *buff, unsigned long len) {
 	struct file *file;
+	int ret;
 
-	//SYSCALL_DEBUG("read fd:%d buff:%x len:%x \n",fd,buff,len);
+	SYSCALL_DEBUG("read fd:%d buff:%x len:%x \n",fd,buff,len);
 
 	file = fd_to_file(fd);
 	if (file == 0){
@@ -752,7 +763,9 @@ int SYS_fs_read(unsigned long fd, unsigned char *buff, unsigned long len) {
 	if ((vfs_fs == 0) || (vfs_fs->read == 0))
 		return 0;
 
-	return fs_read(file, buff, len);
+	ret = fs_read(file, buff, len);
+	SYSCALL_DEBUG("read ret :%d  %s\n",ret,buff);
+	return ret;
 }
 /***************************************************************************************************/
 struct file *fs_dup(struct file *old_filep, struct file *new_filep) {
@@ -860,20 +873,11 @@ int fs_stat(struct file *filep, struct fileStat *stat) {
 	}
 	return ret;
 }
-unsigned long SYS_fs_fstat(int fd, void *buf) {
-	struct file *fp;
-	SYSCALL_DEBUG("fstat  fd:%x buf:%x \n", fd, buf);
 
-	fp = fd_to_file(fd);
-	if (fp <= 0 || buf == 0)
-		return -1;
-	return fs_stat(fp, buf);
-}
 /*************************************************************/
 unsigned long fs_fadvise(struct inode *inode, unsigned long offset,
 		unsigned long len, int advise) {
 	struct page *page;
-	struct list_head *p;
 	int ret;
 	int count=0;
 
@@ -1101,6 +1105,8 @@ static int fs_destroy_pipe(struct file *fp) {
 static int fs_send_to_pipe(struct file *fp, unsigned char *buf, int len) {
 	int max_size = PAGE_SIZE ;
 	int ret;
+	int consumed_len=0;
+	int left_len=len;
 
 	int i = fp->private;
 	if (i < 0 || i >= MAX_PIPES)
@@ -1119,7 +1125,7 @@ restart:
 		goto last;
 #else
 		mutexUnLock(g_inode_lock);
-		if (pipes[i].count > 1) { /* wait if there is more then thread operating pipe */
+		if (pipes[i].count > 1) { /* wait if there is more then one thread operating pipe */
 			sc_sleep(2);
 			goto restart;
 		}
@@ -1127,19 +1133,24 @@ restart:
 #endif
 	}
 
-	if (len < max_size)
-		max_size = len;
-	ut_memcpy(pipes[i].bufs[out].data, buf, max_size);
+	if (left_len < max_size)
+		max_size = left_len;
+	ut_memcpy(pipes[i].bufs[out].data, buf+consumed_len, max_size);
 	pipes[i].bufs[out].size = max_size;
 	pipes[i].bufs[out].start_offset = 0;
 	pipes[i].out_index = (pipes[i].out_index + 1) % MAX_PIPE_BUFS;
 	ret=max_size;
+	consumed_len = consumed_len+max_size;
+	left_len = left_len-max_size;
 
 last:
 	mutexUnLock(g_inode_lock);
+	if (left_len>0){
+		goto restart;
+	}
 	//ut_printf(" sending in :%s: to pipe-%d : %d\n",g_current_task->name, i,ret);
 
-	return ret;
+	return consumed_len;
 }
 #define EAGAIN          11      /* Try again */
 static int fs_recv_from_pipe(struct file *fp, unsigned char *buf, int len) {
@@ -1193,9 +1204,8 @@ unsigned long fs_registerFileSystem(struct filesystem *fs) {
 int init_vfs() {
 	g_slab_filep = kmem_cache_create("file_struct", sizeof(struct file), 0, 0,
 			NULL, NULL);
-	slab_inodep = kmem_cache_create("inode_struct", sizeof(struct inode), 0, 0,
+	slab_inodep = kmem_cache_create("inode_struct", sizeof(struct inode), 0, JSLAB_FLAGS_DEBUG,
 			NULL, NULL);
-
 
 	return 0;
 }

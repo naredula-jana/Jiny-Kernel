@@ -168,7 +168,7 @@ static int init_xen_info(void) {
 		BUG();
 
 	g_sharedInfoArea = HOST_XEN_SH_ADDR;
-	vm_mmap(0, g_sharedInfoArea, PAGE_SIZE, PROT_WRITE, MAP_FIXED, phy_addr);
+	vm_mmap(0, g_sharedInfoArea, PAGE_SIZE, PROT_WRITE, MAP_FIXED, phy_addr,"xen");
 
 	DEBUG("NEW shared info area sec  : %x phyaddr:%x \n", g_sharedInfoArea->wc_sec,phy_addr);
 	init_events();

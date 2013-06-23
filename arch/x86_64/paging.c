@@ -10,7 +10,7 @@
 addr_t g_kernel_page_dir=0;
 
 extern addr_t end; // end of code and data region
-static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int writeFault);
+static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int writeFault, struct fault_ctx *ctx);
 static void mk_pte(pte_t *pte, addr_t fr,int global,int user,int rw)
 {
 	pte->present = 1;
@@ -71,7 +71,7 @@ static void mk_pde(pde_t *pde, addr_t fr,int page_size,int global,int user)
 	pde->nx=0;
 	pde->frame = fr;
 }
-extern unsigned long VIDEO ;
+
 
 addr_t initialise_paging(addr_t end_addr)
 {
@@ -91,8 +91,9 @@ addr_t initialise_paging(addr_t end_addr)
 //	ut_printf("Initializing Paging  %x: physical high addr:%x  \n",placement_address,end_addr);
 	level2_table=(addr_t *)0x00103000+20; /* 20 entries(40M) already initialized */
 	fr=0+20*512; /*  2M= 512 4Kpages already initialized */
-	for (i=20; i<512; i++) /* 20 entries is already initialized, this loop covers for 1G */
+	for (i=20; i<512; i++) /* 20(40M) entries is already initialized, this loop covers for 1G */
 	{
+		/* TODO: need to check the maximum physical memory and need to initilize accordingly, currentl 1G is initilised */
 		if (fr > nframes) {
 			break;
 		}
@@ -103,7 +104,7 @@ addr_t initialise_paging(addr_t end_addr)
 			for (j = 0; j < 512; j++) {
 				mk_pte(curr_virt_end_addr+j*8, fr + j, 1, 0, 1);
 			}
-			curr_virt_end_addr=curr_virt_end_addr+PAGE_SIZE;
+			curr_virt_end_addr=curr_virt_end_addr+PAGE_SIZE; /* this is physical space used for the page table */
 		}
 		level2_table++;
 		fr=fr+512; /* 2M = 512*4K frames */	
@@ -112,19 +113,20 @@ addr_t initialise_paging(addr_t end_addr)
 //	ut_printf("Initializing PAGING  nframes:%x  FR:%x l2:%x i=%d \n",nframes,fr,level2_table,i);
 	p=(unsigned long *)0x00102000; /* TODO: the following two lines need to remove later */
 	/* reset the L3 table first entry need only when the paging is enabled */
+	/* since first entry used for temporary page table where adress space is from 0 onwards  , second entry is permanent kernel space from 2g to.. i.e 0x40000000 */
 
 #ifdef SMP
 	/* for SMP it is reset to zero after all the cpus are up */
 #else
 	*p=0;
 #endif
-
-	VIDEO=(unsigned long)__va(VIDEO);
+//	VIDEO=(unsigned long)__va(VIDEO);
 	flush_tlb(0x101000);
 	ut_printf("END address :%x\n",&end);
+
 	return (addr_t)curr_virt_end_addr;
 }
-static inline void flush_tlb_entry(unsigned long  vaddr)
+ void flush_tlb_entry(unsigned long  vaddr)
 {
   __asm__ volatile("invlpg (%0)"
                    :: "r" (vaddr));
@@ -184,12 +186,12 @@ void ar_pageFault(struct fault_ctx *ctx) {
 	if (present) {
 		DEBUG("page fault: Updating present \n");
 		//mm_debug=1;
-		handle_mm_fault(faulting_address, ctx->istack_frame->rip, 0);
+		handle_mm_fault(faulting_address, ctx->istack_frame->rip, 0, ctx);
 		return;
 	}
 	if (rw) {
 		DEBUG("Read-only \n");
-		handle_mm_fault(faulting_address, ctx->istack_frame->rip, 1);
+		handle_mm_fault(faulting_address, ctx->istack_frame->rip, 1, ctx);
 		return;
 	}
 	if (us) {
@@ -208,7 +210,7 @@ void ar_pageFault(struct fault_ctx *ctx) {
 
 #define MAX_KERNEL_ENTRIES 10
 static int kernel_pages_level=3;
-static unsigned long kernel_level3_entries[MAX_KERNEL_ENTRIES];
+static unsigned long kernel_level3_entries[MAX_KERNEL_ENTRIES]; /* 1 entry represents 1G Memory */
 static int kernel_level3_entries_count=0;
 static void copy_kernel_pagetable_entries(){
 	int i,j,k;
@@ -340,7 +342,9 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 	unsigned long *v; /* virtual address */
 	unsigned int i,max_i,cleared;
 
-	DEBUG("Clear Page tableLevel :%x ptableaddr:%x addr:%x len:%x start_addr:%x \n",level,ptable_addr,addr,len,start_addr);	
+
+	DEBUG("Clear Page tableLevel :%x ptableaddr:%x addr:%x len:%x start_addr:%x \n",level,ptable_addr,addr,len,start_addr);
+
 	p=ptable_addr;
 	if (p == 0 || len==0) return 0;
 	switch (level)
@@ -363,17 +367,17 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 
 	}
 	max_i=table_len/max_entry;
-	if (max_i>=512) max_i=511;
+	if (max_i>=512) max_i=512;
 	if (addr == 0 && len ==0) 
 	{
 		i=0;
-		max_i=511;
+		max_i=512;
 	}
 
 	v=__va(p+i*8);
 	start_addr=start_addr+i*max_entry;
 	DEBUG("            i:%d max_i:%d tableaddr: %x \n",i,max_i,p);
-	while( i<=max_i )
+	while( i<max_i )
 	{
 		unsigned long entry_end,entry_start;
 		entry_start=start_addr;
@@ -517,7 +521,9 @@ int ar_check_valid_address(unsigned long addr, int len) {
 
 	return JFAIL;
 }
-static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_fault)
+int g_stat_pagefaults_write=0;
+extern unsigned long g_phy_mem_size;
+static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_fault, struct fault_ctx *ctx)
 {
 	struct mm_struct *mm;
 	struct vm_area_struct *vma;
@@ -526,17 +532,36 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 	unsigned char user=0;
 
 	mm=g_kernel_mm;
-	if (g_current_task->mm != mm){
+
+	if ((addr > KERNEL_ADDR_START) && ( addr<(KERNEL_ADDR_START+g_phy_mem_size)) && (write_fault == 1)) { /* look for the kernel slab data pages */
+		vma=vm_findVma(g_kernel_mm,(addr & PAGE_MASK),8);
+		assert(vma!=0);
+		vma->stat_page_wrt_faults++;
+		struct page *page = virt_to_page(addr & PAGE_MASK);
+		if (PageSlab(page) ){
+			jslab_pagefault(addr, faulting_ip, ctx);
+			return 1;
+		}else{
+			ar_modifypte((unsigned long)addr,g_kernel_mm,(unsigned char)1); /* make the page write */
+			vm_vma_stat(vma,addr,faulting_ip,write_fault,0);
+			g_stat_pagefaults_write++;
+			return 1;
+		}
+	}
+	vma=vm_findVma(g_kernel_mm,(addr & PAGE_MASK),8);
+	if (vma == 0 && g_current_task->mm != mm) {
 		/* this is case where user thread running in kernel */
-		 user=1;
-		 mm = g_current_task->mm;
+		user = 1;
+		mm = g_current_task->mm;
+		vma = vm_findVma(mm, (addr & PAGE_MASK), 8); /* length changed to just 8 bytes at maximum , instead of entire page*/
 	}
 
-	if (mm==0 || mm->pgd == 0) BUG();
-
-	asm volatile("sti");
-	vma=vm_findVma(mm,(addr & PAGE_MASK),8); /* length changed to just 8 bytes at maximum , instead of entire page*/
-	asm volatile("cli");
+	if (addr>=KERNEL_ADDR_START && addr<=(KERNEL_ADDR_START+0x200000)){
+		while(1);
+	}
+	if (mm==0 || mm->pgd == 0){
+		BUG();
+	}
 
 	if (vma == 0) 
 	{
@@ -546,7 +571,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 		//	ut_printf("ERROR: user program Segmentaion Fault addr:%x  ip:%x :%s\n",addr,faulting_ip,g_current_task->name);
 			Jcmd_maps(0,0);
 			ut_log("page fault addr:%x ip:%x  \n",addr,faulting_ip);
-			//BUG();
+			BUG();
 			ut_showTrace(&stack_var);
 			SYS_sc_exit(902);
 			return 1;
@@ -614,7 +639,8 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 			return 1;
 		}
 		p=(unsigned long *)__pa(v);
-		DEBUG(" Adding to LEAF: clean Anonymous page paddr: %x vaddr: %x \n",p,addr);
+		vm_vma_stat(vma,addr,faulting_ip,write_fault,v);
+		DEBUG(" Adding to LEAF: clean Anonymous page name:%s: page vaddr: %x addr:%x  faulip:%x pte:%x \n",g_current_task->name,v,addr,faulting_ip,(pl1+(L1_INDEX(addr))));
 	}else if (vma->vm_flags & MAP_FIXED)
 	{
 		if ( vma->vm_inode != NULL)
@@ -622,28 +648,31 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 			asm volatile("sti");
 			p=(unsigned long *)fs_getVmaPage(vma,vma->vm_private_data+(addr-vma->vm_start));
 			if (write_fault && (writeFlag!= 0)) {
-				addr_t *fp;
-				fp=(unsigned long *)mm_getFreePages(MEM_CLEAR,0);
+				addr_t *free_page;
+				free_page=(unsigned long *)mm_getFreePages(MEM_CLEAR,0);
 #if 1
 				int file_len = (vma->vm_end - vma->vm_start) - ((addr&PAGE_MASK) - (vma->vm_start));
 				if (file_len > PAGE_SIZE) file_len = PAGE_SIZE;
 				if (file_len > 0) {
-					ut_memcpy((unsigned char *) fp, (unsigned char *) __va(p), file_len);
+					ut_memcpy((unsigned char *) free_page, (unsigned char *) __va(p), file_len);
 				}
 #else
-				ut_memcpy((unsigned char *) fp, (unsigned char *) __va(p), PAGE_SIZE);
+				ut_memcpy((unsigned char *) free_page, (unsigned char *) __va(p), PAGE_SIZE);
 #endif
-				p=(unsigned long *)__pa(fp);
+				p=(unsigned long *)__pa(free_page);
 				writeFlag = 1 ;
 			}else{
 				writeFlag = 0 ; /* this should be a COW data pages */
 			}
+			vm_vma_stat(vma,addr,faulting_ip,write_fault,0);
+
 			asm volatile("cli");
 			DEBUG(" Adding to LEAF: pagecache  paddr: %x vaddr: %x\n",p,addr);
 		}else
 		{
 			p=(unsigned long *)(vma->vm_private_data + (addr-vma->vm_start)) ;
-			DEBUG(" Adding to LEAF: private page paddr: %x vaddr: %x \n",p,addr);
+			if (user == 0)
+				ut_log("Kernel Adding to LEAF: private page paddr: %x vaddr: %x \n",p,addr);
 			DEBUG(" page fault of anonymous page p:%x  private_data:%x vm_start::x \n",p,vma->vm_private_data,vma->vm_start);
 		}
 	}else
@@ -662,8 +691,6 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 	flush_tlb_entry(addr);
 	if (addr >= 0x810000 &&  addr <= 0x811000){
 		unsigned long *test_ptr=0x810ec0;
-
-
 	}
 	DEBUG("Finally Inserted addr:%x  Pl4: %x pl3:%x  p12:%x pl1:%x p:%x \n",addr,pl4,pl3,pl2,pl1,p);	
 	return 1;	
@@ -757,5 +784,59 @@ last:
 		ut_printf("Flushing entire page table : pages scan:%d last addr:%x\n",total_pages_scan,addr);
 		ar_flushTlbGlobal(); /* TODO : need not flush entire table, flush only specific tables*/
 	}
+	return addr;
+}
+unsigned long  ar_modifypte(unsigned long addr, struct mm_struct *mm, unsigned char rw)
+{
+	addr_t *pl4,*pl3,*pl2,*pl1,*v;
+	pte_t *pte;
+	pde_t *pde;
+	int i;
+	int ret=JFAIL;
+
+	if (mm==0 || mm->pgd == 0 || addr==0) BUG();
+
+	if (1)
+	{
+		pl4=(unsigned long *)mm->pgd;
+		if (pl4 == 0) return 0;
+
+		v=__va(pl4+(L4_INDEX(addr))) ;
+		pl3=(unsigned long *)((*v) & (~0xfff));
+		if (pl3==0)
+		{
+			goto last;
+		}
+
+		v=__va(pl3+(L3_INDEX(addr)));
+		pl2=(unsigned long *)((*v) & (~0xfff));
+		if (pl2==0)
+		{
+			goto last;
+		}
+
+		v=__va(pl2+(L2_INDEX(addr)));
+		pl1=(unsigned long *)((*v) & (~0xfff));
+		pde = __va(pl2+(L2_INDEX(addr)));
+
+		if (pde->ps == 1)/* 2 MB page */
+		{
+			goto last;
+#if 0
+			if (pde->dirty==1){
+			   ut_printf(" Big page: start:%x  end:%x  dirty:%x \n",addr,(addr+PAGE_SIZE*512),pde->dirty);
+			}
+			addr=addr+PAGE_SIZE*512;
+			pde->dirty = 0;
+#endif
+		}
+
+		pte=__va(pl1+(L1_INDEX(addr)));
+		pte->rw = rw;
+		ar_flushTlbGlobal();
+	}
+
+last:
+
 	return addr;
 }

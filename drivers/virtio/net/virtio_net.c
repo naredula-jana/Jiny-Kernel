@@ -78,6 +78,7 @@ static int attach_virtio_net_pci(device_t *pci_dev) {
 	virtio_dev_t *virtio_dev = (virtio_dev_t *) pci_dev->private_data;
 	uint32_t msi_vector;
 
+
 	virtio_set_status(virtio_dev,
 			virtio_get_status(virtio_dev) + VIRTIO_CONFIG_S_ACKNOWLEDGE);
 	DEBUG("VirtioNet: Initializing VIRTIO PCI NET status :%x :  \n", virtio_get_status(virtio_dev));
@@ -116,16 +117,16 @@ static int attach_virtio_net_pci(device_t *pci_dev) {
 		outw(virtio_dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 1);
 		outw(virtio_dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 0xffff);
 	}
+
 	virtio_disable_cb(virtio_dev->vq[1]); /* disable interrupts on sending side */
+#if 1
 	if (msi_vector > 0) {
 		for (i = 0; i < 3; i++)
 			ar_registerInterrupt(msi_vector + i, virtio_net_interrupt,
 					"virt_net_msi",pci_dev);
 	}
+#endif
 
-	virtio_set_status(virtio_dev,
-			virtio_get_status(virtio_dev) + VIRTIO_CONFIG_S_DRIVER_OK);
-	DEBUG("VirtioNet:  Initilization Completed \n");
 
 	for (i = 0; i < 120; i++) /* add buffers to recv q */
 		addBufToQueue(virtio_dev->vq[0], 0, 4096);
@@ -134,6 +135,11 @@ static int attach_virtio_net_pci(device_t *pci_dev) {
 	virtio_queue_kick(virtio_dev->vq[0]);
 
 	registerNetworkHandler(NETWORK_DRIVER, netdriver_xmit, (void *) pci_dev);
+
+
+	virtio_set_status(virtio_dev,
+			virtio_get_status(virtio_dev) + VIRTIO_CONFIG_S_DRIVER_OK);
+	DEBUG("VirtioNet:  Initilization Completed \n");
 	return 1;
 }
 
@@ -150,7 +156,7 @@ static void virtio_net_interrupt(registers_t regs, void *private_data) {
 	virtio_dev_t *dev;
 	unsigned long flags;
 
-	spin_lock_irqsave(&virtionet_lock, flags);
+//	spin_lock_irqsave(&virtionet_lock, flags);
 
 	dev = (virtio_dev_t *) pci_dev->private_data;
 	if (dev->msi == 0)
@@ -163,7 +169,7 @@ static void virtio_net_interrupt(registers_t regs, void *private_data) {
 		netif_rx(addr, len);
 	addBufToQueue(dev->vq[0], 0, 4096);
     virtio_queue_kick(dev->vq[0]);
-	spin_unlock_irqrestore(&virtionet_lock, flags);
+//	spin_unlock_irqrestore(&virtionet_lock, flags);
 }
 
 int virtio_send_errors = 0;

@@ -297,7 +297,7 @@ int init_smp_force(int ncpus) {
 
 	KERNEL_PRINT(("SMP: Intel MultiProcessor \"Force\" Support\n"));
 	/* 0xfee00000 - 0xfef00000 for lapic */
-	if ((ret=vm_mmap(0,(unsigned long)__va(0xFee00000) ,0x100000,PROT_WRITE,MAP_FIXED,0xFee00000)) == 0) /* this is for SMP */
+	if ((ret=vm_mmap(0,(unsigned long)__va(0xFee00000) ,0x100000,PROT_WRITE,MAP_FIXED,0xFee00000,"smp_apic")) == 0) /* this is for SMP */
 	{
 		ut_printf("SMP: ERROR : mmap fails for \n");
 		return 0;
@@ -337,8 +337,15 @@ int init_smp_force(int ncpus) {
 	local_bsp_apic_init(); /* TODO : Need to call this twice to get APIC enabled */
 
 	unsigned long *page_table;
-	page_table = __va(0x00102000); /* Refer the paging.c code this is work around for SMP */
+	page_table = __va(0x00102000); /* Refer the paging.c code this is work around for SMP, this entry used for temporary page table where kernel s[pace is from 0 onwards wheras in permanent it is from 1g  */
 	*page_table = 0;
+
+#if 0  /* TO make first 2M or code pages in to Readonly */
+	//unsigned long *page_table;
+	page_table = __va(0x00103000); /* to make first 2M(text) read only */
+	*page_table = 0x281 ;
+	flush_tlb(0x101000);
+#endif
 
 	wait_non_bootcpus = 0; /* from this point onwards  all non-boot cpus starts */
 

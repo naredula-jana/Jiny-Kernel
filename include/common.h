@@ -32,12 +32,12 @@ extern spinlock_t g_global_lock;
 
 #define SYSCALL_DEBUG(x...) do { \
 	if (g_conf_syscall_debug==1)	{\
-		unsigned long flags; \
 		ut_printf("SYSCALL(%x :%d uip: %x) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip); ut_printf(x); \
 	}else if (g_conf_syscall_debug==2) {\
-		unsigned long flags; \
+		if (strace_wait() == JSUCCESS) {\
 				ut_log("SYSCALL(%x :%d uip: %x) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip); ut_log(x); \
-	}\
+		}\
+    }\
 } while (0) 
 
 #define assert(x) do {  if (!(x)) { BUG() ;} } while(0)
@@ -88,8 +88,8 @@ typedef struct {
 }time_t;
 
 #define unlikely(x)     (x) /* TODO */
-#define BUG() do { unsigned long stack_var;  \
-	cli(); ut_showTrace(&stack_var);while(1) ; } while(0)
+#define BUG() do {  \
+	cli(); ut_getBackTrace(0,0,0);while(1) ; } while(0)
 #define BUG_ON(condition) do { if (unlikely((condition)!=0)) BUG(); } while(0)
 
 

@@ -13,8 +13,7 @@
 #define LINES			24
 /* The attribute of an character.  */
 #define ATTRIBUTE		0x1f
-/* The video memory address.  */
-unsigned long VIDEO = 0xB8000;
+
 
 /* Variables.  */
 /* Save the X position.  */
@@ -22,23 +21,23 @@ static int xpos;
 /* Save the Y position.  */
 static int ypos;
 /* Point to the video memory.  */
-static volatile unsigned char *video_g;
+volatile unsigned char *g_video_ram = 0;
 static unsigned char video_buffer_g[LINES][2 * COLUMNS];
 /* Forward declarations.  */
 void cls(void);
 static void itoa(char *buf, int buf_len, int base, unsigned long d);
 void ut_printf(const char *format, ...);
-void ut_log(const char *format, ...);
+
 extern void *g_print_lock;
 /* Clear the screen and initialize VIDEO, XPOS and YPOS.  */
 int ut_cls(void) {
 	int i;
 	unsigned char *ptr;
 	ptr = &(video_buffer_g[0][0]);
-	video_g = (unsigned char *) VIDEO;
 
+	if (g_video_ram==0) return 0;
 	for (i = 0; i < COLUMNS * LINES * 2; i++) {
-		*(video_g + i) = 0;
+		*(g_video_ram + i) = 0;
 		*(ptr + i) = 0;
 	}
 
@@ -50,10 +49,10 @@ static void refresh_screen(void) {
 	int i;
 	unsigned char *ptr;
 	ptr = &(video_buffer_g[0][0]);
-	video_g = (unsigned char *) VIDEO;
+	if (g_video_ram==0) return;
 
 	for (i = 1; i < COLUMNS * LINES * 2; i = i + 2) {
-		*(video_g + i) = 0x4f;
+		*(g_video_ram + i) = 0x4f;
 		*(ptr + i) = 0x4f;
 	}
 
@@ -113,15 +112,15 @@ static void scroll() {
 	unsigned char *ptr;
 
 	ptr = &(video_buffer_g[0][0]);
-	video_g = (unsigned char *) VIDEO;
+	if (g_video_ram == 0) return;
 	for (i = 0; i < COLUMNS * (LINES - 1) * 2; i++) /* copy the data from next line to prev line */
 	{
-		*(video_g + i) = ptr[i + 2 * COLUMNS];
+		*(g_video_ram + i) = ptr[i + 2 * COLUMNS];
 		*(ptr + i) = ptr[i + 2 * COLUMNS];
 	}
 	for (i = COLUMNS * (LINES - 1) * 2; i < COLUMNS * (LINES) * 2; i++) /* clear the last line */
 	{
-		*(video_g + i) = 0;
+		*(g_video_ram + i) = 0;
 		*(ptr + i) = 0;
 	}
 	refresh_screen();
@@ -193,8 +192,8 @@ void ut_putchar(unsigned char c) {
 
 	//2. VGI output
 	//log_putchar(c);
+	if (g_video_ram == 0) return;
 
-	video_g = (unsigned char *) VIDEO;
 	spin_lock_irqsave(&putchar_lock, flags);
 //	if (g_boot_completed) mutexLock(g_print_lock);
 	ptr = &(video_buffer_g[0][0]);
@@ -214,8 +213,8 @@ void ut_putchar(unsigned char c) {
 		return;
 	}
 
-	*(video_g + (xpos + ypos * COLUMNS) * 2) = c & 0xFF;
-	*(video_g + (xpos + ypos * COLUMNS) * 2 + 1) = ATTRIBUTE;
+	*(g_video_ram + (xpos + ypos * COLUMNS) * 2) = c & 0xFF;
+	*(g_video_ram + (xpos + ypos * COLUMNS) * 2 + 1) = ATTRIBUTE;
 	*(ptr + (xpos + ypos * COLUMNS) * 2) = c & 0xFF;
 	*(ptr + (xpos + ypos * COLUMNS) * 2 + 1) = ATTRIBUTE;
 
@@ -235,8 +234,8 @@ struct writer_struct{
 static int str_writer(struct writer_struct *writer,unsigned char c){
 	if (writer->type==1){
 		log_putchar(c);
-		if (is_kernel_thread)
-			ut_putchar(c);
+		//if (is_kernel_thread)
+		//	ut_putchar(c);
 		return 1;
 	}else if (writer->type==0){
 	    ut_putchar(c);

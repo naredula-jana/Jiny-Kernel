@@ -113,7 +113,7 @@ static inline void free_pages_ok(unsigned long map_nr, unsigned long order)
 	change_bit((index) >> (1+(order)), (area)->map)
 #define CAN_DMA(x) (PageDMA(x))
 #define ADDRESS(x) (KERNEL_ADDR_START + ((x) << PAGE_SHIFT))
-
+#if 0
 #define RMQUEUE(order, gfp_mask) \
 	do { struct free_mem_area_struct * area = free_mem_area+order; \
 		unsigned long new_order = order; \
@@ -131,7 +131,8 @@ static inline void free_pages_ok(unsigned long map_nr, unsigned long order)
 					DEBUG(" Page alloc return address: %x mask:%x order:%d \n",ADDRESS(map_nr),gfp_mask,order); \
 					if (gfp_mask & MEM_CLEAR) ut_memset(ADDRESS(map_nr),0,PAGE_SIZE<<order); \
 					if (!(gfp_mask & MEM_FOR_CACHE)) memleakHook_alloc(ADDRESS(map_nr),PAGE_SIZE<<order,0,0);\
-					return ADDRESS(map_nr); \
+					ret_address = ADDRESS(map_nr); \
+					goto last;
 				} \
 				prev = ret; \
 				ret = ret->next; \
@@ -139,7 +140,7 @@ static inline void free_pages_ok(unsigned long map_nr, unsigned long order)
 			new_order++; area++; \
 		} while (new_order < NR_MEM_LISTS); \
 	} while (0)
-
+#endif
 #define EXPAND(map,index,low,high,area) \
 	do { unsigned long size = 1 << high; \
 		while (high > low) { \
@@ -186,6 +187,7 @@ static unsigned long init_free_area(unsigned long start_mem, unsigned long end_m
 	  freepages.low = i * 2;
 	  freepages.high = i * 3;*/
 	g_mem_map = (page_struct_t *) LONG_ALIGN(start_mem+8);
+	ut_log("	g_mem_map :%x \n",g_mem_map);
 	p = g_mem_map + MAP_NR(end_mem);
 	start_mem = LONG_ALIGN((unsigned long) p);
 	ut_printf(" freearemap setup map: %x diff:%x   \n",g_mem_map,(start_mem -(unsigned long) g_mem_map));
@@ -193,7 +195,7 @@ static unsigned long init_free_area(unsigned long start_mem, unsigned long end_m
 	do {
 		--p;
 		atomic_set(&p->count, 0);
-		p->flags = (1 << PG_DMA) | (1 << PG_reserved);
+		p->flags = (1 << PG_DMA) | (1 << PG_reserved) ;
 	} while (p > g_mem_map);
 
 	for (i = 0 ; i < NR_MEM_LISTS ; i++) {
@@ -235,6 +237,7 @@ static void init_mem(unsigned long start_mem, unsigned long end_mem)
 			continue;
 		}
 		atomic_set(&g_mem_map[MAP_NR(tmp)].count, 1);
+		PageSetReferenced(g_mem_map+MAP_NR(tmp));
 		mm_putFreePages(tmp,0);
 
 	}
@@ -243,6 +246,140 @@ static void init_mem(unsigned long start_mem, unsigned long end_mem)
 	return;
 }
 /*****************************************************************  API functions */
+
+int mm_putFreePages(unsigned long addr, unsigned long order) {
+	unsigned long map_nr = MAP_NR(addr);
+	int ret = 0;
+	int page_order = order;
+
+#ifdef MEMLEAK_TOOL
+	memleakHook_free(addr,0);
+#endif
+	if (map_nr < g_max_mapnr) {
+		page_struct_t * map = g_mem_map + map_nr;
+		if (PageReserved(map)) {
+			BUG();
+		}
+		if (atomic_dec_and_test(&map->count)) {
+			if (PageSwapCache(map)){
+				ut_log("PANIC Freeing swap cache pages");
+				BUG();
+			}
+		//	map->flags &= ~(1 << PG_referenced);
+			free_pages_ok(map_nr, order);
+			if (init_done == 1) {
+				DEBUG(" Freeing memory addr:%x order:%d \n", addr, order);
+			}else{
+			//	BUG();
+			}
+			ret = 1;
+		}
+	}else{
+		BUG();
+	}
+last:
+	if (ret){
+		unsigned long i = (1 << page_order);
+		struct page *page = virt_to_page(addr);
+
+		while (i--) {
+			assert(PageReferenced(page));
+			PageClearReferenced(page);
+			page++;
+		}
+	}else{
+		BUG();
+	}
+	return ret;
+}
+unsigned long mm_getFreePages(int gfp_mask, unsigned long order) {
+	unsigned long flags;
+	unsigned long ret_address = 0;
+	unsigned long page_order = order;
+
+	if (order >= NR_MEM_LISTS)
+		goto last;
+
+	spin_lock_irqsave(&free_area_lock, flags);
+	do {
+		struct free_mem_area_struct * area = free_mem_area+order;
+		unsigned long new_order = order;
+		do { struct page *prev = memory_head(area), *ret = prev->next;
+			while (memory_head(area) != ret) {
+				if ( CAN_DMA(ret)) {
+					unsigned long map_nr;
+					(prev->next = ret->next)->prev = prev;
+					map_nr = ret - g_mem_map;
+					MARK_USED(map_nr, new_order, area);
+					area->stat_count--;
+					g_nr_free_pages -= 1 << order;
+					EXPAND(ret, map_nr, order, new_order, area);
+					spin_unlock_irqrestore(&free_area_lock, flags);
+					DEBUG(" Page alloc return address: %x mask:%x order:%d \n",ADDRESS(map_nr),gfp_mask,order);
+					if (gfp_mask & MEM_CLEAR) ut_memset(ADDRESS(map_nr),0,PAGE_SIZE<<order);
+					if (!(gfp_mask & MEM_FOR_CACHE)) memleakHook_alloc(ADDRESS(map_nr),PAGE_SIZE<<order,0,0);
+					ret_address = ADDRESS(map_nr);
+					goto last;
+				}
+				prev = ret;
+				ret = ret->next;
+			}
+			new_order++; area++;
+		} while (new_order < NR_MEM_LISTS);
+	} while (0);
+	spin_unlock_irqrestore(&free_area_lock, flags);
+
+last:
+	if (ret_address > 0) {
+		unsigned long i = (1 << page_order);
+		struct page *page = virt_to_page(ret_address);
+
+		while (i--) {
+			assert(!PageReferenced(page));
+			PageSetReferenced(page);
+			page++;
+		}
+	}
+	return ret_address;
+}
+
+extern unsigned long g_multiboot_mod_addr;
+extern unsigned long g_multiboot_mod_len;
+extern unsigned long g_phy_mem_size;
+extern unsigned long _start,_end;
+int init_memory(unsigned long arg1)
+{
+	unsigned long virt_start_addr,virt_end_addr;
+	unsigned long pc_size;
+
+	unsigned long phy_end_addr = g_phy_mem_size;
+	ut_log("	Initializing memory phy_endaddr : %x  \n",phy_end_addr);
+	virt_start_addr=initialise_paging( phy_end_addr);
+	virt_end_addr=(unsigned long)__va(phy_end_addr);
+	ut_log("	After Paging initialized start_addr: %x endaddr: %x \n",virt_start_addr,virt_end_addr);
+
+	if (g_multiboot_mod_len > 0) /* symbol file  reside at the end of memory, it can acess only when page table is initialised */
+	{
+		g_symbol_table=(symb_table_t *)virt_start_addr;
+		g_total_symbols=(g_multiboot_mod_len)/sizeof(symb_table_t);
+		ut_memcpy((unsigned char *)g_symbol_table,(unsigned char *)g_multiboot_mod_addr,g_multiboot_mod_len);
+		virt_start_addr=(unsigned long)virt_start_addr+g_multiboot_mod_len;
+		ut_log("	g_symbol_table as module:  %x totalsymbols :%d size :%d some symbol address:%x : ", g_symbol_table,g_total_symbols,sizeof(symb_table_t),g_symbol_table[5].address);
+		ut_log("	symbol name:  %s \n",&g_symbol_table[5].name[0]);
+	}
+	ut_log("	code+data  : %x  -%x size:%dK\n",&_start,&_end,((long)&_end-(long)&_start)/1000);
+	ut_log("	free area  : %x - %x size:%dM\n",virt_start_addr,virt_end_addr,(virt_end_addr-virt_start_addr)/1000000);
+	virt_start_addr=init_free_area( virt_start_addr, virt_end_addr);
+
+	pc_size = 0x10000000 ;
+	pc_init((unsigned char *)virt_start_addr,pc_size);
+	ut_log("	pagecache  : %x - %x size:%dM\n",virt_start_addr,virt_start_addr+pc_size,pc_size/1000000);
+
+	virt_start_addr=virt_start_addr+pc_size;
+	init_mem(virt_start_addr, virt_end_addr);
+	ut_log("	buddy pages: %x - %x size:%dM\n",virt_start_addr, virt_end_addr,(virt_end_addr-virt_start_addr)/1000000);
+	return 0;
+}
 /*
  * Show free area list (used inside shift_scroll-lock stuff)
  * We also calculate the percentage fragmentation. We do this by counting the
@@ -266,77 +403,24 @@ int Jcmd_mem(char *arg1, char *arg2) {
 	}
 	spin_unlock_irqrestore(&free_area_lock, flags);
 	ut_printf("total Free pages = %d (%dM) Actual pages: %d (%dM) \n", total, (total * 4) / 1024,stat_mem_size/PAGE_SIZE,stat_mem_size/(1024*1024));
+
+	int slab=0;
+	int referenced=0;
+	int reserved=0;
+//	int free=0;
+	int dma=0;
+	unsigned long va_end=(unsigned long)__va(g_phy_mem_size);
+
+	page_struct_t *p;
+	p = g_mem_map + MAP_NR(va_end);
+	do {
+		--p;
+		if (PageReserved(p)) reserved++;
+		if (PageDMA(p)) dma++;
+		if (PageReferenced(p))referenced++;
+		if (PageSlab(p)) slab++;
+	} while (p > g_mem_map);
+	ut_printf(" rserverd:%d referenced:%d dma:%d slab:%d \n\n",reserved,referenced,dma,slab);
+	Jcmd_jslab(0,0);
 	return 1;
-}
-int mm_putFreePages(unsigned long addr, unsigned long order) {
-	unsigned long map_nr = MAP_NR(addr);
-
-#ifdef MEMLEAK_TOOL
-	memleakHook_free(addr,0);
-#endif
-	if (map_nr < g_max_mapnr) {
-		page_struct_t * map = g_mem_map + map_nr;
-		if (PageReserved(map)) {
-			goto error;
-		}
-		if (atomic_dec_and_test(&map->count)) {
-			if (PageSwapCache(map))
-				ut_printf("PANIC Freeing swap cache pages");
-			map->flags &= ~(1 << PG_referenced);
-			free_pages_ok(map_nr, order);
-			if (init_done == 1) {
-				DEBUG(" Freeing memory addr:%x order:%d \n", addr, order);
-			}
-			return 1;
-		}
-	}
-	error: ut_printf(" ERROR in freeing the area  addr:%x order:%x \n", addr,
-			order);
-	BUG();
-	return 0;
-}
-unsigned long mm_getFreePages(int gfp_mask, unsigned long order) {
-	unsigned long flags;
-
-	if (order >= NR_MEM_LISTS)
-		goto nopage;
-
-	spin_lock_irqsave(&free_area_lock, flags);
-	RMQUEUE(order, gfp_mask);
-	spin_unlock_irqrestore(&free_area_lock, flags);
-
-nopage:
-	return 0;
-}
-extern unsigned long VIDEO;
-extern unsigned long g_multiboot_mod_addr;
-extern unsigned long g_multiboot_mod_len;
-extern unsigned long g_phy_mem_size;
-int init_memory(unsigned long arg1)
-{
-	unsigned long virt_start_addr,virt_end_addr;
-	unsigned long pc_size;
-
-	unsigned long phy_end_addr = g_phy_mem_size;
-	ut_log("	Initializing memory phy_endaddr : %x video:%x \n",phy_end_addr,VIDEO);
-	virt_start_addr=initialise_paging( phy_end_addr);
-	virt_end_addr=(unsigned long)__va(phy_end_addr);
-	ut_log("	After Paging initialized start_addr: %x endaddr: %x video:%x \n",virt_start_addr,virt_end_addr,VIDEO);
-
-	if (g_multiboot_mod_len > 0) /* symbol file  reside at the end of memory, it can acess only when page table is initialised */
-	{
-		g_symbol_table=(symb_table_t *)virt_start_addr;
-		g_total_symbols=(g_multiboot_mod_len)/sizeof(symb_table_t);
-		ut_memcpy((unsigned char *)g_symbol_table,(unsigned char *)g_multiboot_mod_addr,g_multiboot_mod_len);
-		virt_start_addr=(unsigned long)virt_start_addr+g_multiboot_mod_len;
-		ut_log("	symbol:  %x : %d  :%d :%x : \n", g_symbol_table,g_total_symbols,sizeof(symb_table_t),g_symbol_table[5].address);
-		ut_log("	symbol:  %s \n",&g_symbol_table[5].name[0]);
-	}
-
-	virt_start_addr=init_free_area( virt_start_addr, virt_end_addr);
-	pc_size = 0x10000000 ;
-	pc_init((unsigned char *)virt_start_addr,pc_size); /* TODO: currently page cache uses 10M, this may be using 2M pages, this need to move to use 4K size pages */
-	virt_start_addr=virt_start_addr+pc_size;
-	init_mem(virt_start_addr, virt_end_addr);
-	return 0;
 }

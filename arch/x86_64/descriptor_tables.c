@@ -142,21 +142,29 @@ int ar_archSetUserFS(unsigned long addr) /* TODO need to reimplement using LDT *
 				| SEG_DPL_USER; /* 8th location in gdt table */
 		g_current_task->thread.userland.user_fs_base = addr;
 	}
-	ar_updateCpuState(g_current_task);
+	ar_updateCpuState(g_current_task,0);
 	return 1;
 }
-int ar_updateCpuState(struct task_struct *p) {
-	int cpuid = p->cpu;
+int ar_updateCpuState(struct task_struct *next, struct task_struct *prev) {
+	int cpuid = next->cpu;
 	if (cpuid != getcpuid()) {
 		BUG();
 	}
-	g_cpu_state[cpuid].md_state.user_stack = p->thread.userland.user_stack;
-	g_cpu_state[cpuid].md_state.user_ds = p->thread.userland.user_ds;
-	g_cpu_state[cpuid].md_state.user_es = p->thread.userland.user_es;
-	g_cpu_state[cpuid].md_state.user_fs = p->thread.userland.user_fs;
-	g_cpu_state[cpuid].md_state.user_gs = p->thread.userland.user_gs;
-	g_cpu_state[cpuid].md_state.user_fs_base = p->thread.userland.user_fs_base;
-	g_cpu_state[cpuid].md_state.kernel_stack = (unsigned long) p + TASK_SIZE;
+	if (prev){
+		prev->thread.userland.user_stack = g_cpu_state[cpuid].md_state.user_stack;
+		prev->thread.userland.user_ds = g_cpu_state[cpuid].md_state.user_ds;
+		prev->thread.userland.user_es = g_cpu_state[cpuid].md_state.user_es;
+		prev->thread.userland.user_fs = g_cpu_state[cpuid].md_state.user_fs;
+		prev->thread.userland.user_gs = g_cpu_state[cpuid].md_state.user_gs;
+		prev->thread.userland.user_fs_base =  g_cpu_state[cpuid].md_state.user_fs_base;
+	}
+	g_cpu_state[cpuid].md_state.user_stack = next->thread.userland.user_stack;
+	g_cpu_state[cpuid].md_state.user_ds = next->thread.userland.user_ds;
+	g_cpu_state[cpuid].md_state.user_es = next->thread.userland.user_es;
+	g_cpu_state[cpuid].md_state.user_fs = next->thread.userland.user_fs;
+	g_cpu_state[cpuid].md_state.user_gs = next->thread.userland.user_gs;
+	g_cpu_state[cpuid].md_state.user_fs_base = next->thread.userland.user_fs_base;
+	g_cpu_state[cpuid].md_state.kernel_stack = (unsigned long) next + TASK_SIZE;
 
 	seg_descr_setup(&gdt_entries[cpuid][FS_UDATA_DESCR], SEG_TYPE_DATA,
 			SEG_DPL_USER, g_cpu_state[cpuid].md_state.user_fs_base, 0xfffff,

@@ -33,7 +33,7 @@ int init_host_shm(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len, int
 	}
 	if (bars[0].addr != 0) {
 		if ((ret = vm_mmap(0, HOST_SHM_CTL_ADDR, 0x1000, PROT_WRITE, MAP_FIXED,
-				bars[0].addr)) == 0) {
+				bars[0].addr,"host_shm")) == 0) {
 			ut_printf(
 					"ERROR : mmap fails for Host_ctl addr :%x len:%x ret:%x \n",
 					bars[0].addr, bars[0].len, ret);
@@ -50,7 +50,7 @@ int init_host_shm(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len, int
       i=2;		/* MSI present in bar-1 */
 	if (bars[i].addr != 0) {
 		if ((ret = vm_mmap(0, HOST_SHM_ADDR, bars[i].len, PROT_WRITE, MAP_FIXED,
-				bars[i].addr)) == 0) {
+				bars[i].addr,"host_shm")) == 0) {
 			ut_printf(
 					"ERROR : mmap fails for Host_shm addr :%x len:%x ret:%x \n",
 					bars[i].addr, bars[i].len, ret);

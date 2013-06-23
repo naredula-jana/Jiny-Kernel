@@ -496,7 +496,7 @@ page_struct_t *pc_getFreePage() {
 #define TARGET_FREELIST (0.10*pc_totalpages)
 #define TARGET_INACTIVELIST (0.40*pc_totalpages)
 #define TARGET_DIRTYLIST (0.20*pc_totalpages)
-int pc_housekeep(){
+int pc_housekeep(void){
 	int ret;
 	int count,count_success;
 	page_struct_t *page;
@@ -545,7 +545,7 @@ int pc_housekeep(){
 
 	return 1;
 }
-int pc_is_freepages_available(){
+int pc_is_freepages_available(void){
 	if (free_list.count.counter<TARGET_FREELIST){
 		return 0;
 	}else{

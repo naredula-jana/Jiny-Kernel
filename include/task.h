@@ -15,6 +15,7 @@
 #include "ipc.h"
 #include "descriptor_tables.h"
 
+#define TASK_SIZE 4*(PAGE_SIZE)  /* TODO : it is redefined in multiboot.h  also */
 
 #define TASK_RUNNING            0
 #define TASK_INTERRUPTIBLE      1
@@ -38,6 +39,7 @@ struct user_thread {
 struct thread_struct {
 	void *sp; /* kernel stack pointer when scheduling start */
 	void *ip; /* kernel ip when scheduling start */
+	void *rbp; /* kernel rbp, currently used for getting back trace */
 	int(*real_ip)(void *);
 	unsigned char **argv;
 	struct user_thread userland;
@@ -101,6 +103,8 @@ struct task_struct {
 
 	task_queue_t dead_tasks;
 	int exit_code;
+	int curr_syscall_id;
+	unsigned char *status_info;
 
 	struct list_head run_queue; /* run queue */
 	struct list_head task_queue; /* task queue */
@@ -147,5 +151,14 @@ static inline struct task_struct *current_task(void)
 #define g_current_task current_task()
 #define is_kernel_thread (g_current_task->mm == g_kernel_mm)
 
+
+#define MAX_BACKTRACE 20
+typedef struct backtrace{
+	struct{
+	unsigned long ret_addr;
+	unsigned char *name;
+	}entries[MAX_BACKTRACE];
+	int count;
+}backtrace_t;
 
 #endif

@@ -36,10 +36,11 @@ int ipc_mutex_lock(void *p, int line) {
 	}
 	assert (g_current_task->locks_nonsleepable == 0);
 
+
 	g_current_task->stats.wait_line_no = line;
 	while (ipc_sem_wait(p, 100) != 1)
 		;
-
+	g_current_task->status_info = NULL;
 	sem->owner_pid = g_current_task->pid;
 	sem->recursive_count =1;
 	g_current_task->locks_sleepable++;
@@ -309,6 +310,7 @@ int ipc_waiton_waitqueue(wait_queue_t *waitqueue, unsigned long ticks) {
 
 	spin_lock_irqsave(&g_global_lock, flags);
 	g_current_task->state = TASK_INTERRUPTIBLE;
+	g_current_task->status_info = waitqueue->name;
 	g_current_task->stats.wait_start_tick_no = g_jiffies ;
 	waitqueue->stat_wait_count++;
 	_add_to_waitqueue(waitqueue, g_current_task, ticks);
@@ -316,6 +318,7 @@ int ipc_waiton_waitqueue(wait_queue_t *waitqueue, unsigned long ticks) {
 
 	sc_schedule();
 
+	g_current_task->status_info = NULL;
 	waitqueue->stat_wait_ticks = waitqueue->stat_wait_ticks + (g_jiffies-g_current_task->stats.wait_start_tick_no);
 	if (g_current_task->sleep_ticks <= 0)
 		return 0;
@@ -380,7 +383,7 @@ int Jcmd_locks(char *arg1, char *arg2) {
 	unsigned long flags;
 	struct list_head *pos;
 	struct task_struct *task;
-	int len;
+	int len,max_len;
 	unsigned char *buf;
 
 	ut_printf("SPIN LOCKS:  Name  pid count contention(rate) recursive# \n");
@@ -395,8 +398,13 @@ int Jcmd_locks(char *arg1, char *arg2) {
 
 	ut_printf("Wait queue: name: [owner pid] (wait_ticks/count:recursive_count) : waiting pid(name-line_no)\n");
 
-	buf=mm_getFreePages(0,0);
-	len = PAGE_SIZE;
+	len = PAGE_SIZE*100;
+	max_len=len;
+	buf = (unsigned char *) vmalloc(len,0);
+	if (buf == 0) {
+		ut_printf(" Unable to get vmalloc memory \n");
+		return 0;
+	}
 	spin_lock_irqsave(&g_global_lock, flags);
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
 		struct semaphore *sem=0;
@@ -405,34 +413,34 @@ int Jcmd_locks(char *arg1, char *arg2) {
 		if (wait_queues[i] == 0)
 			continue;
 		if (wait_queues[i]->used_for == 0)
-			len = len - ut_snprintf(buf+PAGE_SIZE-len,len," %9s : ", wait_queues[i]->name);
+			len = len - ut_snprintf(buf+max_len-len,len," %9s : ", wait_queues[i]->name);
 		else {
-			len = len - ut_snprintf(buf+PAGE_SIZE-len,len,"[%9s]: ", wait_queues[i]->name);
+			len = len - ut_snprintf(buf+max_len-len,len,"[%9s]: ", wait_queues[i]->name);
 			sem = wait_queues[i]->used_for;
 			if (sem){
 				recursive_count = sem->stat_recursive_count;
 				total_acquired_time = sem->stat_total_acquired_time;
 				if (sem->owner_pid != 0)
-					len = len - ut_snprintf(buf+PAGE_SIZE-len,len," [%x] ", sem->owner_pid);
+					len = len - ut_snprintf(buf+max_len-len,len," [%x] ", sem->owner_pid);
 			}
 		}
-		len = len - ut_snprintf(buf+PAGE_SIZE-len,len," (%d/%d:%d: AT:%d) ", wait_queues[i]->stat_wait_ticks,wait_queues[i]->stat_wait_count,recursive_count,total_acquired_time);
+		len = len - ut_snprintf(buf+max_len-len,len," (%d/%d:%d: AT:%d) ", wait_queues[i]->stat_wait_ticks,wait_queues[i]->stat_wait_count,recursive_count,total_acquired_time);
 
 		if (len <= 0) break;
 		list_for_each(pos, &wait_queues[i]->head) {
 			int wait_line=0;
 			task = list_entry(pos, struct task_struct, wait_queue);
 			if (sem!=0) wait_line=task->stats.wait_line_no;
-			len = len - ut_snprintf(buf+PAGE_SIZE-len,len,":%x(%s-%d),", task->pid, task->name,wait_line);
+			len = len - ut_snprintf(buf+max_len-len,len,":%x(%s-%d),", task->pid, task->name,wait_line);
 		}
 
-		len = len - ut_snprintf(buf+PAGE_SIZE-len,len,"\n");
+		len = len - ut_snprintf(buf+max_len-len,len,"\n");
 		if (len <= 0) break;
 	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
 
 	ut_printf("%s",buf);
-	mm_putFreePages(buf,0);
+	vfree(buf);
 	return 1;
 }
 

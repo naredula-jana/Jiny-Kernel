@@ -62,7 +62,6 @@ long fault_error_g=0;
 long fault_num_g=0;
 struct fault_ctx cpu_ctx;
 static int gpFault(struct fault_ctx *ctx) {
-	int stack_var;
 	fault_ip_g = ctx->istack_frame->rip;
 	fault_error_g = ctx->errcode;
 	fault_num_g = ctx->fault_num;
@@ -71,7 +70,7 @@ static int gpFault(struct fault_ctx *ctx) {
 			" ERROR: cpuid:%d Gp Fault fault ip:%x error code:%x sp:%x fault number:%x taskname:%s:\n",
 			getcpuid(), fault_ip_g, fault_error_g, ctx->istack_frame->rsp,
 			fault_num_g, g_current_task->name);
-	ut_showTrace(&stack_var);
+	ut_getBackTrace(0,0,0);
 	if (g_current_task->mm != g_kernel_mm) /* user level thread */
 	{
 		while(1);

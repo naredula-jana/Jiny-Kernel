@@ -18,11 +18,25 @@
 #define PAGE_MASK       (~(PAGE_SIZE-1))
 #define PAGE_ALIGN(addr)	(((addr)+PAGE_SIZE-1)&PAGE_MASK)
 
-
+typedef struct jcache_s jcache_t;
+#define JSLAB_FLAGS_DEBUG 0x10000
+#ifdef JINY_SLAB
+#define kmem_cache_t jcache_t
+#define mm_slab_cache_alloc jslab_alloc1
+#define mm_malloc jslab_alloc2
+#define mm_slab_cache_free jslab_free1
+#define mm_free jslab_free2
+#define kmem_cache_create jslab_create_cache
+#define kmem_cache_destroy jslab_destroy_cache
+#else
+typedef struct kmem_cache_s kmem_cache_t;
+#endif
 
 #define KERNEL_ADDR_START (0x40000000) /* Note This should be multiples 1GB , otherwise page tables copying will break */
+
 #define USERANONYMOUS_ADDR 0x20000000
 #define USERSTACK_ADDR     0x30000000
+#define USER_SYSCALL_PAGE 0xffffffffff600000
 #define USERSTACK_LEN  0x100000
 
 #define __pa(x)                 ((unsigned long)(x)-KERNEL_ADDR_START)
@@ -30,6 +44,7 @@
 #define MAP_NR(addr)            (__pa(addr) >> PAGE_SHIFT)
 
 #define virt_to_page(kaddr)	(g_mem_map + (__pa(kaddr) >> PAGE_SHIFT))
+#define page_to_virt(page) (__va(((page_struct_t *)page - (page_struct_t *)g_mem_map)<<PAGE_SHIFT))
 /*
  * vm_flags..
  */
@@ -72,8 +87,8 @@
 struct vm_area_struct {
 	struct mm_struct *vm_mm; /* The address space we belong to. */
 	unsigned long vm_start; /* Our start address within vm_mm. */
-	unsigned long vm_end; /* The first byte after our end address
-	 within vm_mm. */
+	unsigned long vm_end; /* The first byte after our end address  within vm_mm. */
+	const unsigned char *name;
 
 	/* linked list of VM areas per task, sorted by address */
 	struct vm_area_struct *vm_next;
@@ -87,6 +102,16 @@ struct vm_area_struct {
 	struct inode *vm_inode; /* File we map to (can be NULL). */
 	unsigned long vm_private_data; /* was vm_pte (shared mem) */
 	struct list_head inode_vma_link; /* vmas connected to inode */
+
+	int stat_page_faults,stat_page_wrt_faults;
+	int stat_page_count;
+	int stat_log_index;
+	struct {
+		unsigned long vaddr;
+		unsigned long fault_addr;
+		unsigned long optional;
+		unsigned char rw_flag;
+	}stat_log[10];
 };
 #define PAGE_MAGIC 0xabab123456
 typedef struct page {
@@ -114,7 +139,6 @@ struct addr_list {
 };
 extern page_struct_t *g_mem_map;
 
-typedef struct kmem_cache_s kmem_cache_t;
 /* SLAB cache for vm_area_struct structures */
 extern kmem_cache_t *vm_area_cachep;
 
@@ -132,9 +156,6 @@ extern struct mm_struct *g_kernel_mm;
 #define PG_referenced            2
 #define PG_dirty                 3
 #define PG_uptodate              4
-#define PG_free_after            5
-#define PG_decr_after            6
-#define PG_swap_unlock_after     7
 #define PG_DMA                   8
 #define PG_slab                  9
 #define PG_swap_cache           10
@@ -142,13 +163,19 @@ extern struct mm_struct *g_kernel_mm;
 #define PG_reserved             31
 
 #define PageReserved(page)      (test_bit(PG_reserved, &(page)->flags))
+#define PageReferenced(page)      (test_bit(PG_referenced, &(page)->flags))
 #define PageSwapCache(page)     (test_bit(PG_swap_cache, &(page)->flags))
 #define PageDMA(page)           (test_bit(PG_DMA, &(page)->flags))
-#define PageClearSlab(page)	(clear_bit(PG_slab, &(page)->flags))
-#define PageSetSlab(page)	set_bit(PG_slab, &(page)->flags)
+#define PageSlab(page)           (test_bit(PG_slab, &(page)->flags))
 #define PageDirty(page)      (test_bit(PG_dirty, &(page)->flags))
+
+#define PageSetSlab(page)	set_bit(PG_slab, &(page)->flags)
 #define PageSetDirty(page)      set_bit(PG_dirty, &(page)->flags)
+#define PageSetReferenced(page)      (set_bit(PG_referenced, &(page)->flags))
+
+#define PageClearReferenced(page)      (clear_bit(PG_referenced, &(page)->flags))
 #define PageClearDirty(page)    clear_bit(PG_dirty, &(page)->flags)
+#define PageClearSlab(page)	(clear_bit(PG_slab, &(page)->flags))
 
 
 static inline unsigned char *pcPageToPtr(struct page *p) {

@@ -131,7 +131,7 @@ unsigned long fs_loadElfLibrary(struct file *file, unsigned long tmp_stack, unsi
 		if (eppnt->p_filesz > 0) {
 			unsigned long addr;
 			addr = vm_mmap(file, ELF_PAGESTART(eppnt->p_vaddr), eppnt->p_filesz + ELF_PAGEOFFSET(eppnt->p_vaddr), eppnt->p_flags, 0, (eppnt->p_offset
-					- ELF_PAGEOFFSET(eppnt->p_vaddr)));
+					- ELF_PAGEOFFSET(eppnt->p_vaddr)),"text");
 			if (addr == 0)
 				error = 0;
 		}
@@ -159,7 +159,7 @@ unsigned long fs_loadElfLibrary(struct file *file, unsigned long tmp_stack, unsi
 	if (error != 0) {
 		ut_log(" ERROR in elf loader filename :%s :%d\n",file->filename,-error);
 	} else {
-		vm_mmap(0, USERSTACK_ADDR, USERSTACK_LEN, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0);
+		vm_mmap(0, USERSTACK_ADDR, USERSTACK_LEN, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0,"userstack");
 		if (stack_len > 0) {
 			aux_vec = (unsigned long *)aux_addr;
 			if (aux_vec != 0) {
@@ -196,20 +196,10 @@ unsigned long fs_loadElfLibrary(struct file *file, unsigned long tmp_stack, unsi
 			}
 			ut_memcpy((unsigned char *)USERSTACK_ADDR + USERSTACK_LEN - stack_len, (unsigned char *)tmp_stack, stack_len);
 
-#define SYSCALL_PAGE 0xffffffffff600000
-			vm_mmap(0, SYSCALL_PAGE, 0x1000, PROT_READ | PROT_EXEC |PROT_WRITE, MAP_ANONYMOUS, 0);
+
+			vm_mmap(0, USER_SYSCALL_PAGE, 0x1000, PROT_READ | PROT_EXEC |PROT_WRITE, MAP_ANONYMOUS, 0,"fst_syscal");
 			//ut_memset((unsigned char *)SYSCALL_PAGE,(unsigned char )0xcc,0x1000);
-			ut_memcpy((unsigned char *)SYSCALL_PAGE,(unsigned char *)&__vsyscall_page,0x1000);
-#if 0
-			unsigned int *syscallp;
-			syscallp=(unsigned int *)0xffffffffff600400;
-			*syscallp=0xc9c0c748;
-			syscallp++;
-			*syscallp=0x0f000000;
-			syscallp++;
-			*syscallp=0xccccc305;
-			syscallp++;
-#endif
+			ut_memcpy((unsigned char *)USER_SYSCALL_PAGE,(unsigned char *)&__vsyscall_page,0x1000);
 		}
 	}
 	DEBUG(" Program start address(autod) : %x \n",elf_ex.e_entry);

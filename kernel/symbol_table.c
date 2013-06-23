@@ -133,17 +133,53 @@ int ut_symbol_execute(int type, char *name, char *argv1,char *argv2){
 	return 0;
 }
 
-void print_symbol(addr_t addr)
-{
+unsigned char *ut_get_symbol(addr_t addr) {
 	int i;
 	for (i=0; i< g_total_symbols; i++)
 	{
 		if ((addr>=g_symbol_table[i].address) && (addr<g_symbol_table[i+1].address))
 		{
-			ut_printf("   :%s + %x addr:%x i:%d\n",g_symbol_table[i].name,(addr-g_symbol_table[i].address),addr,i);
-			return ;
+			//ut_printf("   :%s + %x addr:%x i:%d\n",g_symbol_table[i].name,(addr-g_symbol_table[i].address),addr,i);
+			return g_symbol_table[i].name;
 		}
 	}
-	ut_printf("   :%x \n",addr);
+	return 0;
+}
+
+void ut_getBackTrace(unsigned long *rbp, unsigned long task_addr, backtrace_t *bt){
+	int i;
+	unsigned char *name;
+	unsigned long lower_addr,upper_addr;
+
+	if (rbp == 0) {
+		asm("movq %%rbp,%0" : "=m" (rbp));
+		lower_addr = g_current_task;
+		upper_addr = lower_addr + TASK_SIZE;
+	} else {
+		lower_addr = task_addr;
+		upper_addr = lower_addr + TASK_SIZE;
+	}
+	if (bt == 0){
+		struct task_struct *t = lower_addr;
+		ut_printf("taskname:  pid:%d\n",t->name,t->pid);
+	}
+	for (i=0; i<MAX_BACKTRACE; i++){
+		if (rbp<lower_addr || rbp>upper_addr) break;
+		name = ut_get_symbol(*(rbp+1));
+		if (bt){
+			bt->entries[i].name = name;
+			bt->entries[i].ret_addr = *(rbp+1);
+			bt->count = i+1;
+		}else{
+			ut_printf(" %d :%s - %x\n",i+1,name,*(rbp+1));
+		}
+		rbp=*rbp;
+		if (rbp<lower_addr || rbp>upper_addr) break;
+	}
 	return;
+}
+
+void Jcmd_bt(unsigned char *arg1,unsigned char *arg2){
+
+	ut_getBackTrace(0,0,0);
 }

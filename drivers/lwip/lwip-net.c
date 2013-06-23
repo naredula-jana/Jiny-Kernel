@@ -379,7 +379,7 @@ int lwip_sock_close(void *session) {
 }
 int lwip_sock_bind(void *session, struct sockaddr *s, int sock_type) {
 	struct ip_addr listenaddr = { s->addr }; /* TODO */
-	int rc = netconn_bind(session, &listenaddr, lwip_ntohs(s->sin_port));
+	int rc = netconn_bind(session, &listenaddr, (s->sin_port));
 	if (rc != ERR_OK) {
 		DEBUG("Failed to bind connection: %i\n", rc);
 		return SYSCALL_FAIL;

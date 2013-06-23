@@ -123,7 +123,10 @@ good_syscall_number:
         movq %r10,%rcx
 
         pushq %rax
+        pushq %rdx
+        movq %rax,%gs:CPU_STATE_SYSCALLID
         call sc_before_syscall
+        popq %rdx
         popq %rax
 
         call *syscalltable(,%rax,8)

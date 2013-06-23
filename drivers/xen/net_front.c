@@ -121,7 +121,7 @@ void * init_netfront( void(*thenetif_rx)(unsigned char* data,
 
 	for (i = 0; i < NET_RX_RING_SIZE; i++) {
 		/* TODO: that's a lot of memory */
-		dev->rx_buffers[i].page = (char*) mm_getFreePages(0, 0);
+		dev->rx_buffers[i].page = (char*) alloc_page();
 	}
 	txs = (struct netif_tx_sring *) alloc_page();
 	rxs = (struct netif_rx_sring *) alloc_page();

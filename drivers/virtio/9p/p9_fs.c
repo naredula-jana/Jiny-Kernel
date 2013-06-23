@@ -28,7 +28,7 @@ static int p9ClientInit() {
 	init = 1;
 
 	client.pkt_buf = (unsigned char *) mm_getFreePages(MEM_CLEAR, 2);
-	client.pkt_len = 4098*4; /* this should be above 4090*2 */
+	client.pkt_len = PAGE_SIZE*4;
 	ut_memset(client.pkt_buf,0,client.pkt_len);
 
 	client.lock = mutexCreate("mutex_p9");

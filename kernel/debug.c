@@ -526,7 +526,7 @@ int Jcmd_break_install(unsigned char *arg_name, unsigned char *arg2) {
 
 		next: ;
 	}
-	ut_printf(" Total breaks :%s: ret=%d  index=%d\n", arg_name, ret, i);
+	ut_printf(" Total breaks :%s: ret=%d  index=%d  cpuid:%d\n", arg_name, ret, i,getcpuid());
 	return ret;
 }
 int Jcmd_trace_start(unsigned char *arg_name){
@@ -594,4 +594,5 @@ int Jcmd_print_trace(unsigned char *arg_pid, unsigned char *arg_cpu_id) {
 	ut_printf(" Total trace records : %d \n",count);
 	return 1;
 }
+
 

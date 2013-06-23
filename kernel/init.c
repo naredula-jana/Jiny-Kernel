@@ -14,7 +14,7 @@
 #include "mm.h"
 #include "task.h"
 #include "mach_dep.h"
-
+#include "interface.h"
 
 /* SLAB cache for vm_area_struct structures */
 kmem_cache_t *vm_area_cachep;
@@ -34,6 +34,9 @@ extern int init_symbol_table(unsigned long arg1);
 extern int init_devClasses(unsigned long arg1);
 extern int init_modules(unsigned long arg1);
 extern int  init_log_file(unsigned long arg1);
+extern int init_jslab(unsigned long arg1);
+int init_kernel_vmaps(unsigned long arg1);
+int init_kmemleak(unsigned long arg1);
 
 typedef struct {
 	int (*func)(unsigned long arg);
@@ -45,7 +48,10 @@ static inittable_t inittable[] = {
 		{init_physical_memory,0,"PhysicalMemory"},
 		{init_descriptor_tables,0,"ISR and Descriptors"},
 		{init_memory,0,           "Main memory"},
+#ifndef JINY_SLAB
 		{init_kmem_cache,0,       "kmem cache"},
+#endif
+		{init_jslab,0,"Jslab initialization"},
 		{init_syscall,0,       "syscalls"},
 		{init_vfs,0,       "vfs"},
 		{init_tasking,0,       "tasking"},
@@ -64,6 +70,7 @@ static inittable_t inittable[] = {
 		{init_symbol_table,0,       "symboltable"},
 		{init_devClasses,0,       "devicesclasses"},
 		{init_modules,0,       "modules"},
+		{init_kernel_vmaps, 0, "Kernel Vmaps"},
 //		{init_log_file,0, "log file "},
 		{0,0,0}
 };
@@ -128,11 +135,47 @@ void __stack_chk_fail(){
 }
 void idleTask_func() {
 	int k=0;
+
+	/* wait till initilization completed */
+	while(g_boot_completed==0);
+
+#if 1  /* TO make first 2M or code pages in to Readonly */
+	unsigned long *page_table;
+	static int init_readonly=0;
+	unsigned long intr_flags;
+	int cpu;
+
+	spin_lock_irqsave(&g_global_lock, intr_flags);
+	if (init_readonly == 0) {/* only one thread should do , other page fault will occur */
+		page_table = __va(0x00103000); /* to make first 2M(text) read only */
+		*page_table = 0x281;
+		init_readonly = 1;
+	}
+#if 0
+	void *p=mm_getFreePages(0, 0);
+	ut_memcpy(p,__va(0x101000),PAGE_SIZE);
+	flush_tlb(__pa(p));
+#endif
+	cpu=getcpuid();
+
+	flush_tlb(0x101000);
+	flush_tlb_entry(KERNEL_ADDR_START);
+	ar_flushTlbGlobal();
+	ut_log(" TLB flushed by cpu :%d \n",cpu);
+	spin_unlock_irqrestore(&g_global_lock, intr_flags);
+#endif
+
 	ut_printf("Idle Thread Started cpuid: %d stack addrss:%x \n",getcpuid(),&k);
 	while (1) {
 		__asm__("hlt");
 		sc_schedule();
 	}
+}
+Jcmd_flush(){
+	flush_tlb(0x101000);
+	flush_tlb_entry(KERNEL_ADDR_START);
+	ar_flushTlbGlobal();
+	ut_log(" flushed TLB cpu:%d \n",getcpuid());
 }
 /****************************************House Keeper *******************************************/
 
@@ -147,7 +190,52 @@ void housekeeper_thread(){
 }
 /*************************************************************************************************/
 int g_boot_completed=0;
+
+/* The video memory address.  */
+#define  VIDEO  0xB8000
+extern volatile unsigned char *g_video_ram;
+unsigned long g_vmalloc_start=0;
+unsigned long g_vmalloc_size=0;
 extern int shell_main(void *arg);
+int init_kernel_vmaps(unsigned long arg1){
+	unsigned long ret;
+	int map_size;
+	unsigned long vaddr;
+
+	if ((ret = vm_mmap(0, (unsigned long) KERNEL_ADDR_START, g_phy_mem_size,
+			PROT_WRITE, MAP_FIXED, KERNEL_ADDR_START,"phy_mem")) == 0) {
+		ut_log("	ERROR: kernel address map Fails \n");
+	}else{
+		ut_log("	Kernel vmap: physical ram: %x-%x size:%dM\n",KERNEL_ADDR_START,KERNEL_ADDR_START+g_phy_mem_size,g_phy_mem_size/1000000);
+	}
+
+	/* Vitual memory for video */
+	map_size=0x8000000;
+	//vaddr = KERNEL_ADDR_START+g_phy_mem_size;
+	vaddr = __va(0xe0000000);
+	if ((ret = vm_mmap(0, (unsigned long)vaddr , map_size ,
+			PROT_WRITE, MAP_FIXED, VIDEO,"videoram")) == 0) {
+		ut_log("	ERROR: kernel video ram address map Fails \n");
+	}else{
+		g_video_ram = vaddr;
+		ut_log("	Kernel vmap: video ram   :%x-%x size:%dM\n",g_video_ram,g_video_ram+map_size,map_size/1000000);
+	}
+#if 1
+	/* Vitual memory for vmalloc */
+	map_size=0x8000000;
+	vaddr = __va(0xe9000000);
+	if ((ret = vm_mmap(0, (unsigned long)vaddr , map_size ,
+			PROT_WRITE, MAP_ANONYMOUS, 0,"vmalloc")) <= 0) {
+		ut_log("	ERROR: ..kernel vmalloc address address map Fails :%x :%p\n",ret,ret);
+	}else{
+		g_vmalloc_start = vaddr;
+		g_vmalloc_size = map_size;
+		init_jslab_vmalloc();
+		ut_log("	Kernel vmap: vmalloc ram   :%x-%x size:%dM\n",g_vmalloc_start,g_vmalloc_start+g_vmalloc_size,g_vmalloc_size/1000000);
+	}
+#endif
+	return 0;
+}
 void cmain() {  /* This is the first c function to be executed */
 	multiboot_info_t *mbi;
 	unsigned long max_addr;
@@ -169,16 +257,12 @@ void cmain() {  /* This is the first c function to be executed */
 	do_cpuid(1,val);
 	ut_log("	cpuid result %x : %x :%x :%x \n",val[0],val[1],val[2],val[3]);
 	g_cpu_features=val[3]; /* edx */
-	if ((ret=vm_mmap(0,(unsigned long)KERNEL_ADDR_START ,g_phy_mem_size,PROT_WRITE,MAP_FIXED,KERNEL_ADDR_START)) == 0)
-	{
-		ut_log("ERROR: kernel address map Fails \n");
-	}
-
 
 	sc_createKernelThread(shell_main, 0, (unsigned char *)"shell_main");
 	sc_createKernelThread(housekeeper_thread, 0, (unsigned char *)"house_keeper");
-	sti(); /* start the interrupts finally */
 	g_boot_completed=1;
+	sti(); /* start the interrupts finally */
+
 	idleTask_func();
 	return;
 }

@@ -465,8 +465,7 @@ static struct kmemleak_object *_lookup_object(unsigned long ptr, int alias) {
     return object;
 }
 
-
-//#define PAGE_SIZE (0x1000)
+static backtrace_t bt;
 /*
  * Save stack trace to the given array of MAX_TRACE size.
  */
@@ -483,33 +482,14 @@ static unsigned int save_stack_trace(unsigned long **trace_output) {
 	stack_trace.entries = (unsigned long *) trace_output;
 	stack_trace.skip = 5;
 
-	sz = (long) stack_top;
-	sz = sz / 4;
-	sz = sz * 4;
 
-	stack_top = (unsigned long *) sz;
-	i = 0;
-	sz = ~(PAGE_SIZE - 1);
-	stack_end = (unsigned long) stack_top & (sz);
-	stack_end = stack_end + PAGE_SIZE -10;
-
-	if (stack_end) {
-		while (((unsigned long) stack_top < stack_end)
-				&& i < (MAX_TRACE + stack_trace.skip)) {
-			addr = *stack_top;
-			stack_top = stack_top + 1;
-			if ((addr > (unsigned long) code_region_start)
-					&& (addr < (unsigned long) data_region_start)) {
-				if (i >= stack_trace.skip) {
-					stack_trace.entries[i - (stack_trace.skip)] = addr;
-				}
-				i++;
-			}
-		}
-		stack_trace.nr_entries = i - stack_trace.skip;
+	ut_getBackTrace(0,0,&bt);
+	for (i=0; i<bt.count&& i<MAX_TRACE; i++){
+		stack_trace.entries[i] = bt.entries[i].ret_addr;
 	}
+	return bt.count;
 
-	return stack_trace.nr_entries;
+
 }
 
 /*
@@ -938,7 +918,7 @@ void kmemleak_scan(void) {
 		if (object->count == 0){
 			pr_debug(" Leak Object addr: %x size:%d trace:",object->pointer,object->size);
 			for (k = 0; k < MAX_TRACE; k++){
-				pr_debug(" %x ",object->trace[k]);
+				pr_debug(" %s(%x) ",ut_get_symbol(object->trace[k]),object->trace[k]);
 			}
 			pr_debug("\n");
 			new_leaks++;
@@ -970,7 +950,7 @@ extern int memleakHook_copyFromEarlylog(void (*palloc)(const void *ptr, int size
 /*
  * Kmemleak initialization.
  */
-int init_kmemleak(void) {
+int init_kmemleak(unsigned long arg1) {
 	unsigned long flags;
 	int i;
 

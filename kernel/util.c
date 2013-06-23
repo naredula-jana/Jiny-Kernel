@@ -12,40 +12,11 @@
 #include <stdarg.h>
 #include "common.h"
 #include "interface.h"
-extern unsigned long stack;
-extern addr_t end;
-extern void print_symbol(addr_t addr);
-void ut_showTrace(unsigned long *stack_top)
-{
-	unsigned long addr;
-	unsigned long  sz,stack_end,code_end;
-	int i;
-	unsigned long end_addr=&end;
+//extern unsigned long stack;
+//extern addr_t end;
 
 
-	sz=(long)stack_top;
-	sz=sz/4;
-	sz=sz*4;
-	stack_top=(unsigned long *)sz;
-	i = 0;
-	sz=(TASK_SIZE-1);
-	sz=~sz;
-	stack_end = (unsigned long)stack_top & (sz);
-	stack_end = stack_end+TASK_SIZE-10;
-	code_end = (unsigned long)&end_addr;
-	ut_printf("\nCALL Trace:   code_end:%x  %x :%x  \n",code_end,stack_top,stack_end);
 
-	if (stack_end) {
-		while (((unsigned long)stack_top < stack_end) && i<12) {
-			addr = *stack_top;
-			stack_top=(unsigned char *)stack_top+4;
-			if ((addr > 0x103000) && (addr<code_end)) {
-				print_symbol(addr);
-				i++;
-			}
-		}
-	}
-}
 unsigned long ut_atol(unsigned char *p)
 {
 	unsigned long a;
