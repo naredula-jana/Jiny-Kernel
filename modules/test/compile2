@@ -1,0 +1,3 @@
+gcc -c ./test2.c 
+gcc -c ./test_mod.c 
+ld -r ./test2.o ./test_mod.o -o test_ld.o 

@@ -12,7 +12,8 @@ static unsigned char message[300];
 
 static void webserver_thread(void *p)
 {
-    struct ip_addr listenaddr = { htonl(0x0ad180b0) };
+    //struct ip_addr listenaddr = { htonl(0x0ad180b0) };
+    struct ip_addr listenaddr = { htonl(0x0) };
     struct netconn *listener;
     struct netconn *session;
     struct timeval tv;
@@ -35,15 +36,16 @@ static void webserver_thread(void *p)
         return;
     }
     DEBUG("sucessfully listening the webserver \n");
-
+int stat_count=0;
     while (1) {
+
     	int i;
         DEBUG("BEFORE accept the new connection \n");
         netconn_accept(listener,&session);
         if (session == NULL)
             continue;
-
-        ut_sprintf(message, "<html><body><pre> Jiny Kernel Dmesg max_len:%d  curr_len:%d \n",MAX_DMESG_LOG,g_dmesg_index);
+stat_count++;
+        ut_sprintf(message, "<html><body><pre>stat:%d Jiny Kernel Dmesg max_len:%d  curr_len:%d \n",stat_count,MAX_DMESG_LOG,g_dmesg_index);
         (void) netconn_write(session, message, ut_strlen(message), NETCONN_COPY);
 #if 0
         i=0;

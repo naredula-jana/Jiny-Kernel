@@ -295,6 +295,7 @@ void jslab_free1(jcache_t *cachep, void *obj) {
 	free_obj((unsigned long)obj);
 }
 void jslab_free2(const void *objp){
+	if (objp==0) return;
 	free_obj((unsigned long)objp);
 }
 

@@ -9,7 +9,7 @@ LWIP_OBJ=$(LWIP_USER_OBJ) /opt_src/lwip/src/api/sockets.o /opt_src/lwip/src/api/
 XEN_OBJ=drivers/xen/xen_init.o drivers/xen/xenbus.o drivers/xen/evntchn.o drivers/xen/gntmap.o drivers/xen/gnttab.o drivers/xen/net_front.o 
 VIRTIO_OBJ= drivers/virtio/virtio_ring.o drivers/virtio/virtio_pci.o drivers/virtio/virtio_memballoon.o drivers/virtio/net/virtio_net.o drivers/virtio/net/test_udpserver.o drivers/virtio/9p/virtio_9p.o drivers/virtio/9p/9p.o drivers/virtio/9p/p9_fs.o
 MEMLEAK_OBJ=mm/memleak/memleak.o mm/memleak/os_dep.o mm/memleak/prio_tree.o  mm/memleak/memleak_hook.o
-OBJECTS= arch/$(ARCH_DIR)/boot.o arch/$(ARCH_DIR)/vsyscall_emu_64.o arch/$(ARCH_DIR)/init.o arch/$(ARCH_DIR)/syscall.o arch/$(ARCH_DIR)/clock.o arch/$(ARCH_DIR)/isr.o arch/$(ARCH_DIR)/descriptor_tables.o arch/$(ARCH_DIR)/pci.o arch/$(ARCH_DIR)/msix.o arch/$(ARCH_DIR)/paging.o arch/$(ARCH_DIR)/interrupt.o  drivers/display.o drivers/keyboard.o drivers/serial.o mm/memory.o mm/slab.o mm/jslab.o mm/mmap.o mm/pagecache.o fs/binfmt_elf.o fs/vfs.o $(MEMLEAK_OBJ) $(VIRTIO_OBJ)
+OBJECTS= arch/$(ARCH_DIR)/boot.o arch/$(ARCH_DIR)/vsyscall_emu_64.o arch/$(ARCH_DIR)/init.o arch/$(ARCH_DIR)/syscall.o arch/$(ARCH_DIR)/clock.o arch/$(ARCH_DIR)/isr.o arch/$(ARCH_DIR)/descriptor_tables.o arch/$(ARCH_DIR)/pci.o arch/$(ARCH_DIR)/msix.o arch/$(ARCH_DIR)/paging.o arch/$(ARCH_DIR)/interrupt.o  drivers/display.o drivers/keyboard.o drivers/serial.o mm/memory.o  mm/jslab.o mm/mmap.o mm/pagecache.o fs/binfmt_elf.o fs/vfs.o $(MEMLEAK_OBJ) $(VIRTIO_OBJ)
 OBJECTS += drivers/hostshm/host_fs.o drivers/hostshm/shm_device.o drivers/hostshm/shm_queue.o
 ifdef SMP
 OBJECTS += arch/$(ARCH_DIR)/smp/smp-imps.o arch/$(ARCH_DIR)/smp/trampoline_64.o arch/$(ARCH_DIR)/smp/head.o arch/$(ARCH_DIR)/smp/apic.o
@@ -19,7 +19,7 @@ ifdef NETWORKING
 OBJECTS += $(LWIP_OBJ) 
 endif
 
-OBJECTS += kernel.a
+OBJECTS += kernel/debug.o kernel/device.o  kernel/init.o  kernel/ipc.o  kernel/module.o  kernel/network.o  kernel/shell.o  kernel/symbol_table.o  kernel/syscall.o  kernel/task.o  kernel/util.o
 
  
 user: 
@@ -29,7 +29,9 @@ all: lwip.a
 	make SOURCE_ROOT=$$PWD -C kernel
 	make SOURCE_ROOT=$$PWD -C drivers
 #	make SOURCE_ROOT=$$PWD -C drivers/xen
+ifdef NETWORKING
 	make SOURCE_ROOT=$$PWD -C drivers/lwip
+endif
 	make SOURCE_ROOT=$$PWD -C drivers/hostshm
 	make SOURCE_ROOT=$$PWD -C drivers/virtio
 	make SOURCE_ROOT=$$PWD -C drivers/virtio/9p
@@ -44,6 +46,10 @@ all: lwip.a
 	objdump -D -l bin/kernel_bin > bin/obj_file
 	nm -l bin/kernel_bin | sort > util/in
 	util/gen_symboltbl util/in bin/mod_file
+	util/dwarf_reader bin/kernel_bin > util/dwarf_temp_output
+	chmod 777 ./dwarf_datatypes
+	mv ./dwarf_datatypes test/root/
+	
 clean:
 	make SOURCE_ROOT=$$PWD -C kernel clean
 	make SOURCE_ROOT=$$PWD -C drivers clean

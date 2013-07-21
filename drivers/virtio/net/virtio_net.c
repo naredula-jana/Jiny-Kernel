@@ -155,7 +155,7 @@ static void virtio_net_interrupt(registers_t regs, void *private_data) {
 	device_t *pci_dev = (device_t *) private_data;
 	virtio_dev_t *dev;
 	unsigned long flags;
-
+int i;
 //	spin_lock_irqsave(&virtionet_lock, flags);
 
 	dev = (virtio_dev_t *) pci_dev->private_data;
@@ -163,12 +163,17 @@ static void virtio_net_interrupt(registers_t regs, void *private_data) {
 		isr = inb(dev->pci_ioaddr + VIRTIO_PCI_ISR);
 
 	//virtqueue_disable_cb(dev->vq[0]);
-	addr = (unsigned char *) virtio_removeFromQueue(dev->vq[0],
-			(unsigned int *) &len);
-	if (addr != 0)
-		netif_rx(addr, len);
-	addBufToQueue(dev->vq[0], 0, 4096);
-    virtio_queue_kick(dev->vq[0]);
+	for (i = 0; i < 10; i++) {
+		addr = (unsigned char *) virtio_removeFromQueue(dev->vq[0],
+				(unsigned int *) &len);
+		if (addr != 0)
+			netif_rx(addr, len);
+		if (addr == 0)
+			break;
+		addBufToQueue(dev->vq[0], 0, 4096);
+		virtio_queue_kick(dev->vq[0]);
+	}
+
 //	spin_unlock_irqrestore(&virtionet_lock, flags);
 }
 

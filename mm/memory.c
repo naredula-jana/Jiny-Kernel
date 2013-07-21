@@ -113,34 +113,7 @@ static inline void free_pages_ok(unsigned long map_nr, unsigned long order)
 	change_bit((index) >> (1+(order)), (area)->map)
 #define CAN_DMA(x) (PageDMA(x))
 #define ADDRESS(x) (KERNEL_ADDR_START + ((x) << PAGE_SHIFT))
-#if 0
-#define RMQUEUE(order, gfp_mask) \
-	do { struct free_mem_area_struct * area = free_mem_area+order; \
-		unsigned long new_order = order; \
-		do { struct page *prev = memory_head(area), *ret = prev->next; \
-			while (memory_head(area) != ret) { \
-				if ( CAN_DMA(ret)) { \
-					unsigned long map_nr; \
-					(prev->next = ret->next)->prev = prev; \
-					map_nr = ret - g_mem_map; \
-					MARK_USED(map_nr, new_order, area); \
-					area->stat_count--; \
-					g_nr_free_pages -= 1 << order; \
-					EXPAND(ret, map_nr, order, new_order, area); \
-					spin_unlock_irqrestore(&free_area_lock, flags); \
-					DEBUG(" Page alloc return address: %x mask:%x order:%d \n",ADDRESS(map_nr),gfp_mask,order); \
-					if (gfp_mask & MEM_CLEAR) ut_memset(ADDRESS(map_nr),0,PAGE_SIZE<<order); \
-					if (!(gfp_mask & MEM_FOR_CACHE)) memleakHook_alloc(ADDRESS(map_nr),PAGE_SIZE<<order,0,0);\
-					ret_address = ADDRESS(map_nr); \
-					goto last;
-				} \
-				prev = ret; \
-				ret = ret->next; \
-			} \
-			new_order++; area++; \
-		} while (new_order < NR_MEM_LISTS); \
-	} while (0)
-#endif
+
 #define EXPAND(map,index,low,high,area) \
 	do { unsigned long size = 1 << high; \
 		while (high > low) { \

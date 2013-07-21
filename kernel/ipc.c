@@ -40,7 +40,7 @@ int ipc_mutex_lock(void *p, int line) {
 	g_current_task->stats.wait_line_no = line;
 	while (ipc_sem_wait(p, 100) != 1)
 		;
-	g_current_task->status_info = NULL;
+	g_current_task->status_info[0] = 0;
 	sem->owner_pid = g_current_task->pid;
 	sem->recursive_count =1;
 	g_current_task->locks_sleepable++;
@@ -305,12 +305,13 @@ int ipc_wakeup_waitqueue(wait_queue_t *waitqueue ) {
 
 	return ret;
 }
+/* ticks in terms of 10 ms */
 int ipc_waiton_waitqueue(wait_queue_t *waitqueue, unsigned long ticks) {
 	unsigned long flags;
 
 	spin_lock_irqsave(&g_global_lock, flags);
 	g_current_task->state = TASK_INTERRUPTIBLE;
-	g_current_task->status_info = waitqueue->name;
+	ut_snprintf(g_current_task->status_info,MAX_TASK_STATUS_DATA ,"wait-%s: %d",waitqueue->name,ticks);
 	g_current_task->stats.wait_start_tick_no = g_jiffies ;
 	waitqueue->stat_wait_count++;
 	_add_to_waitqueue(waitqueue, g_current_task, ticks);
@@ -318,7 +319,7 @@ int ipc_waiton_waitqueue(wait_queue_t *waitqueue, unsigned long ticks) {
 
 	sc_schedule();
 
-	g_current_task->status_info = NULL;
+	g_current_task->status_info[0] = 0;
 	waitqueue->stat_wait_ticks = waitqueue->stat_wait_ticks + (g_jiffies-g_current_task->stats.wait_start_tick_no);
 	if (g_current_task->sleep_ticks <= 0)
 		return 0;

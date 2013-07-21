@@ -55,23 +55,8 @@ extern spinlock_t g_global_lock;
 extern int brk_pnt;
 #define BRK while(brk_pnt==0)
 
+#include "symbol_table.h"
 
-#define MAX_SYMBOLLEN 40
-#define MAX_FILELEN 50
-#define SYMBOL_GTEXT 0
-#define SYMBOL_DATA 1
-#define SYMBOL_LTEXT 2
-#define SYMBOL_CMD 10
-#define SYMBOL_CONF 12
-typedef struct {
-	addr_t address;
-	char type;
-	unsigned char name[MAX_SYMBOLLEN];
-	char file_lineno[MAX_FILELEN];
-	unsigned long subsystem_type;
-}symb_table_t ;
-extern symb_table_t *g_symbol_table;
-extern unsigned long g_total_symbols;
 
 typedef struct registers
 {

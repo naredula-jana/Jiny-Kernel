@@ -1,5 +1,5 @@
 SOURCE_ROOT=/opt_src/Jiny-Kernel/
-#NETWORKING =1 
+NETWORKING =1 
 JINY_SLAB = 1
 #JSLAB_DEBUG = 1
 SMP=1
@@ -8,7 +8,7 @@ INCLUDE=. -DNETWORKING -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURC
 
 
 
-CC=gcc -g
+CC=gcc -g -gdwarf-2
 
 AT=
 

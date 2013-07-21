@@ -163,6 +163,7 @@ int Jcmd_ps(char *arg1, char *arg2) {
 	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
 	ut_printf("%s",buf);
+	SYS_fs_write(1,buf,len);
 
 	vfree(buf);
 	return 1;
@@ -503,7 +504,7 @@ static void init_task_struct(struct task_struct *p,struct mm_struct *mm){
 	p->task_queue.prev = 0;
 	p->wait_queue.next = p->wait_queue.prev = NULL;
 	p->stats.ticks_consumed = 0;
-	p->status_info = 0;
+	p->status_info[0] = 0;
 	/* link to queue */
 	free_pid_no++;
 	if (free_pid_no==0) free_pid_no++;

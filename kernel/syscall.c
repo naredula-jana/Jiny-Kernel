@@ -634,12 +634,12 @@ int strace_wait() {
 	if (ut_strcmp(g_current_task->name, strace_thread_name) == 0) {
 		int id = strace_progress_id;
 		ret =JSUCCESS;
-		g_current_task->status_info = "waiting @syscall..";
+		ut_strncpy(g_current_task->status_info , "waiting @syscall..",MAX_TASK_STATUS_DATA);
 		while ((id == strace_progress_id) && (g_current_task->curr_syscall_id == strace_syscall_id)){
 			sc_sleep(20);
 		}
 	}
-	g_current_task->status_info = NULL;
+	g_current_task->status_info[0] = 0;
 	return ret;
 }
 void Jcmd_strace(unsigned char *arg1,unsigned char *arg2){

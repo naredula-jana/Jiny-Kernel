@@ -121,7 +121,6 @@ static int _pagelist_move(page_struct_t *page, page_list_t *list) {
 		return 0;
 }
 static int _pagelist_add(page_struct_t *page, page_list_t *list, int tail) {
-	unsigned long flags;
 
 	if (page == NULL) return 0;
 
@@ -224,7 +223,6 @@ int pc_check_valid_addr(unsigned char *addr, int len){
 	return 1;
 }
 int pc_get_page(struct page *page){
-	unsigned long flags;
 	struct inode *inode;
 
 	mutexLock(g_inode_lock);
@@ -240,7 +238,6 @@ int pc_get_page(struct page *page){
 	return JSUCCESS;
 }
 int pc_put_page(struct page *page){
-	unsigned long flags;
 	struct inode *inode;
 	inode=page->inode;
 
@@ -303,7 +300,6 @@ int pc_init(unsigned char *start_addr, unsigned long len) {
 /*  Remove page from page cache */
 int pc_deletePage(struct page *page) {
 	struct inode *inode;
-	unsigned long flags;
 	int ret=JFAIL;
 
 	mutexLock(g_inode_lock);

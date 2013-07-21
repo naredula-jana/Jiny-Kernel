@@ -12,7 +12,35 @@
  *   - Middle layer between network drivers(like virtio..)  and protocol stacks(lwip, udp responser .. etc)
  *   - It works as a bottom Half for network packets.
  *   - It should come up before drivers and protocol stacks, so that they hook to this layer
+ *
+packet flows
+flow-1)  virtio interrupt-> netif_rx -> addto-queue ----(interrupt context)
+
+flow-2)  remove_from_queue -> protocol_driver_callback-lwip_netif_rx----  (netRx_BH)
+#1  0x000000004013acda in tcp_receive (pcb=0x402b81a0) at /opt_src/lwip/src/core/tcp_in.c:1009
+#2  0x000000004013a2bc in tcp_process (pcb=0x402b81a0) at /opt_src/lwip/src/core/tcp_in.c:737
+#3  0x000000004013957d in tcp_input (p=0x402cf806, inp=0x7ff68020) at /opt_src/lwip/src/core/tcp_in.c:319
+#4  0x0000000040132db3 in ip_input (p=0x402cf806, inp=0x7ff68020) at /opt_src/lwip/src/core/ipv4/ip.c:505
+#5  0x000000004013dd99 in ethernet_input (p=0x402cf806, netif=0x7ff68020) at /opt_src/lwip/src/netif/etharp.c:1282
+#6  0x00000000401245d1 in netfront_input (netif=0x7ff68020, data=0x7ff8504a "\213Q\004\205\322t\003\211B\020\203\071", len=0) at lwip-net.c:189
+#7  0x000000004012463d in lwip_netif_rx (data=0x7ff85000 "", len=64, private_data=0x0) at lwip-net.c:224
+#8  0x0000000040144931 in netRx_BH (arg=0x0) at network.c:87
+
+flow-3)  low_level_output -> netif_tx -> driver_callback-netdriver_xmit --- ( protcol thread context)
+#0  netdriver_xmit (data=0x402cf81e "", len=52, private_data=0x7fff1020) at virtio_net.c:183
+#1  0x0000000040144aaa in netif_tx (data=0x402cf81e "", len=52) at network.c:124
+#2  0x00000000401243c9 in low_level_output (netif=0x7ff62020, p=0x402cf806) at lwip-net.c:104
+#3  0x000000004013d4bf in etharp_arp_input (netif=0x7ff62020, ethaddr=0x7ff62063, p=0x402cf806) at /opt_src/lwip/src/netif/etharp.c:787
+#4  0x000000004013dddb in ethernet_input (p=0x402cf806, netif=0x7ff62020) at /opt_src/lwip/src/netif/etharp.c:1291
+#5  0x00000000401245d1 in netfront_input (netif=0x7ff62020, data=0x7ffe303e "\211\320\350\374\377\377\377\353\005\350\374\377\377\377\211C<\203{<", len=0) at lwip-net.c:189
+#6  0x000000004012463d in lwip_netif_rx (data=0x7ffe3000 "", len=52, private_data=0x0) at lwip-net.c:224
+#7  0x0000000040144941 in netRx_BH (arg=0x0) at network.c:87
+
+ flow-2 and flow-3  callbacks are registered with the function registerNetworkHandler
+ recv path :  buf allocated in virtio , freed in netRX_BH after copying the content in protocol layer to pbuf
+ send path : buf is allocated in netdriver_xmit(virtio)
  */
+
 #define DEBUG_ENABLE 1
 #include "common.h"
 
@@ -37,17 +65,23 @@ static int count_net_drivers = 0;
 static int count_protocol_drivers = 0;
 static struct net_handlers net_drivers[MAX_HANDLERS];
 static struct net_handlers protocol_drivers[MAX_HANDLERS];
+static int stat_queue_len=0;
 static int add_to_queue(unsigned char *buf, int len) {
 	if (buf == 0 || len == 0)
 		return 0;
+	ut_log("Recevied from  network and keeping in queue: len:%d  stat count:%d prod:%d cons:%d\n",len,stat_queue_len,queue.producer,queue.consumer);
+
+
 	if (queue.data[queue.producer].buf == 0) {
 		queue.data[queue.producer].len = len;
 		queue.data[queue.producer].buf = buf;
 		queue.producer++;
+		stat_queue_len++;
 		if (queue.producer >= MAX_QUEUE_LENGTH)
 			queue.producer = 0;
 		return 1;
 	}
+	ut_log("ERROR: NO SPACE in the queue \n");
 	return 0;
 }
 static int remove_from_queue(unsigned char **buf, unsigned int *len) {
@@ -55,6 +89,9 @@ static int remove_from_queue(unsigned char **buf, unsigned int *len) {
 			&& (queue.data[queue.consumer].len != 0)) {
 		*buf = queue.data[queue.consumer].buf;
 		*len = queue.data[queue.consumer].len;
+
+		ut_log("netrecv : receving from queue len:%d  prod:%d cons:%d\n",queue.data[queue.consumer].len,queue.producer,queue.consumer);
+
 		queue.data[queue.consumer].len = 0;
 		queue.data[queue.consumer].buf = 0;
 		queue.consumer++;
@@ -103,7 +140,7 @@ int registerNetworkHandler(int type,
 }
 int netif_rx(unsigned char *data, unsigned int len) {
 	if (add_to_queue(data, len) == 0 && data != 0 && len != 0) {
-		mm_putFreePages(data, 0);
+		mm_putFreePages(data, 0); /* fail to queue, so the packet is getting dropped and freed  */
 	}
 	return 1;
 }

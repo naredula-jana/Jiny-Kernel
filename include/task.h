@@ -104,7 +104,8 @@ struct task_struct {
 	task_queue_t dead_tasks;
 	int exit_code;
 	int curr_syscall_id;
-	unsigned char *status_info;
+#define MAX_TASK_STATUS_DATA 100
+	unsigned char status_info[MAX_TASK_STATUS_DATA];
 
 	struct list_head run_queue; /* run queue */
 	struct list_head task_queue; /* task queue */
