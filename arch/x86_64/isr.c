@@ -199,11 +199,12 @@ int ar_faultHandler(void *p, unsigned int  int_no)
 	{
 		int ret;
 
+		g_cpu_state[getcpuid()].intr_nested_level++;
 		stack_depth++;
 		isr_t handler = g_interrupt_handlers[int_no].action;
 		ret = handler(&ctx);
 		g_interrupt_handlers[int_no].stat[getcpuid()].num_irqs++;
-
+		g_cpu_state[getcpuid()].intr_nested_level--;
 		stack_depth--;
 		return ret; /* return properly for page fault or debug fault or trap fault */
 	}else

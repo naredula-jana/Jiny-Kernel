@@ -16,6 +16,11 @@
 #endif
 #define POW2(n) (1 << (n))
 
+enum sock_type {
+          SOCK_STREAM     = 1,
+          SOCK_DGRAM      = 2
+};
+
 /* return to system calls */
 #define SYSCALL_SUCCESS 0
 #define SYSCALL_FAIL -1
@@ -32,10 +37,10 @@ extern spinlock_t g_global_lock;
 
 #define SYSCALL_DEBUG(x...) do { \
 	if (g_conf_syscall_debug==1)	{\
-		ut_printf("SYSCALL(%x :%d uip: %x) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip); ut_printf(x); \
+		ut_printf("SYSCALL(%x :%d uip: %x :%d) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip,g_current_task->stats.syscall_count); ut_printf(x); \
 	}else if (g_conf_syscall_debug==2) {\
 		if (strace_wait() == JSUCCESS) {\
-				ut_log("SYSCALL(%x :%d uip: %x) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip); ut_log(x); \
+				ut_log("SYSCALL(%x :%d uip: %x :%d) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip,g_current_task->stats.syscall_count); ut_log(x); \
 		}\
     }\
 } while (0) 
@@ -72,9 +77,10 @@ typedef struct {
 	unsigned long tv_nsec;
 }time_t;
 
+
 #define unlikely(x)     (x) /* TODO */
 #define BUG() do {  \
-	cli(); ut_getBackTrace(0,0,0);while(1) ; } while(0)
+	cli(); ut_log(" BUG at :\n"); ut_getBackTrace(0,0,0);while(1) ; } while(0)
 #define BUG_ON(condition) do { if (unlikely((condition)!=0)) BUG(); } while(0)
 
 
@@ -83,7 +89,8 @@ typedef struct {
 // first parameter.
 typedef int (*isr_t)();
 extern int g_serial_output;
-extern void *g_inode_lock;
+extern void *g_inode_lock; /* vfs */
+extern void *g_netBH_lock; /* netBH */
 #define printk ut_printf
 unsigned char kb_getchar();
 void register_interrupt_handler(uint8_t n, isr_t handler);

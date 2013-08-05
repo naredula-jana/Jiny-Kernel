@@ -64,11 +64,11 @@ stat_count++;
     }
 }
 
-int start_webserver()
-{
-	int ret;
+int start_webserver(){
+	unsigned long pid;
 
-    ret=sc_createKernelThread(webserver_thread,NULL,(unsigned char *)"web_server");
+    pid=sc_createKernelThread(webserver_thread,NULL,(unsigned char *)"web_server");
+    sc_task_stick_to_cpu(pid, 0); /* TODO: currently all network related threads are sticked to cpu-o to avoid crash in tcp layer */
 
     return 0;
 }

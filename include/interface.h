@@ -18,15 +18,17 @@ struct iovec {
  *
  */
 /* scheduling */
-extern int ipc_register_waitqueue(wait_queue_t *waitqueue, char *name);
+extern int ipc_register_waitqueue(wait_queue_t *waitqueue, char *name, unsigned long flags);
 extern int ipc_unregister_waitqueue(wait_queue_t *waitqueue);
 int ipc_wakeup_waitqueue(wait_queue_t *waitqueue);
 int ipc_waiton_waitqueue(wait_queue_t *waitqueue, unsigned long ticks);
 int sc_sleep( long ticks); /* each tick is 100HZ or 10ms */
+unsigned long SYS_sc_vfork();
 unsigned long SYS_sc_fork();
 unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void *ctid,  void *args) ;
 int SYS_sc_exit(int status);
 void sc_delete_task(struct task_struct *task);
+int sc_task_stick_to_cpu(unsigned long pid, int cpu_id);
 int SYS_sc_kill(unsigned long pid,unsigned long signal);
 void SYS_sc_execve(unsigned char *file,unsigned char **argv,unsigned char **env);
 int Jcmd_threadlist_stat( char *arg1,char *arg2);
@@ -181,13 +183,16 @@ struct sockaddr {
 struct Socket_API{
 	void* (*open)(int type);
 	int (*bind)(void *conn,struct sockaddr *s,int sock_type);
+	int (*get_addr)(void *conn,struct sockaddr *s);
 	void* (*accept)(void *conn);
+	void* (*check_data)(void *conn);
 	int (*listen)(void *conn,int len);
 	int (*connect)(void *conn, uint32_t *addr, uint16_t port);
-    int (*write)(void *conn, unsigned char *buff, unsigned long len, int sock_type);
+    int (*write)(void *conn, unsigned char *buff, unsigned long len, int sock_type,uint32_t daddr, uint16_t dport);
     int (*read)(void *conn, unsigned char *buff, unsigned long len);
     int (*read_from)(void *conn, unsigned char *buff, unsigned long len,uint32_t *addr, uint16_t port);
-	int (*close)(void *conn);
+	int (*close)(void *conn,int sock_type);
+	int (*network_status)(void *arg1,void *arg2);
 };
 int register_to_socketLayer(struct Socket_API *api);
 int socket_close(struct file *file);

@@ -23,8 +23,10 @@ void *ipc_mutex_create(unsigned char *name) {
 	sem->stat_acquired_start_time =0;
 	return sem;
 }
+
 int ipc_mutex_lock(void *p, int line) {
 	sys_sem_t *sem = p;
+	int ret;
 
 	if (p == 0)
 		return 0;
@@ -36,10 +38,11 @@ int ipc_mutex_lock(void *p, int line) {
 	}
 	assert (g_current_task->locks_nonsleepable == 0);
 
-
 	g_current_task->stats.wait_line_no = line;
-	while (ipc_sem_wait(p, 100) != 1)
-		;
+	ret = 0;
+	while (ret != 1){
+		ret = ipc_sem_wait(p, 10000);
+	}
 	g_current_task->status_info[0] = 0;
 	sem->owner_pid = g_current_task->pid;
 	sem->recursive_count =1;
@@ -67,7 +70,6 @@ int ipc_mutex_unlock(void *p, int line) {
 	sem->stat_total_acquired_time += (g_jiffies-sem->stat_acquired_start_time);
 	ipc_sem_signal(p);
 
-
 	return 1;
 }
 
@@ -81,15 +83,20 @@ int ipc_mutex_destroy(void *p) {
 /* this call consume system resources */
 signed char ipc_sem_new(struct semaphore *sem, uint8_t count) {
 	int ret;
+	char *name;
 
+	name=sem->name;
+	if (name==NULL){
+		name="mutex_semaphore";
+	}
 	sem->owner_pid = 0;
 	sem->count = count;
-	sem->sem_lock = SPIN_LOCK_UNLOCKED("mutex_semaphore");
+	sem->sem_lock = SPIN_LOCK_UNLOCKED(name);
 	sem->valid_entry = 1;
 	if (sem->name == 0) {
 		sem->name = "semaphore";
 	}
-	ret = ipc_register_waitqueue(&sem->wait_queue, sem->name);
+	ret = ipc_register_waitqueue(&sem->wait_queue, sem->name,WAIT_QUEUE_WAKEUP_ONE);
 	return 0;
 }
 
@@ -114,12 +121,11 @@ void ipc_sem_signal(sys_sem_t *sem) {
 
 	spin_lock_irqsave(&(sem->sem_lock), flags);
 	sem->count++;
-	ipc_wakeup_waitqueue(&sem->wait_queue);
 	spin_unlock_irqrestore(&(sem->sem_lock), flags);
+	ipc_wakeup_waitqueue(&sem->wait_queue);
 }
 
-uint32_t ipc_sem_wait(sys_sem_t *sem, uint32_t timeout_arg) /* timeout_arg in ms */
-{
+uint32_t ipc_sem_wait(sys_sem_t *sem, uint32_t timeout_arg){ /* timeout_arg in ms */
 	unsigned long flags;
 	unsigned long timeout;
 
@@ -130,11 +136,16 @@ uint32_t ipc_sem_wait(sys_sem_t *sem, uint32_t timeout_arg) /* timeout_arg in ms
 		}
 		if (timeout_arg == 0)
 			timeout = 100;
+
 		spin_lock_irqsave(&(sem->sem_lock), flags);
 		/* Atomically check that we can proceed */
 		if (sem->count > 0 || (timeout <= 0))
 			break;
 		spin_unlock_irqrestore(&(sem->sem_lock), flags);
+
+		if (g_current_task->killed == 1){
+			return IPC_TIMEOUT;
+		}
 	}
 
 	if (sem->count > 0) {
@@ -235,11 +246,11 @@ static int _del_from_waitqueue(wait_queue_t *waitqueue, struct task_struct *p) {
 }
 
 
-int ipc_register_waitqueue(wait_queue_t *waitqueue, char *name) {
+int ipc_register_waitqueue(wait_queue_t *waitqueue, char *name,unsigned long flags) {
 	int i;
-	unsigned long flags;
+	unsigned long irq_flags;
 
-	spin_lock_irqsave(&g_global_lock, flags);
+	spin_lock_irqsave(&g_global_lock, irq_flags);
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
 		if (wait_queues[i] == 0) {
 			INIT_LIST_HEAD(&(waitqueue->head));
@@ -247,11 +258,12 @@ int ipc_register_waitqueue(wait_queue_t *waitqueue, char *name) {
 
 			wait_queues[i] = waitqueue;
 			waitqueue->used_for = 0;
+			waitqueue->flags = flags;
 			goto last;
 		}
 	}
 last:
-    spin_unlock_irqrestore(&g_global_lock, flags);
+    spin_unlock_irqrestore(&g_global_lock, irq_flags);
 	return -1;
 }
 /* TODO It should be called from all the places where sc_register_waitqueue is called, currently it is unregister is called only from few places*/
@@ -289,8 +301,12 @@ int ipc_wakeup_waitqueue(wait_queue_t *waitqueue ) {
 			else
 				BUG();
 			ret++;
+			if (waitqueue->flags & WAIT_QUEUE_WAKEUP_ONE){
+				goto gotit ;
+			}
 		}
 	}
+gotit:
 	spin_unlock_irqrestore(&g_global_lock, flags);
 
 	if (ret>0){/* wakeup any other idle and active cpus to serve the runqueue  */

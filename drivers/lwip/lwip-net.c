@@ -1,47 +1,12 @@
 /* 
  * lwip-net.c
  *
- * interface between lwIP's ethernet and Mini-os's netfront.
- * For now, support only one network interface, as mini-os does.
- *
- * Tim Deegan <Tim.Deegan@eu.citrix.net>, July 2007
- * based on lwIP's ethernetif.c skeleton file, copyrights as below.
- */
-
-/*
- * Copyright (c) 2001-2004 Swedish Institute of Computer Science.
- * All rights reserved. 
- * 
- * Redistribution and use in source and binary forms, with or without modification, 
- * are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- * 3. The name of the author may not be used to endorse or promote products
- *    derived from this software without specific prior written permission. 
- *
- * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR IMPLIED 
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT 
- * SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, 
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT 
- * OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING 
- * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY 
- * OF SUCH DAMAGE.
- *
- * This file is part of the lwIP TCP/IP stack.
- * 
- * Author: Adam Dunkels <adam@sics.se>
+ * Interface to LWIP stack from Jiny
  *
  */
 
 #define __types_h
-#define DEBUG_ENABLE 1
+//#define DEBUG_ENABLE 1
 #include "lwip/opt.h"
 #include "lwip/def.h"
 #include "lwip/mem.h"
@@ -74,6 +39,8 @@
 #define IF_IPADDR	0x00000000
 #define IF_NETMASK	0x00000000
 
+static int error_mem=0;
+static int error_send_mem=0;
 /* Only have one network interface at a time. */
 static struct netif *the_interface = NULL;
 
@@ -134,7 +101,6 @@ static err_t netfront_output(struct netif *netif, struct pbuf *p,
 
 	/* resolve hardware address, then send (or queue) packet */
 	return etharp_output(netif, p, ipaddr);
-
 }
 
 /*
@@ -148,16 +114,20 @@ static err_t netfront_output(struct netif *netif, struct pbuf *p,
 static void netfront_input(struct netif *netif, unsigned char* data, int len) {
 	struct eth_hdr *ethhdr;
 	struct pbuf *p, *q;
+	int ret;
 
 #if ETH_PAD_SIZE
 	len += ETH_PAD_SIZE; /* allow room for Ethernet padding */
 #endif
 
 	/* move received packet into a new pbuf */
+	mutexLock(g_netBH_lock);
 	p = pbuf_alloc(PBUF_RAW, len, PBUF_POOL);
+	mutexUnLock(g_netBH_lock);
 	if (p == NULL) {
 		LINK_STATS_INC(link.memerr);
 		LINK_STATS_INC(link.drop);
+		error_mem++;
 		return;
 	}
 
@@ -185,34 +155,12 @@ static void netfront_input(struct netif *netif, unsigned char* data, int len) {
 	/* points to packet payload, which starts with an Ethernet header */
 	ethhdr = p->payload;
 
-	ethhdr = p->payload;
-	ethernet_input(p, netif);
-#if 0
-	switch (htons(ethhdr->type)) {
-		/* IP packet? */
-		case ETHTYPE_IP:
-		/* skip Ethernet header */
-		DEBUG("RECVED THE IP packet send to LWIP for processing\n");
-		pbuf_header(p, -(int16_t)sizeof(struct eth_hdr));
-		/* pass to network layer */
-		if (tcpip_input(p, netif) == ERR_MEM)
-		/* Could not store it, drop */
+	mutexLock(g_netBH_lock);
+	if (ethernet_input(p, netif) != ERR_OK){
+		BUG();
 		pbuf_free(p);
-		break;
-
-		case ETHTYPE_ARP:
-		/* pass p to ARP module  */
-		DEBUG("RECVED THE ARP packet send to LWIP for processing\n");
-		etharp_arp_input(netif, (struct eth_addr *) netif->hwaddr, p);
-		break;
-
-		default:
-		DEBUG("RECVED THE UNKNOWN packet send to LWIP for processing\n");
-		pbuf_free(p);
-		p = NULL;
-		break;
 	}
-#endif
+	mutexUnLock(g_netBH_lock);
 }
 
 static int lwip_netif_rx(unsigned char* data, unsigned int len,
@@ -258,7 +206,7 @@ err_t netif_netfront_init(struct netif *netif) {
 	/* ifType ethernetCsmacd(6) @see RFC1213 */
 	netif->link_type = 6;
 	/* your link speed here */
-	netif->link_speed =;
+	//netif->link_speed =;
 	netif->ts = 0;
 	netif->ifinoctets = 0;
 	netif->ifinucastpkts = 0;
@@ -298,88 +246,181 @@ err_t netif_netfront_init(struct netif *netif) {
 	sys_timeout(ARP_TMR_INTERVAL, arp_timer, NULL);
 	return ERR_OK;
 }
-enum sock_type {
-          SOCK_STREAM     = 1,
-          SOCK_DGRAM      = 2
-};
+
 void *lwip_sock_open(int type) {
+	void *ret;
+
+	mutexLock(g_netBH_lock);
 	if (type == SOCK_DGRAM) {
-		return netconn_new(NETCONN_UDP);
-	} else if (type == SOCK_STREAM) {
-		return netconn_new(NETCONN_TCP);
+		ret = netconn_new(NETCONN_UDP);
+	} else if (type == SOCK_STREAM ) {
+		ret = netconn_new(NETCONN_TCP);
 	} else {
+		SYSCALL_DEBUG("Error socket Unknown type : %d \n",type);
+		ret = 0;
+	}
+	mutexUnLock(g_netBH_lock);
+	return ret;
+}
+
+static void lwip_network_status(unsigned char *arg1,unsigned char *arg2){
+	struct netif *netif;
+
+	netif = the_interface;
+	if (netif ==0) return;
+
+	ut_printf(" ip:%x gw:%x mask:%x \n",netif->ip_addr, netif->gw, netif->netmask);
+	ut_printf("mac_addr : %x:%x:%x:%x:%x:%x \n",netif->hwaddr[0],netif->hwaddr[1],netif->hwaddr[2],netif->hwaddr[3],netif->hwaddr[4],netif->hwaddr[5]);
+	ut_printf(" mem Errors: %d  send mem errors:%d\n",error_mem,error_send_mem);
+	#if LWIP_SNMP
+	ut_printf("in_bytes:%d out_bytes:%d inpkts:%d outpkts:%d  \n",netif->ifinoctets,netif->ifoutoctets,netif->ifinucastpkts,netif->ifoutucastpkts);
+	#endif
+
+	ut_printf(" link: Tx:%d Rx:%d drop:%d\n IP: Tx:%d Rx:%d drop:%d\nUDP: Tx:%d Rx:%d drop:%d\n",lwip_stats.link.xmit,lwip_stats.link.recv,lwip_stats.link.drop,lwip_stats.ip.xmit,lwip_stats.ip.recv,lwip_stats.ip.drop,lwip_stats.udp.xmit,lwip_stats.udp.recv,lwip_stats.udp.drop);
+}
+int lwip_sock_read_from(void *conn, unsigned char *buff, unsigned long len,struct sockaddr *sockaddr, int addr_len) {
+	struct netbuf *new_buf=0;
+	unsigned char *data;
+	int data_len=0;
+	int ret=0;
+
+	SYSCALL_DEBUG(" SOCK recvfrom :%x len:%d \n",buff,len);
+
+	mutexLock(g_netBH_lock);
+	ret=netconn_recv(conn,  &new_buf);
+	mutexUnLock(g_netBH_lock);
+if (ret == ERR_TIMEOUT){
+	if (g_current_task->killed == 1){
 		return 0;
 	}
 }
 
-int lwip_sock_read_from(void *conn, unsigned char *buff, unsigned long len,uint32_t *addr, uint16_t port) {
-	struct netbuf *new_buf=0;
-	unsigned char *data;
-	int data_len=0;
-	int ret;
-
-	ut_log(" SOCK read :%x len:%d \n",buff,len);
-
-repeat:
-	ret=netconn_recv(conn,  &new_buf);
 	if (ret!=ERR_OK){
-		sc_sleep(50);
-		goto repeat;
-		//return 0;
+		SYSCALL_DEBUG(" Fail to recvfrom data: %x newret:%x(%d) \n",ret,-ret,-ret);
+		return 0;
 	}
+	SYSCALL_DEBUG(" SUCESS to recv data:%d \n",ret);
 	netbuf_data(new_buf,&data,&data_len);
 	if (data_len >  0){
-		ut_memcpy(buff,data,ut_min(data_len,len)); //TODO: need to free the memory
-		return ut_min(data_len,len);
+		if (sockaddr != 0){
+			sockaddr->addr = new_buf->addr.addr;
+			sockaddr->sin_port = new_buf->port;
+		}
+		ut_memcpy(buff,data,ut_min(data_len,len));
+		ret = ut_min(data_len,len);
+	}else{
+		ret =0;
 	}
-	return 0;
+
+	mutexLock(g_netBH_lock);
+	netbuf_delete(new_buf);
+	mutexUnLock(g_netBH_lock);
+
+	return ret;
+}
+int lwip_sock_check(void *conn_p){
+	int  recv_bytes=0;
+	//lwip_ioctl(conn,FIONREAD,&recv_bytes);
+	struct netconn *conn=conn_p;
+	if (conn==0) return 0;
+	return ((conn->acceptmbox.read_sem.count) || (conn->recvmbox.read_sem.count));
 }
 int lwip_sock_read(void *conn, unsigned char *buff, unsigned long len) {
 	struct netbuf *new_buf=0;
 	unsigned char *data;
 	int data_len=0;
+	int ret,newret;
 
-	int ret;
+	SYSCALL_DEBUG(" SOCK read :%x len:%d \n",buff,len);
+	mutexLock(g_netBH_lock);
+	ret=netconn_recv(conn, &new_buf);
+	mutexUnLock(g_netBH_lock);
 
-	ut_log(" SOCK read :%x len:%d \n",buff,len);
-	ret=netconn_recv(conn,  &new_buf);
 	if (ret!=ERR_OK){
+		SYSCALL_DEBUG(" Fail to recv data: %x newret:%x(%d) \n",ret,-ret,-ret);
 		return 0;
 	}
+
 	netbuf_data(new_buf,&data,&data_len);
+	SYSCALL_DEBUG(" SUCESS to recv data:%d  ret:%d\n",data_len,ret);
 	if (data_len >  0){
-		ut_memcpy(buff,data,ut_min(data_len,len)); //TODO: need to fre the memory
-		return ut_min(data_len,len);
+		ut_memcpy(buff,data,ut_min(data_len,len));
+		ret = ut_min(data_len,len);
+	}else{
+		ret = 0;
 	}
-	return 0;
+
+	mutexLock(g_netBH_lock);
+	netbuf_delete(new_buf);
+	mutexUnLock(g_netBH_lock);
+
+	return ret;
 }
 int lwip_sock_connect(void *conn, unsigned long *addr, uint16_t port) {
-	return netconn_connect(conn, addr, lwip_ntohs(port));
+	int ret;
+
+	mutexLock(g_netBH_lock);
+	ret = netconn_connect(conn, addr, lwip_ntohs(port));
+	mutexUnLock(g_netBH_lock);
+	return ret;
 }
-int lwip_sock_write(void *conn, unsigned char *buff, unsigned long len, int type) {
+int lwip_sock_write(void *conn, unsigned char *buff, unsigned long len, int type, uint32_t daddr, uint16_t dport) {
+	int ret;
+
+	mutexLock(g_netBH_lock);
 	if (type == SOCK_DGRAM) {
+		ip_addr_t addr;
 		struct netbuf *buf;
 		char * data;
+		SYSCALL_DEBUG("SOCKDGRAM  WRITING len : %d : daddr:%x dport:%x \n",len,daddr,dport);
 
 		buf = netbuf_new();
+		if (buf ==0){
+			error_send_mem++;
+			ret = 0;
+			goto last;
+		}
 		data = netbuf_alloc(buf, len+1);
 		ut_memcpy(data, buff, len);
-		netconn_send(conn, buf);
+		addr.addr = daddr;
+		netconn_sendto(conn, buf,&addr,dport);
 		netbuf_delete(buf);
-		return len;
+		ret = len;
 	} else if (type == SOCK_STREAM) {
-		return netconn_write(conn, buff, len, NETCONN_COPY);
+		SYSCALL_DEBUG("SOCKSTRAEM  WRITING len : %d : \n",len);
+		ret = netconn_write(conn, buff, len, NETCONN_COPY);
+		if (ret == ERR_OK){
+			ret = len;
+		}
 	}
-	return 0;
+last:
+	mutexUnLock(g_netBH_lock);
+	return ret;
 }
-int lwip_sock_close(void *session) {
-	netconn_disconnect(session);
+int lwip_sock_close(void *session,int sock_type) {
+	mutexLock(g_netBH_lock);
+//	if (sock_type == SOCK_STREAM){
+		netconn_disconnect(session);
+//	}
 	netconn_delete(session);
-	return 1;
+	mutexUnLock(g_netBH_lock);
+
+	return SYSCALL_SUCCESS;
+}
+int lwip_get_addr(void *session, struct sockaddr *s){
+
+	if (netconn_getaddr(session,&s->addr,&s->sin_port, 1) == ERR_OK)
+		return SYSCALL_SUCCESS;
+	else
+		return SYSCALL_FAIL;
 }
 int lwip_sock_bind(void *session, struct sockaddr *s, int sock_type) {
 	struct ip_addr listenaddr = { s->addr }; /* TODO */
-	int rc = netconn_bind(session, &listenaddr, (s->sin_port));
+
+	mutexLock(g_netBH_lock);
+	int rc = netconn_bind(session, &listenaddr, ntohs(s->sin_port));
+	mutexUnLock(g_netBH_lock);
+
 	if (rc != ERR_OK) {
 		DEBUG("Failed to bind connection: %i\n", rc);
 		return SYSCALL_FAIL;
@@ -387,7 +428,10 @@ int lwip_sock_bind(void *session, struct sockaddr *s, int sock_type) {
 	if (sock_type == SOCK_DGRAM){
 		return SYSCALL_SUCCESS;
 	}
+
+	mutexLock(g_netBH_lock);
 	rc = netconn_listen(session);
+	mutexUnLock(g_netBH_lock);
 	if (rc != ERR_OK) {
 		DEBUG("Failed to listen on connection: %i\n", rc);
 		return SYSCALL_FAIL;
@@ -396,7 +440,11 @@ int lwip_sock_bind(void *session, struct sockaddr *s, int sock_type) {
 }
 void *lwip_sock_accept(void *listener, struct sockaddr *s) {
 	void *ret;
+
+	mutexLock(g_netBH_lock);
 	netconn_accept(listener, &ret);
+	mutexUnLock(g_netBH_lock);
+
 	return ret;
 }
 /*
@@ -417,6 +465,7 @@ struct Socket_API lwip_socket_api;
  * which calls back to tcpip_bringup_finished(), which 
  * lets us know it's OK to continue.int lwip_sock_read
  */
+extern int g_network_ip;
 int load_LwipTcpIpStack() {
 	//mac = 00:30:48:DB:5E:06
 	unsigned char mac[7] = { 0x00, 0x30, 0x48, 0xDB, 0x5E, 0x06, 0x0 };
@@ -452,7 +501,7 @@ int load_LwipTcpIpStack() {
 	//down(&tcpip_is_up);
 
 	if (1) {
-		struct ip_addr ipaddr = { htonl(0x0ad181b0) }; /* 10.209.129.176  */
+		struct ip_addr ipaddr = { htonl(g_network_ip) };
 		struct ip_addr netmask = { htonl(0xffffff00) };
 		struct ip_addr gw = { htonl(0x0ad18001) };
 		networking_set_addr(&ipaddr, &netmask, &gw);
@@ -469,9 +518,13 @@ int load_LwipTcpIpStack() {
 	lwip_socket_api.accept = lwip_sock_accept;
 	lwip_socket_api.open = lwip_sock_open;
 	lwip_socket_api.connect = lwip_sock_connect;
+	lwip_socket_api.network_status = lwip_network_status;
+	lwip_socket_api.get_addr = lwip_get_addr;
+	lwip_socket_api.check_data = lwip_sock_check;
 	register_to_socketLayer(&lwip_socket_api);
 	return 1;
 }
+
 
 /* Shut down the network */
 int unload_LwipTcpIpStack() {

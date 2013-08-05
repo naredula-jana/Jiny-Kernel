@@ -81,11 +81,13 @@ struct task_struct {
 	volatile long state;    /* -1 unrunnable, 0 runnable, >0 stopped */
 	unsigned long flags;    /* per process flags, defined below */
 	unsigned long pending_signal;	
+	int killed; /* some as send send a kill signal or self killed */
 	atomic_t count; /* usage count */
 
 	unsigned long pid,ppid;
 	unsigned char name[MAX_TASK_NAME+1];
 	int cpu;
+	int stick_to_cpu; /* by default run on any cpu */
 	int counter;
 	long sleep_ticks;
 	unsigned long cpu_contexts; /* every cpu context , it will be incremented */
@@ -116,6 +118,7 @@ struct task_struct {
 		unsigned long mem_consumed;
 		unsigned wait_start_tick_no;
 		int wait_line_no; /* line number where mutex lock as triggered */
+		int syscall_count;
 	} stats;
 
 	unsigned long magic_numbers[4]; /* already stack is default fill with magic numbers */
@@ -130,6 +133,8 @@ struct cpu_state {
 	unsigned char cpu_priority;
 	int active; /* only active cpu will pickup the tasks , otherwise they can only run idle threads */
 	int intr_disabled; /* interrupts disabled except apic timer */
+
+	int intr_nested_level;
 
 	unsigned long stat_total_contexts;
 	unsigned long stat_nonidle_contexts;
@@ -153,12 +158,12 @@ static inline struct task_struct *current_task(void)
 #define is_kernel_thread (g_current_task->mm == g_kernel_mm)
 
 
-#define MAX_BACKTRACE 20
+
 typedef struct backtrace{
 	struct{
 	unsigned long ret_addr;
 	unsigned char *name;
-	}entries[MAX_BACKTRACE];
+	}entries[MAX_BACKTRACE_LENGTH];
 	int count;
 }backtrace_t;
 

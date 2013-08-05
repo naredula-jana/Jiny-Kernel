@@ -73,6 +73,9 @@
 #define SEEK_HOLE       4       /* seek to the next hole */
 
 #define F_DUPFD         0       /* dup */
+#define F_GETFD         1       /*getfd flags */
+#define F_SETFD         2       /*setfd for close on exec */
+#define FD_CLOSEXEC      1
 
 enum {
 POSIX_FADV_DONTNEED=4
@@ -95,6 +98,7 @@ enum { /* Inode types*/
 	IN_FILE=4,
 	OUT_PIPE_FILE=5,
 	IN_PIPE_FILE=6,
+	DEV_NULL_FILE=7,
 
 	REGULAR_FILE=0x8000,
 	DIRECTORY_FILE=0x4000,
@@ -110,10 +114,11 @@ struct file {
 	unsigned char filename[MAX_FILENAME];
 	int type;
 	uint64_t offset;
+	int flags;
 
 	struct inode *inode;
-	void *private;
-	int sock_type;
+	void *private_pipe;
+
 };
 
 #define PAGELIST_HASH_SIZE 40
@@ -128,9 +133,21 @@ struct inode {
 	unsigned long fs_private;
 	struct filesystem *vfs;
 
-	int file_type;
-	uint64_t file_size; /* file length */
-	uint64_t inode_no;
+	int type;
+
+	union {
+		struct {
+			uint64_t file_size; /* file length */
+			uint64_t inode_no;
+		}file;
+		struct {
+			int sock_type;
+			unsigned long local_addr;
+			unsigned short local_port;
+		}socket;
+	}u;
+
+	int stat_out,stat_in,stat_err;
 
 	unsigned char filename[MAX_FILENAME];
 	struct list_head page_list[PAGELIST_HASH_SIZE];

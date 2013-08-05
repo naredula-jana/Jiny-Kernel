@@ -148,6 +148,34 @@ static int debug_trace(unsigned char *arg1, unsigned char *arg2) {
 
 	return 1;
 }
+/******************************************************************/
+void *test_lock;
+int start_test=0;
+static void mutex_thr(){
+
+	int i,j,k;
+
+	while(start_test==0);
+	for (i=0; i<20000; i++){
+		mutexLock(test_lock);
+		j=1;
+		for (k=0; k<100; k++){
+			j=j*100;
+		}
+		mutexUnLock(test_lock);
+	}
+	SYS_sc_exit(22);
+}
+void Jcmd_mutextest(){
+	int ret;
+	test_lock = mutexCreate("mutex_testlock");
+	ret = sc_createKernelThread(mutex_thr, 0, (unsigned char *)"mutex_test-1");
+	ret = sc_createKernelThread(mutex_thr, 0, (unsigned char *)"mutex_test-2");
+	ret = sc_createKernelThread(mutex_thr, 0, (unsigned char *)"mutex_test-3");
+start_test=1;
+	return ;
+}
+/**********************************************************************/
 static int sh_pci(unsigned char *arg1, unsigned char *arg2) {
 	//device_t dev;
 	//list_pci();
@@ -194,26 +222,10 @@ static int Jcmd_memleak(unsigned char *arg1, unsigned char *arg2) {
 	ut_printf("alloced memory: %x mp_addr:%x \n", mp, &mp);
 	mp = (unsigned long)mm_malloc(130, 0);
 	ut_printf("alloced memory: %x\n", mp);
-	k = ut_atoi(arg1);
-	if (k == 1)
-		kmemleak_scan();
+
+	kmemleak_scan();
 	return 0;
 
-	ret = sc_createKernelThread(t11, 0, (unsigned char *)"test");
-	ret = sc_createKernelThread(t22, 0, (unsigned char *)"test");
-	return 0;
-	wfp = fs_open(arg1, 0, 0);
-	if (wfp == 0) {
-		ut_printf(" Error opening file :%s: \n", arg1);
-		return 0;
-	}
-
-	for (i = 0; i < ut_atoi(arg2); i++)
-		ret = fs_stat(wfp, &fstat);
-	ut_printf("fstat size :%d inode:%d \n", fstat.st_size, fstat.inode_no);
-	fs_close(wfp);
-
-	return 0;
 }
 static int sh_sync(unsigned char *arg1, unsigned char *arg2) {
 	struct file *wfp;

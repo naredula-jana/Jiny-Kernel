@@ -77,14 +77,12 @@ static inline void remove_mem_queue(struct free_mem_area_struct *area,struct pag
  * Hint: -mask = 1+~mask
  */
 
-static inline void free_pages_ok(unsigned long map_nr, unsigned long order)
+static inline void _free_pages_ok(unsigned long map_nr, unsigned long order)
 {
 	struct free_mem_area_struct *area = free_mem_area + order;
 	unsigned long index = map_nr >> (1 + order);
 	unsigned long mask = (~0UL) << order;
-	unsigned long flags;
 
-	spin_lock_irqsave(&free_area_lock, flags);
 
 #define list(x) (g_mem_map+(x))
 
@@ -103,7 +101,6 @@ static inline void free_pages_ok(unsigned long map_nr, unsigned long order)
 
 #undef list
 
-	spin_unlock_irqrestore(&free_area_lock, flags);
 }
 
 /*
@@ -224,10 +221,12 @@ int mm_putFreePages(unsigned long addr, unsigned long order) {
 	unsigned long map_nr = MAP_NR(addr);
 	int ret = 0;
 	int page_order = order;
+	unsigned long flags;
 
 #ifdef MEMLEAK_TOOL
 	memleakHook_free(addr,0);
 #endif
+	spin_lock_irqsave(&free_area_lock, flags);
 	if (map_nr < g_max_mapnr) {
 		page_struct_t * map = g_mem_map + map_nr;
 		if (PageReserved(map)) {
@@ -239,7 +238,7 @@ int mm_putFreePages(unsigned long addr, unsigned long order) {
 				BUG();
 			}
 		//	map->flags &= ~(1 << PG_referenced);
-			free_pages_ok(map_nr, order);
+			_free_pages_ok(map_nr, order);
 			if (init_done == 1) {
 				DEBUG(" Freeing memory addr:%x order:%d \n", addr, order);
 			}else{
@@ -256,13 +255,23 @@ last:
 		struct page *page = virt_to_page(addr);
 
 		while (i--) {
+#ifdef MEMORY_DEBUG
+			if (!PageReferenced(page)){
+				ut_printf("Page Backtrace in Free Page :\n");
+				ut_printBackTrace(page->bt_addr_list,MAX_BACKTRACE_LENGTH);
+			}
+#endif
 			assert(PageReferenced(page));
 			PageClearReferenced(page);
+#ifdef MEMORY_DEBUG
+			ut_storeBackTrace(page->bt_addr_list,MAX_BACKTRACE_LENGTH);
+#endif
 			page++;
 		}
 	}else{
 		BUG();
 	}
+	spin_unlock_irqrestore(&free_area_lock, flags);
 	return ret;
 }
 unsigned long mm_getFreePages(int gfp_mask, unsigned long order) {
@@ -271,7 +280,7 @@ unsigned long mm_getFreePages(int gfp_mask, unsigned long order) {
 	unsigned long page_order = order;
 
 	if (order >= NR_MEM_LISTS)
-		goto last;
+		return ret_address;
 
 	spin_lock_irqsave(&free_area_lock, flags);
 	do {
@@ -287,7 +296,6 @@ unsigned long mm_getFreePages(int gfp_mask, unsigned long order) {
 					area->stat_count--;
 					g_nr_free_pages -= 1 << order;
 					EXPAND(ret, map_nr, order, new_order, area);
-					spin_unlock_irqrestore(&free_area_lock, flags);
 					DEBUG(" Page alloc return address: %x mask:%x order:%d \n",ADDRESS(map_nr),gfp_mask,order);
 					if (gfp_mask & MEM_CLEAR) ut_memset(ADDRESS(map_nr),0,PAGE_SIZE<<order);
 					if (!(gfp_mask & MEM_FOR_CACHE)) memleakHook_alloc(ADDRESS(map_nr),PAGE_SIZE<<order,0,0);
@@ -300,7 +308,7 @@ unsigned long mm_getFreePages(int gfp_mask, unsigned long order) {
 			new_order++; area++;
 		} while (new_order < NR_MEM_LISTS);
 	} while (0);
-	spin_unlock_irqrestore(&free_area_lock, flags);
+
 
 last:
 	if (ret_address > 0) {
@@ -308,11 +316,22 @@ last:
 		struct page *page = virt_to_page(ret_address);
 
 		while (i--) {
+#ifdef MEMORY_DEBUG
+			if (PageReferenced(page)){
+				ut_log("Page Backtrace in Alloc page :\n");
+				ut_printBackTrace(page->bt_addr_list,MAX_BACKTRACE_LENGTH);
+			}
+#endif
 			assert(!PageReferenced(page));
 			PageSetReferenced(page);
+#ifdef MEMORY_DEBUG
+			ut_storeBackTrace(page->bt_addr_list,MAX_BACKTRACE_LENGTH);
+#endif
 			page++;
 		}
 	}
+
+	spin_unlock_irqrestore(&free_area_lock, flags);
 	return ret_address;
 }
 

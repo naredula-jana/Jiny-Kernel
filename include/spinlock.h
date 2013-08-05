@@ -87,12 +87,15 @@ static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 		g_spinlock_count++;
 	}
 
+#if 0
 	if (lock->log_length >= MAX_SPIN_LOG) lock->log_length=0;
 	lock->log[lock->log_length].line = line;
 	lock->log[lock->log_length].pid = g_current_task->pid;
 	lock->log[lock->log_length].cpuid = g_current_task->cpu;
 	lock->log[lock->log_length].name = g_current_task->name;
 	lock->log[lock->log_length].spins = 1 + (lock->stat_count/10);
+#endif
+
 	lock->log_length++;
 	lock->pid = g_current_task->pid;
 	g_current_task->locks_nonsleepable++;
@@ -129,6 +132,7 @@ static inline void arch_spinlock_unlock(spinlock_t *lock, int line) {
 #endif
 	if (1){
 		lock->stat_unlocks++;
+#if 0
 		if (lock->log_length >= MAX_SPIN_LOG) lock->log_length=0;
 		lock->log[lock->log_length].line = line;
 		lock->log[lock->log_length].pid = g_current_task->pid;
@@ -136,6 +140,7 @@ static inline void arch_spinlock_unlock(spinlock_t *lock, int line) {
 		lock->log[lock->log_length].name = g_current_task->name;
 		lock->log[lock->log_length].spins = 0;
 		lock->log_length++;
+#endif
 		lock->pid = 0;
 		lock->recursive_count = 0;
 		g_current_task->locks_nonsleepable--;

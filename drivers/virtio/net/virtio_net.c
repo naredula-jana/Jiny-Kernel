@@ -155,8 +155,9 @@ static void virtio_net_interrupt(registers_t regs, void *private_data) {
 	device_t *pci_dev = (device_t *) private_data;
 	virtio_dev_t *dev;
 	unsigned long flags;
-int i;
-//	spin_lock_irqsave(&virtionet_lock, flags);
+	int i;
+
+	spin_lock_irqsave(&virtionet_lock, flags);
 
 	dev = (virtio_dev_t *) pci_dev->private_data;
 	if (dev->msi == 0)
@@ -174,7 +175,7 @@ int i;
 		virtio_queue_kick(dev->vq[0]);
 	}
 
-//	spin_unlock_irqrestore(&virtionet_lock, flags);
+	spin_unlock_irqrestore(&virtionet_lock, flags);
 }
 
 int virtio_send_errors = 0;
@@ -184,6 +185,7 @@ static int netdriver_xmit(unsigned char* data, unsigned int len,
 	static int send_pkts = 0;
 	virtio_dev_t *dev;
 	int i, ret;
+	unsigned long flags;
 
 	dev = (virtio_dev_t *) pci_dev->private_data;
 	if (dev == 0 || data==0)
@@ -196,6 +198,7 @@ static int netdriver_xmit(unsigned char* data, unsigned int len,
 	ut_memcpy(addr+10,data,len);
 	ret = -ENOSPC;
 
+	spin_lock_irqsave(&virtionet_lock, flags);
 	ret = addBufToQueue(dev->vq[1], (unsigned char *) addr, len+10);
 	send_pkts++;
 	if (ret == -ENOSPC) {
@@ -205,12 +208,14 @@ static int netdriver_xmit(unsigned char* data, unsigned int len,
 
 	send_pkts = 0;
 	virtio_queue_kick(dev->vq[1]);
-
+	spin_unlock_irqrestore(&virtionet_lock, flags);
 #if 1
 	i = 0;
 	while (i < 50) {
 		i++;
+		spin_lock_irqsave(&virtionet_lock, flags);
 		addr = (unsigned long) virtio_removeFromQueue(dev->vq[1], &len);
+		spin_unlock_irqrestore(&virtionet_lock, flags);
 		if (addr) {
 			mm_putFreePages(addr, 0);
 		} else {

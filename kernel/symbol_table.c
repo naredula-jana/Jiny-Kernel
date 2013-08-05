@@ -155,6 +155,37 @@ unsigned char *ut_get_symbol(addr_t addr) {
 	return 0;
 }
 
+void ut_printBackTrace(unsigned long *bt, unsigned long max_length){
+	int i;
+	unsigned char *name;
+
+
+	for (i=0; i<max_length; i++){
+		if (bt[i] == 0) return;
+		name = ut_get_symbol(bt[i]);
+		ut_log(" %d :%s - %x\n",i+1,name,bt[i]);
+	}
+	return;
+}
+void ut_storeBackTrace(unsigned long *bt, unsigned long max_length){
+	unsigned long *rbp;
+	unsigned long lower_addr,upper_addr;
+	int i;
+
+	asm("movq %%rbp,%0" : "=m" (rbp));
+	lower_addr = g_current_task;
+	upper_addr = lower_addr + TASK_SIZE;
+	for (i=0; i<max_length; i++){
+		bt[i]=0;
+	}
+	for (i=0; i<max_length; i++){
+		bt[i] = *(rbp+1);
+		rbp=*rbp;
+		if (rbp<lower_addr || rbp>upper_addr) break;
+	}
+	return;
+}
+
 void ut_getBackTrace(unsigned long *rbp, unsigned long task_addr, backtrace_t *bt){
 	int i;
 	unsigned char *name;
@@ -170,9 +201,9 @@ void ut_getBackTrace(unsigned long *rbp, unsigned long task_addr, backtrace_t *b
 	}
 	if (bt == 0){
 		struct task_struct *t = lower_addr;
-		ut_printf("taskname:  pid:%d\n",t->name,t->pid);
+		ut_log("taskname:  pid:%d\n",t->name,t->pid);
 	}
-	for (i=0; i<MAX_BACKTRACE; i++){
+	for (i=0; i<MAX_BACKTRACE_LENGTH; i++){
 		if (rbp<lower_addr || rbp>upper_addr) break;
 		name = ut_get_symbol(*(rbp+1));
 		if (bt){
@@ -180,7 +211,7 @@ void ut_getBackTrace(unsigned long *rbp, unsigned long task_addr, backtrace_t *b
 			bt->entries[i].ret_addr = *(rbp+1);
 			bt->count = i+1;
 		}else{
-			ut_printf(" %d :%s - %x\n",i+1,name,*(rbp+1));
+			ut_log(" %d :%s - %x\n",i+1,name,*(rbp+1));
 		}
 		rbp=*rbp;
 		if (rbp<lower_addr || rbp>upper_addr) break;

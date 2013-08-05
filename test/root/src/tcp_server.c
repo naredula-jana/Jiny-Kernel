@@ -41,6 +41,8 @@ int main(int argc, char *argv[])
 
     for (;;) /* Run forever */
     {
+    	unsigned char buf[2000];
+    	int i;
         /* Set the size of the in-out parameter */
         clntLen = sizeof(echoClntAddr);
 
@@ -52,9 +54,15 @@ int main(int argc, char *argv[])
         /* clntSock is connected to a client! */
 
         printf("Handling client %s\n", inet_ntoa(echoClntAddr.sin_addr));
-
+for (i=0; i< 10; i++){
         write(clntSock,"test1234567",5);
-        close(clntSock);
+        buf[0]='\0';
+        read(clntSock,buf,1500);
+        printf("recvied data :%s:\n",buf);
+        fflush(stdout);
+}
+close(clntSock);
     }
+
     /* NOT REACHED */
 }

@@ -158,10 +158,10 @@ int init_driver_keyboard(unsigned long unused) {
 
 		if (i == 0) {
 			input_devices[i].device_id = DEVICE_SERIAL;
-			ipc_register_waitqueue(&input_devices[i].kb_waitq, "kb-serial");
+			ipc_register_waitqueue(&input_devices[i].kb_waitq, "kb-serial",0);
 		} else {
 			input_devices[i].device_id = DEVICE_KEYBOARD;
-			ipc_register_waitqueue(&input_devices[i].kb_waitq, "kb-key");
+			ipc_register_waitqueue(&input_devices[i].kb_waitq, "kb-key",0);
 		}
 	}
 

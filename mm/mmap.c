@@ -292,11 +292,17 @@ unsigned long SYS_vm_brk(unsigned long addr) {
 	if (g_current_task->mm->brk_addr > (addr - g_current_task->mm->brk_len))
 		return 0;
 	vma = vm_findVma(g_current_task->mm, g_current_task->mm->brk_addr, g_current_task->mm->brk_len - 1);
-	if (vma == 0)
+	if (vma == 0){
+		ut_printf(" BUG:  SYS_vm_brk addr:%x\n",addr);
+		Jcmd_maps(0, 0);
 		BUG();
-	vma->vm_end = addr;
-	g_current_task->mm->brk_len = addr - g_current_task->mm->brk_addr;
-	//Jcmd_vmaps_stat(0, 0);
+	}
+	if (addr > vma->vm_end) {
+		/* TODO: check for collision for the next vm, less chance since the heap and stack are far apart */
+		vma->vm_end = addr;
+		g_current_task->mm->brk_len = addr - g_current_task->mm->brk_addr;
+	}
+
 	return addr;
 }
 

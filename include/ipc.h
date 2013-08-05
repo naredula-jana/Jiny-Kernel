@@ -33,10 +33,12 @@ typedef struct {  /* Do not change the order , initilization will break */
 
 #define IPC_TIMEOUT 0xffffffffUL
 
+#define WAIT_QUEUE_WAKEUP_ONE 1
 typedef struct wait_queue {
 	struct list_head head;
 	char *name;
 	void *used_for; /* it can be used for semaphore/mutex  or raw waitqueue */
+	unsigned long flags;
 
 	int stat_wait_count;
 	int stat_wait_ticks;
@@ -70,6 +72,7 @@ void ipc_sem_signal(sys_sem_t *sem);
 uint32_t ipc_sem_wait(sys_sem_t *sem, unsigned int timeout);
 
 
+
 #define mutexCreate ipc_mutex_create
 #define mutexLock(p)      do { ipc_mutex_lock((void *)p,__LINE__); } while (0)
 #define mutexUnLock(p)      do { ipc_mutex_unlock((void *)p,__LINE__); } while (0)
@@ -77,7 +80,7 @@ uint32_t ipc_sem_wait(sys_sem_t *sem, unsigned int timeout);
 #define sys_sem_new ipc_sem_new
 #define sys_sem_free ipc_sem_free
 #define sys_sem_signal ipc_sem_signal
-#define sys_arch_sem_wait ipc_sem_wait
+
 
 
 #endif

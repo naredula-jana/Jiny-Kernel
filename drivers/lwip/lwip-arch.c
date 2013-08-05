@@ -25,6 +25,10 @@ struct sys_timeouts {
 	struct sys_timeo *next;
 };
 
+
+
+
+//#define MBOX_DEBUG 1
 /******************************* below copied from sys *****************/
 #define SYS_ARCH_TIMEOUT 0xffffffffUL
 #define SYS_MBOX_EMPTY SYS_ARCH_TIMEOUT
@@ -60,7 +64,25 @@ void sys_arch_unprotect(sys_prot_t pval);
 /* Is called to initialize the sys_arch layer */
 void sys_init(void) {
 }
+uint32_t sys_arch_sem_wait(sys_sem_t *sem, uint32_t timeout_arg);
+uint32_t sys_arch_sem_wait(sys_sem_t *sem, uint32_t timeout_arg){
+	uint32_t ret;
+	int net_locked=0;
 
+	sys_sem_t *net_sem = g_netBH_lock;
+	if (net_sem && (net_sem->owner_pid == g_current_task->pid)){
+		net_locked=1;
+		mutexUnLock(g_netBH_lock);
+	}
+
+	ret = ipc_sem_wait(sem,timeout_arg);
+
+	if (net_locked==1){
+		mutexLock(g_netBH_lock);
+	}
+
+	return ret;
+}
 /* Creates an empty mailbox. */
 signed char sys_mbox_new(sys_mbox_t *mbox, int size) {
 
@@ -101,6 +123,10 @@ static void do_mbox_post(sys_mbox_t *mbox, void *msg) {
 	/* The caller got a semaphore token, so we are now allowed to increment
 	 * writer, but we still need to prevent concurrency between writers
 	 * (interrupt handler vs main) */
+
+#if MBOX_DEBUG
+	ut_log("mbox post: %x  write:%d read:%d \n",mbox,mbox->writer,mbox->reader);
+#endif
 	sys_prot_t prot = sys_arch_protect();
 	mbox->messages[mbox->writer] = msg;
 	mbox->writer = (mbox->writer + 1) % mbox->count;
@@ -119,6 +145,7 @@ void sys_mbox_post(sys_mbox_t *mbox, void *msg) {
 	while (ret == IPC_TIMEOUT) {
 		ret = sys_arch_sem_wait(&mbox->write_sem, 1000);
 	}
+
 	do_mbox_post(mbox, msg);
 }
 
@@ -141,6 +168,9 @@ static void do_mbox_fetch(sys_mbox_t *mbox, void **msg) {
 	/* The caller got a semaphore token, so we are now allowed to increment
 	 * reader, but we may still need to prevent concurrency between readers.
 	 * FIXME: can there be concurrent readers? */
+#if MBOX_DEBUG
+	ut_log("mbox fetch: %x  write:%d read:%d \n",mbox,mbox->writer,mbox->reader);
+#endif
 	prot = sys_arch_protect();
 	assert(mbox->reader != mbox->writer);
 	// TODO : as Hit once
@@ -218,11 +248,12 @@ uint32_t sys_arch_mbox_tryfetch(sys_mbox_t *mbox, void **msg) {
 static struct thread *lwip_thread;
 sys_thread_t sys_thread_new(char *name, void (*thread)(void *arg), void *arg,
 		int stacksize, int prio) {
-	int ret;
+	unsigned long pid;
 
-	ret = sc_createKernelThread(thread, (unsigned char *)arg, (unsigned char *)name);
-	DEBUG(" Thread created for tcp/ip: %d:\n", ret);
-	return ret;
+	pid = sc_createKernelThread(thread, (unsigned char *)arg, (unsigned char *)name);
+//	sc_task_stick_to_cpu(pid, 0); /* TODO: currently all network related threads are sticked to cpu-o to avoid crash in tcp layer */
+	DEBUG(" Thread created for tcp/ip: %d:\n", pid);
+	return pid;
 }
 
 /* This optional function does a "fast" critical region protection and returns

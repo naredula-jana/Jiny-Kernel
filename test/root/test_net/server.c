@@ -33,19 +33,24 @@ printf(" before while  =%d %d \n",recv_stop,testabc);
 		timeout.tv_sec = 1;
 		timeout.tv_usec = 0;
 rc=2;
-printf("before  select :%d \n",rc);
+//printf("before  select :%d \n",rc);
 	//	rc = select(sfd + 1, &readSet, NULL, NULL, &timeout);
-printf("after select :%d \n",rc);
+//printf("after select :%d \n",rc);
 		if (rc != 0) {
 			ret=recvfrom(sfd, buf, 1224, 0, (struct sockaddr *) &client, &l);
 			if (ret > 0  && (send_on==1))
                          {
+			//	client.sin_port=htons(1300);
 			    ret=sendto(sfd,buf,ret,0,(struct sockaddr *)&client,sizeof(client));
-                           if (ret > 0) send_pkts++;
+                          if (ret > 0) send_pkts++;
                          }	
 		recv_pkts++;
 #ifdef DEBUG
-			printf("MESSAGE FROM CLIENT:%s\n", buf);
+		if ((recv_pkts % 10000) ==0){
+			printf("MESSAGE FROM CLIENT: len:%d  recv_pkts:%d\n",ret,recv_pkts);
+
+			 fflush(stdout);
+		}
 #endif
 		}
 	}
@@ -93,7 +98,7 @@ printf("first before while  =%d %d  addr:%p testabcaddr:%p\n",recv_stop,testabc,
 	server.sin_family=AF_INET; 
 	client.sin_family=AF_INET;
 	server.sin_port=htons(1300); 
-	server.sin_port=1300; 
+//	server.sin_port=1300; 
 printf(" recv1:%d before while  =%d %d  addr:%p\n",recv1,recv_stop,testabc,&recv_stop);
 	if (argc != 1) {
 		printf("./a.out <ip> \n");

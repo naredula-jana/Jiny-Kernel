@@ -65,13 +65,13 @@ static int p9_open(uint32_t fid, unsigned char *filename, int flags, int arg_mod
 
 	for (i = 0; i < MAX_P9_FILES; i++) {
 		if (client.files[i].fid ==fid) {
-			if (client.files[i].opened == 1) return 1;
-			client.files[i].opened = 1;
+			if (client.files[i].opened == 1) return JSUCCESS;
 			break;
 		}
 	}
-
-	mode_b = 2; /* every file is opened as RDWR with p9 filesystem, since the open file will use for all the files( read file, write file etc) in vfs */
+	if (i==MAX_P9_FILES) return JFAIL;
+	mode_b = arg_mode;
+	//mode_b = 2; /* every file is opened as RDWR with p9 filesystem, since the open file will use for all the files( read file, write file etc) in vfs */
 	if (flags & O_CREAT) {
 		client.type = P9_TYPE_TCREATE;
 		perm = 0x1ff; /* this is same as 777 */
@@ -88,6 +88,7 @@ static int p9_open(uint32_t fid, unsigned char *filename, int flags, int arg_mod
 		ret = p9_read_rpc(&client, "");
 		if (client.recv_type == P9_TYPE_ROPEN || client.recv_type == P9_TYPE_RCREATE) {
 			ret = JSUCCESS;
+			client.files[i].opened = 1;
 		}
 		//ut_log(" p9fs OPEN fid:%d  return type :%d \n",fid,client.recv_type);
 	}
@@ -288,7 +289,7 @@ static uint32_t p9_read(uint32_t fid, uint64_t offset, unsigned char *data,
 			ret = p9_read_rpc(&client, "d", &read_len);
 			if (client.recv_type != P9_TYPE_RREAD) {
 				read_len = 0;
-				ut_log("ERROR Read fid:%d max_size:%d read_len:%d ret%d recvtype:%d \n",fid,data_len,read_len,ret,client.recv_type);
+				ut_log("P9 ERROR Read fid:%d max_size:%d read_len:%d ret%d recvtype:%d \n",fid,data_len,read_len,ret,client.recv_type);
 			}
 
 		}
@@ -357,7 +358,7 @@ static uint32_t p9_write(uint32_t fid, uint64_t offset, unsigned char *data, uin
 		ret = p9_read_rpc(&client, "d", &write_len);
 		if (client.recv_type != P9_TYPE_RWRITE) {
 			write_len = 0;
-			ut_log("ERROR Write fid:%d max_size:%d read_len:%d ret%d recvtype:%d \n",fid,data_len,write_len,ret,client.recv_type);
+			ut_log("ERROR  p9  Write fid:%d max_size:%d read_len:%d ret%d recvtype:%d \n",fid,data_len,write_len,ret,client.recv_type);
 		}
 	}
 
@@ -462,8 +463,8 @@ static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
 }
 static void update_size(struct inode *inode,uint64_t offset, int len ) {
 	if (inode !=0 && len > 0) {
-		if (inode->file_size < (offset+len))
-			inode->file_size = offset+len;
+		if (inode->u.file.file_size < (offset+len))
+			inode->u.file.file_size = offset+len;
 	}
 	return ;
 }
@@ -490,7 +491,7 @@ static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, u
 		}
 	} else if (type == REQUEST_READ) {
 		fid = inode->fs_private;
-		ret = p9_read(fid, offset, data, data_len,inode->file_type);
+		ret = p9_read(fid, offset, data, data_len,inode->type);
 		update_size(inode,offset,ret);
 	} else if (type == REQUEST_WRITE) {
 		fid = inode->fs_private;
@@ -504,7 +505,7 @@ static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, u
 		fid = inode->fs_private;
 		ret = p9_stat(fid, fp);
 		if (ret==JSUCCESS){
-			inode->file_type = fp->type;
+			inode->type = fp->type;
 		}
 	} else if (type == REQUEST_CLOSE) {
 		fid = inode->fs_private;
@@ -516,7 +517,7 @@ static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, u
 		fid = inode->fs_private;
 		ret = p9_setattr(fid,offset);
 		if (ret == JSUCCESS){
-			inode->file_size = offset;
+			inode->u.file.file_size = offset;
 		}
 	}
 

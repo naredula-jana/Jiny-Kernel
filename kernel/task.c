@@ -123,9 +123,13 @@ int Jcmd_ps(char *arg1, char *arg2) {
 	struct task_struct *task;
 	int i,ret,len,max_len;
 	unsigned char *buf;
+	int all=0;
 
 	ut_printf("pid state generation ticks sleep_ticks mm mm_count name cpu\n");
 
+	if (arg1!=0 && ut_strcmp(arg1,"all")==0){
+		all=1;
+	}
 	len = PAGE_SIZE*100;
 	max_len=len;
 	buf = (unsigned char *) vmalloc(len,0);
@@ -143,27 +147,31 @@ int Jcmd_ps(char *arg1, char *arg2) {
 		else
 			len = len - ut_snprintf(buf+max_len-len,len,"(%2x)", task->pid);
 
-		len = len - ut_snprintf(buf+max_len-len,len,"%3d %3d %5x  %5x %4d %7s sleeptick(%3d:%d) cpu:%3d :%s: count:%d status:%s\n",task->state, task->cpu_contexts, task->ticks, task->mm, task->mm->count.counter, task->name, task->sleep_ticks,
-				task->stats.ticks_consumed,task->cpu,task->mm->fs.cwd,task->count.counter,task->status_info);
+		len = len - ut_snprintf(buf+max_len-len,len,"%3d %3d %5x  %5x %4d %7s sleeptick(%3d:%d) cpu:%3d :%s: count:%d status:%s stickcpu:%x\n",task->state, task->cpu_contexts, task->ticks, task->mm, task->mm->count.counter, task->name, task->sleep_ticks,
+				task->stats.ticks_consumed,task->cpu,task->mm->fs.cwd,task->count.counter,task->status_info,task->stick_to_cpu);
 		temp_bt.count = 0;
 		if (task->state != TASK_RUNNING) {
-			ut_getBackTrace(task->thread.rbp, task, &temp_bt);
-			for (i = 0; i < temp_bt.count; i++) {
-				len = len - ut_snprintf(buf + max_len - len, len,
-								"          %d: %9s - %x \n", i,
-								temp_bt.entries[i].name,
-								temp_bt.entries[i].ret_addr);
+			if (all == 1) {
+				ut_getBackTrace(task->thread.rbp, task, &temp_bt);
+				for (i = 0; i < temp_bt.count; i++) {
+					len = len - ut_snprintf(buf + max_len - len, len,
+									"          %d: %9s - %x \n", i,
+									temp_bt.entries[i].name,
+									temp_bt.entries[i].ret_addr);
+				}
 			}
 		}
 
 	}
-	len = len -ut_snprintf(buf+max_len-len,len," CPU Processors:  cpuid contexts <state 0=idle, intr-disabled > name pid\n");
+	len = len -ut_snprintf(buf+max_len-len,len," CPU Processors:  cpuid contexts(user/total) <state 0=idle, intr-disabled > name pid\n");
 	for (i=0; i<getmaxcpus(); i++){
-		len = len -ut_snprintf(buf+max_len-len,len,"%2d:%4d <%d-%d> %7s(%d)\n",i,g_cpu_state[i].stat_total_contexts,g_cpu_state[i].active,g_cpu_state[i].intr_disabled,g_cpu_state[i].current_task->name,g_cpu_state[i].current_task->pid);
+		len = len -ut_snprintf(buf+max_len-len,len,"%2d:(%4d/%4d) <%d-%d> %7s(%d)\n",i,g_cpu_state[i].stat_nonidle_contexts,g_cpu_state[i].stat_total_contexts,g_cpu_state[i].active,g_cpu_state[i].intr_disabled,g_cpu_state[i].current_task->name,g_cpu_state[i].current_task->pid);
 	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
-	ut_printf("%s",buf);
-	SYS_fs_write(1,buf,len);
+	if (g_current_task->mm == g_kernel_mm)
+		ut_printf("%s",buf);
+	else
+		SYS_fs_write(1,buf,len);
 
 	vfree(buf);
 	return 1;
@@ -321,11 +329,11 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	free_mm(old_mm);
 
 	/* check for symbolic link */
-	if (mm->exec_fp != 0 && (mm->exec_fp->inode->file_type != REGULAR_FILE)) {
+	if (mm->exec_fp != 0 && (mm->exec_fp->inode->type != REGULAR_FILE)) {
 		struct fileStat  file_stat;
 		unsigned char newfilename[MAX_FILENAME];
 		fs_stat(mm->exec_fp,&file_stat);
-		if (mm->exec_fp->inode->file_type == SYM_LINK_FILE){
+		if (mm->exec_fp->inode->type == SYM_LINK_FILE){
 			if (fs_read(mm->exec_fp, newfilename, MAX_FILENAME)!=0){
 				fs_close(mm->exec_fp);
 				mm->exec_fp = (struct file *)fs_open(newfilename, 0, 0);
@@ -456,6 +464,7 @@ static int free_mm(struct mm_struct *mm) {
 	return 1;
 }
 #define CLONE_VM 0x100
+#define CLONE_VFORK 0x1000
 unsigned long sc_createKernelThread(int(*fn)(void *), unsigned char *args, unsigned char *thread_name) {
 	unsigned long pid;
 	unsigned long flags;
@@ -490,12 +499,14 @@ static void init_task_struct(struct task_struct *p,struct mm_struct *mm){
 	p->cpu_contexts = 0;
 	INIT_LIST_HEAD(&(p->dead_tasks.head));
 	p->pending_signal = 0;
+	p->killed = 0;
 	p->exit_code = 0;
 	p->cpu = getcpuid();
 	p->thread.userland.user_fs = 0;
 	p->thread.userland.user_fs_base = 0;
 
 	p->cpu =0xffff;
+	p->stick_to_cpu = 0xffff;
 	p->ppid = g_current_task->pid;
 	p->trace_stack_length = 10; /* some initial stack length, we do not know at what point tracing starts */
 	p->run_queue.next = 0;
@@ -505,6 +516,8 @@ static void init_task_struct(struct task_struct *p,struct mm_struct *mm){
 	p->wait_queue.next = p->wait_queue.prev = NULL;
 	p->stats.ticks_consumed = 0;
 	p->status_info[0] = 0;
+
+	p->stats.syscall_count = 0;
 	/* link to queue */
 	free_pid_no++;
 	if (free_pid_no==0) free_pid_no++;
@@ -552,6 +565,8 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void 
 		DEBUG("BEFORE duplicating pagetables and vmaps \n");
 		ar_dup_pageTable(g_current_task->mm, mm);
 		vm_dup_vmaps(g_current_task->mm, mm);
+		mm->brk_addr = g_current_task->mm->brk_addr;
+		mm->brk_len = g_current_task->mm->brk_len;
 		DEBUG("AFTER duplicating pagetables and vmaps\n");
 
 		mm->exec_fp = 0; // TODO : need to be cloned
@@ -589,13 +604,20 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void 
 		BUG();
 	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
+	if (clone_flags & CLONE_VFORK){//TODO : sys-vfork partially deone, need to use to signals suspend and continue the parent process
+
+	}
 
 	SYSCALL_DEBUG("clone return pid :%d \n",ret_pid);
 	return ret_pid;
 }
 unsigned long SYS_sc_fork() {
 	SYSCALL_DEBUG("fork \n");
-	return SYS_sc_clone(CLONE_VM, 0, 0,  0, 0);
+	return SYS_sc_clone(0, 0, 0,  0, 0);
+}
+unsigned long SYS_sc_vfork() {
+	SYSCALL_DEBUG("vfork \n");
+	return SYS_sc_clone( CLONE_VFORK, 0, 0,  0, 0);
 }
 static int release_resources(struct task_struct *child_task, int attach_to_parent){
 	int i;
@@ -666,6 +688,24 @@ int SYS_sc_exit(int status) {
 	sc_schedule();
 	return 0;
 }
+int sc_task_stick_to_cpu(unsigned long pid, int cpu_id) {
+	unsigned long flags;
+	struct list_head *pos;
+	struct task_struct *task;
+	int ret = SYSCALL_FAIL;
+
+	spin_lock_irqsave(&g_global_lock, flags);
+	list_for_each(pos, &g_task_queue.head) {
+		task = list_entry(pos, struct task_struct, task_queue);
+		if (task->pid == pid) {
+			task->stick_to_cpu = cpu_id;
+			ret = SYSCALL_SUCCESS;
+			break;
+		}
+	}
+	spin_unlock_irqrestore(&g_global_lock, flags);
+	return ret;
+}
 int SYS_sc_kill(unsigned long pid, unsigned long signal) {
 	unsigned long flags;
 	struct list_head *pos;
@@ -680,6 +720,9 @@ int SYS_sc_kill(unsigned long pid, unsigned long signal) {
 		if (task->pid == pid) {
 			task->pending_signal = 1;
 			ret = SYSCALL_SUCCESS;
+			if (signal==9){
+				task->killed = 1;
+			}
 			break;
 		}
 	}
@@ -784,7 +827,7 @@ int init_tasking(unsigned long unused) {
 
 	INIT_LIST_HEAD(&(run_queue.head));
 	INIT_LIST_HEAD(&(g_task_queue.head));
-	ipc_register_waitqueue(&timer_queue,"timer");
+	ipc_register_waitqueue(&timer_queue,"timer",0);
 
 	atomic_set(&g_kernel_mm->count,1);
 	g_kernel_mm->mmap = 0x0;
@@ -816,9 +859,11 @@ int init_tasking(unsigned long unused) {
 		g_cpu_state[i].current_task = g_cpu_state[i].idle_task;
 		g_cpu_state[i].dead_task = 0;
 		g_cpu_state[i].stat_total_contexts = 0;
+		g_cpu_state[i].stat_nonidle_contexts = 0;
 		g_cpu_state[i].active = 1; /* by default when the system starts all the cpu are in active state */
 		g_cpu_state[i].intr_disabled = 0; /* interrupts are active */
 		g_cpu_state[i].cpu_priority = 0;
+		g_cpu_state[i].intr_nested_level = 0;
 		ut_strncpy(g_cpu_state[i].idle_task->name, (unsigned char *)"idle", MAX_TASK_NAME);
 	}
     g_current_task->cpu=0;
@@ -917,7 +962,7 @@ static void schedule_kernelSecondHalf(){ /* kernel thread second half:_schedule 
 }
 
 #define MAX_DEAD_TASKS 20
-static struct task_struct *dead_tasks[MAX_DEAD_TASKS];
+//static struct task_struct *dead_tasks[MAX_DEAD_TASKS];
 void sc_schedule() { /* _schedule function task can land here. */
 	unsigned long intr_flags;
 	int i;
@@ -934,8 +979,10 @@ void sc_schedule() { /* _schedule function task can land here. */
 		DEBUG(" Task Stack got CORRUPTED task:%x :%x :%x \n",g_current_task,g_current_task->magic_numbers[0],g_current_task->magic_numbers[1]);
 		BUG();
 	}
-#if 1
-	if (g_current_task->pending_signal != 0 && g_current_task->state != TASK_KILLING){ /* TODO: need handle the signal properly, need to merge this code with sc_check_signal, sc_check_signal may not be called if there is no syscall  */
+#if 0
+	if (g_current_task->pending_signal != 0 && g_current_task->state != TASK_KILLING){
+		/* TODO: need handle the signal properly, need to merge this code with sc_check_signal,
+		 *  sc_check_signal may not be called if there is no syscall, the task should die withs it sknowledge, this is not correct place  */
 		g_current_task->state = TASK_KILLING;
 		g_current_task->exit_code = 9;
 		release_resources(g_current_task, 1);
@@ -961,6 +1008,7 @@ void sc_schedule() { /* _schedule function task can land here. */
 void sc_before_syscall() {
 	g_current_task->curr_syscall_id = g_cpu_state[getcpuid()].md_state.syscall_id;
 	g_current_task->callstack_top = 0;
+	g_current_task->stats.syscall_count++;
 }
 void sc_after_syscall() {
 
@@ -972,7 +1020,10 @@ void sc_after_syscall() {
 		ut_printf(" WARNING: kernel thread cannot be killed \n");
 	} else {
 		g_current_task->pending_signal = 0;
-		SYS_sc_exit(9);
+		if (g_current_task->killed == 1){
+			g_current_task->killed =0;
+			SYS_sc_exit(9);
+		}
 		return;
 	}
 	g_current_task->pending_signal = 0;
@@ -1014,6 +1065,11 @@ static unsigned long  _schedule(unsigned long flags) {
 		g_cpu_state[cpuid].intr_disabled = 1;
 	} else {
 		next = _del_from_runqueue(0);
+		if (next != 0 && next->stick_to_cpu!=0xffff && next->stick_to_cpu!=cpuid ){
+			/* TODO: this is temporary solution, permanent solution is to implement seperate run queue for each cpu, the current solution can lead to sticky task starvation since we are moving to the end of queue*/
+			list_add_tail(&next->run_queue, &run_queue.head);
+			next = 0;
+		}
 		if ((g_cpu_state[cpuid].intr_disabled == 1) && (cpuid != 0) && (g_cpu_state[cpuid].active == 1)){
 			/* re-enable the apic */
 			apic_reenable();

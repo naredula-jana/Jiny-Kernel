@@ -331,14 +331,21 @@ static void format_string(struct writer_struct *writer, const char *format, va_l
 void ut_printf(const char *format, ...) {
 	struct writer_struct writer;
 	unsigned long flags;
-	//if (g_boot_completed) mutexLock(g_print_lock);  Cannot be used because idle threads may issue print from isrs
+	int locked=0;
+	// Cannot be used because idle threads may issue print from isrs, due to this it is best effort to lock in a non-interrupt context
+	if (g_boot_completed && g_cpu_state[getcpuid()].intr_nested_level==0 && g_current_task->locks_nonsleepable==0) {
+	//	mutexLock(g_print_lock);
+		locked=1;
+	}
 	va_list vl;
 	va_start(vl,format);
 
 	writer.type=0;
 	format_string(&writer,format,vl);
 
-	//if (g_boot_completed) mutexUnLock(g_print_lock);
+	if (locked ==1){
+		//mutexUnLock(g_print_lock);
+	}
 }
 
 

@@ -55,7 +55,7 @@
 #define START_USE(_vq)						\
 	do {							\
 		if ((_vq)->in_use)	{			\
-			DEBUG("%s:in_use = %i\n",		\
+			DEBUG("%s:in_use = %d\n",		\
 			      (_vq)->vq.name, (_vq)->in_use);	\
 			      BUG();} \
 		(_vq)->in_use = __LINE__;			\

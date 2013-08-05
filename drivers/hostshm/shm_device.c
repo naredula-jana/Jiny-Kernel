@@ -62,7 +62,7 @@ int init_host_shm(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len, int
 	}else{
 		return 0;
 	}
-	ipc_register_waitqueue(&g_hfs_waitqueue,"Hfs");
+	ipc_register_waitqueue(&g_hfs_waitqueue,"Hfs",0);
 	if (pci_hdr->interrupt_line > 0) {
 		int k;
 #if 1

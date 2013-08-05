@@ -113,6 +113,8 @@ struct vm_area_struct {
 		unsigned char rw_flag;
 	}stat_log[10];
 };
+#define MEMORY_DEBUG 1
+#define MAX_BACKTRACE_LENGTH 20
 #define PAGE_MAGIC 0xabab123456
 typedef struct page {
 	/* these must be first (free area handling) */
@@ -129,6 +131,9 @@ typedef struct page {
 	struct list_head lru_link; /* LRU list: the page can be in freelist,active or inactive in of the list   */
 	unsigned char list_type; /* LRU list # is stored */
 	struct list_head list; /*TODO: currently used 1)  SLAB 2) pagecache:inodelist  */
+#ifdef MEMORY_DEBUG
+	unsigned long bt_addr_list[MAX_BACKTRACE_LENGTH];
+#endif
 	unsigned long magic_number;
 } page_struct_t;
 

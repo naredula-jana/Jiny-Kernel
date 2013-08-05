@@ -24,7 +24,7 @@ struct __sysctl_args {
 unsigned long SYS_sysctl(struct __sysctl_args *args );
 unsigned long SYS_getdents(unsigned int fd, unsigned char *user_buf,int size);
 unsigned long SYS_fork();
-int g_conf_syscall_debug=2;
+int g_conf_syscall_debug=0;
 long SYS_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags,unsigned long fd, unsigned long off);
 unsigned long snull(unsigned long *args);
 unsigned long SYS_uname(unsigned long *args);
@@ -35,7 +35,10 @@ struct timespec {
     long   tv_sec;        /* seconds */
     long   tv_nsec;       /* nanoseconds */
 };
-
+struct timeval {
+    long         tv_sec;     /* seconds */
+    long    tv_usec;    /* microseconds */
+};
 
 struct stat {
 	unsigned long int st_dev; /* ID of device containing file */
@@ -60,17 +63,21 @@ long int SYS_time(__time_t *time);
 unsigned long SYS_fs_fstat(int fd, struct stat *buf);
 unsigned long SYS_fs_stat(const char *path, struct stat *buf);
 
-unsigned long SYS_fs_dup2(int fd1, int fd2);
+int SYS_fs_dup2(int fd1, int fd2);
+int SYS_fs_dup(int fd1);
 unsigned long SYS_fs_readlink(unsigned char *path, char *buf, int bufsiz);
+int SYS_getsockname(int sockfd, struct sockaddr *addr, int *addrlen);
 
 unsigned long SYS_rt_sigaction();
 unsigned long SYS_getuid();
 unsigned long SYS_getgid();
+unsigned long SYS_setsid();
 unsigned long SYS_setuid(unsigned long uid) ;
 unsigned long SYS_setgid(unsigned long gid) ;
 unsigned long SYS_setpgid(unsigned long pid, unsigned long gid);
 unsigned long SYS_geteuid() ;
 unsigned long SYS_sigaction();
+unsigned long SYS_rt_sigprocmask();
 unsigned long SYS_ioctl();
 unsigned long SYS_getpid();
 unsigned long SYS_getppid();
@@ -100,13 +107,16 @@ unsigned long SYS_poll(struct pollfd *fds, int nfds, int timeout);
 
 unsigned long SYS_nanosleep(const struct timespec *req, struct timespec *rem);
 unsigned long SYS_getcwd(unsigned char *buf, int len);
+unsigned long SYS_chroot(unsigned char *filename);
 unsigned long SYS_chdir(unsigned char *filename);
 unsigned long SYS_fs_fcntl(int fd, int cmd, int args);
 unsigned long SYS_setsockopt(int sockfd, int level, int optname,
 		const void *optval, int optlen);
 unsigned long SYS_gettimeofday(time_t *tv, struct timezone *tz);
 unsigned long SYS_pipe(unsigned int *fds);
+unsigned long SYS_alarm(int seconds);
 int SYS_sync();
+int SYS_select(int nfds, int *readfds, int *writefds, int *exceptfds, struct timeval *timeout);
 
 typedef struct {
 	void *func;
@@ -116,16 +126,16 @@ syscalltable_t syscalltable[] = {
 /* 0 */
 { SYS_fs_read },/* 0 */{ SYS_fs_write }, { SYS_fs_open }, { SYS_fs_close }, { SYS_fs_stat }, { SYS_fs_fstat }, /* 5 */
 { SYS_fs_stat }, { SYS_poll }, { SYS_fs_lseek }, { SYS_vm_mmap }, { SYS_vm_mprotect },/* 10 */
-{ SYS_vm_munmap }, { SYS_vm_brk }, { SYS_rt_sigaction }, { snull }, { snull }, /* 15 */
+{ SYS_vm_munmap }, { SYS_vm_brk }, { SYS_rt_sigaction }, { SYS_rt_sigprocmask }, { snull }, /* 15 */
 { SYS_ioctl }, { snull }, { snull }, { SYS_fs_readv }, { SYS_fs_writev }, /* 20 */
-{ snull }, { SYS_pipe }, { snull }, { snull }, { snull }, /* 25 */
+{ snull }, { SYS_pipe }, { SYS_select }, { snull }, { snull }, /* 25 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 30 */
-{ snull }, { snull }, { SYS_fs_dup2 }, { snull }, { SYS_nanosleep }, /* 35 = nanosleep */
-{ snull }, { snull }, { snull }, { SYS_getpid }, { snull }, /* 40 */
+{ snull }, { SYS_fs_dup }, { SYS_fs_dup2 }, { snull }, { SYS_nanosleep }, /* 35 = nanosleep */
+{ snull }, { SYS_alarm }, { snull }, { SYS_getpid }, { snull }, /* 40 */
 { SYS_socket }, { SYS_connect }, { SYS_accept }, { SYS_sendto }, { SYS_recvfrom }, /* 45 */
 { snull }, { snull }, { snull }, { SYS_bind }, { SYS_listen }, /* 50 */
-{ snull }, { snull }, { snull }, { SYS_setsockopt }, { snull }, /* 55 */
-{ SYS_sc_clone }, { SYS_sc_fork }, { snull }, { SYS_sc_execve }, { SYS_sc_exit }, /* 60 */
+{ SYS_getsockname }, { snull }, { snull }, { SYS_setsockopt }, { snull }, /* 55 */
+{ SYS_sc_clone }, { SYS_sc_fork }, { SYS_sc_vfork }, { SYS_sc_execve }, { SYS_sc_exit }, /* 60 */
 { SYS_wait4 }, { SYS_sc_kill }, { SYS_uname }, { snull }, { snull }, /* 65 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 70 */
 { snull }, { SYS_fs_fcntl }, { snull }, { snull }, { SYS_fs_fdatasync }, /* 75 */
@@ -136,7 +146,7 @@ syscalltable_t syscalltable[] = {
 { SYS_gettimeofday }, { snull }, { snull }, { snull }, { snull }, /* 100 */
 { snull }, { SYS_getuid }, { snull }, { SYS_getgid }, { SYS_setuid }, /* 105 */
 { SYS_setgid }, { SYS_geteuid }, { snull }, { SYS_setpgid }, { SYS_getppid }, /* 110 */
-{ SYS_getpgrp }, { snull }, { snull }, { snull }, { snull }, /* 115 */
+{ SYS_getpgrp }, { SYS_setsid }, { snull }, { snull }, { snull }, /* 115 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 120 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 125 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 130 */
@@ -146,7 +156,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 150 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 155 */
 { SYS_sysctl }, { snull }, { SYS_arch_prctl }, { snull }, { snull }, /* 160 */
-{ snull }, { SYS_sync }, { snull }, { snull }, { snull }, /* 165 */
+{ SYS_chroot }, { SYS_sync }, { snull }, { snull }, { snull }, /* 165 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 170 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 175 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 180 */
@@ -285,6 +295,10 @@ unsigned long SYS_setpgid(unsigned long pid, unsigned long gid) {
 	temp_pgid = gid;
 	return 0;
 }
+unsigned long  SYS_setsid(){
+	SYSCALL_DEBUG("setsid(Hardcoded) :\n");
+	return g_current_task->pid;
+}
 unsigned long SYS_geteuid() {
 	SYSCALL_DEBUG("geteuid(Hardcoded) :\n");
 	return 500;
@@ -295,6 +309,10 @@ unsigned long SYS_getpgrp() {
 }
 unsigned long SYS_rt_sigaction() {
 	SYSCALL_DEBUG("sigaction(Dummy) \n");
+	return SYSCALL_SUCCESS;
+}
+unsigned long SYS_rt_sigprocmask() {
+	SYSCALL_DEBUG("sigprocmask(Dummy) \n");
 	return SYSCALL_SUCCESS;
 }
 #define TIOCSPGRP 0x5410
@@ -324,7 +342,7 @@ unsigned long SYS_fs_readlink(unsigned char *path, char *buf, int bufsiz) {
 		return ret;
 	}
 
-	if (fp->inode->file_type == SYM_LINK_FILE) {
+	if (fp->inode->type == SYM_LINK_FILE) {
 		ret = fs_read(fp, buf, bufsiz);
 	}
 	fs_close(fp);
@@ -449,19 +467,21 @@ unsigned long SYS_fs_fcntl(int fd, int cmd, int args) {
 	struct file *fp_old,*fp_new;
 	int i;
 	int new_fd=args;
+	int ret = SYSCALL_FAIL;
 
 	SYSCALL_DEBUG("fcntl(Partial)  fd:%x cmd:%x args:%x\n", fd, cmd, args);
 	if (cmd == F_DUPFD){
 		fp_old = fd_to_file(fd);
-		if (fp_old==0 ) return -1;
+		if (fp_old==0 ) return SYSCALL_FAIL;
 		fp_new = mm_slab_cache_alloc(g_slab_filep, 0);
-		if (fp_new==0 ) return -1;
+		if (fp_new==0 ) return SYSCALL_FAIL;
 
 		if (new_fd > g_current_task->mm->fs.total && new_fd<MAX_FDS){
 			g_current_task->mm->fs.total = new_fd +1;
 			g_current_task->mm->fs.filep[new_fd]=fp_new;
 			fs_dup(fp_old,fp_new);
-			return new_fd;
+			ret = new_fd;
+			goto last;
 		}
 		for (i = new_fd; i < MAX_FDS; i++) {
 			if (g_current_task->mm->fs.filep[i] == 0) {
@@ -470,13 +490,28 @@ unsigned long SYS_fs_fcntl(int fd, int cmd, int args) {
 				}
 				g_current_task->mm->fs.filep[i]=fp_new;
 				fs_dup(fp_old,fp_new);
-				return i;
+				ret = i;
+				goto last;
 			}
 		}
 		mm_slab_cache_free(g_slab_filep, fp_new);
-		return -1;
+		ret = SYSCALL_FAIL;
+		goto last;
+	}else if (cmd == F_SETFD){
+		if (args == FD_CLOSEXEC){
+			fp_old = fd_to_file(fd);
+			if (fp_old==0 ) return SYSCALL_FAIL;
+			fp_old->flags = FD_CLOSEXEC;
+			ret = SYSCALL_SUCCESS;
+		}
+	}else if (cmd == F_GETFD){
+		fp_old = fd_to_file(fd);
+		if (fp_old==0 ) return SYSCALL_FAIL;
+		ret = fp_old->flags;
 	}
-	return -1;
+last:
+	SYSCALL_DEBUG("fcntlret  fd:%x ret:%x(%d)\n",fd,ret,ret);
+	return ret;
 }
 
 unsigned long SYS_futex(unsigned long *a) {//TODO
@@ -556,6 +591,14 @@ unsigned long SYS_wait4(int pid, void *status, unsigned long option,
 		return 0;
 	}
 }
+unsigned long SYS_alarm(int seconds){
+	SYSCALL_DEBUG("alarm(TODO) seconds :%d \n", seconds);
+	return SYSCALL_SUCCESS;
+}
+unsigned long SYS_chroot(unsigned char *filename) {
+	SYSCALL_DEBUG("chroot(TODO) :%s \n", filename);
+	return SYSCALL_SUCCESS;
+}
 unsigned long SYS_chdir(unsigned char *filename) {
 	int ret;
 	struct file *fp;
@@ -590,7 +633,31 @@ unsigned long SYS_getcwd(unsigned char *buf, int len) {
 /*************************************
  * TODO : partially implemented calls
  * **********************************/
+int SYS_select(int nfds, int *readfds, int *writefds, int *exceptfds, struct timeval *timeout){
+	unsigned *p;
+	int i;
+	SYSCALL_DEBUG("select (TODO)  nfds:%x readfds:%x write:%x execpt:%x timeout:%d  \n", nfds, readfds,writefds,exceptfds,timeout);
 
+	if (readfds != 0 && timeout == 0) {
+		p = readfds;
+		for (i = 0; i < 32; i++) {
+			if (test_bit(i,p)) {
+				break;
+			}
+		}
+		if (i == 32)
+			return 0;
+		SYSCALL_DEBUG("select checking read fd :%d \n",i);
+		while (1) {
+			int ret = SYS_fs_read(i,0,0);
+			if (ret > 0) return 1;
+			sc_sleep(100);
+		}
+	}
+	SYSCALL_DEBUG("select readval :%x \n",*p);
+
+	return SYSCALL_SUCCESS;
+}
 unsigned long SYS_poll(struct pollfd *fds, int nfds, int timeout) {
 	int i,fd;
 	struct file *file;
@@ -606,7 +673,7 @@ unsigned long SYS_poll(struct pollfd *fds, int nfds, int timeout) {
 			fds[i].revents = POLLIN ;
 		}
 	}
-	return 0;
+	return SYSCALL_SUCCESS;
 }
 unsigned long SYS_setsockopt(int sockfd, int level, int optname,
 		const void *optval, int optlen) {
@@ -616,7 +683,7 @@ unsigned long SYS_setsockopt(int sockfd, int level, int optname,
 	{
 
 	}
-	return SYSCALL_FAIL;
+	return SYSCALL_SUCCESS;
 }
 
 unsigned long SYS_exit_group() {

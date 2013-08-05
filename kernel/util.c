@@ -83,6 +83,28 @@ void ut_memset(uint8_t *dest, uint8_t val, long len)
 	for ( i=len; i != 0; i--) *temp++ = val;
 	return ;
 }
+// Compare two strings. Should return -1 if
+// str1 < str2, 0 if they are equal or 1 otherwise.
+int ut_strncmp(unsigned char *str1,unsigned  char *str2, int n)
+{
+	int i = 0;
+	int failed = 0;
+	if (str1==0 || str2==0) return -1;
+	while(str1[i] != '\0' && str2[i] != '\0' && i<n)
+	{
+		if(str1[i] != str2[i])
+		{
+			failed = 1;
+			break;
+		}
+		i++;
+	}
+	// why did the loop exit?
+	if( (str1[i] == '\0' && str2[i] != '\0') || (str1[i] != '\0' && str2[i] == '\0') )
+		failed = 1;
+	if (failed == 1 && str1[i] =='\0') failed=2;
+	return failed;
+}
 
 // Compare two strings. Should return -1 if 
 // str1 < str2, 0 if they are equal or 1 otherwise.

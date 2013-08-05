@@ -54,7 +54,7 @@ clean:
 	make SOURCE_ROOT=$$PWD -C kernel clean
 	make SOURCE_ROOT=$$PWD -C drivers clean
 	make SOURCE_ROOT=$$PWD -C drivers/xen clean
-#	make SOURCE_ROOT=$$PWD -C drivers/lwip clean
+	make SOURCE_ROOT=$$PWD -C drivers/lwip clean
 	make SOURCE_ROOT=$$PWD -C drivers/hostshm clean
 	make SOURCE_ROOT=$$PWD -C drivers/virtio clean
 	make SOURCE_ROOT=$$PWD -C drivers/virtio/9p clean
@@ -64,8 +64,8 @@ clean:
 	make SOURCE_ROOT=$$PWD -C arch/$(ARCH_DIR)/smp clean
 	make SOURCE_ROOT=$$PWD -C mm clean
 	make SOURCE_ROOT=$$PWD -C mm/memleak clean
-	\rm bin/mod_file
 	\rm $(LWIP_OBJ)
+	\rm bin/mod_file
 
 LWC     := $(shell find /opt_src/lwip/src/ -type f -name '*.c')
 LWC     := $(filter-out %6.c %ip6_addr.c, $(LWC))

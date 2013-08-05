@@ -67,7 +67,7 @@ static int attach_virtio_9p_pci(device_t *pci_dev) {
 	DEBUG(" NEW Initializing.9P INPUT  VIRTIO PCI COMPLETED with driver ok :%x \n", vp_get_status(virtio_dev));
 	inb(virtio_dev->pci_ioaddr + VIRTIO_PCI_ISR);
 
-	ipc_register_waitqueue(&p9_waitq, "waitq_p9");
+	ipc_register_waitqueue(&p9_waitq, "waitq_p9",0);
 	p9_dev = virtio_dev;
 	p9_initFs();
 	return 1;
