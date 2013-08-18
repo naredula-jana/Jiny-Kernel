@@ -170,7 +170,7 @@ int init_networking();
 #define NETWORK_PROTOCOLSTACK 1
 #define NETWORK_DRIVER 2
 int registerNetworkHandler(int type, int (*callback)(unsigned char *buf, unsigned int len, void *private_data), void *private_data);
-int netif_rx(unsigned char *data, unsigned int len);
+int netif_rx(unsigned char *data, unsigned int len, unsigned char **replace_buf);
 int netif_tx(unsigned char *data, unsigned int len);
 /************************ socket layer interface ********/
 struct sockaddr {

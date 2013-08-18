@@ -13,7 +13,10 @@ int add_deviceClass(void *addr){
     parent = devClass->parent;
 
     if (parent ==0 ) return 0;
-    devClass->sibling = parent->children;
+    if (devClass != parent->children)
+    	devClass->sibling = parent->children;
+    else
+    	devClass->sibling = 0;
     parent->children = devClass;
     return 1;
 }

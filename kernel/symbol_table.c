@@ -19,17 +19,17 @@
 symb_table_t *g_symbol_table = 0;
 unsigned long g_total_symbols = 0;
 /**************************************
- * Subsytems: sc-schedule ,
- *            fs-vfs file system ,
- *            SYS-syscalls,
- *            ar-machineDepenedent,
- *            sock- network
- *            vm - virtual memory
- *            mem - memory
- *            ipc - sys,ipc ...  : ipc layer
- *            pc - page cache
- *            sysctl - Jcmd_,g_conf_
- *            ut - utilities
+ * Subsytems: sc    -schedule ,
+ *            fs    -vfs file system ,
+ *            SYS   -syscalls,
+ *            ar    -machineDepenedent,
+ *            sock  -network
+ *            vm    -virtual memory
+ *            mem   -memory
+ *            ipc   -sys,ipc ...  : ipc layer
+ *            pc    -page cache
+ *            sysctl-Jcmd_,g_conf_
+ *            ut    -utilities
  *
  *            lwip
  *

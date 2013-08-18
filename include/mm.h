@@ -22,8 +22,8 @@ typedef struct jcache_s jcache_t;
 #define JSLAB_FLAGS_DEBUG 0x10000
 #ifdef JINY_SLAB
 #define kmem_cache_t jcache_t
-#define mm_slab_cache_alloc jslab_alloc1
-#define mm_malloc jslab_alloc2
+#define mm_slab_cache_alloc jslab_alloc_from_cache
+#define mm_malloc jslab_alloc_from_predefined
 #define mm_slab_cache_free jslab_free1
 #define mm_free jslab_free2
 #define kmem_cache_create jslab_create_cache
@@ -125,8 +125,9 @@ typedef struct page {
 	unsigned long flags; /* atomic flags, some possibly updated asynchronously */
 
 	unsigned int age; /* youngest =1 or eldest =100 */
+	unsigned int large_page_size; /* used for large page or contegous pages */
 
-	struct inode *inode;
+	struct inode *inode; /* overloaded used by slab for large page implementataion */
 	uint64_t offset; /* offset in the inode */
 	struct list_head lru_link; /* LRU list: the page can be in freelist,active or inactive in of the list   */
 	unsigned char list_type; /* LRU list # is stored */
@@ -165,6 +166,7 @@ extern struct mm_struct *g_kernel_mm;
 #define PG_slab                  9
 #define PG_swap_cache           10
 #define PG_skip                 11
+#define PG_large_page           12
 #define PG_reserved             31
 
 #define PageReserved(page)      (test_bit(PG_reserved, &(page)->flags))
@@ -172,16 +174,18 @@ extern struct mm_struct *g_kernel_mm;
 #define PageSwapCache(page)     (test_bit(PG_swap_cache, &(page)->flags))
 #define PageDMA(page)           (test_bit(PG_DMA, &(page)->flags))
 #define PageSlab(page)           (test_bit(PG_slab, &(page)->flags))
+#define PageLargePage(page)           (test_bit(PG_large_page, &(page)->flags))
 #define PageDirty(page)      (test_bit(PG_dirty, &(page)->flags))
 
 #define PageSetSlab(page)	set_bit(PG_slab, &(page)->flags)
+#define PageSetLargePage(page)	set_bit(PG_large_page, &(page)->flags)
 #define PageSetDirty(page)      set_bit(PG_dirty, &(page)->flags)
 #define PageSetReferenced(page)      (set_bit(PG_referenced, &(page)->flags))
 
 #define PageClearReferenced(page)      (clear_bit(PG_referenced, &(page)->flags))
 #define PageClearDirty(page)    clear_bit(PG_dirty, &(page)->flags)
 #define PageClearSlab(page)	(clear_bit(PG_slab, &(page)->flags))
-
+#define PageClearLargePage(page)	(clear_bit(PG_large_page, &(page)->flags))
 
 static inline unsigned char *pcPageToPtr(struct page *p) {
 	unsigned char *addr;

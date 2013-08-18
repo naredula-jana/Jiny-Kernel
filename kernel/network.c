@@ -44,13 +44,13 @@ flow-3)  low_level_output -> netif_tx -> driver_callback-netdriver_xmit --- ( pr
 //#define DEBUG_ENABLE 1
 #include "common.h"
 
-#define MAX_QUEUE_LENGTH 300
+#define MAX_QUEUE_LENGTH 600
 struct queue_struct {
 	wait_queue_t waitq;
 	int producer, consumer;
 	struct {
 		unsigned char *buf;
-		unsigned int len;
+		unsigned int len; /* actual data length , not the buf lenegth, buf always constant length */
 	} data[MAX_QUEUE_LENGTH];
 	int stat_processed[MAX_CPUS];
 	int queue_len;
@@ -71,13 +71,27 @@ static struct net_handlers protocol_drivers[MAX_HANDLERS];
 int g_network_ip=0x0ad181b0; /* 10.209.129.176  */
 static int stat_from_driver = 0;
 static int stat_to_driver = 0;
-
-static int add_to_queue(unsigned char *buf, int len) {
+/***********************************************************************
+ *  1) for every buf is added will get back a replace buf
+ *  2) for every buf removed will given back the replace buf.
+ *  Using 1) and 2) techniques allocation and free  is completely avoided from driver to queue and vice versa.
+ *  the Cost is the queue should be prefilled with some buffers.
+ *
+ *    path: netif_rx -> add_to_queue -> netRx_BH
+ *
+ *
+ */
+static unsigned char *get_freebuf(){
+	/* size of buf is hardcoded to 4096, this is linked to network driverbuffer size */
+	return mm_getFreePages(0, 0);
+}
+static int add_to_queue(unsigned char *buf, int len, unsigned char **replace_outbuf) {
 	if (buf == 0 || len == 0)
 		return 0;
 	//ut_log("Recevied from  network and keeping in queue: len:%d  stat count:%d prod:%d cons:%d\n",len,stat_queue_len,queue.producer,queue.consumer);
-	if (queue.data[queue.producer].buf == 0) {
+	if (queue.data[queue.producer].len == 0) {
 		queue.data[queue.producer].len = len;
+		*replace_outbuf = queue.data[queue.producer].buf;
 		queue.data[queue.producer].buf = buf;
 		queue.producer++;
 		queue.queue_len++;
@@ -89,7 +103,7 @@ static int add_to_queue(unsigned char *buf, int len) {
 
 	return 0;
 }
-static int remove_from_queue(unsigned char **buf, unsigned int *len) {
+static int remove_from_queue(unsigned char **buf, unsigned int *len, unsigned char *replace_inbuf) {
 	if ((queue.data[queue.consumer].buf != 0)
 			&& (queue.data[queue.consumer].len != 0)) {
 		*buf = queue.data[queue.consumer].buf;
@@ -98,7 +112,7 @@ static int remove_from_queue(unsigned char **buf, unsigned int *len) {
 		//	ut_log("netrecv : receving from queue len:%d  prod:%d cons:%d\n",queue.data[queue.consumer].len,queue.producer,queue.consumer);
 
 		queue.data[queue.consumer].len = 0;
-		queue.data[queue.consumer].buf = 0;
+		queue.data[queue.consumer].buf = replace_inbuf;
 		queue.consumer++;
 		queue.queue_len--;
 		queue.stat_processed[getcpuid()]++;
@@ -114,12 +128,13 @@ static int netRx_BH(void *arg) {
 	unsigned char *data;
 	unsigned int len;
 	int qret;
+	unsigned char *replace_buf = get_freebuf();
 
 	while (1) {
 		ipc_waiton_waitqueue(&queue.waitq, 1000);
 
 		mutexLock(g_netBH_lock);
-		qret = remove_from_queue(&data, &len);
+		qret = remove_from_queue(&data, &len, replace_buf);
 		mutexUnLock(g_netBH_lock);
 
 		while ( qret == 1) {
@@ -131,10 +146,10 @@ static int netRx_BH(void *arg) {
 			if (ret == 0) {
 
 			}
-			mm_putFreePages(data, 0);
+			replace_buf = data;
 
 			mutexLock(g_netBH_lock);
-			qret = remove_from_queue(&data, &len);
+			qret = remove_from_queue(&data, &len, replace_buf);
 			mutexUnLock(g_netBH_lock);
 		}
 	}
@@ -155,18 +170,51 @@ int registerNetworkHandler(int type,
 	}
 	return 1;
 }
-int netif_rx(unsigned char *data, unsigned int len) {
-	if (add_to_queue(data, len) == 0 && data != 0 && len != 0) {
-		mm_putFreePages(data, 0); /* fail to queue, so the packet is getting dropped and freed  */
+
+int unregisterNetworkHandler(int type,
+		int (*callback)(unsigned char *buf, unsigned int len,
+				void *private_data), void *private_data) {
+	int i;
+	if (type == NETWORK_PROTOCOLSTACK) {
+		for (i = 0; i < count_protocol_drivers; i++) {
+			if (protocol_drivers[i].callback == callback) {
+				protocol_drivers[i].callback = 0;
+				protocol_drivers[count_protocol_drivers].private = 0;
+			}
+		}
+	} else {
+		for (i = 0; i < count_protocol_drivers; i++) {
+			if (net_drivers[i].callback == callback) {
+				net_drivers[i].callback = 0;
+				net_drivers[i].private = private_data;
+			}
+		}
+	}
+	return 1;
+}
+static int network_enabled=0;
+int netif_rx(unsigned char *data, unsigned int len, unsigned char **replace_buf) {
+	if (network_enabled==0){
+		*replace_buf = data;
+		return 0;
+	}
+	if (add_to_queue(data, len,replace_buf) == 0 && data != 0 && len != 0) {
+		*replace_buf = data; /* fail to queue, so the packet is getting dropped and freed  */
 	}else{
 		ipc_wakeup_waitqueue(&queue.waitq); /* wake all consumers , i.e all the netBH */
 	}
 	stat_from_driver++;
+	if (*replace_buf < 0x10000){ /* invalid address*/
+		BUG();
+	}
 	return 1;
 }
 int netif_tx(unsigned char *data, unsigned int len) {
 	int ret;
 
+	if (network_enabled==0){
+		return 0;
+	}
 	if (data == 0 || len == 0)
 		return 0;
 	stat_to_driver++;
@@ -181,26 +229,37 @@ int netif_tx(unsigned char *data, unsigned int len) {
 }
 int init_networking() {
 	unsigned long pid;
+	int i;
 
 	ut_memset((unsigned char *) &queue, 0, sizeof(struct queue_struct));
+	for (i=0; i<MAX_QUEUE_LENGTH; i++){
+		queue.data[i].buf = get_freebuf();
+		queue.data[i].len = 0; /* this represent actual data length */
+		if (queue.data[i].buf == 0){
+			BUG();
+		}
+	}
+
 	ipc_register_waitqueue(&queue.waitq, "netRx_BH",WAIT_QUEUE_WAKEUP_ONE);
 	g_netBH_lock = mutexCreate("mutex_netBH");
 	pid = sc_createKernelThread(netRx_BH, 0, (unsigned char *) "netRx_BH_1");
 	pid = sc_createKernelThread(netRx_BH, 0, (unsigned char *) "netRx_BH_2");
 	pid = sc_createKernelThread(netRx_BH, 0, (unsigned char *) "netRx_BH_3");
-//	sc_task_stick_to_cpu(pid, 0); /* TODO: currently all network related threads are sticked to cpu-o to avoid crash in tcp layer */
+	network_enabled = 1;
 	return 0;
 }
 /*******************************************************************************************
  Socket layer
  ********************************************************************************************/
 static struct Socket_API *socket_api = 0;
-static int socketLayerRegistered = 0;
 int register_to_socketLayer(struct Socket_API *api) {
 	if (api == 0)
 		return 0;
 	socket_api = api;
-	socketLayerRegistered = 1;
+	return 1;
+}
+int unregister_to_socketLayer() {
+	socket_api = 0;
 	return 1;
 }
 
@@ -210,10 +269,9 @@ int socket_close(struct file *file) {
 		fs_putInode(file->inode);
 		return 1;
 	}
-	if (socketLayerRegistered == 0)
+	if (socket_api == 0){
 		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
-	if (socket_api->close == 0)
-		return SYSCALL_FAIL;
+	}
 	if (file->inode->fs_private != 0){
 		ret = socket_api->close(file->inode->fs_private, file->inode->u.socket.sock_type);
 	}else{
@@ -226,10 +284,9 @@ int socket_close(struct file *file) {
 int socket_read(struct file *file, unsigned char *buff, unsigned long len) {
 	int ret;
 
-	if (socketLayerRegistered == 0)
-		return 0; /* TCP/IP sockets are not supported */
-	if (socket_api->read == 0)
-		return 0;
+	if (socket_api == 0){
+		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
+	}
 
 	if (buff==0){
 		return socket_api->check_data(file->inode->fs_private);
@@ -249,10 +306,9 @@ int socket_write(struct file *file, unsigned char *buff, unsigned long len) {
 	unsigned char *kbuf;
 	int klen;
 
-	if (socketLayerRegistered == 0)
-		return 0; /* TCP/IP sockets are not supported */
-	if (socket_api->write == 0)
-		return 0;
+	if (socket_api == 0){
+		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
+	}
 
 	klen = 3000;
 	kbuf = mm_malloc(klen, 0);
@@ -278,18 +334,15 @@ int SYS_socket(int family, int arg_type, int z) {
 	int ret=-1;
 	int type=arg_type;
 
-	if (socketLayerRegistered == 0)
-		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
 	SYSCALL_DEBUG("socket : family:%x type:%x arg3:%x\n", family, type, z);
+	if (socket_api == 0){
+		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
+	}
 
-//	sc_task_stick_to_cpu(g_current_task->pid, 0); /* TODO ; work around to make network stick to single CPU */
 	if (socket_api->open) {
 		conn = socket_api->open(type);
 		if (conn == 0){
-#if 0 //TODO : remove later this is only to accept new type of connections
-			ret = -2;
-			goto last;
-#endif
+
 		}
 	} else {
 		ret = -1;
@@ -316,7 +369,7 @@ last:
 	return ret;
 }
 static int sock_check(int sockfd){
-	if (socketLayerRegistered == 0 || socket_api == 0 || (sockfd<0 || sockfd>MAX_FDS)){
+	if (socket_api == 0 || (sockfd<0 || sockfd>MAX_FDS)){
 		SYSCALL_DEBUG("ERROR: socket CHECK1 FAILED fd :%x \n",sockfd);
 		return JFAIL;
 	}
@@ -329,8 +382,9 @@ static int sock_check(int sockfd){
 }
 int SYS_bind(int fd, struct sockaddr *addr, int len) {
 	int ret;
-	if (sock_check(fd) == JFAIL || addr == 0)
+	if (sock_check(fd) == JFAIL || addr == 0){
 		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
+	}
 	SYSCALL_DEBUG("Bind fd:%d ip:%x port:%x len:%d\n", fd, addr->addr, addr->sin_port, len);
 	if (socket_api->bind == 0)
 		return SYSCALL_FAIL;
@@ -353,11 +407,20 @@ int SYS_bind(int fd, struct sockaddr *addr, int len) {
 	return ret;
 }
 #define AF_INET         2       /* Internet IP Protocol         */
+static uint32_t net_htonl(uint32_t n)
+{
+  return ((n & 0xff) << 24) |
+    ((n & 0xff00) << 8) |
+    ((n & 0xff0000UL) >> 8) |
+    ((n & 0xff000000UL) >> 24);
+}
+
 int SYS_getsockname(int sockfd, struct sockaddr *addr, int *addrlen){
 	int ret=SYSCALL_SUCCESS;
 	SYSCALL_DEBUG("getsockname %d \n", sockfd);
-	if (sock_check(sockfd) == JFAIL || addr == 0)
+	if (sock_check(sockfd) == JFAIL || addr == 0){
 		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
+	}
 
 	struct file *file = g_current_task->mm->fs.filep[sockfd];
 	if (file == 0 || file->inode->u.socket.sock_type==0){
@@ -366,7 +429,7 @@ int SYS_getsockname(int sockfd, struct sockaddr *addr, int *addrlen){
 	}
 	addr->family = AF_INET;
 	addr->addr = file->inode->u.socket.local_addr ;
-	addr->addr = lwip_htonl(g_network_ip);
+	addr->addr = net_htonl(g_network_ip);
 	addr->sin_port = file->inode->u.socket.local_port;
 	//ret = socket_api->get_addr(file->inode->fs_private, addr);
 

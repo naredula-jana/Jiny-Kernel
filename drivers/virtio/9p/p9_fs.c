@@ -70,8 +70,8 @@ static int p9_open(uint32_t fid, unsigned char *filename, int flags, int arg_mod
 		}
 	}
 	if (i==MAX_P9_FILES) return JFAIL;
-	mode_b = arg_mode;
-	//mode_b = 2; /* every file is opened as RDWR with p9 filesystem, since the open file will use for all the files( read file, write file etc) in vfs */
+//	mode_b = arg_mode;
+	mode_b = 2; /*TODO: every file is opened as RDWR with p9 filesystem, since the open file will use for all the files(stat, read file, write file etc) in vfs */
 	if (flags & O_CREAT) {
 		client.type = P9_TYPE_TCREATE;
 		perm = 0x1ff; /* this is same as 777 */
@@ -358,7 +358,7 @@ static uint32_t p9_write(uint32_t fid, uint64_t offset, unsigned char *data, uin
 		ret = p9_read_rpc(&client, "d", &write_len);
 		if (client.recv_type != P9_TYPE_RWRITE) {
 			write_len = 0;
-			ut_log("ERROR  p9  Write fid:%d max_size:%d read_len:%d ret%d recvtype:%d \n",fid,data_len,write_len,ret,client.recv_type);
+			ut_log("ERROR  p9  Write fid:%d data_len:%d offset:%d ret%d recvtype:%d \n",fid,data_len,offset,ret,client.recv_type);
 		}
 	}
 
@@ -541,8 +541,16 @@ static int p9Fdatasync(struct inode *inodep) {
 	return 1;
 }
 static long p9Write(struct inode *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
+	long ret;
 	p9ClientInit();
-    return (long) p9Request(REQUEST_WRITE, inodep, offset, data, data_len, 0, 0);
+    ret = (long) p9Request(REQUEST_WRITE, inodep, offset, data, data_len, 0, 0);
+    if (ret > 0){
+    	inodep->stat_last_offset = offset;
+    	inodep->stat_out++;
+    }else{
+    	inodep->stat_err++;
+    }
+    return ret;
 }
 
 static long p9Read(struct inode *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {

@@ -137,6 +137,7 @@ struct inode {
 
 	union {
 		struct {
+			unsigned long open_mode;
 			uint64_t file_size; /* file length */
 			uint64_t inode_no;
 		}file;
@@ -148,6 +149,7 @@ struct inode {
 	}u;
 
 	int stat_out,stat_in,stat_err;
+	long stat_last_offset;
 
 	unsigned char filename[MAX_FILENAME];
 	struct list_head page_list[PAGELIST_HASH_SIZE];

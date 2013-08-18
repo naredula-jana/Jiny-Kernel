@@ -258,8 +258,9 @@ static struct inode *fs_getInode(char *arg_filename, int flags, int mode) {
 		struct fileStat stat;
 
 		inode_init(ret_inode, filename, vfs_fs);
+		ret_inode->u.file.open_mode = mode & 0x3;
 #if 1
-		ret = vfs_fs->open(ret_inode, flags, mode);
+		ret = vfs_fs->open(ret_inode, flags, ret_inode->u.file.open_mode);
 		if (ret == JFAIL) {
 			ret_inode->count.counter = 0;
 			if (fs_putInode(ret_inode) == 0) {
@@ -352,7 +353,7 @@ struct file *fs_open(unsigned char *filename, int flags, int mode) {
 		filep->type = REGULAR_FILE;
 	}
 
-	inodep = fs_getInode((char *) filep->filename, flags, mode);
+	inodep = fs_getInode((char *) filep->filename, mode, flags);
 	if (inodep == 0)
 		goto error;
 
@@ -393,7 +394,7 @@ unsigned long SYS_fs_open(char *filename, int mode, int flags) {
 		filep  = mm_slab_cache_alloc(g_slab_filep, 0);
 		filep->type = DEV_NULL_FILE;
 	}else{
-		filep = (struct file *) fs_open((unsigned char *) filename, mode, flags);
+		filep = (struct file *) fs_open((unsigned char *) filename, flags, mode);
 	}
 	total = g_current_task->mm->fs.total;
 	if (filep != 0 && total < MAX_FDS) {
@@ -551,6 +552,11 @@ int fs_write(struct file *filep, unsigned char *buff, unsigned long len) {
 		BUG();
 	}
 	if (filep->offset > (filep->inode->u.file.file_size)) return -1;
+#if 0
+	if (filep->inode->u.file.open_mode == O_RDONLY){
+		return -1;
+	}
+#endif
 	while (tmp_len < len) {
 		try_again:
 		page = pc_getInodePage(filep->inode, filep->offset);

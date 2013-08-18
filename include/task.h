@@ -80,14 +80,17 @@ typedef struct task_queue {
 struct task_struct {
 	volatile long state;    /* -1 unrunnable, 0 runnable, >0 stopped */
 	unsigned long flags;    /* per process flags, defined below */
-	unsigned long pending_signal;	
+	unsigned long pending_signals;	
 	int killed; /* some as send send a kill signal or self killed */
 	atomic_t count; /* usage count */
 
 	unsigned long pid,ppid;
 	unsigned char name[MAX_TASK_NAME+1];
-	int cpu;
+
+	int allocated_cpu;
+	int current_cpu;
 	int stick_to_cpu; /* by default run on any cpu */
+
 	int counter;
 	long sleep_ticks;
 	unsigned long cpu_contexts; /* every cpu context , it will be incremented */
@@ -129,6 +132,8 @@ struct cpu_state {
 	struct task_struct *current_task;
 	struct task_struct *dead_task;
 	struct task_struct *idle_task;
+	task_queue_t run_queue;
+	int run_queue_length;
 
 	unsigned char cpu_priority;
 	int active; /* only active cpu will pickup the tasks , otherwise they can only run idle threads */
@@ -138,8 +143,9 @@ struct cpu_state {
 
 	unsigned long stat_total_contexts;
 	unsigned long stat_nonidle_contexts;
-}; /* TODO : align to 64 */
-//}__aligned(64);
+} __attribute__ ((aligned (64))) ;
+
+
 struct cpu_state g_cpu_state[];
 #define is_kernelThread(task) (task->mm == g_kernel_mm)
 #define IPI_INTERRUPT 200

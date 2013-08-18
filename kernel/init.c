@@ -36,6 +36,7 @@ extern int init_modules(unsigned long arg1);
 extern int  init_log_file(unsigned long arg1);
 extern int init_jslab(unsigned long arg1);
 int init_kernel_vmaps(unsigned long arg1);
+void  init_code_readonly(unsigned long arg1);
 int init_kmemleak(unsigned long arg1);
 
 typedef struct {
@@ -67,6 +68,7 @@ static inittable_t inittable[] = {
 		{init_networking,0,       "networking"},
 #endif
 		{init_clock,0,       "clock"},
+		{init_code_readonly,0,       "Making code readonly"},
 		{init_symbol_table,0,       "symboltable"},
 		{init_devClasses,0,       "devicesclasses"},
 		{init_modules,0,       "modules"},
@@ -133,13 +135,8 @@ void idleTask_func();
    pointed by ADDR.  */
 void __stack_chk_fail(){
 }
-void idleTask_func() {
-	int k=0;
-
-	/* wait till initilization completed */
-	while(g_boot_completed==0);
-
-#if 1  /* TO make first 2M or code pages in to Readonly */
+void  init_code_readonly(unsigned long arg1){
+  /* TO make first 2M or code pages in to Readonly */
 	unsigned long *page_table;
 	static int init_readonly=0;
 	unsigned long intr_flags;
@@ -163,7 +160,14 @@ void idleTask_func() {
 	ar_flushTlbGlobal();
 	ut_log(" TLB flushed by cpu :%d \n",cpu);
 	spin_unlock_irqrestore(&g_global_lock, intr_flags);
-#endif
+	return;
+}
+void idleTask_func() {
+	int k=0;
+
+	/* wait till initilization completed */
+	while(g_boot_completed==0);
+	init_code_readonly(0);
 
 	ut_printf("Idle Thread Started cpuid: %d stack addrss:%x \n",getcpuid(),&k);
 	while (1) {

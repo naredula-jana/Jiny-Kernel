@@ -466,7 +466,7 @@ struct Socket_API lwip_socket_api;
  * lets us know it's OK to continue.int lwip_sock_read
  */
 extern int g_network_ip;
-int load_LwipTcpIpStack() {
+static int load_LwipTcpIpStack() {
 	//mac = 00:30:48:DB:5E:06
 	unsigned char mac[7] = { 0x00, 0x30, 0x48, 0xDB, 0x5E, 0x06, 0x0 };
 	struct netif *netif;
@@ -475,18 +475,17 @@ int load_LwipTcpIpStack() {
 	struct ip_addr gw = { 0 };
 	char *ip = NULL;
 	static int network_started = 0;
+	ut_printf("Before starting the LWIP load network_started: %x  address:%x \n",network_started,&network_started);
 	if (network_started != 0)
 		return 0;
 	network_started = 1;
-
-	DEBUG("LWIP: Waiting for network.\n");
+	ut_printf(" starting the LWIP load\n");
+	ut_log("LWIP Module: Waiting for network.\n");
 	tcpip_is_up.name = "sem_tcpip";
 	ipc_sem_new(&tcpip_is_up, 0 ); /* TODO : need to free the sem */
 
-	DEBUG(
-			"LWIP: IP %x netmask %x gateway %x.\n", ntohl(ipaddr.addr), ntohl(netmask.addr), ntohl(gw.addr));
-
-	DEBUG("LWIP: TCP/IP bringup begins.\n");
+	ut_log("	LWIP: IP %x netmask %x gateway %x.\n", ntohl(ipaddr.addr), ntohl(netmask.addr), ntohl(gw.addr));
+	ut_log("	LWIP: TCP/IP bringup begins.\n");
 
 	netif = mm_malloc(sizeof(struct netif), 0);
 
@@ -507,8 +506,8 @@ int load_LwipTcpIpStack() {
 		networking_set_addr(&ipaddr, &netmask, &gw);
 	}
 	registerNetworkHandler(NETWORK_PROTOCOLSTACK, lwip_netif_rx, NULL);
-	DEBUG("LWIP: Latest Network is ready with IP.\n");
-	start_webserver();
+	ut_log("	LWIP: Latest Network is ready with IP.\n");
+	//start_webserver();
 
 	lwip_socket_api.read = lwip_sock_read;
 	lwip_socket_api.read_from = lwip_sock_read_from;
@@ -522,17 +521,18 @@ int load_LwipTcpIpStack() {
 	lwip_socket_api.get_addr = lwip_get_addr;
 	lwip_socket_api.check_data = lwip_sock_check;
 	register_to_socketLayer(&lwip_socket_api);
+	ut_printf("Lwip Initialization completed \n");
 	return 1;
 }
-
-
-/* Shut down the network */
-int unload_LwipTcpIpStack() {
-	return 1;
+static void init_module(){
+	load_LwipTcpIpStack();
 }
-int stat_LwipTcpIpStack() {
-	return 0;
+static void clean_module(){
+	unregisterNetworkHandler(NETWORK_PROTOCOLSTACK, lwip_netif_rx, NULL);
+	unregister_to_socketLayer();
+	ut_printf("inside the clean module func\n");
 }
 
-DEFINE_MODULE(LwipTcpIpStack, root, load_LwipTcpIpStack, unload_LwipTcpIpStack, stat_LwipTcpIpStack);
+
+//DEFINE_MODULE(LwipTcpIpStack, root, load_LwipTcpIpStack, unload_LwipTcpIpStack, stat_LwipTcpIpStack);
 

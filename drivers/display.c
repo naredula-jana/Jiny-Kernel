@@ -135,18 +135,35 @@ static spinlock_t putchar_lock = SPIN_LOCK_UNLOCKED("putchar");
 
 static int init_log_file_done=0;
 static struct file *log_fp;
+static int dmesg_file_index=0;
 
 int init_log_file(unsigned long unused){
 	int ret=0;
 
 	if (init_log_file_done == 0) {
-		log_fp = (struct file *) fs_open((unsigned char *) "jiny.log", O_APPEND, 0);
+		log_fp = (struct file *) fs_open((unsigned char *) "jiny.log", O_APPEND, O_RDWR);
 		if (log_fp == 0)
 			return 0;
 		init_log_file_done = 1;
 		ret=fs_write(log_fp, g_dmesg, g_dmesg_index);
+		dmesg_file_index = g_dmesg_index;
 	}
 	return ret;
+}
+int Jcmd_logflush(unsigned char *arg1) {
+	int ret = 0;
+	if (init_log_file_done == 1) {
+		int len = g_dmesg_index - dmesg_file_index; // TODO : need to take wrap arounds where len becomes negative
+
+		if (len > 0) {
+			ret = fs_write(log_fp, &g_dmesg[dmesg_file_index], len);
+			dmesg_file_index = g_dmesg_index;
+		}
+		ut_log("flushed to log :%d  ret:%d len:%d\n", dmesg_file_index, ret, len);
+	} else {
+		ut_log("Failed to flush to log\n");
+	}
+	return 1;
 }
 static void log_putchar(unsigned char c){
 	unsigned long flags;

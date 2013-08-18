@@ -146,7 +146,7 @@ int ar_archSetUserFS(unsigned long addr) /* TODO need to reimplement using LDT *
 	return 1;
 }
 int ar_updateCpuState(struct task_struct *next, struct task_struct *prev) {
-	int cpuid = next->cpu;
+	int cpuid = next->current_cpu;
 	if (cpuid != getcpuid()) {
 		BUG();
 	}
@@ -234,15 +234,15 @@ static void init_idt() {
 	asm volatile("sti");
 }
 #ifdef SMP
-void init_smp_gdt(int cpu) {
+void init_smp_gdt(int current_cpu) {
 #if 0
-	ut_memcpy(&gdt_entries[cpu][0], &gdt_entries[0][0], sizeof(gdt_entries[cpu]));
-	gdt_ptr[cpu].limit = (sizeof(gdt_entries) / MAX_CPUS)-1;
-	gdt_ptr[cpu].base = (uint64_t)&gdt_entries[cpu][0];
-	gdtr_load(&gdt_ptr[cpu]);
+	ut_memcpy(&gdt_entries[current_cpu][0], &gdt_entries[0][0], sizeof(gdt_entries[current_cpu]));
+	gdt_ptr[current_cpu].limit = (sizeof(gdt_entries) / MAX_CPUS)-1;
+	gdt_ptr[current_cpu].base = (uint64_t)&gdt_entries[current_cpu][0];
+	gdtr_load(&gdt_ptr[current_cpu]);
 	tr_load(GDT_SEL(TSS_DESCR));
 #else
-	init_gdt(cpu);
+	init_gdt(current_cpu);
 #endif
 
 	idtr_load(&idt_ptr);

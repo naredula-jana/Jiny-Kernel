@@ -37,7 +37,6 @@ static int addBufToQueue(struct virtqueue *vq, unsigned char *buf, unsigned long
 
 	if (buf == 0) {
 		buf = (unsigned char *) mm_getFreePages(0, 0);
-		ut_memset(buf, 0, sizeof(struct virtio_net_hdr));
 #if 1
 		if (test_virtio_nob == 1) { /* TODO: this is introduced to burn some cpu cycles, otherwise throughput drops drastically  from 1.6G to 500M , with vhost this is not a issue*/
 			unsigned long buf1 = mm_getFreePages(MEM_CLEAR, 0);
@@ -46,6 +45,9 @@ static int addBufToQueue(struct virtqueue *vq, unsigned char *buf, unsigned long
 #endif
 		len = 4096; /* page size */
 	}
+	ut_memset(buf, 0, sizeof(struct virtio_net_hdr));
+
+
 	sg[0].page_link = (unsigned long) buf;
 	sg[0].length = sizeof(struct virtio_net_hdr);
 	sg[0].offset = 0;
@@ -155,9 +157,10 @@ static void virtio_net_interrupt(registers_t regs, void *private_data) {
 	device_t *pci_dev = (device_t *) private_data;
 	virtio_dev_t *dev;
 	unsigned long flags;
+	unsigned char *replace_buf;
 	int i;
 
-	spin_lock_irqsave(&virtionet_lock, flags);
+//	spin_lock_irqsave(&virtionet_lock, flags);
 
 	dev = (virtio_dev_t *) pci_dev->private_data;
 	if (dev->msi == 0)
@@ -167,15 +170,16 @@ static void virtio_net_interrupt(registers_t regs, void *private_data) {
 	for (i = 0; i < 10; i++) {
 		addr = (unsigned char *) virtio_removeFromQueue(dev->vq[0],
 				(unsigned int *) &len);
-		if (addr != 0)
-			netif_rx(addr, len);
-		if (addr == 0)
+		if (addr != 0){
+			netif_rx(addr, len, &replace_buf);
+			addBufToQueue(dev->vq[0], replace_buf, 4096);
+			virtio_queue_kick(dev->vq[0]);
+		}else{
 			break;
-		addBufToQueue(dev->vq[0], 0, 4096);
-		virtio_queue_kick(dev->vq[0]);
+		}
 	}
 
-	spin_unlock_irqrestore(&virtionet_lock, flags);
+//	spin_unlock_irqrestore(&virtionet_lock, flags);
 }
 
 int virtio_send_errors = 0;

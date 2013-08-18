@@ -521,7 +521,7 @@ unsigned long SYS_futex(unsigned long *a) {//TODO
 }
 
 unsigned long SYS_sysctl(struct __sysctl_args *args) {
-	SYSCALL_DEBUG("sysctl  args:%x \n", args);
+	SYSCALL_DEBUG("sysctl  args:%x: \n", args);
 	int *name;
 	unsigned char *carg[10];
 	int i;
@@ -529,6 +529,7 @@ unsigned long SYS_sysctl(struct __sysctl_args *args) {
 	if (args == 0)
 		return -1; /* -1 is error */
 
+	//ut_printf(" cmd :%s: ")
 	name = args->name[0];
 //	ut_printf(" sysctl name.. addr:%x: %x: %x: nlen:%d: \n", name[0], name[1], name[2], args->nlen);
 

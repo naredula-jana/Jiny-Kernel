@@ -14,7 +14,7 @@
 
 
 /********************* Data Structures *****************************/
-#define NR_MEM_LISTS 6
+#define NR_MEM_LISTS 8
 #define memory_head(x) ((struct page *)(x))
 
 /* The start of this MUST match the start of "struct page" */

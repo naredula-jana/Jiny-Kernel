@@ -119,13 +119,34 @@ static inline void * _getpages(jcache_t *cachep) {
 
 static void free_obj(unsigned long addr) {
 	struct page *page = virt_to_page(addr & PAGE_MASK);
-	jslab_t *slabp = (jslab_t *) (addr & SLAB_MASK);
-	jcache_t *cachep = slabp->cachep;
+	jcache_t *cachep;
+	jslab_t *slabp;
+
+	assert(PageSlab(page));
+	if (PageLargePage(page)) {/* large page object */
+		int i;
+
+		cachep = (jcache_t *) page->inode; /* TODO : overloaded , need to rename from inode to private */
+		assert(cachep);
+		for (i = 0; i < (1 << cachep->page_order); i++) {
+			struct page *p = virt_to_page((addr+(i*PAGE_SIZE)) & PAGE_MASK);
+			PageClearLargePage(p);
+			PageClearSlab(p);
+			assert(p->inode);
+			p->inode = 0;
+		}
+		mm_putFreePages(addr, cachep->page_order);
+		cachep->stat_frees++;
+		cachep->stat_total_objs--;
+		return;
+	}
+
+	slabp = (jslab_t *) (addr & SLAB_MASK);
+	cachep = slabp->cachep;
 	int index;
 	unsigned long taddr=0;
 	unsigned long intr_flags;
 
-	assert(PageSlab(page));
 	sanity_check();
 
 	index = (addr - (addr & PAGE_MASK) - sizeof(jslab_t)) / cachep->obj_size; //TODO : need to SLAB_MASK for multipage
@@ -155,6 +176,21 @@ static void * _alloc_obj(jcache_t *cachep) {
 	int index;
 	unsigned long addr=0;
 	unsigned long taddr=0;
+
+	if(cachep->obj_size >= PAGE_SIZE){ /* large page object */
+		int i;
+		addr = (unsigned long) mm_getFreePages(0, cachep->page_order);
+		if (addr == 0) return 0;
+		for (i = 0; i < (1 << cachep->page_order); i++) {
+			struct page *p = virt_to_page((addr+(i*PAGE_SIZE)) & PAGE_MASK);
+			PageSetLargePage(p);
+			PageSetSlab(p);
+			p->inode = cachep;
+		}
+		cachep->stat_allocs++;
+		cachep->stat_total_objs++;
+		return addr;
+	}
 
 	if (list_empty(&(cachep->partial_list))) {
 		_getpages(cachep);
@@ -191,15 +227,29 @@ static void * _alloc_obj(jcache_t *cachep) {
 	cachep->stat_allocs++;
 	return (void *)addr;
 }
+static int log_n(int n){
+	int ret=0;
+	while (n>0){
+		n=n/2;
+		ret++;
+	}
+	if (ret > 0) ret=ret -1;
+	return ret;
+}
 static int create_jcache(jcache_t *cachep, const char *name, int obj_size,unsigned long flags) {
 	int max_obj_space;
 
 	if (cachep == 0)  return JFAIL;
-	max_obj_space = (PAGE_SIZE - sizeof(jslab_t));
-	cachep->page_order = 0; //TODO : currently only one page can be used
-	if (obj_size > max_obj_space){
-		assert(0);
-		return JFAIL;
+	if (obj_size >= PAGE_SIZE) {
+		max_obj_space = obj_size;
+		cachep->page_order = log_n(obj_size >> PAGE_SHIFT) ;
+	} else {
+		max_obj_space = (PAGE_SIZE - sizeof(jslab_t));
+		cachep->page_order = 0; //TODO : currently only one page can be used
+		if (obj_size > max_obj_space) {
+			assert(0);
+			return JFAIL;
+		}
 	}
 	cachep->name = name;
 	cachep->obj_size = obj_size;
@@ -227,8 +277,8 @@ static int create_jcache(jcache_t *cachep, const char *name, int obj_size,unsign
 
 /****************************************** standard/predefined caches ************/
 
-#define MAX_PREDEFINED_CACHES 15
-int cache_sizes[] = { 32, 64, 128, 256, 512, 1024, 2048,3700, 0 };
+#define MAX_PREDEFINED_CACHES 25
+int cache_sizes[] = { 32, 64, 128, 256, 512, 1024, 2048,3700, PAGE_SIZE, PAGE_SIZE*2, PAGE_SIZE*4, PAGE_SIZE*8, PAGE_SIZE*16, PAGE_SIZE*32, PAGE_SIZE*64, PAGE_SIZE*128, PAGE_SIZE*256, PAGE_SIZE*512, PAGE_SIZE*1024, 0 };
 jcache_t predefined_caches[MAX_PREDEFINED_CACHES];
 int init_jslab(unsigned long arg1) {
 	int i,ret;
@@ -254,7 +304,7 @@ int init_jslab(unsigned long arg1) {
 	return 0;
 }
 /************************************** API *************************************************************************************/
-void *  jslab_alloc1(jcache_t *cachep, int flags){
+void *  jslab_alloc_from_cache(jcache_t *cachep, int flags){
 	void * ret;
 	unsigned long intr_flags;
 
@@ -266,7 +316,7 @@ void *  jslab_alloc1(jcache_t *cachep, int flags){
 
 	return ret;
 }
-void * jslab_alloc2(size_t obj_size, int flags) {
+void * jslab_alloc_from_predefined(size_t obj_size, int flags) {
 	jcache_t *cachep = NULL;
 	void *ret;
 	int i;
@@ -307,7 +357,7 @@ jslab_create_cache (const char *name, size_t size, size_t offset,
 	jcache_t *cachep;
 	int ret;
 
-	cachep = (jcache_t *)jslab_alloc2(sizeof(jcache_t),0);
+	cachep = (jcache_t *)jslab_alloc_from_predefined(sizeof(jcache_t),0);
 	assert(cachep!=0);
 	ret = create_jcache(cachep, name, size, flags);
 	if (ret == JFAIL) {
@@ -342,7 +392,6 @@ static int vmalloc_initiated=0;
 static int vblock_size=0x200000;
 int init_jslab_vmalloc(){
 	int i;
-
 
 	int total_blocks = g_vmalloc_size/vblock_size;
 	for (i=0; i<MAX_VBLOCKS ; i++){
@@ -392,6 +441,7 @@ void vfree(unsigned long addr){
 	int i;
 
 	if (vmalloc_initiated ==0) return;
+	if (addr==0) return;
 	int total_blocks = g_vmalloc_size/vblock_size;
 	for (i=0; i<MAX_VBLOCKS && i<total_blocks; i++){
 		if (vblocks[i].vaddr == addr){
@@ -425,7 +475,7 @@ int Jcmd_jslabmalloc(unsigned char *arg1, unsigned char *arg2) {
 	}
 	type=ut_atoi(arg1);
 
-	addr = (unsigned long)jslab_alloc1(&test_cache,0);
+	addr = (unsigned long)jslab_alloc_from_cache(&test_cache,0);
 	ut_printf("New addr :%x \n", addr);
 	if (type==1){
 		unsigned char *p=(unsigned char *)addr;
@@ -452,8 +502,8 @@ int Jcmd_jslab(unsigned char *arg1, unsigned char *arg2) {
 			ut_printf("***");
 		}
 #endif
-		ut_printf("%s %d objs/pages:%d/%d allocs/free:%d/%d\n", cachep->name, cachep->obj_size,
-				cachep->stat_total_objs, cachep->stat_total_pages,cachep->stat_allocs,cachep->stat_frees);
+		ut_printf("%s %d objs/pages:%d/%d allocs/free:%d/%d order:%x\n", cachep->name, cachep->obj_size,
+				cachep->stat_total_objs, cachep->stat_total_pages,cachep->stat_allocs,cachep->stat_frees,cachep->page_order);
 	}
 	return 1;
 }

@@ -50,7 +50,6 @@ static tokenise(char *p, symb_table_t *t) {
 			p[i] = '\0';
 			if (k == 0) {
 				t->address = ut_atoi(p);
-//printf(" %s : %x \n",p,t->address);
 			} else if (k == 1) {
 				if (q[0] == 'T') {
 					t->type = TYPE_GTEXT;
@@ -66,6 +65,7 @@ static tokenise(char *p, symb_table_t *t) {
 			} else if (k == 3) {
 				snprintf(t->file_lineno, MAX_FILELEN, "%s", q);
 			}
+printf(" %s %s : %x \n",p,t->name,t->address);
 			k++;
 			q = p + i + 1;
 			if (k > 3)

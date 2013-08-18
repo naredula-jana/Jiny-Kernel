@@ -149,32 +149,55 @@ static int debug_trace(unsigned char *arg1, unsigned char *arg2) {
 	return 1;
 }
 /******************************************************************/
-void *test_lock;
-int start_test=0;
-static void mutex_thr(){
-
-	int i,j,k;
-
-	while(start_test==0);
-	for (i=0; i<20000; i++){
-		mutexLock(test_lock);
-		j=1;
-		for (k=0; k<100; k++){
-			j=j*100;
-		}
-		mutexUnLock(test_lock);
+#if 0
+#include "/opt_src/Jiny-Kernel/drivers/lwip/arch/sys_arch.h"
+sys_mbox_t mbox;
+int g_conf_start_test=0;
+int total_messages = 1000000;
+int prod_cpu=0;
+int cons_cpu=0;
+static void mutex_prod() {
+	unsigned long ts;
+	int i;
+	while (g_conf_start_test == 0)
+		;
+	ts=g_jiffies;
+	prod_cpu = g_current_task->allocated_cpu ;
+	for (i = 1; i < total_messages; i++) {
+		sys_mbox_post(&mbox, i + 100);
 	}
+	//ut_printf("Completed sending %d messages in %d \n",total_messages,(g_jiffies-ts));
+	SYS_sc_exit(22);
+}
+static void mutex_cons(){
+	unsigned long ts;
+	int i;
+	unsigned long msg;
+	while(g_conf_start_test==0);
+
+	ts=g_jiffies;
+	prod_cpu = g_current_task->allocated_cpu ;
+	for (i = 1; i < total_messages; i++) {
+		while(sys_arch_mbox_fetch(&mbox, &msg,100)!=0);
+	}
+	ut_printf("Completed CONSUM %d messages in %d  cpus:%d:%d\n",total_messages,(g_jiffies-ts),prod_cpu,cons_cpu);
 	SYS_sc_exit(22);
 }
 void Jcmd_mutextest(){
 	int ret;
-	test_lock = mutexCreate("mutex_testlock");
-	ret = sc_createKernelThread(mutex_thr, 0, (unsigned char *)"mutex_test-1");
-	ret = sc_createKernelThread(mutex_thr, 0, (unsigned char *)"mutex_test-2");
-	ret = sc_createKernelThread(mutex_thr, 0, (unsigned char *)"mutex_test-3");
-start_test=1;
+	static int init=0;
+	if (init==0){
+		sys_mbox_new(&mbox,2);
+		init =1;
+	}
+	g_conf_start_test=0;
+	ret = sc_createKernelThread(mutex_prod, 0, (unsigned char *)"mbox_prod");
+	ret = sc_createKernelThread(mutex_cons, 0, (unsigned char *)"mbox_cons");
+
+//start_test=1;
 	return ;
 }
+#endif
 /**********************************************************************/
 static int sh_pci(unsigned char *arg1, unsigned char *arg2) {
 	//device_t dev;

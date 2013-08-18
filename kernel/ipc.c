@@ -286,6 +286,8 @@ last:
 int ipc_wakeup_waitqueue(wait_queue_t *waitqueue ) {
 	int ret = 0;
 	struct task_struct *task;
+	int wakeup_cpu=-1;
+	int active_cpu=0;
 
 	unsigned long flags;
 	if (waitqueue == NULL)
@@ -296,12 +298,14 @@ int ipc_wakeup_waitqueue(wait_queue_t *waitqueue ) {
 		task = list_entry(waitqueue->head.next, struct task_struct, wait_queue);
 		if (_del_from_waitqueue(waitqueue, task) == 1) {
 			task->state = TASK_RUNNING;
-			if (task->run_queue.next == 0 )
-				sc_add_to_runqueue(task);
-			else
+			if (task->run_queue.next == 0 ){
+				active_cpu = _sc_task_assign_to_cpu(task);
+			}else{
 				BUG();
+			}
 			ret++;
 			if (waitqueue->flags & WAIT_QUEUE_WAKEUP_ONE){
+				wakeup_cpu = task->allocated_cpu;
 				goto gotit ;
 			}
 		}
@@ -309,10 +313,21 @@ int ipc_wakeup_waitqueue(wait_queue_t *waitqueue ) {
 gotit:
 	spin_unlock_irqrestore(&g_global_lock, flags);
 
-	if (ret>0){/* wakeup any other idle and active cpus to serve the runqueue  */
+	if ((waitqueue->flags & WAIT_QUEUE_WAKEUP_ONE) && active_cpu == 1){
+		return 1;
+	}
+	if (ret>0){/* wakeup relevent cpus  */
 		int i;
+
+		/* wake up specific cpu */
+		if ((wakeup_cpu != -1) && g_cpu_state[wakeup_cpu].current_task==g_cpu_state[wakeup_cpu].idle_task){
+			apic_send_ipi_vector(wakeup_cpu,IPI_INTERRUPT);
+			return ret;
+		}
+
+		/* wakeup all cpus */
 		for (i=0; i<getmaxcpus(); i++){
-			if (g_current_task->cpu != i && g_cpu_state[i].current_task==g_cpu_state[i].idle_task && g_cpu_state[i].active){
+			if (g_current_task->current_cpu != i && g_cpu_state[i].current_task==g_cpu_state[i].idle_task && g_cpu_state[i].active){
 				apic_send_ipi_vector(i,IPI_INTERRUPT);
 				return ret;
 			}
@@ -331,9 +346,8 @@ int ipc_waiton_waitqueue(wait_queue_t *waitqueue, unsigned long ticks) {
 	g_current_task->stats.wait_start_tick_no = g_jiffies ;
 	waitqueue->stat_wait_count++;
 	_add_to_waitqueue(waitqueue, g_current_task, ticks);
+	flags=_schedule(flags);
 	spin_unlock_irqrestore(&g_global_lock, flags);
-
-	sc_schedule();
 
 	g_current_task->status_info[0] = 0;
 	waitqueue->stat_wait_ticks = waitqueue->stat_wait_ticks + (g_jiffies-g_current_task->stats.wait_start_tick_no);
@@ -360,7 +374,7 @@ void ipc_check_waitqueues() {
 				_del_from_waitqueue(wait_queues[i], task);
 				task->state = TASK_RUNNING;
 				if (task->run_queue.next == 0)
-					sc_add_to_runqueue(task);
+					_sc_task_assign_to_cpu(task);
 				else
 					BUG();
 			}
