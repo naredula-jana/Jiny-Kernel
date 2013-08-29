@@ -35,10 +35,12 @@ k call_graph
 #define	DEBUG_RET			0xc3
 #define	DEBUG_LEAVE		0xc9
 
+
 enum {
 	BRKPOINT_START=1,
 	BRKPOINT_RET=2
 };
+
 
 static int total_breakpoints=0;
 #define MAX_CALLOUTS 40
@@ -61,7 +63,7 @@ struct breakpoint_struct {
 };
 static breakpoint_t breakpoint_table[MAX_BREAKPOINTS];
 static breakpoint_t *brk_hash_table[MAX_BRK_HASH];
-static spinlock_t breakpoint_lock = SPIN_LOCK_UNLOCKED("breakpoint");
+static spinlock_t breakpoint_lock = SPIN_LOCK_UNLOCKED((uint8_t *)"breakpoint");
 #define MAX_BREAK_STARTINGPOINTS 100
 static int startpoint_count=0;
 static int breakpoint_starts[MAX_BREAK_STARTINGPOINTS];
@@ -225,7 +227,7 @@ static int breakpoint_delete(int sym_index) {
 		if (breakpoint_table[i].symb_index == sym_index) {
 
 			spin_lock_irqsave(&breakpoint_lock, flags);
-			instr = breakpoint_table[i].addr;
+			instr = (uint8_t *)breakpoint_table[i].addr;
 			if (instr[0] == DEBUG_PATCHVAL){
 				if (breakpoint_table[i].type == BRKPOINT_START){
 					instr[0] = DEBUG_PUSHL_EBP;
@@ -297,7 +299,7 @@ static int breakpoint_create(int sym_index){
 	int  k;
 	int ret=0;
 
-	instr = g_symbol_table[sym_index].address;
+	instr = (uint8_t *)g_symbol_table[sym_index].address;
 	if (instr[0] != DEBUG_PUSHL_EBP) {
 		return ret;
 	}
@@ -310,7 +312,7 @@ static int breakpoint_create(int sym_index){
 	}
 
 	/* patchup the returns: there should only one return  */
-	for (k = 0; (instr + k) < g_symbol_table[sym_index + 1].address; k++) {
+	for (k = 0; (instr + k) < (uint8_t *)g_symbol_table[sym_index + 1].address; k++) {
 		if (instr[k] == DEBUG_LEAVE && instr[k + 1] == DEBUG_RET) {
 			if (breakpoint_add(sym_index, (unsigned long) instr+k, BRKPOINT_RET) == 1) {
 				instr[k] = DEBUG_PATCHVAL;
@@ -350,7 +352,7 @@ int init_breakpoints(){
 	ar_registerInterrupt(3, breakpoint_fault, "trapFault", NULL);
 	return 0;
 }
-static unsigned char *discard_subsystems[]={"ut_",0};
+static  char *discard_subsystems[]={"ut_",0};
 static int check_discard_subsystems(unsigned char *p){
 	int j;
 
@@ -361,7 +363,7 @@ static int check_discard_subsystems(unsigned char *p){
 	}
 	return 0;
 }
-static unsigned char *subsystems[]={"SYS_","fs_",0};
+static  char *subsystems[]={"SYS_","fs_",0};
 static void print_clusters() {
 	int i, j,k,l;
 	for (j = 0; subsystems[j] != 0; j++) {
@@ -370,7 +372,7 @@ static void print_clusters() {
 				"subgraph cluster_0 {\n style=filled;\n color=lightgrey; \n node [style=filled,color=white];\n rankdir = TB;\n");
 
 		for (i = 0; i < g_total_symbols; i++) {
-			if (ut_strcmp(subsystems[j], g_symbol_table[i].subsystem_type) != 0)
+			if (ut_strcmp(subsystems[j], (uint8_t *)g_symbol_table[i].subsystem_type) != 0)
 				continue;
 			for (k = 0; k < MAX_BREAKPOINTS; k++) {
 				if (breakpoint_table[k].call_out_count == 0)
@@ -402,11 +404,11 @@ int Jcmd_call_stats(unsigned char *arg1,unsigned char * arg2){
 	}subsystem_stats[30];
 	int count=0;
 
-	if (ut_strcmp(arg1,"help") ==0){
+	if (ut_strcmp(arg1,(uint8_t *)"help") ==0){
 		ut_printf("call_stats <graph>  -- print graphs\n call_stats -- print subsystem stats \n");
 	}
 	k=0;
-	if (ut_strcmp(arg1,"graph") !=0){
+	if (ut_strcmp(arg1,(uint8_t *)"graph") !=0){
 		for (i = 0; i < MAX_BREAKPOINTS; i++) {
 			int found = 0;
 			if (breakpoint_table[i].addr == 0
@@ -460,13 +462,13 @@ int Jcmd_call_stats(unsigned char *arg1,unsigned char * arg2){
 			if (check_discard_subsystems(g_symbol_table[sindex].subsystem_type)==1) continue;
 
 			if (g_symbol_table[sindex].subsystem_type != 0
-					&& ut_strcmp(g_symbol_table[sindex].subsystem_type, "SYS_") == 0) {
+					&& ut_strcmp(g_symbol_table[sindex].subsystem_type, (uint8_t *)"SYS_") == 0) {
 				ut_printf(" %s [style=filled, color=green];\n", g_symbol_table[sindex].name);
 			} else if (g_symbol_table[sindex].subsystem_type != 0
-					&& ut_strcmp(g_symbol_table[sindex].subsystem_type, "p9_") == 0) {
+					&& ut_strcmp(g_symbol_table[sindex].subsystem_type, (uint8_t *)"p9_") == 0) {
 				ut_printf(" %s [style=filled, color=red];\n", g_symbol_table[sindex].name);
 			} else if (g_symbol_table[sindex].subsystem_type != 0
-					&& ut_strcmp(g_symbol_table[sindex].subsystem_type, "fs_") == 0) {
+					&& ut_strcmp(g_symbol_table[sindex].subsystem_type, (uint8_t *)"fs_") == 0) {
 				ut_printf(" %s [style=filled, color=orange];\n", g_symbol_table[sindex].name);
 			}
 
@@ -484,16 +486,16 @@ int Jcmd_call_stats(unsigned char *arg1,unsigned char * arg2){
 	return 1;
 }
 // "/task.c:","/kernel.c:",
-static unsigned char *discard_patterns[]={".s:",".S:",".h:","/x86_64/","/debug.c:","serial.c:","/display.c:",0};
+static char *discard_patterns[]={".s:",".S:",".h:","/x86_64/","/debug.c:","serial.c:","/display.c:",0};
 int Jcmd_break_install(unsigned char *arg_name, unsigned char *arg2) {
 	int i, k;
 	int ret = 0;
 
-	if (ut_strcmp(arg_name,"help") ==0){
+	if (ut_strcmp(arg_name,(uint8_t *)"help") ==0){
 		ut_printf("break_install all : install break points all locations\n break_install delete : delete all existed break points \n");
 		return 1;
 	}
-	if (arg_name!=0 && ut_strcmp(arg_name, "delete") == 0) {
+	if (arg_name!=0 && ut_strcmp(arg_name, (uint8_t *)"delete") == 0) {
 		for (i = 3; i < g_total_symbols; i++) {
 			if (g_symbol_table[i].type != SYMBOL_GTEXT && g_symbol_table[i].type != SYMBOL_LTEXT) continue;
 			ret = ret + breakpoint_delete(i);
@@ -505,7 +507,7 @@ int Jcmd_break_install(unsigned char *arg_name, unsigned char *arg2) {
 		if (g_symbol_table[i].type != SYMBOL_GTEXT)
 			continue;
 		if (g_symbol_table[i].file_lineno[0]=='\0') continue;
-		if (ut_strcmp(arg_name, "all") == 0) {
+		if (ut_strcmp(arg_name, (uint8_t *)"all") == 0) {
 			int k = 0;
 			while (discard_patterns[k] != 0) {
 				if (ut_strstr((unsigned char *) g_symbol_table[i].file_lineno,discard_patterns[k]) != 0)
@@ -517,7 +519,7 @@ int Jcmd_break_install(unsigned char *arg_name, unsigned char *arg2) {
 				continue;
 		}
 
-		if (arg2 != 0 && ut_strcmp(arg2, "delete") == 0) {
+		if (arg2 != 0 && ut_strcmp(arg2, (uint8_t *)"delete") == 0) {
 			ret = ret + breakpoint_delete(i);
 		} else {
 			ret = ret + breakpoint_create(i);
@@ -529,10 +531,11 @@ int Jcmd_break_install(unsigned char *arg_name, unsigned char *arg2) {
 	ut_printf(" Total breaks :%s: ret=%d  index=%d  cpuid:%d\n", arg_name, ret, i,getcpuid());
 	return ret;
 }
+
 int Jcmd_trace_start(unsigned char *arg_name){
 	int i,j;
 
-	if (ut_strcmp(arg_name,"help") ==0){
+	if (ut_strcmp(arg_name,(uint8_t *)"help") ==0){
 		ut_printf("break_start <starting_fucntion>: break starts from this function \nbreak_start  <empty> : Removing all starting functions\n");
 		return 0;
 	}

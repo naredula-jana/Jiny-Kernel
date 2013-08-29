@@ -172,8 +172,6 @@ int virtio_createQueue(uint16_t index, virtio_dev_t *dev, int qType) {
 	DEBUG("Creating PAGES order: %d size:%d  \n",get_order(size),size);
 	//vring_size(num);
 	queue = mm_getFreePages(MEM_CLEAR, get_order(size));
-	/*if (info == 0)
-		return 0;*/
 
 	/* activate the queue */
 	outl(dev->pci_ioaddr + VIRTIO_PCI_QUEUE_PFN, __pa(queue) >> VIRTIO_PCI_QUEUE_ADDR_SHIFT);

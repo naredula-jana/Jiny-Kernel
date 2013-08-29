@@ -88,7 +88,7 @@ struct vm_area_struct {
 	struct mm_struct *vm_mm; /* The address space we belong to. */
 	unsigned long vm_start; /* Our start address within vm_mm. */
 	unsigned long vm_end; /* The first byte after our end address  within vm_mm. */
-	const unsigned char *name;
+	const char *name;
 
 	/* linked list of VM areas per task, sorted by address */
 	struct vm_area_struct *vm_next;

@@ -21,8 +21,9 @@ struct __sysctl_args {
 	size_t newlen; /* size of new value */
 };
 
+
 unsigned long SYS_sysctl(struct __sysctl_args *args );
-unsigned long SYS_getdents(unsigned int fd, unsigned char *user_buf,int size);
+unsigned long SYS_getdents(unsigned int fd, uint8_t *user_buf,int size);
 unsigned long SYS_fork();
 int g_conf_syscall_debug=0;
 long SYS_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags,unsigned long fd, unsigned long off);
@@ -65,7 +66,7 @@ unsigned long SYS_fs_stat(const char *path, struct stat *buf);
 
 int SYS_fs_dup2(int fd1, int fd2);
 int SYS_fs_dup(int fd1);
-unsigned long SYS_fs_readlink(unsigned char *path, char *buf, int bufsiz);
+unsigned long SYS_fs_readlink(uint8_t *path, char *buf, int bufsiz);
 int SYS_getsockname(int sockfd, struct sockaddr *addr, int *addrlen);
 
 unsigned long SYS_rt_sigaction();
@@ -106,9 +107,9 @@ unsigned long SYS_poll(struct pollfd *fds, int nfds, int timeout);
 /*************************************************************************/
 
 unsigned long SYS_nanosleep(const struct timespec *req, struct timespec *rem);
-unsigned long SYS_getcwd(unsigned char *buf, int len);
-unsigned long SYS_chroot(unsigned char *filename);
-unsigned long SYS_chdir(unsigned char *filename);
+unsigned long SYS_getcwd(uint8_t *buf, int len);
+unsigned long SYS_chroot(uint8_t *filename);
+unsigned long SYS_chdir(uint8_t *filename);
 unsigned long SYS_fs_fcntl(int fd, int cmd, int args);
 unsigned long SYS_setsockopt(int sockfd, int level, int optname,
 		const void *optval, int optlen);
@@ -181,26 +182,26 @@ syscalltable_t syscalltable[] = {
 struct utsname
   {
     /* Name of the implementation of the operating system.  */
-    unsigned char sysname[UTSNAME_LENGTH];
+    uint8_t sysname[UTSNAME_LENGTH];
     /* Name of this node on the network.  */
-    unsigned char nodename[UTSNAME_LENGTH];
+    uint8_t nodename[UTSNAME_LENGTH];
     /* Current release level of this implementation.  */
-    unsigned char release[UTSNAME_LENGTH];
+    uint8_t release[UTSNAME_LENGTH];
     /* Current version level of this release.  */
-    unsigned char version[UTSNAME_LENGTH];
+    uint8_t version[UTSNAME_LENGTH];
     /* Name of the hardware type the system is running on.  */
-    unsigned char machine[UTSNAME_LENGTH];
+    uint8_t machine[UTSNAME_LENGTH];
   };
 
 struct utsname g_utsname;
 //uname({sysname="Linux", nodename="njana-desk", release="2.6.35-22-generic", version="#33-Ubuntu SMP Sun Sep 19 20:32:27 UTC 2010", machine="x86_64"}) = 0
 static int init_utsname() {
-	ut_strcpy(g_utsname.sysname, (unsigned char *) "Linux");
-	ut_strcpy(g_utsname.nodename, (unsigned char *) "njana-desk");
-	ut_strcpy(g_utsname.release, (unsigned char *) "2.6.35-22-generic");
+	ut_strcpy(g_utsname.sysname, (uint8_t *) "Linux");
+	ut_strcpy(g_utsname.nodename, (uint8_t *) "njana-desk");
+	ut_strcpy(g_utsname.release, (uint8_t *) "2.6.35-22-generic");
 	ut_strcpy(g_utsname.version,
-			(unsigned char *) "#33-Ubuntu SMP Sun Sep 19 20:32:27 UTC 2010");
-	ut_strcpy(g_utsname.machine, (unsigned char *) "x86_64");
+			(uint8_t *) "#33-Ubuntu SMP Sun Sep 19 20:32:27 UTC 2010");
+	ut_strcpy(g_utsname.machine, (uint8_t *) "x86_64");
 	return 1;
 }
 static int init_uts_done = 0;
@@ -210,7 +211,7 @@ unsigned long SYS_uname(unsigned long *args) {
 	if (init_uts_done == 0)
 		init_utsname();
 //	ut_printf(" Inside uname : %s \n",g_utsname.sysname);
-	ut_memcpy((unsigned char *) args, (unsigned char *) &g_utsname,
+	ut_memcpy((uint8_t *) args, (uint8_t *) &g_utsname,
 			sizeof(g_utsname));
 	return 0;
 }
@@ -327,7 +328,7 @@ unsigned long SYS_ioctl(int d, int request, unsigned long *addr) {//TODO
 	}
 	return SYSCALL_SUCCESS;
 }
-unsigned long SYS_fs_readlink(unsigned char *path, char *buf, int bufsiz) {
+unsigned long SYS_fs_readlink(uint8_t *path, char *buf, int bufsiz) {
 	struct file *fp;
 	int ret = -2; /* no such file exists */
 
@@ -337,7 +338,7 @@ unsigned long SYS_fs_readlink(unsigned char *path, char *buf, int bufsiz) {
 		return ret;
 
 	buf[0] = '\0';
-	fp = (struct file *) fs_open((unsigned char *) path, 0, 0);
+	fp = (struct file *) fs_open((uint8_t *) path, 0, 0);
 	if (fp == 0) {
 		return ret;
 	}
@@ -355,7 +356,7 @@ static int copy_stat_touser(struct file *fp,struct stat *buf){
 	int ret;
 
 	ret = fs_stat(fp, &fstat);
-	ut_memset((unsigned char *) buf, 0, sizeof(struct stat));
+	ut_memset((uint8_t *) buf, 0, sizeof(struct stat));
 	if (fp->type == IN_FILE || fp->type == OUT_FILE) {
 
 	} else {
@@ -400,7 +401,7 @@ unsigned long SYS_fs_stat(const char *path, struct stat *buf) {
 	if (path == 0 || buf == 0)
 		return ret;
 
-	fp = (struct file *) fs_open((unsigned char *) path, 0, 0);
+	fp = (struct file *) fs_open((uint8_t *) path, 0, 0);
 	if (fp == 0) {
 		return ret;
 	}
@@ -441,13 +442,9 @@ struct linux_dirent {
 	char d_name[]; /* Filename (null-terminated) */
 };
 
-unsigned long SYS_getdents(unsigned int fd, unsigned char *user_buf, int size) {
+unsigned long SYS_getdents(unsigned int fd, uint8_t *user_buf, int size) {
 	struct file *fp = 0;
-	unsigned char *temp_buf = 0;
-	struct linux_dirent *dirp;
-	int i, tret, len;
 	int ret = -1;
-	struct dirEntry *dir_ent;
 
 	SYSCALL_DEBUG("getidents fd:%d userbuf:%x size:%d \n", fd, user_buf, size);
 	fp = fd_to_file(fd);
@@ -457,7 +454,6 @@ unsigned long SYS_getdents(unsigned int fd, unsigned char *user_buf, int size) {
 	}
 
 	ret = fs_readdir(fp, user_buf, size,&fp->offset);
-last:
 	return ret;
 }
 /*********************** end of getdents *************************/
@@ -523,7 +519,7 @@ unsigned long SYS_futex(unsigned long *a) {//TODO
 unsigned long SYS_sysctl(struct __sysctl_args *args) {
 	SYSCALL_DEBUG("sysctl  args:%x: \n", args);
 	int *name;
-	unsigned char *carg[10];
+	uint8_t *carg[10];
 	int i;
 
 	if (args == 0)
@@ -539,11 +535,11 @@ unsigned long SYS_sysctl(struct __sysctl_args *args) {
 	for (i = 0; i < 3; i++) {
 		carg[i] = 0;
 		if (name[i] != 0) {
-			carg[i] = name[i];
+			carg[i] = name[i];  // TODO: currently this is a non-standard name[i] should get integer not strings
 		}
 	}
-	if (carg[0] != 0 && ut_strcmp(carg[0], "set") == 0) {
-		ut_symbol_execute(SYMBOL_CONF, carg[1], carg[2]);
+	if (carg[0] != 0 && ut_strcmp(carg[0], (uint8_t *)"set") == 0) {
+		ut_symbol_execute(SYMBOL_CONF, carg[1], carg[2],0);
 
 	} else {
 		if (carg[0] == 0) {
@@ -596,19 +592,19 @@ unsigned long SYS_alarm(int seconds){
 	SYSCALL_DEBUG("alarm(TODO) seconds :%d \n", seconds);
 	return SYSCALL_SUCCESS;
 }
-unsigned long SYS_chroot(unsigned char *filename) {
+unsigned long SYS_chroot(uint8_t *filename) {
 	SYSCALL_DEBUG("chroot(TODO) :%s \n", filename);
 	return SYSCALL_SUCCESS;
 }
-unsigned long SYS_chdir(unsigned char *filename) {
+unsigned long SYS_chdir(uint8_t *filename) {
 	int ret;
 	struct file *fp;
 	SYSCALL_DEBUG("chdir  buf:%s \n", filename);
 	if (filename == 0)
 		return SYSCALL_FAIL;
-	fp = (struct file *) fs_open((unsigned char *) filename, 0, 0);
+	fp = (struct file *) fs_open((uint8_t *) filename, 0, 0);
 	if (fp == 0) {
-		if (ut_strcmp(filename, "/") != 0)
+		if (ut_strcmp(filename, (uint8_t *)"/") != 0)
 			return SYSCALL_FAIL;
 	} else {
 		fs_close(fp);
@@ -619,7 +615,7 @@ unsigned long SYS_chdir(unsigned char *filename) {
 	return SYSCALL_SUCCESS;
 }
 
-unsigned long SYS_getcwd(unsigned char *buf, int len) {
+unsigned long SYS_getcwd(uint8_t *buf, int len) {
 	int ret = SYSCALL_FAIL;
 
 	SYSCALL_DEBUG("getcwd  buf:%x len:%d  \n", buf, len);
@@ -635,7 +631,7 @@ unsigned long SYS_getcwd(unsigned char *buf, int len) {
  * TODO : partially implemented calls
  * **********************************/
 int SYS_select(int nfds, int *readfds, int *writefds, int *exceptfds, struct timeval *timeout){
-	unsigned *p;
+	int *p;
 	int i;
 	SYSCALL_DEBUG("select (TODO)  nfds:%x readfds:%x write:%x execpt:%x timeout:%d  \n", nfds, readfds,writefds,exceptfds,timeout);
 
@@ -694,8 +690,9 @@ unsigned long SYS_exit_group() {
 }
 /****************************************** syscall debug *********************************************/
 
+
 static int strace_progress_id=0;
-static unsigned char strace_thread_name[100]="";
+static uint8_t strace_thread_name[100]="";
 static unsigned int strace_syscall_id=0;
 int strace_wait() {
 	int ret = JFAIL;
@@ -710,7 +707,7 @@ int strace_wait() {
 	g_current_task->status_info[0] = 0;
 	return ret;
 }
-void Jcmd_strace(unsigned char *arg1,unsigned char *arg2){
+void Jcmd_strace(uint8_t *arg1,uint8_t *arg2){
 	int sid;
 
 	if (arg1==NULL ){

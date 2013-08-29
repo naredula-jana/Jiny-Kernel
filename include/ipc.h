@@ -49,7 +49,7 @@ struct semaphore {
 	spinlock_t sem_lock; /* this is to protect count */
 	wait_queue_t wait_queue;
 	int valid_entry;
-	unsigned char *name;
+	char *name;
 	unsigned long owner_pid; /* pid that is owning */
 	int recursive_count;
 
@@ -61,7 +61,7 @@ struct semaphore {
 
 typedef struct semaphore sys_sem_t;
 
-void *ipc_mutex_create(unsigned char *name);
+void *ipc_mutex_create(char *name);
 int ipc_mutex_lock(void *p, int line);
 int ipc_mutex_unlock(void *p, int line);
 int ipc_mutex_destroy(void *p);
@@ -70,8 +70,6 @@ signed char ipc_sem_new(sys_sem_t *sem,uint8_t count);
 void ipc_sem_free(sys_sem_t *sem);
 void ipc_sem_signal(sys_sem_t *sem);
 uint32_t ipc_sem_wait(sys_sem_t *sem, unsigned int timeout);
-
-
 
 #define mutexCreate ipc_mutex_create
 #define mutexLock(p)      do { ipc_mutex_lock((void *)p,__LINE__); } while (0)

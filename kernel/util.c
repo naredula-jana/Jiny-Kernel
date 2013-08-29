@@ -12,12 +12,8 @@
 #include <stdarg.h>
 #include "common.h"
 #include "interface.h"
-//extern unsigned long stack;
-//extern addr_t end;
 
-
-
-unsigned long ut_atol(unsigned char *p)
+unsigned long ut_atol(uint8_t *p)
 {
 	unsigned long a;
 	int i,m,k;
@@ -34,7 +30,7 @@ unsigned long ut_atol(unsigned char *p)
 	}
 	return a;
 }
-unsigned int ut_atoi(unsigned char *p)
+unsigned int ut_atoi(uint8_t *p)
 {         
 	unsigned int a;
 	int i,m,k;
@@ -85,7 +81,7 @@ void ut_memset(uint8_t *dest, uint8_t val, long len)
 }
 // Compare two strings. Should return -1 if
 // str1 < str2, 0 if they are equal or 1 otherwise.
-int ut_strncmp(unsigned char *str1,unsigned  char *str2, int n)
+int ut_strncmp(uint8_t *str1,unsigned  char *str2, int n)
 {
 	int i = 0;
 	int failed = 0;
@@ -108,7 +104,7 @@ int ut_strncmp(unsigned char *str1,unsigned  char *str2, int n)
 
 // Compare two strings. Should return -1 if 
 // str1 < str2, 0 if they are equal or 1 otherwise.
-int ut_strcmp(unsigned char *str1,unsigned  char *str2)
+int ut_strcmp(uint8_t *str1,unsigned  char *str2)
 {
 	int i = 0;
 	int failed = 0;
@@ -129,7 +125,7 @@ int ut_strcmp(unsigned char *str1,unsigned  char *str2)
 	return failed;
 }
 
-int ut_memcmp(unsigned char *m1, unsigned char *m2,int len)
+int ut_memcmp(uint8_t *m1, uint8_t *m2,int len)
 {
 	int i = 0;
 	while(i<len && m1[i] == m2[i])
@@ -142,7 +138,7 @@ int ut_memcmp(unsigned char *m1, unsigned char *m2,int len)
 
 // Copy the NULL-terminated string src into dest, and
 // return dest.
-unsigned char *ut_strcpy(unsigned char *dest, const unsigned char *src)
+uint8_t *ut_strcpy(uint8_t *dest, const uint8_t *src)
 {
 	if (src==0 ) return dest;
 	do
@@ -153,7 +149,7 @@ unsigned char *ut_strcpy(unsigned char *dest, const unsigned char *src)
 	*dest=0;
 	return dest;
 }
-unsigned char *ut_strncpy(unsigned char *dest, const unsigned char *src,int n)
+uint8_t *ut_strncpy(uint8_t *dest, const uint8_t *src,int n)
 {
 	int len=0;
         do
@@ -165,7 +161,7 @@ unsigned char *ut_strncpy(unsigned char *dest, const unsigned char *src,int n)
         *dest=0;
         return dest;
 }
-unsigned char *ut_strstr(unsigned char *s1,unsigned char *s2)
+uint8_t *ut_strstr(uint8_t *s1,uint8_t *s2)
 {
     int i,j;
     if (s1==0 || s2==0) return 0;
@@ -185,7 +181,7 @@ unsigned char *ut_strstr(unsigned char *s1,unsigned char *s2)
 }
 // Concatenate the NULL-terminated string src onto
 // the end of dest, and return dest.
-unsigned char *ut_strcat(unsigned char *dest, const unsigned char *src)
+uint8_t *ut_strcat(uint8_t *dest, const uint8_t *src)
 {
 	while (*dest != 0)
 	{
@@ -201,9 +197,9 @@ unsigned char *ut_strcat(unsigned char *dest, const unsigned char *src)
 	return dest;
 }
 
-int ut_strlen(const unsigned char * s)
+int ut_strlen(const uint8_t * s)
 {
-	const unsigned char *sc;
+	const uint8_t *sc;
 
 	for (sc = s; *sc != '\0'; ++sc)
 		/* nothing */;
@@ -216,7 +212,7 @@ int ut_strlen(const unsigned char * s)
 #define LEFT    16              /* left justified */
 #define SPECIAL 32              /* 0x */
 #define LARGE   64              /* use 'ABCDEF' instead of 'abcdef' */
-static int skip_atoi(const char **s)
+static int skip_atoi(const uint8_t **s)
 {
     int i=0;
 
@@ -224,12 +220,12 @@ static int skip_atoi(const char **s)
         i = i*10 + *((*s)++) - '0';
     return i;
 }
-static char * number(char * buf, char * end, long long num, int base, int size, int precision, int type)
+static char * number(uint8_t * buf, uint8_t * end, long long num, int base, int size, int precision, int type)
 {
     char c,sign,tmp[66];
-    const char *digits;
-    const char small_digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
-    const char large_digits[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const uint8_t *digits;
+    const uint8_t small_digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+    const uint8_t large_digits[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     int i;
 
     digits = (type & LARGE) ? large_digits : small_digits;
@@ -321,13 +317,12 @@ static char * number(char * buf, char * end, long long num, int base, int size, 
     }
     return buf;
 }
-static int vsnprintf(char *buf, size_t size, const char *fmt, va_list args)
-{
+static int vsnprintf(uint8_t *buf, size_t size, const uint8_t *fmt, va_list args){
     int len;
     unsigned long long num;
     int i, base;
-    char *str, *end, c;
-    const char *s;
+    uint8_t *str, *end, c;
+    const uint8_t *s;
 
     int flags;          /* flags to number() */
 
@@ -422,7 +417,7 @@ static int vsnprintf(char *buf, size_t size, const char *fmt, va_list args)
                     ++str;
                 }
             }
-            c = (unsigned char) va_arg(args, int);
+            c = (uint8_t) va_arg(args, int);
             if (str <= end)
                 *str = c;
             ++str;
@@ -439,7 +434,7 @@ static int vsnprintf(char *buf, size_t size, const char *fmt, va_list args)
                 s = "<NULL>";
             //len = strlen(s, precision);
 
-            len = ut_strlen((unsigned char *)s);
+            len = ut_strlen((uint8_t *)s);
 
             if (!(flags & LEFT)) {
                 while (len < field_width--) {
@@ -559,7 +554,7 @@ static int vsnprintf(char *buf, size_t size, const char *fmt, va_list args)
  * @fmt: The format string to use
  * @...: Arguments for the format string
  */
-int ut_snprintf(char * buf, size_t size, const char *fmt, ...)
+int ut_snprintf(uint8_t * buf, size_t size, const char *fmt, ...)
 {
     va_list args;
     int i;
@@ -579,7 +574,7 @@ int ut_snprintf(char * buf, size_t size, const char *fmt, ...)
  * Call this function if you are already dealing with a va_list.
  * You probably want sprintf instead.
  */
-static int vsprintf(char *buf, const char *fmt, va_list args)
+static int vsprintf(char *buf, const uint8_t *fmt, va_list args)
 {
     return vsnprintf(buf, 0xFFFFFFFFUL, fmt, args);
 }
@@ -591,7 +586,7 @@ static int vsprintf(char *buf, const char *fmt, va_list args)
  * @fmt: The format string to use
  * @...: Arguments for the format string
  */
-int ut_sprintf(char * buf, const char *fmt, ...)
+int ut_sprintf(uint8_t * buf, const uint8_t *fmt, ...)
 {
     va_list args;
     int i;
@@ -611,7 +606,7 @@ int ut_sprintf(char * buf, const char *fmt, ...)
 #define _X      0x40    /* hex digit */
 #define _SP     0x80    /* hard space (0x20) */
 
-unsigned char _ctype[] = {
+uint8_t _ctype[] = {
 _C,_C,_C,_C,_C,_C,_C,_C,                        /* 0-7 */
 _C,_C|_S,_C|_S,_C|_S,_C|_S,_C|_S,_C,_C,         /* 8-15 */
 _C,_C,_C,_C,_C,_C,_C,_C,                        /* 16-23 */
@@ -637,7 +632,7 @@ _U,_U,_U,_U,_U,_U,_U,_P,_U,_U,_U,_U,_U,_U,_U,_L,       /* 208-223 */
 _L,_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,       /* 224-239 */
 _L,_L,_L,_L,_L,_L,_L,_P,_L,_L,_L,_L,_L,_L,_L,_L};      /* 240-255 */
 
-#define __ismask(x) (_ctype[(int)(unsigned char)(x)])
+#define __ismask(x) (_ctype[(int)(uint8_t)(x)])
 
 #define isalnum(c)      ((__ismask(c)&(_U|_L|_D)) != 0)
 #define isalpha(c)      ((__ismask(c)&(_U|_L)) != 0)
@@ -650,14 +645,14 @@ _L,_L,_L,_L,_L,_L,_L,_P,_L,_L,_L,_L,_L,_L,_L,_L};      /* 240-255 */
 #define isspace(c)      ((__ismask(c)&(_S)) != 0)
 #define isupper(c)      ((__ismask(c)&(_U)) != 0)
 #define isxdigit(c)     ((__ismask(c)&(_D|_X)) != 0)
-static inline unsigned char __tolower(unsigned char c)
+static inline uint8_t __tolower(uint8_t c)
 {
         if (isupper(c))
                 c -= 'A'-'a';
         return c;
 }
 
-static inline unsigned char __toupper(unsigned char c)
+static inline uint8_t __toupper(uint8_t c)
 {
         if (islower(c))
                 c -= 'a'-'A';
@@ -667,7 +662,7 @@ static inline unsigned char __toupper(unsigned char c)
 #define tolower(c) __tolower(c)
 #define toupper(c) __toupper(c)
 
-unsigned long simple_strtoul(const char *cp,char **endp,unsigned int base)
+unsigned long simple_strtoul(const uint8_t *cp,uint8_t **endp,unsigned int base)
 {
     unsigned long result = 0,value;
 
@@ -691,13 +686,13 @@ unsigned long simple_strtoul(const char *cp,char **endp,unsigned int base)
         *endp = (char *)cp;
     return result;
 }
-static long simple_strtol(const char *cp,char **endp,unsigned int base)
+static long simple_strtol(const uint8_t *cp,uint8_t **endp,unsigned int base)
 {
     if(*cp=='-')
         return -simple_strtoul(cp+1,endp,base);
     return simple_strtoul(cp,endp,base);
 }
-static unsigned long long simple_strtoull(const char *cp,char **endp,unsigned int base)
+static unsigned long long simple_strtoull(const uint8_t *cp,uint8_t **endp,unsigned int base)
 {
     unsigned long long result = 0,value;
 
@@ -722,7 +717,7 @@ static unsigned long long simple_strtoull(const char *cp,char **endp,unsigned in
     return result;
 }
 
-static long long simple_strtoll(const char *cp,char **endp,unsigned int base)
+static long long simple_strtoll(const uint8_t *cp,uint8_t **endp,unsigned int base)
 {
     if(*cp=='-')
         return -simple_strtoull(cp+1,endp,base);
@@ -731,9 +726,9 @@ static long long simple_strtoll(const char *cp,char **endp,unsigned int base)
 
 
 #define INT_MAX         0x7fffffff
-int vsscanf(const char * buf, const char * fmt, va_list args)
+int vsscanf(const uint8_t * buf, const uint8_t * fmt, va_list args)
 {
-        const char *str = buf;
+        const uint8_t *str = buf;
         char *next;
         char digit;
         int num = 0;
@@ -883,8 +878,8 @@ int vsscanf(const char * buf, const char * fmt, va_list args)
                                   signed char *s = (signed char *) va_arg(args,signed char *);
                                   *s = (signed char) simple_strtol(str,&next,base);
                           } else {
-                                  unsigned char *s = (unsigned char *) va_arg(args, unsigned char *);
-                                  *s = (unsigned char) simple_strtoul(str, &next, base);
+                                  uint8_t *s = (uint8_t *) va_arg(args, uint8_t *);
+                                  *s = (uint8_t) simple_strtoul(str, &next, base);
                           }
                           break;
                   case 'h':
@@ -946,7 +941,7 @@ int vsscanf(const char * buf, const char * fmt, va_list args)
  * @fmt:        formatting of buffer
  * @...:        resulting arguments
  */
-int sscanf(const char * buf, const char * fmt, ...)
+int sscanf(const uint8_t * buf, const uint8_t * fmt, ...)
 {
         va_list args;
         int i;

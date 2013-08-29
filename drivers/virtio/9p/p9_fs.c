@@ -192,18 +192,17 @@ static int p9_get_dir_entries(p9_client_t *client, struct dirEntry *dir_ent, int
 	unsigned char *recv;
 	p9_fcall_t pdu;
 	int i, ret=0;
-	int total_len=0;
+	int len,total_len=0;
 	uint32_t total_len1,total_len2;
 	unsigned char p9_ret,type1, type2;
 	uint32_t dummyd;
 	uint16_t tag;
-	uint64_t inode, dummyi;
-	int prev_len,len=0;
+	uint64_t dummyi;
 	struct dirEntry  *dir_p=dir_ent;
 	unsigned char *p;
 
 	recv = client->pkt_buf + 1024;
-	p9_pdu_init(&pdu, 0, 0, client, recv, client->pkt_len-1024);
+	p9_pdu_init(&pdu, 0, 0, client, recv, (unsigned long)client->pkt_len-1024);
 	ret = p9_pdu_read_v(&pdu, "dbw", &total_len1, &p9_ret, &tag);
 	ret = p9_pdu_read_v(&pdu, "d", &total_len2);
 	//ut_printf("New readir len1: %d len2:%d tag:%d type:%d  maxbuflen:%d\n",total_len1,total_len2,tag,p9_ret,client->pkt_len-1024);
@@ -211,7 +210,7 @@ static int p9_get_dir_entries(p9_client_t *client, struct dirEntry *dir_ent, int
 	if (p9_ret != P9_TYPE_RREADDIR){ /* cannot read directory entries */
 		return 0;
 	}
-	p=dir_p;
+	p=(unsigned char *)dir_p;
 	for (i = 0; (total_len<max_len) && ret==0; i++) {
 		ret = p9_pdu_read_v(&pdu, "bdqqbs", &type1, &dummyd, &dir_p->inode_no, &dummyi,
 				&type2, dir_p->filename);
@@ -228,7 +227,7 @@ static int p9_get_dir_entries(p9_client_t *client, struct dirEntry *dir_ent, int
 		p = p + dir_p->d_reclen;
 		total_len = total_len + dir_p->d_reclen;
 		dir_p->next_offset = p;
-		dir_p=p;
+		dir_p=(struct dirEntry  *)p;
 	}
 
 	if (offset){
@@ -243,8 +242,6 @@ static uint32_t p9_readdir(uint32_t fid, unsigned char *data,
 		uint32_t data_len, int *offset) {
 	unsigned long addr;
 	int ret;
-	uint32_t read_len = 0;
-	unsigned char type;
 	struct fileStat fstat, *stat;
 	stat = &fstat;
 
@@ -264,7 +261,6 @@ static uint32_t p9_read(uint32_t fid, uint64_t offset, unsigned char *data,
 	unsigned long addr;
 	int ret;
 	uint32_t read_len = 0;
-	int i;
 
 	if (file_type==SYM_LINK_FILE){
 		client.type = P9_TYPE_TREADLINK;
@@ -324,7 +320,7 @@ typedef struct V9fsIattr
 #endif
 static uint32_t p9_setattr(uint32_t fid, uint64_t size) {
 	unsigned long addr;
-	int i, ret = JFAIL;
+	int ret = JFAIL;
 
 	client.type = P9_TYPE_TSETATTR;
 	client.user_data = 0;
@@ -423,7 +419,7 @@ static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
 	unsigned long addr;
 	int ret=JFAIL;
 	uint32_t dummyd;
-	uint16_t dummyw1,dummyw2,dummyw3;
+	uint16_t dummyw3;
 	unsigned char type;
 	uint32_t ret_zero,stat_size;
 
@@ -501,7 +497,7 @@ static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, u
 		fid = inode->fs_private;
 		ret = p9_remove(fid);
 	} else if (type == REQUEST_STAT) {
-		struct fileStat *fp = data;
+		struct fileStat *fp = (struct fileStat *)data;
 		fid = inode->fs_private;
 		ret = p9_stat(fid, fp);
 		if (ret==JSUCCESS){

@@ -334,31 +334,45 @@ last:
 	spin_unlock_irqrestore(&free_area_lock, flags);
 	return ret_address;
 }
-
-extern unsigned long g_multiboot_mod_addr;
-extern unsigned long g_multiboot_mod_len;
+extern unsigned long g_multiboot_mod2_addr;
+extern unsigned long g_multiboot_mod2_len;
+extern unsigned long g_multiboot_mod1_addr;
+extern unsigned long g_multiboot_mod1_len;
 extern unsigned long g_phy_mem_size;
 extern unsigned long _start,_end;
+extern addr_t end; // end of code and data region
 int init_memory(unsigned long arg1)
 {
 	unsigned long virt_start_addr,virt_end_addr;
 	unsigned long pc_size;
+	unsigned long current_end_memused=&end; /* till this point memory is used*/
 
 	unsigned long phy_end_addr = g_phy_mem_size;
 	ut_log("	Initializing memory phy_endaddr : %x  \n",phy_end_addr);
-	virt_start_addr=initialise_paging( phy_end_addr);
-	virt_end_addr=(unsigned long)__va(phy_end_addr);
-	ut_log("	After Paging initialized start_addr: %x endaddr: %x \n",virt_start_addr,virt_end_addr);
+	if (g_multiboot_mod1_addr > 0){
+		current_end_memused = __va(g_multiboot_mod1_addr+g_multiboot_mod1_len);
+	}
 
-	if (g_multiboot_mod_len > 0) /* symbol file  reside at the end of memory, it can acess only when page table is initialised */
-	{
+	virt_start_addr=initialise_paging( phy_end_addr, current_end_memused);
+	virt_end_addr=(unsigned long)__va(phy_end_addr);
+	ut_log("	After Paging initialized start_addr: %x endaddr: %x  current end:%x\n",virt_start_addr,virt_end_addr,current_end_memused);
+
+#if 0
+	if (g_multiboot_mod1_len > 0){ /* symbol file  reside at the end of memory, it can acess only when page table is initialised */
 		g_symbol_table=(symb_table_t *)virt_start_addr;
-		g_total_symbols=(g_multiboot_mod_len)/sizeof(symb_table_t);
-		ut_memcpy((unsigned char *)g_symbol_table,(unsigned char *)g_multiboot_mod_addr,g_multiboot_mod_len);
-		virt_start_addr=(unsigned long)virt_start_addr+g_multiboot_mod_len;
+		g_total_symbols=(g_multiboot_mod1_len)/sizeof(symb_table_t);
+		ut_memcpy((unsigned char *)g_symbol_table,(unsigned char *)g_multiboot_mod1_addr,g_multiboot_mod1_len);
+		virt_start_addr=(unsigned long)virt_start_addr+g_multiboot_mod1_len;
 		ut_log("	g_symbol_table as module:  %x totalsymbols :%d size :%d some symbol address:%x : ", g_symbol_table,g_total_symbols,sizeof(symb_table_t),g_symbol_table[5].address);
 		ut_log("	symbol name:  %s \n",&g_symbol_table[5].name[0]);
 	}
+
+	if (g_multiboot_mod1_len > 0){
+		virt_start_addr=(unsigned long)virt_start_addr+g_multiboot_mod1_len;
+	}
+#endif
+	ut_log("	end:%x multiboot_mod_addr: %x len :%x(%d) \n",&end,g_multiboot_mod1_addr,g_multiboot_mod1_len,g_multiboot_mod1_len);
+	ut_log("	multiboot_mod_addr2: %x len :%x(%d) current_end_mem: %x \n",g_multiboot_mod2_addr,g_multiboot_mod2_len,g_multiboot_mod2_len, current_end_memused);
 	ut_log("	code+data  : %x  -%x size:%dK\n",&_start,&_end,((long)&_end-(long)&_start)/1000);
 	ut_log("	free area  : %x - %x size:%dM\n",virt_start_addr,virt_end_addr,(virt_end_addr-virt_start_addr)/1000000);
 	virt_start_addr=init_free_area( virt_start_addr, virt_end_addr);
@@ -412,7 +426,7 @@ int Jcmd_mem(char *arg1, char *arg2) {
 		if (PageReferenced(p))referenced++;
 		if (PageSlab(p)) slab++;
 	} while (p > g_mem_map);
-	ut_printf(" rserverd:%d referenced:%d dma:%d slab:%d \n\n",reserved,referenced,dma,slab);
+	ut_printf(" reserved :%d referenced:%d dma:%d slab:%d \n\n",reserved,referenced,dma,slab);
 	Jcmd_jslab(0,0);
 	return 1;
 }

@@ -5,11 +5,17 @@
 //TODO the below structes are duplicate din util directory
 #define MAX_SYMBOLLEN 40
 #define MAX_FILELEN 50
-#define SYMBOL_GTEXT 0
-#define SYMBOL_DATA 1
-#define SYMBOL_LTEXT 2
-#define SYMBOL_CMD 10
-#define SYMBOL_CONF 12
+
+
+enum {
+  SYMBOL_GTEXT= 0x1, /* global text */
+  SYMBOL_DATA = 0x2,
+  SYMBOL_LTEXT = 0x3, /* local text */
+  SYMBOL_CMD = 0x4,
+  SYMBOL_CONF = 0x5,
+  SYMBOL_TYPE_UNRESOLVED=0x6
+};
+#if 0
 typedef struct {
 	addr_t address;
 	char type;
@@ -17,8 +23,21 @@ typedef struct {
 	char file_lineno[MAX_FILELEN];
 	unsigned long subsystem_type;
 }symb_table_t;
+#endif
+typedef struct {
+	unsigned char *name;
+	unsigned long address;
+	char type;
+	char *file_lineno; /* currently not filled */
+	int sec_index;
+	unsigned char *subsystem_type;
+}symb_table_t;
+extern unsigned long g_multiboot_mod1_addr;
+extern unsigned long g_multiboot_mod1_len;
+
 extern symb_table_t *g_symbol_table;
 extern unsigned long g_total_symbols;
+symb_table_t *module_load_kernel_symbols(unsigned char *start_addr, unsigned long mod_len); /* load kernel symbols from kernel file loaded as a module */
 
 
 /********   DWARF related data , obtained using dwarflib

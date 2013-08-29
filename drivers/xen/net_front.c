@@ -121,10 +121,10 @@ void * init_netfront( void(*thenetif_rx)(unsigned char* data,
 
 	for (i = 0; i < NET_RX_RING_SIZE; i++) {
 		/* TODO: that's a lot of memory */
-		dev->rx_buffers[i].page = (char*) alloc_page();
+		dev->rx_buffers[i].page = (char*) alloc_page(0);
 	}
-	txs = (struct netif_tx_sring *) alloc_page();
-	rxs = (struct netif_rx_sring *) alloc_page();
+	txs = (struct netif_tx_sring *) alloc_page(0);
+	rxs = (struct netif_rx_sring *) alloc_page(0);
 	memset(txs, 0, PAGE_SIZE);
 	memset(rxs, 0, PAGE_SIZE);
 
@@ -255,7 +255,7 @@ void netfront_xmit(struct netfront_dev *dev, unsigned char* data, int len) /* TO
 	buf = &dev->tx_buffers[id];
 	page = buf->page;
 	if (!page)
-		page = buf->page = (char*) alloc_page();
+		page = buf->page = (char*) alloc_page(0);
 
 	i = dev->tx.req_prod_pvt;
 	tx = RING_GET_REQUEST(&dev->tx, i);

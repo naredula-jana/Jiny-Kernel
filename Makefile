@@ -28,6 +28,7 @@ OBJECTS += kernel/debug.o kernel/device.o  kernel/init.o  kernel/ipc.o  kernel/m
 user: 
 	make SOURCE_ROOT=$$PWD -C userland clean
 	make SOURCE_ROOT=$$PWD -C userland
+	
 all: lwip.a
 	make SOURCE_ROOT=$$PWD -C kernel
 	make SOURCE_ROOT=$$PWD -C drivers
@@ -50,8 +51,8 @@ endif
 	rm drivers.a  fs.a mm.a $(ARCH_DIR).a
 	gcc -g -I. $(LINK_FLAG)  $(OBJECTS) -nostdlib -Wl,-N -Wl,-Ttext -Wl,40100000 -Tdata=40200000 -o bin/kernel_bin
 	objdump -D -l bin/kernel_bin > bin/obj_file
-	nm -l bin/kernel_bin | sort > util/in
-	util/gen_symboltbl util/in bin/mod_file > util/out
+#	nm -l bin/kernel_bin | sort > util/in
+#	util/gen_symboltbl util/in bin/mod_file > util/out
 	util/dwarf_reader bin/kernel_bin > util/dwarf_temp_output
 	chmod 777 ./dwarf_datatypes
 	mv ./dwarf_datatypes test/root/
@@ -71,7 +72,6 @@ clean:
 	make SOURCE_ROOT=$$PWD -C mm clean
 	make SOURCE_ROOT=$$PWD -C mm/memleak clean
 	\rm $(LWIP_OBJ)
-	\rm bin/mod_file
 
 LWC     := $(shell find /opt_src/lwip/src/ -type f -name '*.c')
 LWC     := $(filter-out %6.c %ip6_addr.c, $(LWC))

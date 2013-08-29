@@ -85,12 +85,12 @@ int Jcmd_balloon(char *arg1, char *arg2) {
 			if (balloon_data.current_index >= MAX_TABLE_SIZE) {
 				break;
 			}
-			v = mm_getFreePages(0, 0);
+			v = alloc_page(0);
 			if (v == 0) {
 				break;
 			}
 			for (i = 0; i < 512; i++) {
-				v[i] = mm_getFreePages(0, 0);
+				v[i] = alloc_page(0);
 				if (v[i] == 0) continue;
 			}
 			send_to_memballoon(v,inflate);

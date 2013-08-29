@@ -34,17 +34,22 @@ unsigned long g_total_symbols = 0;
  *            lwip
  *
  */
-static unsigned char *subsystems[]={"SYS_","sc_","ut_","fs_","p9_","ipc_","pc_","ar_","mm_","vm_","Jcmd_","virtio_",0};
+static char *subsystems[]={"SYS_","sc_","ut_","fs_","p9_","ipc_","pc_","ar_","mm_","vm_","Jcmd_","virtio_",0};
 int init_symbol_table(unsigned long unused) {
 	int i,j;
 	int confs = 0;
 	int stats = 0;
 	int cmds = 0;
 
-	for (i = 0; i < g_total_symbols; i++) {
+	g_symbol_table = module_load_kernel_symbols(__va(g_multiboot_mod1_addr),g_multiboot_mod1_len);
+	if (g_symbol_table == 0){
+		BUG();
+	}
+	for (i = 0;  g_symbol_table[i].name != 0; i++) {
 		unsigned char sym[100], dst[100];
 
 		g_symbol_table[i].subsystem_type = 0;
+		g_symbol_table[i].file_lineno = "UNKNOWN-lineno"; /* TODO need to extract from kernel file */
 		/* detect subsytem type */
 		for (j=0; subsystems[j]!=0; j++){
 			if (ut_strstr(g_symbol_table[i].name, (unsigned char *) subsystems[j]) != 0){
@@ -87,9 +92,10 @@ int init_symbol_table(unsigned long unused) {
 			continue;
 		}
 	}
+	g_total_symbols = i;
 	ut_log("	confs:%d  cmds:%d  totalsymbols:%d \n",
 			confs, cmds, g_total_symbols);
-	init_breakpoints();
+//	init_breakpoints();
 	return 0;
 }
 
@@ -109,8 +115,7 @@ int ut_symbol_show(int type){
 	return count;
 }
 
-
-int ut_symbol_execute(int type, char *name, char *argv1,char *argv2){
+int ut_symbol_execute(int type, char *name, uint8_t *argv1,uint8_t *argv2){
     int i,*conf;
 	int (*func)(char *argv1,char *argv2);
 
@@ -132,6 +137,7 @@ int ut_symbol_execute(int type, char *name, char *argv1,char *argv2){
 	}
 	return ut_mod_symbol_execute(type,name,argv1,argv2);
 }
+
 unsigned long ut_get_symbol_addr(unsigned char *name) {
 	int i;
 	for (i=0; i< g_total_symbols; i++)

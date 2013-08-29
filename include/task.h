@@ -130,7 +130,6 @@ struct cpu_state {
 	struct md_cpu_state md_state; /* This should be at the first location */
 
 	struct task_struct *current_task;
-	struct task_struct *dead_task;
 	struct task_struct *idle_task;
 	task_queue_t run_queue;
 	int run_queue_length;
@@ -162,8 +161,6 @@ static inline struct task_struct *current_task(void)
 }
 #define g_current_task current_task()
 #define is_kernel_thread (g_current_task->mm == g_kernel_mm)
-
-
 
 typedef struct backtrace{
 	struct{

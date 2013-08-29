@@ -42,8 +42,6 @@ int vma_page_remove(struct page *page){
 	struct list_head *p;
 	struct vm_area_struct *vma;
 	struct mm_struct *mm;
-	unsigned long vaddr;
-	int i;
 	int found=0;
 
 	inode=page->inode;
@@ -186,7 +184,7 @@ unsigned long vm_dup_vmaps(struct mm_struct *src_mm,struct mm_struct *dest_mm){ 
 			BUG();
 			return 0;
 		}
-		ut_memcpy(new_vma,vma,sizeof(struct vm_area_struct));
+		ut_memcpy((uint8_t *)new_vma,(uint8_t *)vma,sizeof(struct vm_area_struct));
 		new_vma->vm_mm = dest_mm;
 		new_vma->vm_next = 0;
 
@@ -198,7 +196,7 @@ unsigned long vm_dup_vmaps(struct mm_struct *src_mm,struct mm_struct *dest_mm){ 
 
     return 1;
 }
-unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long pgoff, const unsigned char *name) {
+unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long pgoff, const char *name) {
 	struct mm_struct *mm = g_current_task->mm;
 	struct vm_area_struct *vma;
 	int ret;
@@ -372,7 +370,6 @@ int Jcmd_maps(char *arg1, char *arg2) {
 	int len = PAGE_SIZE*100;
 	int ret,pid,i,max_len;
 	int found=0;
-
 
 	max_len=len;
 	buf = (unsigned char *) vmalloc(len,0);

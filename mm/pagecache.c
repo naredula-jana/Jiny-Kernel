@@ -33,14 +33,14 @@ enum {
 
 typedef struct page_list {
 	struct list_head head;
-	unsigned char list_type;
+	uint8_t list_type;
 	atomic_t count;
 } page_list_t;
 
 
 page_struct_t *pagecache_map;
-unsigned char *pc_startaddr;
-unsigned char *pc_endaddr;
+uint8_t *pc_startaddr;
+uint8_t *pc_endaddr;
 static int pc_totalpages=0;
 static page_list_t free_list,active_list,dirty_list,inactive_list;
 //static spinlock_t pc_lock  = SPIN_LOCK_UNLOCKED("pagecache"); /* protects page cache */
@@ -63,7 +63,7 @@ inactive->free :
 /*********************** local function *************************/
 static int _pagelist_add(page_struct_t *page, page_list_t *list,int tail);
 
-static inline struct page *to_page(unsigned char *addr){ /* TODO remove me later the function is duplicated in fs/host_fs.c */
+static inline struct page *to_page(uint8_t *addr){ /* TODO remove me later the function is duplicated in fs/host_fs.c */
 	unsigned long pn;
 	pn = (addr - pc_startaddr) / PC_PAGESIZE;
 	return pagecache_map + pn;
@@ -86,7 +86,7 @@ static int page_init(page_struct_t *p) {
 }
 
 /* this function does not need lock since it is used only during initlization */
-static int init_pagelist(page_list_t *list, unsigned char type) {
+static int init_pagelist(page_list_t *list, uint8_t type) {
 	INIT_LIST_HEAD(&(list->head));
 	list->count.counter = 0;
 	list->list_type = type;
@@ -197,15 +197,15 @@ static int list_count(struct list_head *head) {
 }
 
 /***************************** API function **********************/
-unsigned char *pc_page_to_ptr(struct page *p){ /* TODO remove me later the function is duplicated in fs/host_fs.c */
-        unsigned char *addr;
+uint8_t *pc_page_to_ptr(struct page *p){ /* TODO remove me later the function is duplicated in fs/host_fs.c */
+        uint8_t *addr;
         unsigned long pn;
         pn=p-pagecache_map;
         addr=pc_startaddr+pn*PC_PAGESIZE;
         return addr;
 }
 
-int pc_check_valid_addr(unsigned char *addr, int len){
+int pc_check_valid_addr(uint8_t *addr, int len){
 	unsigned long pn;
 	struct page *page;
 
@@ -260,20 +260,20 @@ int page_inuse(struct page *page){
 		return 1;
 	}
 }
-int pc_init(unsigned char *start_addr, unsigned long len) {
+int pc_init(uint8_t *start_addr, unsigned long len) {
 	int total_pages, reserved_size;
 	page_struct_t *p;
 	int i;
 
 	unsigned long s = (unsigned long) start_addr;
-	start_addr = (unsigned char *) (((s + PC_PAGESIZE) / PC_PAGESIZE)
+	start_addr = (uint8_t *) (((s + PC_PAGESIZE) / PC_PAGESIZE)
 			* PC_PAGESIZE);
-	pc_startaddr = (unsigned char *) (start_addr);
-	pc_endaddr = (unsigned char *) start_addr + len;
+	pc_startaddr = (uint8_t *) (start_addr);
+	pc_endaddr = (uint8_t *) start_addr + len;
 	total_pages = len / PC_PAGESIZE;
 	reserved_size = sizeof(fileCache_t) + sizeof(page_struct_t) * total_pages;
 	pagecache_map = (page_struct_t *) (start_addr + sizeof(fileCache_t));
-	ut_memset((unsigned char *) pagecache_map, 0,
+	ut_memset((uint8_t *) pagecache_map, 0,
 			sizeof(page_struct_t) * total_pages);
 
 	init_pagelist(&free_list, FREE_LIST);

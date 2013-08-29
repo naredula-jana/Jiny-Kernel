@@ -52,7 +52,7 @@ int conf_set(unsigned char *arg1,unsigned char *arg2) {
 		ut_printf("Conf variables:\n");
 		ut_symbol_show(SYMBOL_CONF);
 	} else {
-		ret = ut_symbol_execute(SYMBOL_CONF, arg1, arg2);
+		ret = ut_symbol_execute(SYMBOL_CONF, arg1, arg2,0);
 	}
 	return ret;
 }
@@ -64,13 +64,13 @@ int cmd(unsigned char *arg1,unsigned  char *arg2) {
 		ut_printf("Command list:\n");
 		ret = ut_symbol_show(SYMBOL_CMD);
 	} else {
-		ret = ut_symbol_execute(SYMBOL_CMD, arg1, arg2);
+		ret = ut_symbol_execute(SYMBOL_CMD, arg1, arg2,0);
 	}
 	if (ret == 0)
 		ut_printf("Not Found: %s\n", arg1);
 	return ret;
 }
-commands_t cmd_list[] = { { "help      ", "HELP MENU", "help", sh_create },
+commands_t cmd_list[] = {
 		{ "t1 ", "t1 file", "t1", Jcmd_memleak },
 		{ "vmcore      ", "vmcore", "vmcore", sh_vmcore_test },
 		{"set  <var> <value>", "set config variables", "set", conf_set },
@@ -90,7 +90,7 @@ commands_t cmd_list[] = { { "help      ", "HELP MENU", "help", sh_create },
 
 
 
-static char buf[26024];
+static unsigned char buf[26024];
 static int sh_mmap(unsigned char *arg1,unsigned char *arg2) {  /* TODO the function broken if given empty args */
 	struct file *fp;
 	unsigned long addr;
@@ -121,7 +121,7 @@ static int sh_cp(unsigned char *arg1, unsigned char *arg2) {
 	ret = 1;
 	i = 1;
 	while (ret > 0) {
-		ret = fs_read(fp, buf, 5000);
+		ret = fs_read(fp, (uint8_t *)buf, 5000);
 		buf[5001] = '\0';
 		if (ret > 0) {
 			wret = fs_write(wfp, buf, ret);
@@ -231,9 +231,6 @@ void t22() {
 }
 static unsigned long test_mp;
 static int Jcmd_memleak(unsigned char *arg1, unsigned char *arg2) {
-	struct file *wfp;
-	struct fileStat fstat;
-	int i, k, ret, wret;
 	unsigned long mp;
 
 	test_mp =(unsigned long) mm_malloc(100, 0);
@@ -268,7 +265,7 @@ static int Jcmd_cat(unsigned char *arg1, unsigned char *arg2) {
 	int i, ret;
 
 	if (arg1 == 0)
-		return;
+		return 0;
 	fp = fs_open(arg1, 0, 0);
 	ut_printf("filename :%s: \n", arg1);
 	if (fp == 0) {

@@ -25,6 +25,7 @@ int brk_pnt=0;
 uint32_t g_cpu_features;
 void *g_print_lock=0;
 
+
 extern int init_physical_memory(unsigned long unused);
 extern int init_kmem_cache(unsigned long arg1);
 extern int init_vfs(unsigned long arg1);
@@ -36,13 +37,13 @@ extern int init_modules(unsigned long arg1);
 extern int  init_log_file(unsigned long arg1);
 extern int init_jslab(unsigned long arg1);
 int init_kernel_vmaps(unsigned long arg1);
-void  init_code_readonly(unsigned long arg1);
+int  init_code_readonly(unsigned long arg1);
 int init_kmemleak(unsigned long arg1);
 
 typedef struct {
 	int (*func)(unsigned long arg);
 	unsigned long arg1;
-	unsigned *comment;
+	char *comment;
 } inittable_t;
 
 static inittable_t inittable[] = {
@@ -62,25 +63,30 @@ static inittable_t inittable[] = {
 		{init_kmemleak,0,       "kmemleak"},
 #endif
 #ifdef SMP
-		{init_smp_force,4,       "kmemleak"},
+		{init_smp_force,4,       "smp_init"},
 #endif
 #ifdef NETWORKING
 		{init_networking,0,       "networking"},
 #endif
 		{init_clock,0,       "clock"},
 		{init_code_readonly,0,       "Making code readonly"},
+		{init_kernel_vmaps, 0, "Kernel Vmaps"},
 		{init_symbol_table,0,       "symboltable"},
 		{init_devClasses,0,       "devicesclasses"},
 		{init_modules,0,       "modules"},
-		{init_kernel_vmaps, 0, "Kernel Vmaps"},
+// moved up		{init_kernel_vmaps, 0, "Kernel Vmaps"},
 //		{init_log_file,0, "log file "},
 		{0,0,0}
 };
 
 unsigned long g_multiboot_info_ptr;
 unsigned long g_multiboot_magic ;
-unsigned long g_multiboot_mod_addr=0;
-unsigned long g_multiboot_mod_len=0;
+unsigned long g_multiboot_mod1_addr=0;
+unsigned long g_multiboot_mod1_len=0;
+
+unsigned long g_multiboot_mod2_addr=0;
+unsigned long g_multiboot_mod2_len=0;
+
 unsigned long g_phy_mem_size=0;
 /* Check if the bit BIT in FLAGS is set.  */
 #define CHECK_FLAG(flags,bit)	((flags) & (1 << (bit)))
@@ -117,12 +123,19 @@ int init_physical_memory(unsigned long unused){
 		}
 	}
 
+
 	if (mbi->mods_count > 0) {
 		multiboot_mod_t *mod;
 
 		mod =(multiboot_mod_t *) mbi->mods_addr;
-		g_multiboot_mod_addr = mod->mod_start;
-		g_multiboot_mod_len = mod->mod_end - mod->mod_start;
+		g_multiboot_mod1_addr = mod->mod_start;
+		g_multiboot_mod1_len = mod->mod_end - mod->mod_start;
+		mod++;
+		if (mbi->mods_count>1){
+			g_multiboot_mod2_addr = mod->mod_start;
+			g_multiboot_mod2_len = mod->mod_end - mod->mod_start;
+			ut_log("	mod2 addr : %x len:%d\n",g_multiboot_mod2_addr,g_multiboot_mod2_len);
+		}
 	}
 	g_phy_mem_size = max_addr;
 	return 0;
@@ -135,7 +148,7 @@ void idleTask_func();
    pointed by ADDR.  */
 void __stack_chk_fail(){
 }
-void  init_code_readonly(unsigned long arg1){
+int  init_code_readonly(unsigned long arg1){
   /* TO make first 2M or code pages in to Readonly */
 	unsigned long *page_table;
 	static int init_readonly=0;
@@ -160,7 +173,7 @@ void  init_code_readonly(unsigned long arg1){
 	ar_flushTlbGlobal();
 	ut_log(" TLB flushed by cpu :%d \n",cpu);
 	spin_unlock_irqrestore(&g_global_lock, intr_flags);
-	return;
+	return 0;
 }
 void idleTask_func() {
 	int k=0;
@@ -175,16 +188,17 @@ void idleTask_func() {
 		sc_schedule();
 	}
 }
+#if 0
 Jcmd_flush(){
 	flush_tlb(0x101000);
 	flush_tlb_entry(KERNEL_ADDR_START);
 	ar_flushTlbGlobal();
 	ut_log(" flushed TLB cpu:%d \n",getcpuid());
 }
+#endif
 /****************************************House Keeper *******************************************/
 
-void housekeeper_thread(){
-	int ret;
+void housekeeper_thread(void *arg){
 	sc_sleep(3000);  /* TODO : need to wait some part of initilization*/
 	init_log_file(0);
 	while(1){
@@ -241,8 +255,6 @@ int init_kernel_vmaps(unsigned long arg1){
 	return 0;
 }
 void cmain() {  /* This is the first c function to be executed */
-	multiboot_info_t *mbi;
-	unsigned long max_addr;
 	int i,ret;
 	/* Clear the screen.  */
 	ut_cls();

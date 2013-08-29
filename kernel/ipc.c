@@ -10,14 +10,14 @@
  */
 #include "interface.h"
 static int ipc_init_done=0;
-void *ipc_mutex_create(unsigned char *name) {
+void *ipc_mutex_create(char *name) {
 	struct semaphore *sem = mm_malloc(sizeof(struct semaphore), 0);
 	assert (ipc_init_done !=0);
 
 	if (sem == 0) {
 		return 0;
 	}
-	sem->name = name;
+	sem->name =(unsigned char *) name;
 	ipc_sem_new(sem, 1);
 	sem->wait_queue.used_for = sem;
 	sem->stat_acquired_start_time =0;
@@ -246,7 +246,7 @@ static int _del_from_waitqueue(wait_queue_t *waitqueue, struct task_struct *p) {
 }
 
 
-int ipc_register_waitqueue(wait_queue_t *waitqueue, char *name,unsigned long flags) {
+int ipc_register_waitqueue(wait_queue_t *waitqueue, char *name, unsigned long flags) {
 	int i;
 	unsigned long irq_flags;
 

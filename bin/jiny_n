@@ -1,0 +1,2 @@
+./qemu-system-x86_64 -gdb tcp::1236 -m 1024M -hda /home/jana/jiny/bin/new_bootdisk -hdb /home/jana/jiny/bin/g2_image -enable-kvm   -vnc :7 -netdev tap,id=guest0,vhost=on,vhostforce -smp 4 -device virtio-net-pci,mac=00:30:48:DB:5E:06,netdev=guest0 -serial telnet::50009,server,nowait -fsdev local,security_model=passthrough,id=fsdev0,path=/opt_src/Jiny-Kernel/test/root/ -device virtio-9p-pci,id=fs0,fsdev=fsdev0,mount_tag=hostshare -monitor tcp::51009,server,nowait,nodelay -balloon virtio
+

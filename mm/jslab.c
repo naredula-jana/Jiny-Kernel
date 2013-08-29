@@ -68,10 +68,9 @@ static inline void _freepages(jcache_t *cachep, unsigned long addr) {
 	unsigned long i = (1 << cachep->page_order);
 	jslab_t *slabp = (jslab_t *) ((unsigned long) addr & SLAB_MASK); //TODO
 	struct page *page = virt_to_page(slabp);
-
 	assert(slabp->bitmap == 0);
 	list_del(&(page->list));
-	unsigned long taddr = addr;
+
 	while (i--) {
 		assert(PageSlab(page));
 #ifdef JSLAB_DEBUG
@@ -104,7 +103,6 @@ static inline void * _getpages(jcache_t *cachep) {
 	slabp->magic_number[1] = JSLAB_MAGIC;
 	list_add(&(page->list), &(cachep->partial_list));
 
-	unsigned long taddr = addr;
 	while (i--) {
 #ifdef JSLAB_DEBUG
 		LEAVE_JSLAB()
@@ -144,7 +142,6 @@ static void free_obj(unsigned long addr) {
 	slabp = (jslab_t *) (addr & SLAB_MASK);
 	cachep = slabp->cachep;
 	int index;
-	unsigned long taddr=0;
 	unsigned long intr_flags;
 
 	sanity_check();
@@ -175,7 +172,6 @@ static void free_obj(unsigned long addr) {
 static void * _alloc_obj(jcache_t *cachep) {
 	int index;
 	unsigned long addr=0;
-	unsigned long taddr=0;
 
 	if(cachep->obj_size >= PAGE_SIZE){ /* large page object */
 		int i;
@@ -185,11 +181,11 @@ static void * _alloc_obj(jcache_t *cachep) {
 			struct page *p = virt_to_page((addr+(i*PAGE_SIZE)) & PAGE_MASK);
 			PageSetLargePage(p);
 			PageSetSlab(p);
-			p->inode = cachep;
+			p->inode = (struct inode *)cachep; // TODO : currently overloaded
 		}
 		cachep->stat_allocs++;
 		cachep->stat_total_objs++;
-		return addr;
+		return (void *)addr;
 	}
 
 	if (list_empty(&(cachep->partial_list))) {
@@ -350,7 +346,7 @@ void jslab_free2(const void *objp){
 }
 
 jcache_t *
-jslab_create_cache (const char *name, size_t size, size_t offset,
+jslab_create_cache (const uint8_t *name, size_t size, size_t offset,
 	unsigned long flags, void (*ctor)(void*, jcache_t *, unsigned long),
 	void (*dtor)(void*, jcache_t *, unsigned long))
 {
@@ -396,7 +392,7 @@ int init_jslab_vmalloc(){
 	int total_blocks = g_vmalloc_size/vblock_size;
 	for (i=0; i<MAX_VBLOCKS ; i++){
 		if (i<total_blocks){
-			vblocks[i].vaddr = g_vmalloc_start + i*vblock_size;
+			vblocks[i].vaddr = (void *)(g_vmalloc_start + i*vblock_size);
 			vblocks[i].size = vblock_size;
 			vblocks[i].is_free = 1;
 		}else{
@@ -405,7 +401,7 @@ int init_jslab_vmalloc(){
 			vblocks[i].is_free = 0;
 		}
 	}
-	unsigned char *p=g_vmalloc_start;
+	uint8_t *p=(uint8_t *)g_vmalloc_start;
 	*p='1';
 	p=p+g_vmalloc_size-10;
 	*p='1';
@@ -437,14 +433,14 @@ void *vmalloc(int size, int flags){
 
 	return 0;
 }
-void vfree(unsigned long addr){
+void vfree(addr_t addr){
 	int i;
 
 	if (vmalloc_initiated ==0) return;
 	if (addr==0) return;
 	int total_blocks = g_vmalloc_size/vblock_size;
 	for (i=0; i<MAX_VBLOCKS && i<total_blocks; i++){
-		if (vblocks[i].vaddr == addr){
+		if (vblocks[i].vaddr ==(addr_t *)addr){
 			vblocks[i].is_free = 1;
 			return;
 		}
@@ -453,6 +449,7 @@ void vfree(unsigned long addr){
 }
 #endif
 /********************************* jcmd's ******************************************************************************/
+#if 0
 int Jcmd_jslabfree(unsigned char *arg1, unsigned char *arg2) {
 	if (arg1 == 0)
 		return 0;
@@ -461,6 +458,7 @@ int Jcmd_jslabfree(unsigned char *arg1, unsigned char *arg2) {
 
 	return 1;
 }
+#endif
 jcache_t test_cache;
 int Jcmd_jslabmalloc(unsigned char *arg1, unsigned char *arg2) {
 	unsigned long addr;

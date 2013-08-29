@@ -1,9 +1,13 @@
-make clean
 make
+sync
+cp bin/g2_orgimage bin/g2_image
 sudo losetup /dev/loop0 -d
 sudo losetup /dev/loop0  bin/g2_image
 mkdir /tmp/ab/
 sudo mount /dev/loop0 /tmp/ab/
 sudo cp bin/kernel_bin /tmp/ab/kernel
-sudo cp bin/mod_file /tmp/ab/mod_file
+sync
 sudo umount /tmp/ab
+sudo losetup /dev/loop0 -d
+echo "SUCCESSFULLY Unmounted"
+

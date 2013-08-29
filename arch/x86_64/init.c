@@ -32,7 +32,7 @@ static inline void efer_set_feature(int ftr_bit)
 	msr_write(MSR_EFER, efer);
 }
 extern void syscall_entry(void);
-int init_syscall(int cpuid)
+int init_syscall(unsigned long cpuid)
 {
 	efer_set_feature(EFER_SCE);
 	msr_write(MSR_STAR,
@@ -40,6 +40,6 @@ int init_syscall(int cpuid)
 			((uint64_t)(GDT_SEL(KDATA_DESCR) | SEG_DPL_USER) << 48));
 	msr_write(MSR_LSTAR, (uint64_t)syscall_entry);
 	msr_write(MSR_SF_MASK, 0x200);
-	init_fs_and_gs(cpuid);
+	init_fs_and_gs((int )cpuid);
 	return 0;
 }

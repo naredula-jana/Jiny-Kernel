@@ -29,11 +29,11 @@ static void inode_sync(struct inode *inode, unsigned long truncate);
 static int fs_create_pipe(struct file *wfp, struct file *rfp);
 static int fs_dup_pipe(struct file *fp);
 static int fs_destroy_pipe(struct file *fp);
-static int fs_recv_from_pipe(struct file *fp, unsigned char *buf, int len);
-static int fs_send_to_pipe(struct file *fp,unsigned char *buf, int len);
+static int fs_recv_from_pipe(struct file *fp, uint8_t *buf, int len);
+static int fs_send_to_pipe(struct file *fp,uint8_t *buf, int len);
 
 
-static int inode_init(struct inode *inode, char *filename,
+static int inode_init(struct inode *inode, uint8_t *filename,
 		struct filesystem *vfs) {
 	int i;
 
@@ -49,7 +49,7 @@ static int inode_init(struct inode *inode, char *filename,
 	inode->u.file.inode_no = 0;
 	inode->type = 0;
 	inode->vfs = vfs;
-	ut_strcpy(inode->filename, (unsigned char *) filename);
+	ut_strcpy(inode->filename, (uint8_t *) filename);
 	for (i=0; i<PAGELIST_HASH_SIZE; i++)
 		INIT_LIST_HEAD(&(inode->page_list[i]));
 	INIT_LIST_HEAD(&(inode->vma_list));
@@ -66,18 +66,18 @@ static int inode_init(struct inode *inode, char *filename,
 /*************************** API functions ************************************************/
 /* TODO :  inode lock need to used in all the places where inode is used */
 
-int Jcmd_ls(char *arg1, char *arg2) {
+int Jcmd_ls(uint8_t *arg1, uint8_t *arg2) {
 	struct inode *tmp_inode;
 	struct list_head *p;
 	int i,len,max_len;
-	unsigned char *buf;
+	uint8_t *buf;
 	int total_pages = 0;
-	const unsigned char *type;
+	const uint8_t *type;
 
 	ut_printf("usagecount nrpages length  inode_no type/type  name (in/out/err)\n");
 	len = PAGE_SIZE*100;
 	max_len=len;
-	buf = (unsigned char *) vmalloc(len,0);
+	buf = (uint8_t *) vmalloc(len,0);
 	if (buf == 0) {
 		ut_printf(" Unable to get vmalloc memory\n");
 		return 0;
@@ -86,8 +86,8 @@ int Jcmd_ls(char *arg1, char *arg2) {
 	mutexLock(g_inode_lock);
 	list_for_each(p, &inode_list) {
 		tmp_inode = list_entry(p, struct inode, inode_link);
-		if (tmp_inode->flags & INODE_EXECUTING) type="*" ;
-		else type=" ";
+		if (tmp_inode->flags & INODE_EXECUTING) type=(uint8_t *)"*";
+		else type=(uint8_t *)" ";
 		if (tmp_inode->type == NETWORK_FILE) {
 			len = len
 					- ut_snprintf(buf + max_len - len, len,
@@ -203,12 +203,12 @@ int Jcmd_sync() {
 	return fs_sync();
 }
 /************************************************************************************************/
-static void transform_filename(unsigned char *arg_filename, char *filename) {
+static void transform_filename(uint8_t *arg_filename, char *filename) {
 	int i, len;
 
 	filename[0] = 0;
 	if (arg_filename[0] != '/') {
-		ut_strcpy(filename, (const unsigned char *)g_current_task->mm->fs.cwd);
+		ut_strcpy((uint8_t *)filename, (const uint8_t *)g_current_task->mm->fs.cwd);
 	}
 	i = 0;
 
@@ -216,13 +216,13 @@ static void transform_filename(unsigned char *arg_filename, char *filename) {
 	if (arg_filename[0] == '.' && arg_filename[1] == '/')
 		i = 2;
 
-	len = ut_strlen((const unsigned char *)filename);
+	len = ut_strlen((const uint8_t *)filename);
 	if (filename[len - 1] != '/') {
-		ut_strcat((const unsigned char *)filename, "/");
+		ut_strcat((const uint8_t *)filename, (uint8_t *)"/");
 	}
-	ut_strcat(filename, &arg_filename[i]); //TODO use strncat
+	ut_strcat((uint8_t *)filename, &arg_filename[i]); //TODO use strncat
 
-	len = ut_strlen((const unsigned char *)filename);
+	len = ut_strlen((const uint8_t *)filename);
 
 	/* remove "/" as last character */
 	if (filename[len - 1] == '/') {
@@ -232,20 +232,19 @@ static void transform_filename(unsigned char *arg_filename, char *filename) {
 	DEBUG(" opening in :%s:  transformfile :%s: \n", arg_filename, filename);
 
 }
-static struct inode *fs_getInode(char *arg_filename, int flags, int mode) {
+static struct inode *fs_getInode(uint8_t *arg_filename, int flags, int mode) {
 	struct inode *ret_inode, *tmp_inode;
 	struct list_head *p;
 	int ret;
-	unsigned char filename[MAX_FILENAME];
+	uint8_t filename[MAX_FILENAME];
 
 	ret_inode = 0;
-
 	transform_filename(arg_filename, filename);
 
 	mutexLock(g_inode_lock);
 	list_for_each(p, &inode_list) {
 		ret_inode = list_entry(p, struct inode, inode_link);
-		if (ut_strcmp((unsigned char *) filename, ret_inode->filename) == 0) {
+		if (ut_strcmp((uint8_t *) filename, ret_inode->filename) == 0) {
 			atomic_inc(&ret_inode->count);
 			mutexUnLock(g_inode_lock);
 			goto last;
@@ -324,7 +323,7 @@ unsigned long fs_putInode(struct inode *inode) {
 	return ret;
 }
 
-struct file *fs_open(unsigned char *filename, int flags, int mode) {
+struct file *fs_open(uint8_t *filename, int flags, int mode) {
 	struct file *filep;
 	struct inode *inodep;
 
@@ -340,11 +339,11 @@ struct file *fs_open(unsigned char *filename, int flags, int mode) {
 		goto error;
 	}
 	/* special files handle here before going to regular files */
-	if (ut_strcmp((unsigned char *) filename, (unsigned char *) "/dev/sockets")
+	if (ut_strcmp((uint8_t *) filename, (uint8_t *) "/dev/sockets")
 			== 0) {
 		filep->inode = mm_slab_cache_alloc(slab_inodep, 0);
 		if (filep->inode == NULL) goto error;
-		inode_init(filep->inode, "/dev/sockets", 0);
+		inode_init(filep->inode, (uint8_t *)"/dev/sockets", 0);
 		filep->offset = 0;
 		filep->type = NETWORK_FILE;
 		filep->inode->type = NETWORK_FILE;
@@ -353,7 +352,7 @@ struct file *fs_open(unsigned char *filename, int flags, int mode) {
 		filep->type = REGULAR_FILE;
 	}
 
-	inodep = fs_getInode((char *) filep->filename, mode, flags);
+	inodep = fs_getInode((uint8_t *) filep->filename, mode, flags);
 	if (inodep == 0)
 		goto error;
 
@@ -386,15 +385,15 @@ unsigned long SYS_fs_open(char *filename, int mode, int flags) {
 	int ret= SYSCALL_FAIL;
 
 	SYSCALL_DEBUG("open: filename :%s: mode:%x flags:%x \n", filename, mode, flags);
-	if (ut_strcmp((unsigned char *) filename, (unsigned char *) "/dev/tty") == 0) {
+	if (ut_strcmp((uint8_t *) filename, (uint8_t *) "/dev/tty") == 0) {
 		ret = 1;
 		goto last;
 	}
-	if (ut_strcmp((unsigned char *) filename, (unsigned char *) "/dev/null") == 0) {
+	if (ut_strcmp((uint8_t *) filename, (uint8_t *) "/dev/null") == 0) {
 		filep  = mm_slab_cache_alloc(g_slab_filep, 0);
 		filep->type = DEV_NULL_FILE;
 	}else{
-		filep = (struct file *) fs_open((unsigned char *) filename, flags, mode);
+		filep = (struct file *) fs_open((uint8_t *) filename, flags, mode);
 	}
 	total = g_current_task->mm->fs.total;
 	if (filep != 0 && total < MAX_FDS) {
@@ -515,7 +514,7 @@ unsigned long fs_readdir(struct file *file, struct dirEntry *dir_ent,
 }
 /************************************************************************************************/
 
-int fs_write(struct file *filep, unsigned char *buff, unsigned long len) {
+int fs_write(struct file *filep, uint8_t *buff, unsigned long len) {
 	int i, ret;
 	int tmp_len, size, page_offset;
 	struct page *page;
@@ -524,7 +523,7 @@ int fs_write(struct file *filep, unsigned char *buff, unsigned long len) {
 	if (vfs_fs == 0 || (vfs_fs->write == 0) || (filep == 0))
 		return 0;
 
-	if (ar_check_valid_address(buff,len)==JFAIL){
+	if (ar_check_valid_address((unsigned long )buff,len)==JFAIL){
 		BUG();
 	}
 
@@ -608,11 +607,11 @@ error:
 	return ret;
 }
 
-int SYS_fs_write(unsigned long fd, unsigned char *buff, unsigned long len) {
+int SYS_fs_write(unsigned long fd, uint8_t *buff, unsigned long len) {
 	struct file *file;
 	int ret;
 
-	SYSCALL_DEBUG("write fd:%d buff:%x len:%x data:%s:\n", fd, buff, len,buff);
+	//SYSCALL_DEBUG("write fd:%d buff:%x len:%x data:%s:\n", fd, buff, len,buff);
 	file = fd_to_file(fd);
 
 	if (file == 0){
@@ -695,19 +694,22 @@ retry_again:  /* the purpose to retry is to get again from the page cache with p
 
 #define CTRL_C 3
 #define CTRL_D 4
-long fs_read(struct file *filep, unsigned char *buff, unsigned long len) {
+long fs_read(struct file *filep, uint8_t *buff, unsigned long len) {
 	int ret;
 	struct page *page;
 	struct inode *inode;
+
 
 	ret = 0;
 	if ((vfs_fs == 0) || (filep == 0))
 		return 0;
 
-	if (ar_check_valid_address(buff,len)==JFAIL){
+	if (ar_check_valid_address((addr_t)buff,len)==JFAIL){
 		BUG();
 	}
 	if (filep->type == OUT_FILE) {
+		ut_log(" ERROR: read on OUT_FILE : name: %s\n",g_current_task->name);
+		//return -1;
 		BUG();
 	}
 	if (filep->type == IN_FILE) {
@@ -783,7 +785,7 @@ long SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt) {
 	}
 	last: return ret;
 }
-int SYS_fs_read(unsigned long fd, unsigned char *buff, unsigned long len) {
+int SYS_fs_read(unsigned long fd, uint8_t *buff, unsigned long len) {
 	struct file *file;
 	int ret;
 
@@ -802,7 +804,7 @@ int SYS_fs_read(unsigned long fd, unsigned char *buff, unsigned long len) {
 		return 0;
 
 	ret = fs_read(file, buff, len);
-	SYSCALL_DEBUG("read ret :%d  %s\n",ret,buff);
+	SYSCALL_DEBUG("read ret :%d\n",ret);
 	return ret;
 }
 /***************************************************************************************************/
@@ -822,7 +824,7 @@ struct file *fs_dup(struct file *old_filep, struct file *new_filep) {
 	}
 
 	/* 2. copy from old */
-	ut_memcpy(new_filep, old_filep, sizeof(struct file));
+	ut_memcpy((uint8_t *)new_filep, (uint8_t *)old_filep, sizeof(struct file));
 	if ((new_filep->type == REGULAR_FILE || new_filep->type == NETWORK_FILE) && new_filep->inode != 0) {
 		atomic_inc(&new_filep->inode->count);
 	}else if (new_filep->type == OUT_PIPE_FILE || new_filep->type == IN_PIPE_FILE) {
@@ -830,6 +832,7 @@ struct file *fs_dup(struct file *old_filep, struct file *new_filep) {
 	}
 	return new_filep;
 }
+int SYS_fs_dup2(int fd_old, int fd_new);
 int SYS_fs_dup(int fd_old) {
 	int i;
 	for (i = 3; i < MAX_FDS; i++) { /* fds: 0,1,2 are for in/out/error */
@@ -862,7 +865,6 @@ last:
 }
 /*************************************************************************************************/
 int fs_close(struct file *filep) {
-	int ret;
 	if (filep == 0 || vfs_fs == 0)
 		return 0;
 	if (filep->type == REGULAR_FILE) {
@@ -990,7 +992,7 @@ unsigned long fs_getVmaPage(struct vm_area_struct *vma, unsigned long offset) {
 		return 0;
 	pc_put_page(page); /* The file will be marked as executable, the pages will be locked at the file level */
 
-	ret = pc_page_to_ptr(page);
+	ret = (unsigned long )pc_page_to_ptr(page);
 	ret = __pa(ret);
 	DEBUG(
 			" mapInodepage phy addr :%x  hostphyaddr:%x offset:%x diff:%x \n", ret, g_hostShmPhyAddr, offset, (to_ptr(page)-pc_startaddr));
@@ -1001,7 +1003,7 @@ unsigned long fs_getVmaPage(struct vm_area_struct *vma, unsigned long offset) {
 struct {
 #define MAX_PIPE_BUFS 20
 	struct {
-		unsigned char *data;
+		uint8_t *data;
 		int size;
 		int start_offset;
 	} bufs[MAX_PIPE_BUFS];
@@ -1039,7 +1041,7 @@ int fs_destroy_filep(int fd) {
 	mm_slab_cache_free(g_slab_filep, fp);
 	return 0;
 }
-unsigned long SYS_pipe(unsigned int *fds) {
+unsigned long SYS_pipe(int *fds) {
 	struct file *wfp, *rfp;
 	int ret;
 
@@ -1089,7 +1091,8 @@ static void init_pipes(){
 	return ;
 }
 static int fs_create_pipe(struct file *wfp, struct file *rfp) {
-	int i, j, found;
+	long i ;
+	int j, found;
 	int ret=-1;
 
 	if (init_pipe_done == 0) {
@@ -1104,8 +1107,8 @@ static int fs_create_pipe(struct file *wfp, struct file *rfp) {
 			pipes[i].in_index = 0;
 			pipes[i].out_index = 0;
 			pipes[i].count = 2;
-			rfp->private_pipe = i;
-			wfp->private_pipe = i;
+			rfp->private_pipe = (void *)i;
+			wfp->private_pipe = (void *)i;
 			for (j = 0; j < MAX_PIPE_BUFS; j++) {
 				pipes[i].bufs[j].data = 0;
 				pipes[i].bufs[j].size = 0;
@@ -1121,7 +1124,7 @@ last:
 	return ret;
 }
 static int fs_dup_pipe(struct file *fp) {
-	int i = fp->private_pipe;
+	long i = (long)fp->private_pipe;
 
 	if (i < 0 || i >= MAX_PIPES)
 		return -1;
@@ -1137,7 +1140,7 @@ static int fs_dup_pipe(struct file *fp) {
 static int fs_destroy_pipe(struct file *fp) {
 	int ret = -1;
 	int j;
-	int i = fp->private_pipe;
+	long i = (long)fp->private_pipe;
 
 	if (i < 0 || i >= MAX_PIPES)
 		return -1;
@@ -1159,13 +1162,13 @@ static int fs_destroy_pipe(struct file *fp) {
 	return ret;
 }
 #define ENOSPC          28      /* No space left on device */
-static int fs_send_to_pipe(struct file *fp, unsigned char *buf, int len) {
+static int fs_send_to_pipe(struct file *fp, uint8_t *buf, int len) {
 	int max_size = PAGE_SIZE ;
 	int ret;
 	int consumed_len=0;
 	int left_len=len;
 
-	int i = fp->private_pipe;
+	long i = (long)fp->private_pipe;
 	if (i < 0 || i >= MAX_PIPES)
 		return -1;
 
@@ -1173,7 +1176,7 @@ restart:
 	mutexLock(g_inode_lock);
 	int out = pipes[i].out_index;
 	if (pipes[i].bufs[out].data == 0) {
-		pipes[i].bufs[out].data = mm_getFreePages(0, 0);
+		pipes[i].bufs[out].data = (uint8_t *)mm_getFreePages(0, 0);
 		pipes[i].bufs[out].size = 0;
 		pipes[i].bufs[out].start_offset = 0;
 	} else {
@@ -1200,7 +1203,7 @@ restart:
 	consumed_len = consumed_len+max_size;
 	left_len = left_len-max_size;
 
-last:
+//last:
 	mutexUnLock(g_inode_lock);
 	if (left_len>0){
 		goto restart;
@@ -1210,8 +1213,8 @@ last:
 	return consumed_len;
 }
 #define EAGAIN          11      /* Try again */
-static int fs_recv_from_pipe(struct file *fp, unsigned char *buf, int len) {
-	int i = fp->private_pipe;
+static int fs_recv_from_pipe(struct file *fp, uint8_t *buf, int len) {
+	long i = (long )fp->private_pipe;
 	int in, max_size;
 	int ret = -1;
 

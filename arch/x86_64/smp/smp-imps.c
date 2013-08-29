@@ -291,7 +291,7 @@ static void add_processor(imps_processor *proc) {
  *  the assumption that you have consecutively numbered APIC ids.
  */
 
-int init_smp_force(int ncpus) {
+int init_smp_force(unsigned long ncpus) {
 	int apicid, i,ret;
 	imps_processor p;
 

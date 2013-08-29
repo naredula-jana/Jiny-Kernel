@@ -27,7 +27,7 @@ extern long *g_idle_stack;
 
 static int free_mm(struct mm_struct *mm);
 static unsigned long push_to_userland();
- unsigned long _schedule(unsigned long flags);
+unsigned long _schedule(unsigned long flags);
 static void schedule_kernelSecondHalf();
 static void schedule_userSecondHalf();
 static int release_resources(struct task_struct *task, int attach_to_parent);
@@ -111,7 +111,7 @@ int _sc_task_assign_to_cpu(struct task_struct *task){
 
 
 void Jcmd_ipi(unsigned char *arg1, unsigned char *arg2) {
-	int i, j;
+	int i;
 	int ret;
 
 	if (arg1 == 0)
@@ -123,7 +123,6 @@ void Jcmd_ipi(unsigned char *arg1, unsigned char *arg2) {
 }
 void Jcmd_taskcpu(unsigned char *arg_pid,unsigned char *arg_cpuid){
 	int cpuid,pid;
-	int ret;
 
 	if (arg_pid==0 || arg_cpuid==0){
 		ut_printf(" taskcpu <pid> <cpuid>\n");
@@ -140,7 +139,6 @@ void Jcmd_taskcpu(unsigned char *arg_pid,unsigned char *arg_cpuid){
 }
 void Jcmd_prio(unsigned char *arg1,unsigned char *arg2){
 	int cpu,priority;
-	int ret;
 
 	if (arg1==0 || arg2==0){
 		ut_printf(" set cpu priority usage: prio <cpu> <priority>\n");
@@ -164,17 +162,17 @@ int sc_sleep(long ticks) /* each tick is 100HZ or 10ms */
 }
 static backtrace_t temp_bt;
 
-int Jcmd_ps(char *arg1, char *arg2) {
+int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	unsigned long flags;
 	struct list_head *pos;
 	struct task_struct *task;
-	int i,ret,len,max_len;
+	int i,len,max_len;
 	unsigned char *buf;
 	int all=0;
 
 	ut_printf(" pid allocatedcpu: state generation ticks sleep_ticks mm mm_count name cpu\n");
 
-	if (arg1!=0 && ut_strcmp(arg1,"all")==0){
+	if (arg1!=0 && ut_strcmp(arg1,(uint8_t *)"all")==0){
 		all=1;
 	}
 	len = PAGE_SIZE*100;
@@ -238,8 +236,8 @@ static unsigned long setup_userstack(unsigned char **argv, unsigned char **env, 
 		return 0;
 	}
 
-	target_argv = (unsigned char *) mm_getFreePages(MEM_CLEAR, 0);
-	target_env = (unsigned char *) mm_getFreePages(MEM_CLEAR, 0);
+	target_argv = (unsigned char *) alloc_page(MEM_CLEAR);
+	target_env = (unsigned char *) alloc_page(MEM_CLEAR);
 	stack = (unsigned char *) vmalloc(MAX_USERSPACE_STACK_TEMPLEN,MEM_CLEAR);
 	if (stack ==0){
 		goto error;
@@ -324,7 +322,6 @@ error:
 
 void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **env) {
 	struct mm_struct *mm,*old_mm;
-	unsigned long flags;
 	int i;
 	unsigned long main_func;
 	unsigned long t_argc, t_argv, stack_len, tmp_stack, tmp_aux;
@@ -608,7 +605,7 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void 
 		mm = mm_slab_cache_alloc(mm_cachep, 0);
 		if (mm == 0)
 			BUG();
-		ut_memset(mm,0,sizeof(struct mm_struct));
+		ut_memset((uint8_t *)mm,0,sizeof(struct mm_struct));
 		atomic_set(&mm->count,1);
 		DEBUG("clone  the mm :%x counter:%x \n",mm,mm->count.counter);
 		mm->pgd = 0;
@@ -633,8 +630,8 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void 
 	/* initialize task struct */
 	init_task_struct(p,mm);
 	if (mm != g_kernel_mm) { /* user level thread */
-		ut_memcpy(&(p->thread.userland), &(g_current_task->thread.userland), sizeof(struct user_thread));
-		ut_memcpy(&(p->thread.user_regs),g_cpu_state[getcpuid()].md_state.kernel_stack-sizeof(struct user_regs),sizeof(struct user_regs));
+		ut_memcpy((uint8_t *)&(p->thread.userland),(uint8_t *) &(g_current_task->thread.userland), sizeof(struct user_thread));
+		ut_memcpy((uint8_t *)&(p->thread.user_regs),(uint8_t *)g_cpu_state[getcpuid()].md_state.kernel_stack-sizeof(struct user_regs),sizeof(struct user_regs));
 
 		DEBUG(" userland  ip :%x \n",p->thread.userland.ip);
 		p->thread.userland.sp = (unsigned long)child_stack;
@@ -765,7 +762,7 @@ int sc_task_stick_to_cpu(unsigned long pid, int cpu_id) {
 	return ret;
 }
 static int process_signals(){/* TODO */
-
+	return 0;
 }
 int SYS_sc_kill(unsigned long pid, unsigned long signal) {
 	unsigned long flags;
@@ -920,7 +917,6 @@ int init_tasking(unsigned long unused) {
 		g_cpu_state[i].idle_task->state = TASK_RUNNING;
 		g_cpu_state[i].idle_task->current_cpu = i;
 		g_cpu_state[i].current_task = g_cpu_state[i].idle_task;
-		g_cpu_state[i].dead_task = 0;
 		g_cpu_state[i].stat_total_contexts = 0;
 		g_cpu_state[i].stat_nonidle_contexts = 0;
 		g_cpu_state[i].active = 1; /* by default when the system starts all the cpu are in active state */
@@ -998,40 +994,38 @@ int getmaxcpus(){
 }
 #endif
 
+#define MAX_DEADTASKLIST_SIZE 100
+static struct task_struct *deadtask_list[MAX_DEADTASKLIST_SIZE+1];
+static int deadlist_size=0;
+static void _add_to_deadlist(struct task_struct *task){
+	if (deadlist_size >= MAX_DEADTASKLIST_SIZE) {
+		BUG();
+	}
+	deadtask_list[deadlist_size] = task;
+	deadlist_size++;
+	return;
+}
 static struct task_struct * _get_dead_task(){
 	struct task_struct *task=0;
 
-	int cpuid=getcpuid();
-	if (g_cpu_state[cpuid].dead_task!=0) {
-		task=g_cpu_state[cpuid].dead_task;
-		g_cpu_state[cpuid].dead_task=0;
-	}else{
-		task=0;
-	}
+	if (deadlist_size==0) return 0;
+	task = deadtask_list[deadlist_size-1];
+	deadtask_list[deadlist_size] = 0;
+	deadlist_size--;
 	return task;
 }
 static void schedule_userSecondHalf(){ /* user thread second Half: _schedule function function land here. */
-	struct task_struct *task = _get_dead_task();
 	spin_unlock_irqrestore(&g_global_lock, g_current_task->flags);
-	if (task != 0)
-		sc_delete_task(task);
-
 	ar_updateCpuState(g_current_task,0);
 	clone_push_to_userland();
 }
 static void schedule_kernelSecondHalf(){ /* kernel thread second half:_schedule function task can lands here. */
-	struct task_struct *task = _get_dead_task();
 	spin_unlock_irqrestore(&g_global_lock, g_current_task->flags);
-	if (task != 0)
-		sc_delete_task(task);
 	g_current_task->thread.real_ip(0);
 }
 
-#define MAX_DEAD_TASKS 20
-//static struct task_struct *dead_tasks[MAX_DEAD_TASKS];
 void sc_schedule() { /* _schedule function task can land here. */
 	unsigned long intr_flags;
-	int i;
 
 	int cpuid=getcpuid();
 
@@ -1045,27 +1039,26 @@ void sc_schedule() { /* _schedule function task can land here. */
 		DEBUG(" Task Stack got CORRUPTED task:%x :%x :%x \n",g_current_task,g_current_task->magic_numbers[0],g_current_task->magic_numbers[1]);
 		BUG();
 	}
-#if 0
-	if (g_current_task->pending_signals != 0 && g_current_task->state != TASK_KILLING){
-		/* TODO: need handle the signal properly, need to merge this code with sc_check_signal,
-		 *  sc_check_signal may not be called if there is no syscall, the task should die withs it sknowledge, this is not correct place  */
-		g_current_task->state = TASK_KILLING;
-		g_current_task->exit_code = 9;
-		release_resources(g_current_task, 1);
-		g_current_task->state = TASK_DEAD;
-	}
-#endif
+
 
 	spin_lock_irqsave(&g_global_lock, intr_flags);
-	intr_flags=_schedule(intr_flags);
-	struct task_struct *task = _get_dead_task();
+	intr_flags = _schedule(intr_flags);
 	spin_unlock_irqrestore(&g_global_lock, intr_flags);
 
-	if (task != 0){
-		if (task->state == TASK_DEAD){
-			sc_delete_task(task);
-		}else{
-			BUG();
+	/* remove dead tasks */
+	while (1) {
+		spin_lock_irqsave(&g_global_lock, intr_flags);
+		struct task_struct *task = _get_dead_task();
+		spin_unlock_irqrestore(&g_global_lock, intr_flags);
+
+		if (task != 0) {
+			if (task->state == TASK_DEAD) {
+				sc_delete_task(task);
+			} else {
+				BUG();
+			}
+		} else {
+			return;
 		}
 	}
 }
@@ -1185,10 +1178,13 @@ unsigned long  _schedule(unsigned long flags) {
 		flush_tlb(next->mm->pgd);
 	}
 	if (prev->state == TASK_DEAD) {
+		_add_to_deadlist(prev);
+#if 0
 		if (g_cpu_state[cpuid].dead_task != NULL){
 			BUG(); //Hitting, Hitting again
 		}
 		g_cpu_state[cpuid].dead_task = prev;
+#endif
 	}else if (prev!=g_cpu_state[cpuid].idle_task && prev->state==TASK_RUNNING){ /* some other cpu  can pickup this task , running task and idle task should not be in a run equeue even though there state is running */
 		if (prev->run_queue.next != 0){ /* Prev should not be on the runqueue */
 			BUG();
@@ -1221,8 +1217,6 @@ void do_softirq() {
 unsigned long g_jiffie_errors=0;
 unsigned long g_jiffie_tick=0;
 void timer_callback(registers_t regs) {
-	int i;
-	unsigned long flags;
 
 	/* 1. increment timestamp */
 	if (getcpuid()==0){

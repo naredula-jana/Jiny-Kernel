@@ -44,6 +44,7 @@ flow-3)  low_level_output -> netif_tx -> driver_callback-netdriver_xmit --- ( pr
 //#define DEBUG_ENABLE 1
 #include "common.h"
 
+
 #define MAX_QUEUE_LENGTH 600
 struct queue_struct {
 	wait_queue_t waitq;
@@ -83,7 +84,7 @@ static int stat_to_driver = 0;
  */
 static unsigned char *get_freebuf(){
 	/* size of buf is hardcoded to 4096, this is linked to network driverbuffer size */
-	return mm_getFreePages(0, 0);
+	return (unsigned char *)alloc_page(0);
 }
 static int add_to_queue(unsigned char *buf, int len, unsigned char **replace_outbuf) {
 	if (buf == 0 || len == 0)
@@ -204,7 +205,7 @@ int netif_rx(unsigned char *data, unsigned int len, unsigned char **replace_buf)
 		ipc_wakeup_waitqueue(&queue.waitq); /* wake all consumers , i.e all the netBH */
 	}
 	stat_from_driver++;
-	if (*replace_buf < 0x10000){ /* invalid address*/
+	if (*replace_buf < (unsigned char *)0x10000){ /* invalid address*/
 		BUG();
 	}
 	return 1;
@@ -273,7 +274,7 @@ int socket_close(struct file *file) {
 		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
 	}
 	if (file->inode->fs_private != 0){
-		ret = socket_api->close(file->inode->fs_private, file->inode->u.socket.sock_type);
+		ret = socket_api->close((void *)file->inode->fs_private, file->inode->u.socket.sock_type);
 	}else{
 		ret = SYSCALL_SUCCESS;
 	}
@@ -289,9 +290,9 @@ int socket_read(struct file *file, unsigned char *buff, unsigned long len) {
 	}
 
 	if (buff==0){
-		return socket_api->check_data(file->inode->fs_private);
+		return socket_api->check_data((void *)file->inode->fs_private);
 	}
-	ret = socket_api->read(file->inode->fs_private, buff, len);
+	ret = socket_api->read((void *)file->inode->fs_private, buff, len);
 
 	SYSCALL_DEBUG("sock read: read bytes :%d \n", ret);
 	if (ret > 0)
@@ -315,7 +316,7 @@ int socket_write(struct file *file, unsigned char *buff, unsigned long len) {
 	if (len < klen)
 		klen = len;
 	ut_memcpy(kbuf, buff, klen);
-	ret = socket_api->write(file->inode->fs_private, kbuf, klen, file->inode->u.socket.sock_type, 0, 0);
+	ret = socket_api->write((void *)file->inode->fs_private, kbuf, klen, file->inode->u.socket.sock_type, 0, 0);
 	mm_free(kbuf);
 	SYSCALL_DEBUG("sock write: written bytes :%d \n", ret);
 	if (ret > 0)
@@ -360,7 +361,7 @@ int SYS_socket(int family, int arg_type, int z) {
 		ret = -3;
 		goto last;
 	}
-	file->inode->fs_private = conn;
+	file->inode->fs_private = (unsigned long)conn;
 	file->inode->u.socket.sock_type = type;
 
 last:
@@ -400,7 +401,7 @@ int SYS_bind(int fd, struct sockaddr *addr, int len) {
 	}
 #endif
 
-	ret = socket_api->bind(file->inode->fs_private, addr, file->inode->u.socket.sock_type);
+	ret = socket_api->bind((void *)file->inode->fs_private, addr, file->inode->u.socket.sock_type);
 	file->inode->u.socket.local_addr = addr->addr;
 	file->inode->u.socket.local_port = addr->sin_port;
 	SYSCALL_DEBUG("Bindret :%x (%d) port:%x\n",ret,ret,addr->sin_port);
@@ -448,7 +449,7 @@ int SYS_accept(int fd) {
 	file = g_current_task->mm->fs.filep[fd];
 	if (file == 0)
 		return SYSCALL_FAIL;
-	void *conn = socket_api->accept(file->inode->fs_private);
+	void *conn = socket_api->accept((void *)file->inode->fs_private);
 	if (conn == 0)
 		return SYSCALL_FAIL;
 	int i = SYS_fs_open("/dev/sockets", 0, 0);
@@ -457,7 +458,7 @@ int SYS_accept(int fd) {
 		return SYSCALL_FAIL;
 	}
 	new_file = g_current_task->mm->fs.filep[i];
-	new_file->inode->fs_private = conn;
+	new_file->inode->fs_private = (unsigned long)conn;
 	new_file->inode->u.socket.local_addr = file->inode->u.socket.local_addr;
 	new_file->inode->u.socket.local_port = file->inode->u.socket.local_port;
 
@@ -496,7 +497,7 @@ int SYS_connect(int fd, struct sockaddr *addr, int len) {
 	ksock_addr.addr = addr->addr;
 	if (file->inode->fs_private == 0) return SYSCALL_FAIL;
 
-	ret = socket_api->connect(file->inode->fs_private, &(ksock_addr.addr),
+	ret = socket_api->connect((void *)file->inode->fs_private, &(ksock_addr.addr),
 			addr->sin_port);
 	SYSCALL_DEBUG("connect ret:%d  addr:%x\n", ret, ksock_addr.addr);
 	return ret;
@@ -516,7 +517,7 @@ unsigned long SYS_sendto(int sockfd, const void *buf, size_t len, int flags,
 	if (file->inode->u.socket.sock_type != SOCK_DGRAM){
 		return 0;
 	}
-	ret = socket_api->write(file->inode->fs_private, buf, len, file->inode->u.socket.sock_type,
+	ret = socket_api->write((void *)file->inode->fs_private, buf, len, file->inode->u.socket.sock_type,
 			dest_addr->addr, dest_addr->sin_port);
 	if (ret > 0)
 		file->inode->stat_out++;
@@ -533,7 +534,7 @@ int SYS_recvfrom(int sockfd, const void *buf, size_t len, int flags,
 		return 0;
 	struct file *file = g_current_task->mm->fs.filep[sockfd];
 
-	ret = socket_api->read_from(file->inode->fs_private, buf, len, dest_addr, addrlen);
+	ret = socket_api->read_from((void *)file->inode->fs_private, buf, len, dest_addr, addrlen);
 
 	SYSCALL_DEBUG("RECVFROM return with len :%d \n", ret);
 	if (ret > 0)
