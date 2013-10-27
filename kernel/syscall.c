@@ -235,8 +235,8 @@ unsigned long SYS_nanosleep(const struct timespec *req, struct timespec *rem) {
 	SYSCALL_DEBUG("nanosleep sec:%d nsec:%d:\n", req->tv_sec, req->tv_nsec);
 	if (req == 0)
 		return 0;
-	ticks = req->tv_sec * 100;
-	ticks = ticks + (req->tv_nsec / 100000);
+	ticks = req->tv_sec * 100; /* so many 10 ms */
+	ticks = ticks + (req->tv_nsec / 10000000);
 	sc_sleep(ticks); /* units of 10ms */
 	return SYSCALL_SUCCESS;
 }
@@ -258,15 +258,16 @@ long int SYS_time(__time_t *time) {
 	if (time == 0)
 		return 0;
 	//*time = g_jiffies;
-	get_wallclock(time);
+	ut_get_wallclock(time,0);
 	SYSCALL_DEBUG("Return time :%x seconds \n", *time);
 	return *time;
 }
 unsigned long SYS_gettimeofday(time_t *tv, struct timezone *tz) {
-	SYSCALL_DEBUG("gettimeofday tv:%x tz:%x\n", tv, tz);
+
 	if (tv == 0)
 		return SYSCALL_FAIL;
-	get_wallclock(&(tv->tv_nsec));
+	ut_get_wallclock(&(tv->tv_sec),&(tv->tv_usec));
+	SYSCALL_DEBUG("gettimeofday sec:%d(%x) usec:%d(%x)\n", tv->tv_sec,tv->tv_sec, tv->tv_usec,tv->tv_usec);
 	return SYSCALL_SUCCESS;
 }
 #define TEMP_UID 26872

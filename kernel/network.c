@@ -43,7 +43,7 @@ flow-3)  low_level_output -> netif_tx -> driver_callback-netdriver_xmit --- ( pr
 
 //#define DEBUG_ENABLE 1
 #include "common.h"
-
+#include "device.h"
 
 #define MAX_QUEUE_LENGTH 600
 struct queue_struct {
@@ -156,7 +156,22 @@ static int netRx_BH(void *arg) {
 	}
 	return 1;
 }
+int net_getmac(unsigned char *mac) {
+	device_t *pci_dev;
+	int i;
 
+	if (mac == 0) {
+		return JFAIL;
+	}
+	if (count_net_drivers > 0) {
+		pci_dev = net_drivers[0].private;
+		for (i = 0; i < 6; i++) {
+			mac[i]=pci_dev->mac[i];
+		}
+		return JSUCCESS;
+	}
+	return JFAIL;
+}
 int registerNetworkHandler(int type,
 		int (*callback)(unsigned char *buf, unsigned int len,
 				void *private_data), void *private_data) {
@@ -245,7 +260,7 @@ int init_networking() {
 	g_netBH_lock = mutexCreate("mutex_netBH");
 	pid = sc_createKernelThread(netRx_BH, 0, (unsigned char *) "netRx_BH_1");
 	pid = sc_createKernelThread(netRx_BH, 0, (unsigned char *) "netRx_BH_2");
-	pid = sc_createKernelThread(netRx_BH, 0, (unsigned char *) "netRx_BH_3");
+//	pid = sc_createKernelThread(netRx_BH, 0, (unsigned char *) "netRx_BH_3");
 	network_enabled = 1;
 	return 0;
 }
@@ -393,7 +408,7 @@ int SYS_bind(int fd, struct sockaddr *addr, int len) {
 	struct file *file = g_current_task->mm->fs.filep[fd];
 	if (file == 0)
 		return SYSCALL_FAIL;
-#if 1  // TODO : remove later , only for testing ftp app
+#if 0  // TODO : remove later , only for testing ftp app
 	if (fd !=3 ){
 		static int test_port=3001;
 		addr->sin_port=test_port;

@@ -419,7 +419,8 @@ int lwip_sock_bind(void *session, struct sockaddr *s, int sock_type) {
 	struct ip_addr listenaddr = { s->addr }; /* TODO */
 
 	mutexLock(g_netBH_lock);
-	int rc = netconn_bind(session, &listenaddr, ntohs(s->sin_port));
+	//int rc = netconn_bind(session, &listenaddr, ntohs(s->sin_port));
+	int rc = netconn_bind(session, &listenaddr, (s->sin_port));
 	mutexUnLock(g_netBH_lock);
 
 	if (rc != ERR_OK) {
@@ -467,9 +468,9 @@ struct Socket_API lwip_socket_api;
  * lets us know it's OK to continue.int lwip_sock_read
  */
 extern int g_network_ip;
-static int load_LwipTcpIpStack() {
+static int load_LwipTcpIpStack(unsigned char *arg_ip, unsigned char *arg_unused) {
 	//mac = 00:30:48:DB:5E:06
-	unsigned char mac[7] = { 0x00, 0x30, 0x48, 0xDB, 0x5E, 0x06, 0x0 };
+	unsigned char mac[7];
 	struct netif *netif;
 	struct ip_addr ipaddr = { htonl(IF_IPADDR) };
 	struct ip_addr netmask = { htonl(IF_NETMASK) };
@@ -492,6 +493,7 @@ static int load_LwipTcpIpStack() {
 
 	tcpip_init(tcpip_bringup_finished, netif);
 
+	net_getmac(mac);
 	netif_add(netif, &ipaddr, &netmask, &gw, mac, netif_netfront_init,
 			ip_input);
 	netif_set_default(netif);
@@ -501,6 +503,9 @@ static int load_LwipTcpIpStack() {
 	//down(&tcpip_is_up);
 
 	if (1) {
+		if (arg_ip != 0){
+			g_network_ip = ut_atoi(arg_ip);
+		}
 		struct ip_addr ipaddr = { htonl(g_network_ip) };
 		struct ip_addr netmask = { htonl(0xffffff00) };
 		struct ip_addr gw = { htonl(0x0ad18001) };
@@ -525,15 +530,23 @@ static int load_LwipTcpIpStack() {
 	ut_printf("Lwip Initialization completed \n");
 	return 1;
 }
-static void init_module(){
-	load_LwipTcpIpStack();
+static void init_module(unsigned char *arg1, unsigned char *arg2){
+	static int init=0;
+	if (init ==0){
+		init=1;
+		load_LwipTcpIpStack(arg1,arg2);
+	}else{
+		ut_printf(" Error Already Initialized \n");
+	}
 }
 static void clean_module(){
 	unregisterNetworkHandler(NETWORK_PROTOCOLSTACK, lwip_netif_rx, NULL);
 	unregister_to_socketLayer();
 	ut_printf("inside the clean module func\n");
 }
-
+void Jcmd_start_network(unsigned char *arg1, unsigned char *arg2){
+	init_module(arg1,arg2);
+}
 
 //DEFINE_MODULE(LwipTcpIpStack, root, load_LwipTcpIpStack, unload_LwipTcpIpStack, stat_LwipTcpIpStack);
 

@@ -37,7 +37,7 @@ extern spinlock_t g_global_lock;
 
 #define SYSCALL_DEBUG(x...) do { \
 	if (g_conf_syscall_debug==1)	{\
-		ut_printf("SYSCALL(%x :%d uip: %x :%d) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip,g_current_task->stats.syscall_count); ut_printf(x); \
+		ut_printf("SYSCALL(%x :%d uip: %x :%d jiff:%d) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip,g_current_task->stats.syscall_count,g_jiffies); ut_printf(x); \
 	}else if (g_conf_syscall_debug==2) {\
 		if (strace_wait() == JSUCCESS) {\
 				ut_log("SYSCALL(%x :%d uip: %x :%d) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip,g_current_task->stats.syscall_count); ut_log(x); \
@@ -74,7 +74,7 @@ typedef struct registers
 
 typedef struct {
 	unsigned long tv_sec;
-	unsigned long tv_nsec;
+	unsigned long tv_usec;
 }time_t;
 
 

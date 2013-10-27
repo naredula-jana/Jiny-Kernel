@@ -134,7 +134,7 @@ gnttab_alloc_and_grant(void **map)
     unsigned long mfn;
     grant_ref_t gref;
 
-    *map = (void *)mm_getFreePages(0,0);
+    *map = (void *)alloc_page(0);
     mfn = __pa(*map)>>PAGE_SHIFT;
     gref = gnttab_grant_access(0, mfn, 0);
     return gref;

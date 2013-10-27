@@ -71,7 +71,7 @@ int cmd(unsigned char *arg1,unsigned  char *arg2) {
 	return ret;
 }
 commands_t cmd_list[] = {
-		{ "t1 ", "t1 file", "t1", Jcmd_memleak },
+	/*	{ "t1 ", "t1 file", "t1", Jcmd_memleak },
 		{ "vmcore      ", "vmcore", "vmcore", sh_vmcore_test },
 		{"set  <var> <value>", "set config variables", "set", conf_set },
 		{"debug  ", "debug ", "debug", debug_trace },
@@ -79,11 +79,11 @@ commands_t cmd_list[] = {
 		{ "kill <pid> ","kill process", "kill", sh_kill },
 		{ "mmap <file> <addr>", "mmap file", "mmap",sh_mmap },
 		{ "amem <order>", "mem allocate ", "amem", sh_alloc_mem },
-		{"fmem <address>", "mem allocate ", "fmem", sh_free_mem },
+		{ "fmem <address>", "mem allocate ", "fmem", sh_free_mem },
 		{ "del <file>", "flush file-remove from page cache       ", "del",sh_del },
 		{ "cp <f1> <f2>", "copy f1 f2       ", "cp", sh_cp },
 		{ "sync <f1>", "sync f1       ", "sync", sh_sync },
-		{ "sd ","start pci device       ", "sd", sh_pci },
+		{ "sd ","start pci device       ", "sd", sh_pci }, */
 				 {
 				0, 0, 0, cmd } /* at last check for command */
 };

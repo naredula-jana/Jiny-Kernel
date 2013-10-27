@@ -1176,7 +1176,7 @@ restart:
 	mutexLock(g_inode_lock);
 	int out = pipes[i].out_index;
 	if (pipes[i].bufs[out].data == 0) {
-		pipes[i].bufs[out].data = (uint8_t *)mm_getFreePages(0, 0);
+		pipes[i].bufs[out].data = (uint8_t *)alloc_page(0);
 		pipes[i].bufs[out].size = 0;
 		pipes[i].bufs[out].start_offset = 0;
 	} else {

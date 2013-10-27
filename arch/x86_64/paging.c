@@ -93,7 +93,7 @@ addr_t initialise_paging(addr_t end_addr, unsigned long current_mem_end)
 	fr=0+20*512; /*  2M= 512 4Kpages already initialized */
 	for (i=20; i<512; i++) /* 20(40M) entries is already initialized, this loop covers for 1G */
 	{
-		/* TODO: need to check the maximum physical memory and need to initilize accordingly, currentl 1G is initilised */
+		/* TODO: need to check the maximum physical memory and need to initilize accordingly, currently 1G is initilised */
 		if (fr > nframes) {
 			break;
 		}
@@ -638,6 +638,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 	{
 		v=(unsigned long *)alloc_page(MEM_CLEAR); /* get page of 4k size for actual page */
 		if ( v==0 ) { /* No Memory: kill the current process */
+			ut_printf("Killing the current process because of shortage of memory \n");
 			SYS_sc_exit(903);
 			return 1;
 		}

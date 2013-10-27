@@ -17,23 +17,11 @@ Running configs:
  2) virtio+p9: (with p9 Filesystems )
     ./qemu-system-x86_64 -s -m 1024M -hda /opt_src/Jiny-Kernel/bin/g2_bootdisk -hdb /opt_src/Jiny-Kernel/bin/g2_image -enable-kvm   -vnc :4 -fsdev local,security_model=passthrough,id=fsdev0,path=/home/jana -device virtio-9p-pci,id=fs0,fsdev=fsdev0,mount_tag=hostshare   -serial telnet::50008,server,nowait -fsdev local,security_model=passthrough,id=fsdev0,path=/opt_src/Jiny-Kernel/test/root/ -device virtio-9p-pci,id=fs0,fsdev=fsdev0,mount_tag=hostshare -monitor tcp::51008,server,nowait,nodelay   
     telnet localhost  50008  /* this will open in to busybox shell on Jiny OS */
-------------------------------
-Using Gdb:
-gdb -x ./gdb_init
-----------------------------
-Constructing the image for grub2 (Not sucessfull):
+----------------------------------------------------------------
+ ./vde_switch  -i /tmp/switch/ -e eth2 
 
-dd if=/dev/zero of=bin/g2_image bs=512 count=8000
---sudo losetup /dev/loop0 -d
---sudo losetup /dev/loop0  bin/g2_image
---sudo mke2fs /dev/loop0
-mke2fs bin/g2_image
-sudo mount /dev/loop0 /tmp/ab/
-populate files into /tmp/ab/
-
-
-sudo umount /tmp/ab
-sudo grub-install --force  /dev/loop0 
+  k start_network ad180b0  /* 10.209.128.176 */
+  k start_network ad180b1
 -------------------------------
 WorkAround:
     - use old image as bootable disk for grub, use second disk to store the kernel.

@@ -48,8 +48,8 @@ void *mm_malloc (size_t size, int flags);
 void mm_free (const void *objp);
 extern void *vmalloc(int size, int flags);
 extern void vfree();
-#define alloc_page(flags) mm_getFreePages(flags, 0)
-#define free_page(p) mm_putFreePages(p, 0)
+#define alloc_page(flags) jalloc_page(flags)
+#define free_page(p) jfree_page(p)
 #define memset ut_memset
 #define ut_free mm_free
 #define ut_malloc(x) mm_malloc(x,0)
@@ -135,6 +135,7 @@ void ut_getBackTrace(unsigned long *rbp, unsigned long task_addr, backtrace_t *b
 int ut_symbol_execute(int type, char *name, uint8_t *argv1,uint8_t *argv2);
 int ut_symbol_show(int type);
 int strace_wait(void);
+int ut_get_wallclock(unsigned long *sec, unsigned long *usec);
 
 /* architecture depended */
 void ar_registerInterrupt(uint8_t n, isr_t handler,char *name, void *private_data);

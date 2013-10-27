@@ -1217,6 +1217,7 @@ void do_softirq() {
 unsigned long g_jiffie_errors=0;
 unsigned long g_jiffie_tick=0;
 void timer_callback(registers_t regs) {
+	int jiff_incremented=0;
 
 	/* 1. increment timestamp */
 	if (getcpuid()==0){
@@ -1226,13 +1227,16 @@ void timer_callback(registers_t regs) {
 		}else{
 			g_jiffie_tick++;
 			g_jiffies++;
+			jiff_incremented=1;
 		}
 	}
 	g_current_task->counter--;
 	g_current_task->stats.ticks_consumed++;
 
 	/* 2. Test of wait queues for any expiry. time queue is one of the wait queue  */
-	ipc_check_waitqueues();
+	if (jiff_incremented == 1){
+		ipc_check_waitqueues();
+	}
 
 	do_softirq();
 }

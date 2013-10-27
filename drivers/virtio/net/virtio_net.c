@@ -36,10 +36,10 @@ static int addBufToQueue(struct virtqueue *vq, unsigned char *buf, unsigned long
 	int ret;
 
 	if (buf == 0) {
-		buf = (unsigned char *) mm_getFreePages(0, 0);
+		buf = (unsigned char *) alloc_page(0);
 #if 1
 		if (test_virtio_nob == 1) { /* TODO: this is introduced to burn some cpu cycles, otherwise throughput drops drastically  from 1.6G to 500M , with vhost this is not a issue*/
-			unsigned long buf1 = mm_getFreePages(MEM_CLEAR, 0);
+			unsigned long buf1 = alloc_page(MEM_CLEAR);
 			mm_putFreePages(buf1, 0);
 		}
 #endif
@@ -90,7 +90,7 @@ static int attach_virtio_net_pci(device_t *pci_dev) {
 
 	addr = virtio_dev->pci_ioaddr + VIRTIO_PCI_HOST_FEATURES;
 	features = inl(addr);
-	DEBUG("VirtioNet:  hostfeatures :%x:\n", features);
+	ut_log("	VirtioNet:  hostfeatures :%x:\n", features);
 	display_virtiofeatures(features, vtnet_feature_desc);
 
 	if (pci_hdr->capabilities_pointer != 0) {
@@ -106,8 +106,7 @@ static int attach_virtio_net_pci(device_t *pci_dev) {
 	} else {
 		addr = virtio_dev->pci_ioaddr + 24;
 	}
-	DEBUG(
-			"VirtioNet:  pioaddr:%x MAC address : %x :%x :%x :%x :%x :%x status: %x:%x  :\n", addr, inb(addr), inb(addr+1), inb(addr+2), inb(addr+3), inb(addr+4), inb(addr+5), inb(addr+6), inb(addr+7));
+	ut_log("	VirtioNet:  pioaddr:%x MAC address : %x :%x :%x :%x :%x :%x status: %x:%x  :\n", addr, inb(addr), inb(addr+1), inb(addr+2), inb(addr+3), inb(addr+4), inb(addr+5), inb(addr+6), inb(addr+7));
 	for (i = 0; i < 6; i++)
 		pci_dev->mac[i] = inb(addr + i);
 	virtio_createQueue(0, virtio_dev, 1);
@@ -196,7 +195,7 @@ static int netdriver_xmit(unsigned char* data, unsigned int len,
 		return 0;
 
 	unsigned char *addr;
-	addr = (unsigned char *) mm_getFreePages(0, 0);
+	addr = (unsigned char *) alloc_page(0);
     if (addr ==0) return 0;
     ut_memset(addr,0,10);
 	ut_memcpy(addr+10,data,len);

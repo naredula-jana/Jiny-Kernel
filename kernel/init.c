@@ -162,7 +162,7 @@ int  init_code_readonly(unsigned long arg1){
 		init_readonly = 1;
 	}
 #if 0
-	void *p=mm_getFreePages(0, 0);
+	void *p=alloc_page(0, 0);
 	ut_memcpy(p,__va(0x101000),PAGE_SIZE);
 	flush_tlb(__pa(p));
 #endif

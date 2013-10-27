@@ -425,6 +425,7 @@ out:  ;
 		if (error != 0){
 			ut_printf("ERROR : %s\n",error);
 		}else{
+			sort_symbols(g_modules[0]);
 			ut_printf(" Successfull loaded the sybols tables of kernel\n");
 			return g_modules[0]->symbol_table;
 		}
@@ -580,7 +581,6 @@ void Jcmd_insmod(unsigned char *filename, unsigned char *arg){
 	}
 	modulep->str_table_length = sec_str->sh_size;
 
-
 	fs_lseek(file, (unsigned long) sec_str->sh_offset, 0);
 	retval = complete_read(file, (unsigned char *) modulep->str_table, sec_str->sh_size);
 	if (retval != sec_str->sh_size){
@@ -653,6 +653,7 @@ out:  ;
 	if (error != 0){
 		ut_printf("ERROR : %s\n",error);
 	}else{
+		sort_symbols(modulep);
 		modulep->init_module(0,0);
 		ut_printf(" Successfull loaded the module\n");
 		return;
@@ -670,7 +671,25 @@ out:  ;
 
 	return;
 }
+void sort_symbols(module_t *modulep){
+	int i,j;
 
+	for (i = 0; modulep->symbol_table[i].name != 0; i++) {
+		int smallest;
+		smallest=i;
+		for (j = i + 1; modulep->symbol_table[j].name != 0; j++) {
+			if (modulep->symbol_table[j].address < modulep->symbol_table[smallest].address){
+				smallest = j;
+			}
+		}
+		if (smallest != i){
+			symb_table_t temp;
+			ut_memcpy(&temp,&(modulep->symbol_table[smallest]), sizeof(symb_table_t));
+			ut_memcpy(&(modulep->symbol_table[smallest]),&(modulep->symbol_table[i]), sizeof(symb_table_t));
+			ut_memcpy(&(modulep->symbol_table[i]),&temp, sizeof(symb_table_t));
+		}
+	}
+}
 void Jcmd_lsmod(unsigned char *arg1,unsigned char *arg2){
 	module_t *modulep=0;
 	int i,j;
