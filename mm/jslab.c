@@ -374,6 +374,40 @@ int jslab_destroy_cache(jcache_t *cachep) {
 	list_del(&(cachep->cache_list));
 	return JSUCCESS;
 }
+
+/* g_conf_page_zero : clear the free pages with zeros so that kvm KSM(Kernel Same page Merging) will compact intra vm zero pages efficiently.
+ *  All the zero pages of the vm merged to one 4k page. If the VM have 1G free pages then it will be merged to 4K size saving 1G-4k memory.
+ * Usefulness of maintaining zero pages:
+ *  1) KSM compression of vm memory will be high if the guest OS maintains sufficient zero pages.
+ *  2) calloc calls will be faster, if there is zero free page in the free list, otherwise need to memset the page with zeros syncronously.
+ * TODO:
+ *  1) Currently it is done in synchronously during jfree_page, it need to be done in asynchronously by an housekeeping thread.
+ *  2) need to maintain seperate queues inside the free list, one for zero pages other for non-zero.
+ *  3) To zero a page, a page from free list should  be picked in such way that,
+ *    it should stay in the zero page list for a period of time otherwise zeroed page can be picked by malloc instead of calloc wasting cpu cycles.
+ *    From the free list, malloc/calloc calls will pickup the page in LIFO order.
+ *    so that zero pages stays in the zero page list for a period of time otherwise KSM will consume lot of CPU cycles in moving the pages from one state to another.
+ *
+ * */
+int g_conf_page_zero = 0;
+static unsigned long stat_page_allocs=0;
+static unsigned long stat_page_alloc_zero=0;
+static unsigned long stat_page_frees=0;
+unsigned long jalloc_page(int flags){
+	stat_page_allocs++;
+	if (flags&MEM_CLEAR){
+		stat_page_alloc_zero++;
+	}
+
+	return mm_getFreePages(flags, 0);
+}
+int jfree_page(unsigned long p){
+	stat_page_frees++;
+	if (g_conf_page_zero==1){
+		ut_memset(p,0,PAGE_SIZE);
+	}
+	return mm_putFreePages(p, 0);
+}
 /*************************** simple vmalloc subsystem ******************************************/
 #if 1
 #define MAX_VBLOCKS 100
@@ -449,16 +483,7 @@ void vfree(addr_t addr){
 }
 #endif
 /********************************* jcmd's ******************************************************************************/
-#if 0
-int Jcmd_jslabfree(unsigned char *arg1, unsigned char *arg2) {
-	if (arg1 == 0)
-		return 0;
 
-	jslab_free2((const void *)ut_atoi(arg1));
-
-	return 1;
-}
-#endif
 jcache_t test_cache;
 int Jcmd_jslabmalloc(unsigned char *arg1, unsigned char *arg2) {
 	unsigned long addr;
@@ -492,7 +517,8 @@ int Jcmd_jslab(unsigned char *arg1, unsigned char *arg2) {
 	jcache_t *cachep;
 	struct list_head *c;
 
-	ut_printf(" malloc :%d frees:%d  pagefault_write:%d\n",stat_mallocs,stat_frees,g_stat_pagefaults_write);
+	ut_printf("malloc :%d frees:%d  pagefault_write:%d\n",stat_mallocs,stat_frees,g_stat_pagefaults_write);
+	ut_printf("single page allocs(zero_alloc):%d(%d) page frees:%d \n",stat_page_allocs,stat_page_alloc_zero,stat_page_frees);
 	list_for_each(c, &(cache_list)) {
 		cachep = list_entry(c, jcache_t , cache_list);
 #ifdef JSLAB_DEBUG

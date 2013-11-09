@@ -140,6 +140,16 @@ static unsigned long init_free_area(unsigned long start_mem, unsigned long end_m
 	unsigned long mask = PAGE_MASK;
 	unsigned long i;
 
+#if 0 /*: Testing purpose: this block is just to touch all the memory */
+	unsigned char *c=start_mem;
+	int k;
+	while (c<end_mem){
+		*c=k;
+		k++;
+		if (k>100) k=0;
+		c=c+1;
+	}
+#endif
 	/*
 	 * Select nr of pages we try to keep free for important stuff
 	 * with a minimum of 10 pages and a maximum of 256 pages, so
@@ -341,6 +351,7 @@ extern unsigned long g_multiboot_mod1_len;
 extern unsigned long g_phy_mem_size;
 extern unsigned long _start,_end;
 extern addr_t end; // end of code and data region
+unsigned long 	g_pagecache_size = 0x10000000 ;
 int init_memory(unsigned long arg1)
 {
 	unsigned long virt_start_addr,virt_end_addr;
@@ -357,27 +368,14 @@ int init_memory(unsigned long arg1)
 	virt_end_addr=(unsigned long)__va(phy_end_addr);
 	ut_log("	After Paging initialized start_addr: %x endaddr: %x  current end:%x\n",virt_start_addr,virt_end_addr,current_end_memused);
 
-#if 0
-	if (g_multiboot_mod1_len > 0){ /* symbol file  reside at the end of memory, it can acess only when page table is initialised */
-		g_symbol_table=(symb_table_t *)virt_start_addr;
-		g_total_symbols=(g_multiboot_mod1_len)/sizeof(symb_table_t);
-		ut_memcpy((unsigned char *)g_symbol_table,(unsigned char *)g_multiboot_mod1_addr,g_multiboot_mod1_len);
-		virt_start_addr=(unsigned long)virt_start_addr+g_multiboot_mod1_len;
-		ut_log("	g_symbol_table as module:  %x totalsymbols :%d size :%d some symbol address:%x : ", g_symbol_table,g_total_symbols,sizeof(symb_table_t),g_symbol_table[5].address);
-		ut_log("	symbol name:  %s \n",&g_symbol_table[5].name[0]);
-	}
 
-	if (g_multiboot_mod1_len > 0){
-		virt_start_addr=(unsigned long)virt_start_addr+g_multiboot_mod1_len;
-	}
-#endif
 	ut_log("	end:%x multiboot_mod_addr: %x len :%x(%d) \n",&end,g_multiboot_mod1_addr,g_multiboot_mod1_len,g_multiboot_mod1_len);
 	ut_log("	multiboot_mod_addr2: %x len :%x(%d) current_end_mem: %x \n",g_multiboot_mod2_addr,g_multiboot_mod2_len,g_multiboot_mod2_len, current_end_memused);
 	ut_log("	code+data  : %x  -%x size:%dK\n",&_start,&_end,((long)&_end-(long)&_start)/1000);
 	ut_log("	free area  : %x - %x size:%dM\n",virt_start_addr,virt_end_addr,(virt_end_addr-virt_start_addr)/1000000);
 	virt_start_addr=init_free_area( virt_start_addr, virt_end_addr);
 
-	pc_size = 0x10000000 ;
+	pc_size = g_pagecache_size ;
 	pc_init((unsigned char *)virt_start_addr,pc_size);
 	ut_log("	pagecache  : %x - %x size:%dM\n",virt_start_addr,virt_start_addr+pc_size,pc_size/1000000);
 
@@ -408,7 +406,7 @@ int Jcmd_mem(char *arg1, char *arg2) {
 				free_mem_area[order].stat_count, (nr << order));
 	}
 	spin_unlock_irqrestore(&free_area_lock, flags);
-	ut_printf("total Free pages = %d (%dM) Actual pages: %d (%dM) \n", total, (total * 4) / 1024,stat_mem_size/PAGE_SIZE,stat_mem_size/(1024*1024));
+	ut_printf("total Free pages = %d (%dM) Actual pages: %d (%dM) pagecachesize: %dM \n", total, (total * 4) / 1024,stat_mem_size/PAGE_SIZE,stat_mem_size/(1024*1024),g_pagecache_size/(1024*1024));
 
 	int slab=0;
 	int referenced=0;
