@@ -52,7 +52,7 @@ int pci_read(pci_addr_t *d, uint16_t pos, uint8_t len, void *buf){
 	uint16_t port;
 	uint32_t addr;
 
-	if(d->bus > 255 || d->device > 31 || d->function > 5 || pos > 4096) {
+	if(d->bus > 255 || d->device > 31 || d->function > 8 || pos > 4096) {
 		return -1;
 	}
 	//  if(alloc_ioport_range( 0xCF8, 8 ) != 0) return -1;

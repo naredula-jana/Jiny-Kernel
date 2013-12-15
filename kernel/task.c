@@ -85,8 +85,10 @@ static inline struct task_struct *_del_from_runqueue(struct task_struct *p, int 
 	g_cpu_state[cpuid].run_queue_length--;
 	return p;
 }
-int g_conf_dynamic_assign_cpu=1;
-/* return 1 if it assigned to active cpu */
+int g_conf_dynamic_assign_cpu=0; /* minimizes the IPI interrupt by reassigning the the task to running cpu */
+int stat_dynamic_assign_errors=1;
+
+/* return 1 if it assigned to running cpu */
 int _sc_task_assign_to_cpu(struct task_struct *task){
 	int i;
 	int min_length=99999;
@@ -101,11 +103,22 @@ int _sc_task_assign_to_cpu(struct task_struct *task){
 		}
 	}
 
+	if (min_cpuid==-1 && g_conf_dynamic_assign_cpu==1){
+		min_cpuid=getcpuid();
+	}
 	_add_to_runqueue(task, min_cpuid);
 	if (min_cpuid == -1){
 		return 0;
 	}else{
 		return 1;
+#if 0
+		if (g_cpu_state[min_cpuid].current_task!=g_cpu_state[min_cpuid].idle_task){
+			return 1;
+		}else {
+			stat_dynamic_assign_errors++;
+			return 0;
+		}
+#endif
 	}
 }
 
@@ -194,7 +207,8 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 		len = len - ut_snprintf(buf+max_len-len,len,"cpu-%d: %3d %3d %5x  %5x %4d %7s sleeptick(%3d:%d) cpu:%3d :%s: count:%d status:%s stickcpu:%x\n",task->allocated_cpu,task->state, task->cpu_contexts, task->ticks, task->mm, task->mm->count.counter, task->name, task->sleep_ticks,
 				task->stats.ticks_consumed,task->current_cpu,task->mm->fs.cwd,task->count.counter,task->status_info,task->stick_to_cpu);
 		temp_bt.count = 0;
-		if (task->state != TASK_RUNNING) {
+		//if (task->state != TASK_RUNNING) {
+		if (1) {
 			if (all == 1) {
 				ut_getBackTrace(task->thread.rbp, task, &temp_bt);
 				for (i = 0; i < temp_bt.count; i++) {
@@ -565,6 +579,7 @@ static void init_task_struct(struct task_struct *p,struct mm_struct *mm){
 	p->run_queue.prev = 0;
 	p->task_queue.next = 0;
 	p->task_queue.prev = 0;
+	p->wait_for_child_exit = 0;
 	p->wait_queue.next = p->wait_queue.prev = NULL;
 	p->stats.ticks_consumed = 0;
 	p->status_info[0] = 0;
@@ -678,7 +693,7 @@ static int release_resources(struct task_struct *child_task, int attach_to_paren
 	int i;
 	struct mm_struct *mm;
 	struct list_head *pos;
-	struct task_struct *task;
+	struct task_struct *task,*parent;
 	unsigned long flags;
 
 	/* 1. release files */
@@ -718,19 +733,21 @@ static int release_resources(struct task_struct *child_task, int attach_to_paren
 					list_move(&(child_task->dead_tasks.head), &(task->dead_tasks.head));
 				}
 			}
-
+			parent = task;
 			goto last;
 		}
 	}
 last:
     spin_unlock_irqrestore(&g_global_lock, flags);
+    if ( parent!=0 )ipc_del_from_waitqueues(parent);
     DEBUG("dead child attached to parent\n");
 	return 1;
 }
 int SYS_sc_exit(int status) {
 	unsigned long flags;
 	SYSCALL_DEBUG("sys exit : status:%d \n",status);
-	ut_log(" pid:%d existed cause:%d name:%s \n",g_current_task->pid,status,g_current_task->name);
+	SYSCALL_DEBUG(" pid:%d existed cause:%d name:%s \n",g_current_task->pid,status,g_current_task->name);
+	//ut_log(" pid:%d existed cause:%d name:%s \n",g_current_task->pid,status,g_current_task->name);
 	ar_updateCpuState(g_current_task, 0);
 
 	release_resources(g_current_task, 1);
@@ -1010,7 +1027,7 @@ static struct task_struct * _get_dead_task(){
 
 	if (deadlist_size==0) return 0;
 	task = deadtask_list[deadlist_size-1];
-	deadtask_list[deadlist_size] = 0;
+	deadtask_list[deadlist_size-1] = 0;
 	deadlist_size--;
 	return task;
 }
@@ -1023,10 +1040,31 @@ static void schedule_kernelSecondHalf(){ /* kernel thread second half:_schedule 
 	spin_unlock_irqrestore(&g_global_lock, g_current_task->flags);
 	g_current_task->thread.real_ip(0);
 }
+void sc_remove_dead_tasks(){
+	unsigned long intr_flags;
+	int cpuid=getcpuid();
 
+	while (1) {
+			spin_lock_irqsave(&g_global_lock, intr_flags);
+			struct task_struct *task=0;
+			if (g_cpu_state[getcpuid()].idle_task != g_current_task){
+				task = _get_dead_task();
+			}
+			spin_unlock_irqrestore(&g_global_lock, intr_flags);
+
+			if (task != 0) {
+				if (task->state == TASK_DEAD) {
+					sc_delete_task(task);
+				} else {
+					BUG();
+				}
+			} else {
+				return;
+			}
+		}
+}
 void sc_schedule() { /* _schedule function task can land here. */
 	unsigned long intr_flags;
-
 	int cpuid=getcpuid();
 
 	if (!g_current_task) {
@@ -1040,27 +1078,12 @@ void sc_schedule() { /* _schedule function task can land here. */
 		BUG();
 	}
 
-
 	spin_lock_irqsave(&g_global_lock, intr_flags);
 	intr_flags = _schedule(intr_flags);
 	spin_unlock_irqrestore(&g_global_lock, intr_flags);
 
 	/* remove dead tasks */
-	while (1) {
-		spin_lock_irqsave(&g_global_lock, intr_flags);
-		struct task_struct *task = _get_dead_task();
-		spin_unlock_irqrestore(&g_global_lock, intr_flags);
-
-		if (task != 0) {
-			if (task->state == TASK_DEAD) {
-				sc_delete_task(task);
-			} else {
-				BUG();
-			}
-		} else {
-			return;
-		}
-	}
+	sc_remove_dead_tasks();
 }
 
 /* NOT do not add any extra code in this function, if any register is used syscalls will not function properly */

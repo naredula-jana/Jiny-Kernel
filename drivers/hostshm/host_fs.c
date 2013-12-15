@@ -41,8 +41,8 @@ static int Hfs_open(uint32_t fid, unsigned char *filename, int flags, int arg_mo
 #endif
 static void update_size(struct inode *inode,uint64_t offset, int len ) {
 	if (inode !=0 && len > 0) {
-		if (inode->u.file.file_size < (offset+len))
-			inode->u.file.file_size = offset+len;
+		if (inode->u.file.stat.st_size < (offset+len))
+			inode->u.file.stat.st_size = offset+len;
 	}
 	return ;
 }

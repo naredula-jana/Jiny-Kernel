@@ -21,12 +21,12 @@ int add_deviceClass(void *addr){
     return 1;
 }
 
-#define MAX_DEVICES 100
+#define MAX_DEVICES 200
 struct {
 	pci_addr_t addr;
 	pci_dev_header_t header;
 }device_list[MAX_DEVICES];
-int device_count=0;
+static int device_count=0;
 
 static void scan_devices(){
 	int i,j,k;
@@ -78,6 +78,10 @@ int init_devClasses(unsigned long unused) {
 			if (probe != NULL && attach != NULL) {
 				if (probe(dev) == 1) {
 					ret=devClass->attach(dev);
+#if 1
+					dev->next=devClass->devices;
+					devClass->devices = dev;
+#endif
 					break;
 				}
 			}
@@ -94,15 +98,28 @@ static int list_devClasses(device_class_t *parent, int level){
 	int count=0;
     if (parent ==0) return 0;
 	while (parent != NULL) {
-       ut_printf(" level:%d  %s\n",level,parent->name);
-       count = count+list_devClasses(parent->children,level++);
+	   device_t *dev;
+       ut_printf("Level:%d  %s\n",level,parent->name);
+
+       dev = parent->devices;
+       while(dev != 0){
+    	   ut_printf("    devices addr(bus:device:function) %d:%d:%d vend:device_id -> %x:%x\n",dev->pci_addr.bus,dev->pci_addr.device,dev->pci_addr.function,dev->pci_hdr.vendor_id,dev->pci_hdr.device_id);
+    	   dev = dev->next;
+       }
+       level++;
+       count = count+list_devClasses(parent->children,level);
        parent = parent->sibling;
        count = count+1;
 	}
 	return count;
 }
-int Jcmd_dev_stat(){
+int Jcmd_lspci(){
+	int i;
+
 	list_devClasses(&deviceClass_root,0);
+	ut_printf(" Complete List of pci devices:\n");
+	for (i=0; i<device_count; i++)
+		ut_printf("devices addr(bus:device:function) %d:%d:%d vend:device_id -> %x:%x\n",device_list[i].addr.bus,device_list[i].addr.device,device_list[i].addr.function,device_list[i].header.vendor_id,device_list[i].header.device_id);
 }
 /***********************************************************************************************
  * Modules:

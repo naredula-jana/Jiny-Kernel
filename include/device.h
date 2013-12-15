@@ -26,6 +26,7 @@ struct device_class{
 
 struct device{
 	device_class_t *devClass;
+	char *name;
     void *private_data;
 /* pci related */
 	pci_dev_header_t pci_hdr;
@@ -35,8 +36,6 @@ struct device{
 	struct pcicfg_msix msix_cfg;
 /* network related */
 	unsigned char mac[7];
-
-
 	device_t *next;
 };
 extern device_class_t deviceClass_root;

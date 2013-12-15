@@ -44,9 +44,10 @@ static int inode_init(struct inode *inode, uint8_t *filename,
 	inode->stat_locked_pages.counter = 0;
 
 	inode->flags = INODE_LONGLIVED;
-	inode->u.file.file_size = 0;
+	inode->u.file.stat.st_size = 0;
 	inode->fs_private = 0;
-	inode->u.file.inode_no = 0;
+	inode->u.file.stat.inode_no = 0;
+	inode->u.file.stat_insync = 0;
 	inode->type = 0;
 	inode->vfs = vfs;
 	ut_strcpy(inode->filename, (uint8_t *) filename);
@@ -94,7 +95,7 @@ int Jcmd_ls(uint8_t *arg1, uint8_t *arg2) {
 							"%d: %4d %4d(%2d) %8d %8d %2x/%x %s", i,
 							tmp_inode->count, tmp_inode->nrpages,
 							tmp_inode->stat_locked_pages.counter, 0,
-							tmp_inode->u.file.inode_no, tmp_inode->type,
+							tmp_inode->u.file.stat.inode_no, tmp_inode->type,
 							tmp_inode->flags, type);
 		} else {
 			len = len
@@ -102,8 +103,8 @@ int Jcmd_ls(uint8_t *arg1, uint8_t *arg2) {
 							"%d: %4d %4d(%2d) %8d %8d %2x/%x %s", i,
 							tmp_inode->count, tmp_inode->nrpages,
 							tmp_inode->stat_locked_pages.counter,
-							tmp_inode->u.file.file_size,
-							tmp_inode->u.file.inode_no, tmp_inode->type,
+							tmp_inode->u.file.stat.st_size,
+							tmp_inode->u.file.stat.inode_no, tmp_inode->type,
 							tmp_inode->flags, type );
 		}
 		len = len - ut_snprintf(buf + max_len - len, len,"(%d/%d/%d-%s\n",tmp_inode->stat_in,tmp_inode->stat_out,tmp_inode->stat_err,tmp_inode->filename);
@@ -128,7 +129,7 @@ int Jcmd_clear_pagecache() {
 	list_for_each(p, &inode_list) {
 		tmp_inode = list_entry(p, struct inode, inode_link);
 		ut_printf("%s %d %d %d \n", tmp_inode->filename, tmp_inode->count,
-				tmp_inode->nrpages, tmp_inode->u.file.file_size);
+				tmp_inode->nrpages, tmp_inode->u.file.stat.st_size);
 		fs_fadvise(tmp_inode, 0, 0, POSIX_FADV_DONTNEED);
 	}
 	mutexUnLock(g_inode_lock);
@@ -146,14 +147,14 @@ int fs_data_sync(int num_pages) {
 			goto last;
 		}
 		struct inode *inode = page->inode;
-		uint64_t len = inode->u.file.file_size;
+		uint64_t len = inode->u.file.stat.st_size;
 		if (len < (page->offset + PC_PAGESIZE)) {
 			len = len - page->offset;
 		} else {
 			len = PC_PAGESIZE;
 		}
 		if ((len>PC_PAGESIZE) || (len <0)){
-			ut_log(" Error in data_sync len:%x  offset:%x inode_len:%x \n",len,page->offset,inode->u.file.file_size);
+			ut_log(" Error in data_sync len:%x  offset:%x inode_len:%x \n",len,page->offset,inode->u.file.stat.st_size);
 			len = PC_PAGESIZE;
 		}
 		assert (page->magic_number == PAGE_MAGIC);
@@ -269,15 +270,17 @@ static struct inode *fs_getInode(uint8_t *arg_filename, int flags, int mode) {
 			goto last;
 		}
 		DEBUG(" filename:%s: %x\n", ret_inode->filename, ret_inode);
-		if (vfs_fs->stat(ret_inode, &stat) == 1) { /* this is to get inode number */
-			ret_inode->u.file.inode_no = stat.inode_no;
-			ret_inode->u.file.file_size = stat.st_size;
+		if (vfs_fs->stat(ret_inode, &stat) == JSUCCESS) { /* this is to get inode number */
+			ret_inode->u.file.stat.inode_no = stat.inode_no;
+
+
+
 			mutexLock(g_inode_lock);
 			list_for_each(p, &inode_list) {
 				tmp_inode = list_entry(p, struct inode, inode_link);
 				if (tmp_inode == ret_inode)
 					continue;
-				if (ret_inode->u.file.inode_no == tmp_inode->u.file.inode_no
+				if (ret_inode->u.file.stat.inode_no == tmp_inode->u.file.stat.inode_no
 						&& ut_strcmp(ret_inode->filename, tmp_inode->filename)
 								== 0) {
 					ret_inode->count.counter = 0;
@@ -358,12 +361,12 @@ struct file *fs_open(uint8_t *filename, int flags, int mode) {
 
 	filep->inode = inodep;
 	if (flags & O_APPEND) {
-		filep->offset = inodep->u.file.file_size;
+		filep->offset = inodep->u.file.stat.st_size;
 	} else {
 		filep->offset = 0;
 	}
 	if (flags & O_CREAT) {
-		if ((inodep->u.file.file_size >0) && (filep->offset==0)){
+		if ((inodep->u.file.stat.st_size >0) && (filep->offset==0)){
 			inode_sync(inodep,1); /* truncate the file */
 		}
 	}
@@ -432,12 +435,12 @@ static void inode_sync(struct inode *inode, unsigned long truncate) {
 		return;
 	}
 
-	for (offset = 0; offset < inode->u.file.file_size; offset = offset + PAGE_SIZE) {
+	for (offset = 0; offset < inode->u.file.stat.st_size; offset = offset + PAGE_SIZE) {
 		page = pc_getInodePage(inode, offset);
 		if (page == NULL)
 			continue;
 		if (PageDirty(page)) {
-			uint64_t len = inode->u.file.file_size;
+			uint64_t len = inode->u.file.stat.st_size;
 			if (len < (page->offset + PC_PAGESIZE)) {
 				len = len - page->offset;
 			} else {
@@ -550,7 +553,7 @@ int fs_write(struct file *filep, uint8_t *buff, unsigned long len) {
 	if (filep->inode && filep->inode->type == DIRECTORY_FILE) { //TODO : check for testing
 		BUG();
 	}
-	if (filep->offset > (filep->inode->u.file.file_size)) return -1;
+	if (filep->offset > (filep->inode->u.file.stat.st_size)) return -1;
 #if 0
 	if (filep->inode->u.file.open_mode == O_RDONLY){
 		return -1;
@@ -589,8 +592,8 @@ int fs_write(struct file *filep, uint8_t *buff, unsigned long len) {
 
 		filep->offset = filep->offset + size;
 		struct inode *inode = filep->inode;
-		if (inode->u.file.file_size < filep->offset)
-			inode->u.file.file_size = filep->offset;
+		if (inode->u.file.stat.st_size < filep->offset)
+			inode->u.file.stat.st_size = filep->offset;
 		tmp_len = tmp_len + size;
 		if (pc_is_freepages_available()==0){
 			pc_housekeep();
@@ -675,8 +678,8 @@ retry_again:  /* the purpose to retry is to get again from the page cache with p
 				err = -5;
 				goto error;
 			}
-			if ((tret + offset) > inode->u.file.file_size)
-				inode->u.file.file_size = offset + tret;
+			if ((tret + offset) > inode->u.file.stat.st_size)
+				inode->u.file.stat.st_size = offset + tret;
 		} else {
 			pc_putFreePage(page);
 			err = -4;
@@ -750,9 +753,9 @@ long fs_read(struct file *filep, uint8_t *buff, unsigned long len) {
 	ret = ret - (filep->offset - OFFSET_ALIGN(filep->offset));
 	if (ret > len)
 		ret = len;
-	if ((filep->offset + ret) > inode->u.file.file_size) {
+	if ((filep->offset + ret) > inode->u.file.stat.st_size) {
 		int r;
-		r = inode->u.file.file_size - filep->offset;
+		r = inode->u.file.stat.st_size - filep->offset;
 		if (r < ret)
 			ret = r;
 	}
@@ -924,11 +927,17 @@ int fs_stat(struct file *filep, struct fileStat *stat) {
 	int ret;
 	if (vfs_fs == 0 || filep == 0)
 		return 0;
-
-	ret = vfs_fs->stat(filep->inode, stat);
-	if (ret == JSUCCESS) {
-		stat->st_size = filep->inode->u.file.file_size;
+	if (filep->inode && filep->inode->u.file.stat_insync == 1 ) {
+		DEBUG(" stat filename :%s: \n",filep->filename);
+		ret = JSUCCESS;
+		ut_memcpy(stat,&(filep->inode->u.file.stat),sizeof(struct fileStat));
+	} else {
+		//BRK;
+		ret = vfs_fs->stat(filep->inode, stat);
+		if (ret == JSUCCESS) {
+			stat->st_size = filep->inode->u.file.stat.st_size;
 //TODO
+		}
 	}
 	return ret;
 }
@@ -942,7 +951,7 @@ unsigned long fs_fadvise(struct inode *inode, unsigned long offset,
 
 	//TODO : implementing other advise types
 	if (advise == POSIX_FADV_DONTNEED && len == 0) {
-		while (offset < inode->u.file.file_size) /* delete all the pages in the inode */
+		while (offset < inode->u.file.stat.st_size) /* delete all the pages in the inode */
 		{
 			ret  = JFAIL;
 
@@ -994,8 +1003,8 @@ unsigned long fs_getVmaPage(struct vm_area_struct *vma, unsigned long offset) {
 
 	ret = (unsigned long )pc_page_to_ptr(page);
 	ret = __pa(ret);
-	DEBUG(
-			" mapInodepage phy addr :%x  hostphyaddr:%x offset:%x diff:%x \n", ret, g_hostShmPhyAddr, offset, (to_ptr(page)-pc_startaddr));
+	//DEBUG(
+	//		" mapInodepage phy addr :%x  hostphyaddr:%x offset:%x diff:%x \n", ret, g_hostShmPhyAddr, offset, (to_ptr(page)-pc_startaddr));
 	return ret; /* return physical address */
 }
 /***************************************** pipe ****************************************/

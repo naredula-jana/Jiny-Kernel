@@ -54,7 +54,7 @@ void jslab_pagefault(unsigned long addr, unsigned long faulting_ip, struct fault
 	BUG();
 }
 #endif
-
+static void init_zeropage_cache();
 
 #define sanity_check() do { \
 	assert((unsigned long)cachep > 0x100000); \
@@ -295,7 +295,7 @@ int init_jslab(unsigned long arg1) {
 #ifdef JSLAB_DEBUG
 	init_jslab_debug();
 #endif
-
+	init_zeropage_cache();
 	init_done = 1;
 	return 0;
 }
@@ -374,8 +374,8 @@ int jslab_destroy_cache(jcache_t *cachep) {
 	list_del(&(cachep->cache_list));
 	return JSUCCESS;
 }
-
-/* g_conf_page_zero : clear the free pages with zeros so that kvm KSM(Kernel Same page Merging) will compact intra vm zero pages efficiently.
+/*****************************************  Zero Page Cache ******************************************************/
+/*  Zero page cache layer: clear the free pages with zeros so that kvm KSM(Kernel Same page Merging) will compact intra vm zero pages efficiently.
  *  All the zero pages of the vm merged to one 4k page. If the VM have 1G free pages then it will be merged to 4K size saving 1G-4k memory.
  * Usefulness of maintaining zero pages:
  *  1) KSM compression of vm memory will be high if the guest OS maintains sufficient zero pages.
@@ -389,22 +389,116 @@ int jslab_destroy_cache(jcache_t *cachep) {
  *    so that zero pages stays in the zero page list for a period of time otherwise KSM will consume lot of CPU cycles in moving the pages from one state to another.
  *
  * */
-int g_conf_page_zero = 0;
+int g_conf_zeropage_cache = 1;
+#define MAX_ZEROLIST_SIZE 40000  /* 4k*40000 =160 Mb */
+typedef struct {
+	int cache_size; /* total number of pages */
+	int dirty_page[MAX_ZEROLIST_SIZE]; /* */
+	int max_dirtypage_index;
+	int cleanpages_list[MAX_ZEROLIST_SIZE];  /*  this should be LIFO, so that the pages at the bottom of the stack will be picked by KSM */
+	int max_cleanpage_index;
+	spinlock_t		spinlock;
+}zeropage_cache_t;
+zeropage_cache_t zeropage_cache;
+static int init_zeropage_cache_done=0;
+static void init_zeropage_cache(){
+	zeropage_cache.max_cleanpage_index =0;
+	zeropage_cache.max_dirtypage_index = 0;
+	zeropage_cache.spinlock = SPIN_LOCK_UNLOCKED(0);
+	init_zeropage_cache_done=1;
+}
+static unsigned long get_from_zeropagecache(int clear_flag){
+	unsigned long intr_flags;
+	unsigned long ret=0;
+	if (init_zeropage_cache_done==0) return ret;
+
+	spin_lock_irqsave(&(zeropage_cache.spinlock), intr_flags);
+	if (clear_flag & MEM_CLEAR){
+		if (zeropage_cache.max_cleanpage_index > 0){
+			int i = zeropage_cache.max_cleanpage_index -1;
+			ret = zeropage_cache.cleanpages_list[i];
+			zeropage_cache.cleanpages_list[i] = 0;
+			zeropage_cache.max_cleanpage_index = i;
+			goto last;
+		}
+	}
+	if (zeropage_cache.max_dirtypage_index > 0){
+		int i = zeropage_cache.max_dirtypage_index -1;
+		ret = zeropage_cache.dirty_page[i];
+		zeropage_cache.dirty_page[i] = 0;
+		zeropage_cache.max_dirtypage_index = i;
+		if (clear_flag & MEM_CLEAR){
+			ut_memset(ret,0,PAGE_SIZE);
+		}
+		goto last;
+	}
+
+last:
+    spin_unlock_irqrestore(&(zeropage_cache.spinlock), intr_flags);
+	return ret;
+}
+static int insert_into_zeropagecache(unsigned long page, int flag){
+	unsigned long intr_flags;
+	int ret = JFAIL;
+	if (init_zeropage_cache_done==0) return JFAIL;
+
+	spin_lock_irqsave(&(zeropage_cache.spinlock), intr_flags);
+	if ((flag&MEM_CLEAR) && zeropage_cache.max_cleanpage_index < MAX_ZEROLIST_SIZE){
+		zeropage_cache.cleanpages_list[zeropage_cache.max_cleanpage_index] = page;
+		zeropage_cache.max_cleanpage_index++;
+		ret = JSUCCESS;
+		goto last;
+	}
+	if ( zeropage_cache.max_dirtypage_index < MAX_ZEROLIST_SIZE){
+		zeropage_cache.dirty_page[zeropage_cache.max_dirtypage_index] = page;
+		zeropage_cache.max_dirtypage_index++;
+		ret = JSUCCESS;
+		goto last;
+	}
+last:
+    spin_unlock_irqrestore(&(zeropage_cache.spinlock), intr_flags);
+	return ret;
+}
+int housekeep_zeropage_cache() { /* clear the page at every call */
+	int i;
+	if (g_conf_zeropage_cache==0) return 0;
+	for (i = 0; i < 100; i++) {
+		if (!(zeropage_cache.max_cleanpage_index < MAX_ZEROLIST_SIZE)) {
+			return 0;
+		}
+		unsigned long page = get_from_zeropagecache(0);
+		if (page != 0) {
+			ut_memset(page, 0, PAGE_SIZE);
+			insert_into_zeropagecache(page, MEM_CLEAR);
+		} else {
+			page = mm_getFreePages(MEM_CLEAR, 0);
+			insert_into_zeropagecache(page, MEM_CLEAR);
+			//return 0;
+		}
+	}
+	return 1;
+}
 static unsigned long stat_page_allocs=0;
 static unsigned long stat_page_alloc_zero=0;
 static unsigned long stat_page_frees=0;
+
 unsigned long jalloc_page(int flags){
 	stat_page_allocs++;
 	if (flags&MEM_CLEAR){
 		stat_page_alloc_zero++;
 	}
-
+	if (g_conf_zeropage_cache==1){
+		unsigned long page;
+		page = get_from_zeropagecache(flags);
+		if (page != 0) return page;
+	}
 	return mm_getFreePages(flags, 0);
 }
 int jfree_page(unsigned long p){
 	stat_page_frees++;
-	if (g_conf_page_zero==1){
-		ut_memset(p,0,PAGE_SIZE);
+	if (g_conf_zeropage_cache==1){
+		if (insert_into_zeropagecache(p,0) == JSUCCESS)
+			return 0;
 	}
 	return mm_putFreePages(p, 0);
 }
@@ -517,8 +611,6 @@ int Jcmd_jslab(unsigned char *arg1, unsigned char *arg2) {
 	jcache_t *cachep;
 	struct list_head *c;
 
-	ut_printf("malloc :%d frees:%d  pagefault_write:%d\n",stat_mallocs,stat_frees,g_stat_pagefaults_write);
-	ut_printf("single page allocs(zero_alloc):%d(%d) page frees:%d \n",stat_page_allocs,stat_page_alloc_zero,stat_page_frees);
 	list_for_each(c, &(cache_list)) {
 		cachep = list_entry(c, jcache_t , cache_list);
 #ifdef JSLAB_DEBUG
@@ -529,6 +621,10 @@ int Jcmd_jslab(unsigned char *arg1, unsigned char *arg2) {
 		ut_printf("%s %d objs/pages:%d/%d allocs/free:%d/%d order:%x\n", cachep->name, cachep->obj_size,
 				cachep->stat_total_objs, cachep->stat_total_pages,cachep->stat_allocs,cachep->stat_frees,cachep->page_order);
 	}
+	ut_printf("malloc :%d frees:%d  pagefault_write:%d\n",stat_mallocs,stat_frees,g_stat_pagefaults_write);
+	ut_printf("single page allocs(zero_alloc):%d(%d) page frees:%d zeropagecache dirty/clean: %d/%d\n",stat_page_allocs,
+			stat_page_alloc_zero,stat_page_frees,zeropage_cache.max_dirtypage_index,zeropage_cache.max_cleanpage_index);
+
 	return 1;
 }
 

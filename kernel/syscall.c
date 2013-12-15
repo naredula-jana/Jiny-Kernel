@@ -568,7 +568,9 @@ unsigned long SYS_wait4(int pid, void *status, unsigned long option,
 	node = g_current_task->dead_tasks.head.next;
 	if (list_empty(&(g_current_task->dead_tasks.head.next))) {
 		if (!(option & WNOHANG)){
-			sc_sleep(50);
+			g_current_task->wait_for_child_exit = 1;
+			sc_sleep(10);
+			g_current_task->wait_for_child_exit = 0;
 		}
 	} else {
 		spin_lock_irqsave(&g_global_lock, flags);

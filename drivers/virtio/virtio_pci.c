@@ -155,7 +155,6 @@ static void callback(struct virtqueue *vq) {
 int virtio_createQueue(uint16_t index, virtio_dev_t *dev, int qType) {
 	int size;
 	uint16_t num;
-	//struct virtio_pci_vq_info *info;
 	unsigned long queue;
 
 	outw(dev->pci_ioaddr + VIRTIO_PCI_QUEUE_SEL, index);
@@ -175,7 +174,6 @@ int virtio_createQueue(uint16_t index, virtio_dev_t *dev, int qType) {
 
 	/* activate the queue */
 	outl(dev->pci_ioaddr + VIRTIO_PCI_QUEUE_PFN, __pa(queue) >> VIRTIO_PCI_QUEUE_ADDR_SHIFT);
-
 
 	/* create the vring */
 	dev->vq[index] = vring_new_virtqueue(num, VIRTIO_PCI_VRING_ALIGN, dev, queue, &notify, &callback, "VIRTQUEUE");

@@ -120,7 +120,14 @@ struct file {
 	void *private_pipe;
 
 };
-
+struct fileStat {
+	uint32_t mode;
+	uint32_t atime,mtime;
+	uint64_t st_size;
+	uint64_t inode_no;
+	uint32_t type;
+	uint32_t blk_size;
+};
 #define PAGELIST_HASH_SIZE 40
 #define get_pagelist_index(offset)  ((offset/PAGE_SIZE)%PAGELIST_HASH_SIZE)
 struct inode {
@@ -138,8 +145,8 @@ struct inode {
 	union {
 		struct {
 			unsigned long open_mode;
-			uint64_t file_size; /* file length */
-			uint64_t inode_no;
+			char stat_insync;
+			struct fileStat stat;
 		}file;
 		struct {
 			int sock_type;
@@ -157,14 +164,7 @@ struct inode {
 	struct list_head inode_link;	
 };
 
-struct fileStat {
-	uint32_t mode;
-	uint32_t atime,mtime;
-	uint64_t st_size;
-	uint64_t inode_no;
-	uint32_t type;
-	uint32_t blk_size;
-};
+
 
 struct dirEntry { /* Do not change the entries , the size of struct is caluclated */
 	unsigned long inode_no; /* Inode number */

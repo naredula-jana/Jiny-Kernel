@@ -103,7 +103,7 @@ void init_handlers()
 	ar_registerInterrupt(14, ar_pageFault,"pagefault", NULL);
 	ar_registerInterrupt(13, gpFault,"gpfault", NULL);
 }
-
+extern int stat_ipi_send_count;
 int Jcmd_cpu(char *arg1,char *arg2)
 {
 	int i, j;
@@ -142,6 +142,7 @@ int Jcmd_cpu(char *arg1,char *arg2)
 		ut_printf("[prio= %3d] ",g_cpu_state[j].cpu_priority);
 	}
 	ut_printf(":priority \n");
+	ut_printf(" ipi send: %d\n",stat_ipi_send_count);
 
 	return 1;
 }

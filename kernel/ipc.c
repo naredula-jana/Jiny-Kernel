@@ -212,9 +212,9 @@ last: ;
 static int _del_from_waitqueue(wait_queue_t *waitqueue, struct task_struct *p) {
 	struct list_head *pos;
 	struct task_struct *task;
-	int ret = 0;
+	int ret = JFAIL;
 
-	if (p==0 || waitqueue==0) return 0;
+	if (p==0 || waitqueue==0) return JFAIL;
 
 	list_for_each(pos, &waitqueue->head) {
 		task = list_entry(pos, struct task_struct, wait_queue);
@@ -236,9 +236,9 @@ static int _del_from_waitqueue(wait_queue_t *waitqueue, struct task_struct *p) {
 				task->sleep_ticks = task->sleep_ticks + p->sleep_ticks;
 			}
 			p->sleep_ticks = 0;
-			ret = 1;
+			ret = JSUCCESS;
 			list_del(&p->wait_queue);//TODO crash happening */
-			return 1;
+			return ret;
 		}
 	}
 
@@ -283,11 +283,37 @@ last:
     spin_unlock_irqrestore(&g_global_lock, flags);
 	return -1;
 }
+static int wakeup_cpus(int wakeup_cpu) {
+	int i;
+	int ret = 0;
+
+	/* wake up specific cpu */
+	if ((wakeup_cpu != -1)) {
+		if (g_cpu_state[wakeup_cpu].current_task == g_cpu_state[wakeup_cpu].idle_task) {
+			apic_send_ipi_vector(wakeup_cpu, IPI_INTERRUPT);
+			return 1;
+		} else {
+			return 0;
+		}
+	}
+
+	/* wakeup all cpus */
+	for (i = 0; i < getmaxcpus(); i++) {
+		if (g_current_task->current_cpu != i
+				&& g_cpu_state[i].current_task == g_cpu_state[i].idle_task
+				&& g_cpu_state[i].active) {
+			apic_send_ipi_vector(i, IPI_INTERRUPT);
+			ret++;
+			// return ret;
+		}
+	}
+	return ret;
+}
 int ipc_wakeup_waitqueue(wait_queue_t *waitqueue ) {
 	int ret = 0;
 	struct task_struct *task;
 	int wakeup_cpu=-1;
-	int active_cpu=0;
+	int assigned_to_running_cpu;
 
 	unsigned long flags;
 	if (waitqueue == NULL)
@@ -296,10 +322,11 @@ int ipc_wakeup_waitqueue(wait_queue_t *waitqueue ) {
 	spin_lock_irqsave(&g_global_lock, flags);
 	while (waitqueue->head.next != &waitqueue->head) {
 		task = list_entry(waitqueue->head.next, struct task_struct, wait_queue);
-		if (_del_from_waitqueue(waitqueue, task) == 1) {
+		if (_del_from_waitqueue(waitqueue, task) == JSUCCESS) {
 			task->state = TASK_RUNNING;
+			assigned_to_running_cpu = 0;
 			if (task->run_queue.next == 0 ){
-				active_cpu = _sc_task_assign_to_cpu(task);
+				assigned_to_running_cpu = _sc_task_assign_to_cpu(task);
 			}else{
 				BUG();
 			}
@@ -312,10 +339,15 @@ int ipc_wakeup_waitqueue(wait_queue_t *waitqueue ) {
 	}
 gotit:
 	spin_unlock_irqrestore(&g_global_lock, flags);
+	if (ret > 0 && assigned_to_running_cpu==0)
+		wakeup_cpus(wakeup_cpu);
 
+#if 0
 	if ((waitqueue->flags & WAIT_QUEUE_WAKEUP_ONE) && active_cpu == 1){
 		return 1;
 	}
+
+
 	if (ret>0){/* wakeup relevent cpus  */
 		int i;
 
@@ -333,7 +365,7 @@ gotit:
 			}
 		}
 	}
-
+#endif
 	return ret;
 }
 /* ticks in terms of 10 ms */
@@ -349,6 +381,8 @@ int ipc_waiton_waitqueue(wait_queue_t *waitqueue, unsigned long ticks) {
 	flags=_schedule(flags);
 	spin_unlock_irqrestore(&g_global_lock, flags);
 
+	sc_remove_dead_tasks();
+
 	g_current_task->status_info[0] = 0;
 	waitqueue->stat_wait_ticks = waitqueue->stat_wait_ticks + (g_jiffies-g_current_task->stats.wait_start_tick_no);
 	if (g_current_task->sleep_ticks <= 0)
@@ -356,9 +390,38 @@ int ipc_waiton_waitqueue(wait_queue_t *waitqueue, unsigned long ticks) {
 	else
 		return g_current_task->sleep_ticks;
 }
+void ipc_del_from_waitqueues(struct task_struct *task) {
+	int i;
+	unsigned long flags;
+	int assigned_to_running_cpu;
+
+	if (task ==0) return;
+	spin_lock_irqsave(&g_global_lock, flags);
+	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
+		if (wait_queues[i] == 0)
+			continue;
+		if (_del_from_waitqueue(wait_queues[i], task)==JFAIL){
+			continue;
+		}
+		task->state = TASK_RUNNING;
+		assigned_to_running_cpu = 0;
+		if (task->run_queue.next == 0)
+			assigned_to_running_cpu = _sc_task_assign_to_cpu(task);
+		else
+			BUG();
+		if (assigned_to_running_cpu == 0) {
+			spin_unlock_irqrestore(&g_global_lock, flags);
+			wakeup_cpus(task->allocated_cpu);
+			spin_lock_irqsave(&g_global_lock, flags);
+		}
+		break;
+	}
+	spin_unlock_irqrestore(&g_global_lock, flags);
+}
 void ipc_check_waitqueues() {
 	int i;
 	unsigned long flags;
+	int assigned_to_running_cpu;
 
 	spin_lock_irqsave(&g_global_lock, flags);
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
@@ -373,10 +436,16 @@ void ipc_check_waitqueues() {
 			if (task->sleep_ticks <= 0) {
 				_del_from_waitqueue(wait_queues[i], task);
 				task->state = TASK_RUNNING;
+				assigned_to_running_cpu = 0;
 				if (task->run_queue.next == 0)
-					_sc_task_assign_to_cpu(task);
+					assigned_to_running_cpu = _sc_task_assign_to_cpu(task);
 				else
 					BUG();
+				if (assigned_to_running_cpu == 0) {
+					spin_unlock_irqrestore(&g_global_lock, flags);
+					wakeup_cpus(task->allocated_cpu);
+					spin_lock_irqsave(&g_global_lock, flags);
+				}
 			}
 		}
 	}

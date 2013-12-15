@@ -185,6 +185,7 @@ void idleTask_func() {
 	ut_printf("Idle Thread Started cpuid: %d stack addrss:%x \n",getcpuid(),&k);
 	while (1) {
 		__asm__("hlt");
+
 		sc_schedule();
 	}
 }
@@ -202,7 +203,8 @@ void housekeeper_thread(void *arg){
 	sc_sleep(3000);  /* TODO : need to wait some part of initilization*/
 	init_log_file(0);
 	while(1){
-		sc_sleep(50);
+		sc_sleep(10);
+		housekeep_zeropage_cache();
 		pc_housekeep();
 	}
 }

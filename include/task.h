@@ -99,6 +99,7 @@ struct task_struct {
 	struct mm_struct *mm;
 	int locks_sleepable;
 	int locks_nonsleepable;
+	int wait_for_child_exit;
 
 #define MAX_DEBUG_CALLSTACK 10
 	int trace_stack_length; /* used for trace purpose */

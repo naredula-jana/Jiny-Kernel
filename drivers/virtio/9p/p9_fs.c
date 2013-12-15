@@ -459,8 +459,8 @@ static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
 }
 static void update_size(struct inode *inode,uint64_t offset, int len ) {
 	if (inode !=0 && len > 0) {
-		if (inode->u.file.file_size < (offset+len))
-			inode->u.file.file_size = offset+len;
+		if (inode->u.file.stat.st_size < (offset+len))
+			inode->u.file.stat.st_size = offset+len;
 	}
 	return ;
 }
@@ -502,6 +502,8 @@ static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, u
 		ret = p9_stat(fid, fp);
 		if (ret==JSUCCESS){
 			inode->type = fp->type;
+			inode->u.file.stat_insync = 1;
+			ut_memcpy(&(inode->u.file.stat),data,sizeof(struct fileStat));
 		}
 	} else if (type == REQUEST_CLOSE) {
 		fid = inode->fs_private;
@@ -513,7 +515,7 @@ static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, u
 		fid = inode->fs_private;
 		ret = p9_setattr(fid,offset);
 		if (ret == JSUCCESS){
-			inode->u.file.file_size = offset;
+			inode->u.file.stat.st_size = offset;
 		}
 	}
 

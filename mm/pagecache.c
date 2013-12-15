@@ -411,7 +411,7 @@ int pc_insertPage(struct inode *inode, struct page *page) {
 
 	assert(page!=0);
 
-	if (page->offset > inode->u.file.file_size)
+	if (page->offset > inode->u.file.stat.st_size)
 		return ret;
 	if (!(page->list.next == 0 && page->list.prev == 0
 			&& page->lru_link.next == 0 && page->lru_link.prev == 0)) {

@@ -500,6 +500,7 @@ void local_apic_timer_ap_init(uint8_t vector)
   local_apic->lvt_timer.reg=lvt_timer.reg;
 }
 extern unsigned char imps_cpu_apic_map[];
+int stat_ipi_send_count =0 ;
 int apic_send_ipi_vector(int cpu, uint8_t vector)
 {
     int ret = 0;
@@ -520,7 +521,7 @@ int apic_send_ipi_vector(int cpu, uint8_t vector)
     icr2.dest = imps_cpu_apic_map[cpu];
     local_apic->icr2.reg=icr2.reg;
   local_apic->icr1.reg=icr1.reg;
-
+  stat_ipi_send_count++;
   if (__local_apic_chkerr())
         ret = -1;
 
