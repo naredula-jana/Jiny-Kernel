@@ -1,23 +1,23 @@
-JINY : (Jana tINY) kernel designed from ground up for superior performance on cloud.
+JINY : (Jana tINY) kernel designed from ground up for superior performance on Hypervisor/cloud.
 
 1) WHAT IS JINY?.
  -Jiny is a tiny unix type of kernel similar to linux, linux app can run directly on it without recompiling because Jiny provides system call interface same or subset of linux. 
- -Designed from ground up: Jiny is designed from the ground up to run on top of hypervisor(kvm,xen) resulting in superior performance. The performance gain will come by reducing memory and cpu overhead when compare to traditional vm like linux,freebsd etc.
- -High priority versus normal priority apps: The apps running on Jiny OS are divided in to high priority app and normal priority. The high priority app like JVM,memcached to run in superior performance when compare to the same app in linux vm.
+ -Designed from ground up: Jiny is designed from the ground up to run on top of hypervisor(kvm,xen) resulting in superior performance. The performance gain will come from reducing memory and cpu overhead when compare to traditional vm like linux,freebsd etc.
+ -High priority versus normal priority apps: The apps running on Jiny OS are divided in to high priority app and normal priority. The high priority app like JVM,memcached can run faster when compare to the same app in linux vm.
  -The number of high priority app's to run will be restricted 1 or 2 at any time because they will be running in kernel context. Low priority app's  will not be recompiled and not limited in number, the performance will be similar to that of Linux. 
 
 2) What is the development plan and current status?.
-  Phase-1: Developing traditional tiny unix like kernel with small foor print(Completed)
+  Phase-1: Developing traditional tiny unix like kernel with small foot print(Completed)
    a) bringing kernel up on x86_64 without any user level app.
    b) Implementing most of the linux system calls, so that statically compiled app's on linux can run as it is. Currently app's like busybox can run as it is.
     
-  phase-2: Converting tiny kernel to high performance kernel on hypervisor(Started)
+  phase-2: Converting tiny kernel to high performance kernel on hypervisor(In Progress)
    a) Changes in Jiny to support high priority app with superior performance when compare to linux vm.
       - to run the high priority app in the kernel context, this is to reduce the memory overhead.
       - to disable/minimize the interrupts on the cpu that is loaded with high priority app. this is reduce the cpu overhead and locks.
-   b) converting most of subsytems in Jiny in to c++11 from c.
+   b) converting most of subsytems in Jiny from c to c++11.
    
- phase-1 will be to develop more like traditional unix like kernel with small foot print on hypervisor. phase-2 is more performance centric for speciliazed high priority app's.
+ phase-1 was developed more like traditional unix like kernel with small foot print on hypervisor. phase-2 is more performance centric for speciliazed high priority app's.
   
    
 3) For What purpose Jiny can be used?
@@ -35,7 +35,6 @@ In the future, it can be used for:
 ------------------------------------------
 
 Phase-1 feature Currently Available:
-
 Page Cache: 
    - LRU and MRU based (based on the published paper in opencirrus)
    
