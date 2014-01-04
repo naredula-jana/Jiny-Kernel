@@ -1,7 +1,8 @@
 
+##JINY (Jana's tINY kernel)
 [JINY] is designed from ground up for superior performance on virtual machine.
 
-1. WHAT IS JINY?.
+1. What is JINY?.
  - Jiny is a  unix like kernel, linux app can directly run on it without recompiling because Jiny provides system call interface same or subset of linux. 
  - Designed from ground up: It is designed from the ground up to give superior performance on vm. The performance gain will come from reducing memory and cpu overhead when compare to traditional os like linux,freebsd etc.
  - High priority versus normal priority apps: The apps running on Jiny OS are divided in to high priority and normal priority. The high priority app like JVM,memcached can run faster when compare to the same app in linux vm. 
@@ -28,12 +29,12 @@
 	
 In the future, it can be used run single high priority app in a vm:
 
-  -  running specialized high priority app like  JVM(hadoop,or any java server), memcached  etc. 
+  -  running specialized high priority app like  JVM(hadoop,or any java server), memcached  etc on the vm. 
 
-4. On what hardware does it run ?
- It was fully tested for x86_64. partially done for x86_32.
+
  
 ##Benchmark:
+
 - app as high priority in Jiny VM:      6 sec
 - app as normal priority in Jiny VM: 55 sec
 - same app on the metal(linux host): 44 sec
@@ -52,3 +53,43 @@ App in VM performance/throughput is better then same app on metal:
   Why do the recompilation needed: The app will be running the kernel context, so the syscall located in libc will replaced with corresponding function calls, The app will be running in ring-0 same as that of kernel.
 
  conclusion: virtulization hardware can also be used to speedup the app.
+
+## Feature Currently Available:
+
+- Page Cache: - LRU and MRU based (based on the published paper in opencirrus) 
+- File System: 
+   - 9p+virtio
+   - Host based file system based on ivshm(Inter Vm Shared Memory) 
+- Virtualization Features:
+   - Elastic Cpu's:
+       - depending on the load, some of the cpu's will be rested.
+       - todo: disabling IPI interrupts for a in-active cpu.
+   - Elastic Memory:
+       - depending on the load, some amount of physical memory can be disabled, so as host/other vm's can use.
+       - todo: using common pool memory for pagecache, currently there are two pools of memory one for pagecache, second for rest.
+- Virtualization drivers:
+    - Xen : xenbus, network driver using xen paravirtualised.
+    - KVM : virtio + P9 filesystem
+    - KVM : virtio + Network (test server with udp stack(tcp/ip))
+    - KVM : virtio + memory ballooning
+    - KVM : clock
+- SMP: APIC,MSIX
+- Networking:
+   - XEN: TCP/IP stack(from LWIP) integrated with XEN paravirtualised Network driver.
+   - KVM: Virtio + LWIP4.0 as a kernel module
+- Debug features:
+   - memoryleak detection.
+   - function tracing or call graph.
+   - syscall debugging.
+   - stack capture at any point. 
+- Loadable Modules:
+   - Supports loadable kernel module. Lwip tcp/ip stack compiled as kernel module.
+- User level:
+   - Statically compiled user app can be launched from kernel shell or busy box.
+   - busybox shell can successfully run on top of Jiny kernel, network apps can able to use socket layer.
+- Hardware:
+  It was fully tested for x86/64. partially done for x86_32.
+##Papers:
+ -   [page cache optimizations for Hadoop appered @ open cirrus-2011](../blob/master/doc/PageCache-Open-Cirrus.pdf) .
+ -   [memory optimization techniques](../blob/master/doc/malloc_paper_techpulse_submit_final.pdf).
+ -   [jiny pagecache implementation](../blob/masterdoc/pagecache.txt)
