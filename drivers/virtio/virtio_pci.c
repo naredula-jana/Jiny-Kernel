@@ -142,11 +142,11 @@ void display_virtiofeatures(unsigned long feature, struct virtio_feature_desc *d
 		if (bit) {
 			for (j = 0; ( desc[j].name != NULL); j++) {
 				if (desc[j].feature_bit == i)
-					ut_printf("%s,", desc[j].name);
+					ut_log("%s,", desc[j].name);
 			}
 		}
 	}
-	ut_printf("\n");
+	ut_log("\n");
 }
 static void callback(struct virtqueue *vq) {
 	DEBUG("  VIRTIO CALLBACK in VIRT queue :%x\n",vq);

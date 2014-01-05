@@ -181,6 +181,7 @@ int init_networking();
 int registerNetworkHandler(int type, int (*callback)(uint8_t *buf, unsigned int len, void *private_data), void *private_data);
 int netif_rx(uint8_t *data, unsigned int len, uint8_t **replace_buf);
 int netif_tx(uint8_t *data, unsigned int len);
+int netif_rx_enable_polling(void *private_data, int (*poll_func)(void *private_data, int enable_interrupt, int total_pkts));
 /************************ socket layer interface ********/
 struct sockaddr {
 	uint16_t family;

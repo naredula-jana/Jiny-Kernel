@@ -287,8 +287,10 @@ static int wakeup_cpus(int wakeup_cpu) {
 	int i;
 	int ret = 0;
 
+	if (getmaxcpus() == 1) return 0; /* for single cpu */
 	/* wake up specific cpu */
 	if ((wakeup_cpu != -1)) {
+		if (g_current_task->current_cpu == wakeup_cpu) return 0;
 		if (g_cpu_state[wakeup_cpu].current_task == g_cpu_state[wakeup_cpu].idle_task) {
 			apic_send_ipi_vector(wakeup_cpu, IPI_INTERRUPT);
 			return 1;
@@ -520,7 +522,7 @@ int Jcmd_locks(char *arg1, char *arg2) {
 			if (sem){
 				recursive_count = sem->stat_recursive_count;
 				total_acquired_time = sem->stat_total_acquired_time;
-				if (sem->owner_pid != 0)
+				//if (sem->owner_pid != 0)
 					len = len - ut_snprintf(buf+max_len-len,len," [%x] ", sem->owner_pid);
 			}
 		}

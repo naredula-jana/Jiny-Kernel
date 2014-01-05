@@ -182,7 +182,7 @@ void idleTask_func() {
 	while(g_boot_completed==0);
 	init_code_readonly(0);
 
-	ut_printf("Idle Thread Started cpuid: %d stack addrss:%x \n",getcpuid(),&k);
+	ut_log("Idle Thread Started cpuid: %d stack addrss:%x \n",getcpuid(),&k);
 	while (1) {
 		__asm__("hlt");
 
@@ -258,11 +258,14 @@ int init_kernel_vmaps(unsigned long arg1){
 }
 void cmain() {  /* This is the first c function to be executed */
 	int i,ret;
+
+	g_cpu_state[0].current_task = g_current_task;
 	/* Clear the screen.  */
 	ut_cls();
 
 	for (i=0; inittable[i].func != 0; i++){
 		ut_log("INITIALIZING :%s  ...\n",inittable[i].comment);
+		ut_printf("..INITIALIZING :%s  ...\n",inittable[i].comment);
 		ret = inittable[i].func(inittable[i].arg1);
 		if (ret==0){
 			//ut_log(" ... Success\n");
@@ -276,11 +279,18 @@ void cmain() {  /* This is the first c function to be executed */
 	ut_log("	cpuid result %x : %x :%x :%x \n",val[0],val[1],val[2],val[3]);
 	g_cpu_features=val[3]; /* edx */
 
+#if 1
 	sc_createKernelThread(shell_main, 0, (unsigned char *)"shell_main");
 	sc_createKernelThread(housekeeper_thread, 0, (unsigned char *)"house_keeper");
+#endif
+
 	g_boot_completed=1;
 	sti(); /* start the interrupts finally */
 
+//	sc_createKernelThread(shell_main, 0, (unsigned char *)"shell_main");
+//	sc_createKernelThread(housekeeper_thread, 0, (unsigned char *)"house_keeper");
+
+	ut_log("	Initalization COMPLETED\n");
 	idleTask_func();
 	return;
 }

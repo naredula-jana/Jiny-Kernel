@@ -201,7 +201,7 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, 
 	struct vm_area_struct *vma;
 	int ret;
 
-	//ut_log(" mmap : name:%s file:%x addr:%x len:%x pgoff:%x flags:%x  protection:%x\n",file->filename,file,addr,len,pgoff,flags,prot);
+	//ut_log(" mmap : name:%s -- %s file:%x addr:%x len:%x pgoff:%x flags:%x  protection:%x\n",name,file->filename,file,addr,len,pgoff,flags,prot);
 	vma = vm_findVma(mm, addr, len);
 	if (vma){
 		ut_log("VMA ERROR:  Already Found :%x \n",addr);
@@ -242,7 +242,9 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, 
 	}
 	ret=vma_link(mm, vma);
 	if (ret < 0){
+        ut_log(" mmap : name:%s file:%x addr:%x len:%x pgoff:%x flags:%x  protection:%x\n",name,file,addr,len,pgoff,flags,prot);
 		ut_log(" Failed ret :%x \n",ret);
+		//ut_getBackTrace(0,0,0);
 		mm_slab_cache_free(vm_area_cachep, vma);
 		return 0;
 	}else{

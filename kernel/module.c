@@ -36,6 +36,7 @@ typedef struct {
 	}secs[SEC_TOTAL];
 
 	symb_table_t *symbol_table;
+	int symb_table_length;
 	unsigned char *str_table;
 	int str_table_length;
 	unsigned char *common_symbol_addr;
@@ -48,7 +49,7 @@ typedef struct {
 static module_t *g_modules[MAX_MODULES];
 static int total_modules=0;
 
-
+static void sort_symbols(module_t *modulep);
 unsigned long ut_mod_get_symbol_addr(unsigned char *name);
 static unsigned long _get_symbol_addr(module_t *modulep, unsigned char *name);
 static int complete_read(struct file *file, unsigned char *buf, int total_size) {
@@ -84,24 +85,28 @@ static int get_symboltable( Elf64_Sym *symb, int total_symb,
 	}
 	global_symb++;
 	module->symbol_table = mm_malloc(
-			(global_symb + 1) * sizeof(symb_table_t), 0);
+			(total_symb + 1) * sizeof(symb_table_t), 0);
 	if (module->symbol_table == 0){
 		return JFAIL;
 	}
 	j = 0;
 	tsemb = symb;
-	for (i = 0; (i < total_symb)&& (j<global_symb); i++, tsemb++) {
+	for (i = 0; (i < total_symb); i++, tsemb++) {
 #ifdef MODULE_DEBUG
 		ut_printf(" %d: name:%d info:%x secton_ind:%d \n",i,tsemb->st_name,tsemb->st_info,tsemb->st_shndx);
 #endif
-		if (ELF32_ST_BIND(tsemb->st_info) == STB_GLOBAL) {
+		if ((ELF32_ST_BIND(tsemb->st_info) == STB_GLOBAL) || (ELF32_ST_BIND(tsemb->st_info) == STB_LOCAL)) {
 			module->symbol_table[j].sec_index = tsemb->st_shndx;
 			if (tsemb->st_shndx == SHN_UNDEF){ /* unresolved symbol */
 				module->symbol_table[j].type = SYMBOL_TYPE_UNRESOLVED;
 				module->symbol_table[j].address = 0;
 			}else if (tsemb->st_shndx == module->secs[SEC_TEXT].sec_index){
 				module->symbol_table[j].address = tsemb->st_value + module->secs[SEC_TEXT].addr;
-				module->symbol_table[j].type = SYMBOL_GTEXT;
+				if (ELF32_ST_BIND(tsemb->st_info) == STB_LOCAL){
+					module->symbol_table[j].type = SYMBOL_LTEXT;
+				}else{
+					module->symbol_table[j].type = SYMBOL_GTEXT;
+				}
 			}else if (tsemb->st_shndx == module->secs[SEC_DATA].sec_index || tsemb->st_shndx == module->secs[SEC_RODATA].sec_index  || tsemb->st_shndx == module->secs[SEC_BSS].sec_index){
 				int si = SEC_DATA;
 				if (tsemb->st_shndx == module->secs[SEC_RODATA].sec_index) si= SEC_RODATA;
@@ -114,7 +119,8 @@ static int get_symboltable( Elf64_Sym *symb, int total_symb,
 			}else if (tsemb->st_shndx == SHN_ABS){ /* storage need to be allocated */
 				module->symbol_table[j].address = tsemb->st_value;
 			}else {
-				ut_printf("ERROR NOT PROCESSED %d section index: %x  name:%s \n",i,tsemb->st_shndx,module->symbol_table[j].name);
+				if ((ELF32_ST_BIND(tsemb->st_info) == STB_GLOBAL))
+					ut_printf("ERROR NOT PROCESSED %d section index: %x  name:%s \n",i,tsemb->st_shndx,module->symbol_table[j].name);
 			}
 			module->symbol_table[j].name = module->str_table + tsemb->st_name;
 			if (module->type == ET_EXEC){
@@ -128,6 +134,7 @@ static int get_symboltable( Elf64_Sym *symb, int total_symb,
 #endif
 			j++;
 		}
+
 		if (tsemb->st_shndx == module->secs[SEC_TEXT].sec_index) {
 			unsigned char *name=module->str_table + tsemb->st_name;
 			if (ut_strcmp(name, (uint8_t *)"init_module") == 0) {
@@ -141,7 +148,7 @@ static int get_symboltable( Elf64_Sym *symb, int total_symb,
 	module->symbol_table[j].address = 0;
 	if (common_symb_length > 0){
 		module->common_symbol_addr = mm_malloc(common_symb_length,MEM_CLEAR);
-		for (i = 0; i<global_symb; i++) {
+		for (i = 0; i<j; i++) {
 			if (module->symbol_table[i].sec_index == SHN_COMMON){
 				module->symbol_table[i].address = module->symbol_table[i].address + module->common_symbol_addr;
 			}
@@ -220,8 +227,14 @@ static char* do_relocation(struct file *file, Elf64_Sym *symb,int total_symbols,
 		unsigned long symbol_value = 0;
 		if (ELF64_ST_BIND(symb[s_index].st_info) == STB_GLOBAL) {
 			symbol_value = _get_symbol_addr(module, module->str_table + symb[s_index].st_name);
-			if (symbol_value == 0)
+			if (symbol_value == ~(0x0)){
+			//	ut_printf(" reloca symb name: %s  ret:%x\n",module->str_table + symb[s_index].st_name,symbol_value);
 				symbol_value = ut_get_symbol_addr(module->str_table + symb[s_index].st_name);
+				if (type==R_X86_64_PC32 && symbol_value==0x0){
+					ut_printf("Error: Relocation name :%s -> %x type:%x\n",module->str_table + symb[s_index].st_name,symbol_value,type);
+					ret = "Error in relocation, caanot find externel symbol";
+				}
+			}
 		} else if (ELF64_ST_BIND(symb[s_index].st_info) == STB_LOCAL) {
 			if (ELF64_ST_TYPE(symb[s_index].st_info) == STT_SECTION ){
 				if (symb[s_index].st_shndx == module->secs[SEC_RODATA].sec_index){
@@ -470,6 +483,8 @@ void Jcmd_insmod(unsigned char *filename, unsigned char *arg){
 	if (file == 0){
 		error = "Fail to open the module file";
 		goto out;
+	}else{ /* flush the old file contents */
+		fs_fadvise(file->inode, 0, 0 , POSIX_FADV_DONTNEED);
 	}
 	source.file=file;
 	fs_lseek(file, 0, 0);
@@ -490,7 +505,7 @@ void Jcmd_insmod(unsigned char *filename, unsigned char *arg){
 		goto out;
 	}
 	fs_lseek(file, (unsigned long) elf_ex.e_shoff, 0);
-	//retval = fs_read(file, (unsigned char *) elf_shdata, sect_size);
+
 	retval = complete_read(file, (unsigned char *) elf_shdata, sect_size);
 	if (retval != sect_size) {
 		error = "failed to read the sections from file";
@@ -499,7 +514,7 @@ void Jcmd_insmod(unsigned char *filename, unsigned char *arg){
 
 	sh_strtab=mm_malloc(elf_shdata[elf_ex.e_shstrndx].sh_size, 0);
 	fs_lseek(file, (unsigned long) elf_shdata[elf_ex.e_shstrndx].sh_offset, 0);
-	retval = fs_read(file, (unsigned char *) sh_strtab, elf_shdata[elf_ex.e_shstrndx].sh_size);
+	retval = complete_read(file, (unsigned char *) sh_strtab, elf_shdata[elf_ex.e_shstrndx].sh_size);
 	if (retval != elf_shdata[elf_ex.e_shstrndx].sh_size){
 		error = "failed to read the sections section symbol table";
 		goto out;
@@ -671,7 +686,7 @@ out:  ;
 
 	return;
 }
-void sort_symbols(module_t *modulep){
+static void sort_symbols(module_t *modulep){
 	int i,j;
 
 	for (i = 0; modulep->symbol_table[i].name != 0; i++) {
@@ -689,22 +704,27 @@ void sort_symbols(module_t *modulep){
 			ut_memcpy(&(modulep->symbol_table[i]),&temp, sizeof(symb_table_t));
 		}
 	}
+	modulep->symb_table_length = i;
 }
+static int stat_cpu_rip_unknown_hit=0;
 void Jcmd_lsmod(unsigned char *arg1,unsigned char *arg2){
 	module_t *modulep=0;
 	int i,j;
-	int all=0;
+	int option=0;
 	unsigned char *buf;
 	int bsize=1000;
+	int total_hits=0;
 
 	buf=mm_malloc(bsize,0);
 	if (arg1!=0 && ut_strcmp(arg1,(uint8_t *)"all")==0){
-		all=1;
+		option=1;
+	} else 	if (arg1!=0 && ut_strcmp(arg1,(uint8_t *)"stat")==0){
+		option=2;
 	}
 	for (i = 0; i < total_modules; i++) {
 		modulep = g_modules[i];
 		modulep->use_count++;
-		ut_printf("%d: %s\n", i, modulep->name);
+		ut_printf("%d: %s symbls count:%d\n", i, modulep->name,modulep->symb_table_length);
 		for (j=0; j<SEC_TOTAL; j++){
 			ut_snprintf(buf,bsize,"	%2d: addr:%5x - %5x \n",modulep->secs[j].sec_index,modulep->secs[j].addr,modulep->secs[j].addr+modulep->secs[j].length);
 			if (g_current_task->mm == g_kernel_mm)
@@ -712,21 +732,45 @@ void Jcmd_lsmod(unsigned char *arg1,unsigned char *arg2){
 			else
 				SYS_fs_write(1, buf, ut_strlen(buf));
 		}
-		if (all == 1) {
+		if (option != 0) {
 			for (j = 0; modulep->symbol_table[j].name != 0; j++) {
-				ut_snprintf(buf,bsize,"	%d:t:%d s_idx:%d  %s -> %x \n", j, modulep->symbol_table[j].type,modulep->symbol_table[j].sec_index,modulep->symbol_table[j].name,
+				if ((option == 2) && (modulep->symbol_table[j].stats.hits == 0)) continue;
+
+				ut_snprintf(buf,bsize,"	%3d:t:%2d s_idx:%2d hits:%4d (rip=%x) %s -> %x \n", j, modulep->symbol_table[j].type,modulep->symbol_table[j].sec_index,modulep->symbol_table[j].stats.hits,modulep->symbol_table[j].stats.rip,modulep->symbol_table[j].name,
 						modulep->symbol_table[j].address);
 				if (g_current_task->mm == g_kernel_mm)
 					ut_printf("%s",buf);
 				else
 					SYS_fs_write(1,buf,ut_strlen(buf));
+				total_hits = total_hits + modulep->symbol_table[j].stats.hits;
 			}
 		}
 		modulep->use_count--;
 	}
-	ut_printf(" Total modules: %d \n",total_modules);
+	ut_snprintf(buf,bsize," Total Modules: %d total Hits:%d  unknownhits:%d\n",total_modules,total_hits,stat_cpu_rip_unknown_hit);
+	if (g_current_task->mm == g_kernel_mm)
+		ut_printf("%s",buf);
+	else
+		SYS_fs_write(1,buf,ut_strlen(buf));
 	mm_free(buf);
 	return;
+}
+
+void Jcmd_reset_cpu_stat() {
+	module_t *modulep = 0;
+	int i,j;
+	for (i = 0; i < total_modules; i++) {
+		modulep = g_modules[i];
+		modulep->use_count++;
+
+		for (j = 0; modulep->symbol_table[j].name != 0; j++) {
+			modulep->symbol_table[j].stats.hits = 0;
+			modulep->symbol_table[j].stats.rip = 0;
+		}
+
+		modulep->use_count--;
+	}
+	stat_cpu_rip_unknown_hit=0;
 }
 void Jcmd_rmmod(unsigned char *filename, unsigned char *arg){
 	int i;
@@ -751,9 +795,9 @@ last:
 }
 static unsigned long _get_symbol_addr(module_t *modulep, unsigned char *name){
 	int i;
-	unsigned long ret = 0;
+	unsigned long ret = ~(0x0);
 	for (i = 0; modulep->symbol_table[i].name != 0; i++) {
-		if (ut_strcmp(modulep->symbol_table[i].name, name) == 0) {
+		if (ut_strcmp(modulep->symbol_table[i].name, name) == 0 && (modulep->symbol_table[i].type != SYMBOL_TYPE_UNRESOLVED)) {
 			ret = modulep->symbol_table[i].address;
 			return ret;
 		}
@@ -764,15 +808,20 @@ static unsigned long _get_symbol_addr(module_t *modulep, unsigned char *name){
 unsigned long ut_mod_get_symbol_addr(unsigned char *name) {
 	int i;
 	module_t *modulep=0;
-	unsigned long ret =0;
+	unsigned long ret=0;
 
 	for (i=0; i<total_modules; i++ ){
 		modulep=g_modules[i];
 		ret = _get_symbol_addr(modulep,name);
-		if (ret != 0) goto last;
+		if (ret != ~(0x0)){
+			goto last;
+		}else {
+			ret = 0x0;
+		}
 	}
 
 last:
+
 	return ret;
 }
 int ut_mod_symbol_execute(int type, char *name, char *argv1,char *argv2){
@@ -781,14 +830,14 @@ int ut_mod_symbol_execute(int type, char *name, char *argv1,char *argv2){
 	int i,j;
 	int ret=0;
 
-	ut_printf(" Trying to execute thefunction in a module \n");
-	for (j=0; j<total_modules ; j++ ){
+//	ut_printf(" Trying to execute the function in a module \n");
+	for (j=1; j<total_modules ; j++ ){ /* only for add on modules , not for kernel*/
 		modulep=g_modules[j];
 		if (modulep ==0) {
 			BUG();
 		}
 		for (i = 0; modulep->symbol_table[i].name != 0; i++) {
-			if (ut_strcmp((uint8_t *)modulep->symbol_table[i].name,(uint8_t *) name) == 0) {
+			if ((modulep->symbol_table[i].type==SYMBOL_GTEXT ||  modulep->symbol_table[i].type==SYMBOL_CMD )&& ut_strcmp((uint8_t *)modulep->symbol_table[i].name,(uint8_t *) name) == 0) {
 				func1=(void *)modulep->symbol_table[i].address;
 				ut_printf("FOUND: BEFORE executing:%s: :%x\n",name,func1);
 				func1();
@@ -800,4 +849,34 @@ int ut_mod_symbol_execute(int type, char *name, char *argv1,char *argv2){
 	}
 last:
 	return ret;
+}
+int perf_stat_rip_hit(unsigned long rip){
+	module_t *modulep=0;
+	int i,j;
+	for (j=0; j<total_modules ; j++ ){
+		int min=0;
+		int max;
+		int curr;
+		modulep=g_modules[j];
+		max = modulep->symb_table_length-1;
+		if ( max <0) max=0;
+		curr = max/2;
+		if (rip < modulep->symbol_table[min].address || rip > modulep->symbol_table[max].address) continue;
+		while (min < (max-1)){ /* binary search */
+			if (rip >= modulep->symbol_table[curr].address ){
+				min = curr;
+			}else {
+				max = curr;
+			}
+			curr = (max+min)/2;
+		}
+		curr = min;
+		if ((rip >= modulep->symbol_table[curr].address) && (rip <= modulep->symbol_table[curr+1].address)){
+			modulep->symbol_table[curr].stats.hits++;
+			modulep->symbol_table[curr].stats.rip=rip;
+		}
+		return JSUCCESS;
+	}
+	stat_cpu_rip_unknown_hit++;
+	return JFAIL;
 }

@@ -143,6 +143,7 @@ struct cpu_state {
 
 	unsigned long stat_total_contexts;
 	unsigned long stat_nonidle_contexts;
+	unsigned long stat_rip;
 } __attribute__ ((aligned (64))) ;
 
 
@@ -152,6 +153,7 @@ struct cpu_state g_cpu_state[];
 #define IPI_CLEARPAGETABLE 201
 extern int getcpuid();
 
+#if 0
 static inline struct task_struct *current_task(void)
 {
 	unsigned long addr,p;
@@ -161,6 +163,20 @@ static inline struct task_struct *current_task(void)
     return (struct task_struct *)addr;
 }
 #define g_current_task current_task()
+#else
+static inline struct task_struct *bootup_task(void)
+{
+	unsigned long addr,p;
+	addr = (unsigned long)&p;
+	addr=addr & (~(TASK_SIZE-1));
+
+    return (struct task_struct *)addr;
+}
+//#define g_current_task g_cpu_state[0].current_task
+register unsigned long current_stack_pointer asm("esp");
+#define g_current_task ((struct task_struct *)(current_stack_pointer & ~(TASK_SIZE - 1)))
+#endif
+
 #define is_kernel_thread (g_current_task->mm == g_kernel_mm)
 
 typedef struct backtrace{

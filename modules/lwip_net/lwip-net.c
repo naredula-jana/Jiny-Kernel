@@ -365,6 +365,38 @@ int lwip_sock_connect(void *conn, unsigned long *addr, uint16_t port) {
 	mutexUnLock(g_netBH_lock);
 	return ret;
 }
+#define  TCPIPTHREAD_BYPASS 1
+#if TCPIPTHREAD_BYPASS /* for leightweight udp , to bypass tcpip_thread to send the udp message */
+new_netconn_send(struct netconn *conn, struct netbuf *buf)
+{
+  struct api_msg msg;
+  err_t err;
+
+  LWIP_ERROR("netconn_send: invalid conn",  (conn != NULL), return ERR_ARG;);
+
+  LWIP_DEBUGF(API_LIB_DEBUG, ("netconn_send: sending %"U16_F" bytes\n", buf->p->tot_len));
+  msg.function = do_send;
+  msg.msg.conn = conn;
+  msg.msg.msg.b = buf;
+ // err = TCPIP_APIMSG(&msg);
+  do_send(&(msg.msg));
+  err = msg.msg.err ;
+  NETCONN_SET_SAFE_ERR(conn, err);
+  sys_arch_sem_wait(&msg.msg.conn->op_completed, 0);
+
+  return err;
+}
+int
+new_netconn_sendto(struct netconn *conn, struct netbuf *buf, ip_addr_t *addr, u16_t port)
+{
+  if (buf != NULL) {
+    ip_addr_set(&buf->addr, addr);
+    buf->port = port;
+    return new_netconn_send(conn, buf);
+  }
+  return ERR_VAL;
+}
+#endif
 int lwip_sock_write(void *conn, unsigned char *buff, unsigned long len, int type, uint32_t daddr, uint16_t dport) {
 	int ret;
 
@@ -384,7 +416,13 @@ int lwip_sock_write(void *conn, unsigned char *buff, unsigned long len, int type
 		data = netbuf_alloc(buf, len+1);
 		ut_memcpy(data, buff, len);
 		addr.addr = daddr;
+#if  TCPIPTHREAD_BYPASS
+		LOCK_TCPIP_CORE()
+		new_netconn_sendto(conn, buf,&addr,dport); /* bypassing tcpip_thread*/
+		UNLOCK_TCPIP_CORE()
+#else
 		netconn_sendto(conn, buf,&addr,dport);
+#endif
 		netbuf_delete(buf);
 		ret = len;
 	} else if (type == SOCK_STREAM) {

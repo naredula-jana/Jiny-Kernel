@@ -31,6 +31,10 @@ typedef struct {
 	char *file_lineno; /* currently not filled */
 	int sec_index;
 	unsigned char *subsystem_type;
+	struct {
+		unsigned long hits;
+		unsigned long rip;
+	}stats;
 }symb_table_t;
 extern unsigned long g_multiboot_mod1_addr;
 extern unsigned long g_multiboot_mod1_len;

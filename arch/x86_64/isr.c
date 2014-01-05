@@ -66,6 +66,7 @@ static int gpFault(struct fault_ctx *ctx) {
 	fault_error_g = ctx->errcode;
 	fault_num_g = ctx->fault_num;
 
+	BRK;
 	ut_printf(
 			" ERROR: cpuid:%d Gp Fault fault ip:%x error code:%x sp:%x fault number:%x taskname:%s:\n",
 			getcpuid(), fault_ip_g, fault_error_g, ctx->istack_frame->rsp,
@@ -164,8 +165,9 @@ void DisableTimer(void)
 {
 	outb(0x21, inb(0x21) | 1);
 }
+
 static void fill_fault_context(struct fault_ctx *fctx, void *rsp,
-		int fault_num)
+		int fault_num, int from_intr)
 {
 	uint8_t *p = rsp;
 
@@ -176,8 +178,11 @@ static void fill_fault_context(struct fault_ctx *fctx, void *rsp,
 	fctx->gprs = (struct gpregs *)p;
 	p += sizeof(struct gpregs);
 
-	fctx->errcode = *(uint32_t *)p;
-	p += 8;
+	if (from_intr==0) /* from isr , not from fault */
+	{
+		fctx->errcode = *(uint32_t *)p;
+		p += 8;
+	}
 
 	/* Save pointer to interrupt stack frame */
 	fctx->istack_frame = (struct intr_stack_frame *)p;
@@ -187,6 +192,7 @@ static void fill_fault_context(struct fault_ctx *fctx, void *rsp,
 	fctx->old_rsp = p;
 	cpu_ctx.gprs=fctx->gprs;
 	cpu_ctx.istack_frame=fctx->istack_frame ;
+	g_cpu_state[0].stat_rip = fctx->istack_frame->rip;
 }
 static int stack_depth=0;
 // This gets called from our ASM interrupt handler stub.
@@ -195,7 +201,7 @@ int ar_faultHandler(void *p, unsigned int  int_no)
 	struct fault_ctx ctx;
 
 	asm volatile("cli"); /* SOME BAD happened STOP all the interrupts */
-	fill_fault_context(&ctx,p,int_no);
+	fill_fault_context(&ctx,p,int_no,0);
 	if (g_interrupt_handlers[int_no].action != 0)
 	{
 		int ret;
@@ -253,12 +259,12 @@ void ar_irqHandler(void *p,unsigned int int_no)
 
 	if (g_interrupt_handlers[int_no].action != 0)
 	{
+		struct fault_ctx ctx;
+
+		fill_fault_context(&ctx,p,int_no,1);
 		isr_t handler = g_interrupt_handlers[int_no].action;
 		if (int_no == 128)
 		{
-			struct fault_ctx ctx;
-
-			fill_fault_context(&ctx,p,int_no);
 			handler(&ctx, g_interrupt_handlers[int_no].private_data);
 		}else
 		{

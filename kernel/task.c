@@ -614,7 +614,7 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void 
 			mm = g_current_task->mm;
 		}
 		atomic_inc(&mm->count);
-		DEBUG("clone  CLONE_VM the mm :%x counter:%x \n",mm,mm->count.counter);
+		SYSCALL_DEBUG("clone  CLONE_VM the mm :%x counter:%x \n",mm,mm->count.counter);
 	} else {
 		int i;
 		mm = mm_slab_cache_alloc(mm_cachep, 0);
@@ -1239,7 +1239,9 @@ void do_softirq() {
 }
 unsigned long g_jiffie_errors=0;
 unsigned long g_jiffie_tick=0;
-void timer_callback(registers_t regs) {
+int g_conf_cpu_stats=1;
+
+void timer_callback(struct fault_ctx *ctx, registers_t regs) {
 	int jiff_incremented=0;
 
 	/* 1. increment timestamp */
@@ -1256,10 +1258,17 @@ void timer_callback(registers_t regs) {
 	g_current_task->counter--;
 	g_current_task->stats.ticks_consumed++;
 
+	/* collect cpu stats */
+	if (g_conf_cpu_stats != 0){
+		int cpuid=getcpuid();
+		perf_stat_rip_hit(g_cpu_state[cpuid].stat_rip);
+	}
+
 	/* 2. Test of wait queues for any expiry. time queue is one of the wait queue  */
 	if (jiff_incremented == 1){
 		ipc_check_waitqueues();
 	}
+
 
 	do_softirq();
 }

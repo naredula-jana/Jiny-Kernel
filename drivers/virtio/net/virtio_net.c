@@ -83,14 +83,14 @@ static int attach_virtio_net_pci(device_t *pci_dev) {
 
 	virtio_set_status(virtio_dev,
 			virtio_get_status(virtio_dev) + VIRTIO_CONFIG_S_ACKNOWLEDGE);
-	DEBUG("VirtioNet: Initializing VIRTIO PCI NET status :%x :  \n", virtio_get_status(virtio_dev));
+	ut_log("VirtioNet: Initializing VIRTIO PCI NET status :%x : virtio_dev:%x \n", virtio_get_status(virtio_dev),virtio_dev);
 
 	virtio_set_status(virtio_dev,
 			virtio_get_status(virtio_dev) + VIRTIO_CONFIG_S_DRIVER);
 
 	addr = virtio_dev->pci_ioaddr + VIRTIO_PCI_HOST_FEATURES;
 	features = inl(addr);
-	ut_log("	VirtioNet:  hostfeatures :%x:\n", features);
+	ut_log("	VirtioNet:  hostfeatures :%x: dev:%x capabilitie:%x\n", features,pci_dev,pci_hdr->capabilities_pointer);
 	display_virtiofeatures(features, vtnet_feature_desc);
 
 	if (pci_hdr->capabilities_pointer != 0) {
@@ -106,9 +106,10 @@ static int attach_virtio_net_pci(device_t *pci_dev) {
 	} else {
 		addr = virtio_dev->pci_ioaddr + 24;
 	}
-	ut_log("	VirtioNet:  pioaddr:%x MAC address : %x :%x :%x :%x :%x :%x status: %x:%x  :\n", addr, inb(addr), inb(addr+1), inb(addr+2), inb(addr+3), inb(addr+4), inb(addr+5), inb(addr+6), inb(addr+7));
 	for (i = 0; i < 6; i++)
 		pci_dev->mac[i] = inb(addr + i);
+	ut_log("	VirtioNet:  pioaddr:%x MAC address : %x :%x :%x :%x :%x :%x mis_vector:%x   :\n",addr, pci_dev->mac[0], pci_dev->mac[1], pci_dev->mac[2], pci_dev->mac[3], pci_dev->mac[4], pci_dev->mac[5],msi_vector);
+
 	virtio_createQueue(0, virtio_dev, 1);
 	if (msi_vector > 0) {
 		outw(virtio_dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 0);
@@ -128,7 +129,6 @@ static int attach_virtio_net_pci(device_t *pci_dev) {
 	}
 #endif
 
-
 	for (i = 0; i < 120; i++) /* add buffers to recv q */
 		addBufToQueue(virtio_dev->vq[0], 0, 4096);
 
@@ -137,10 +137,9 @@ static int attach_virtio_net_pci(device_t *pci_dev) {
 
 	registerNetworkHandler(NETWORK_DRIVER, netdriver_xmit, (void *) pci_dev);
 
-
 	virtio_set_status(virtio_dev,
 			virtio_get_status(virtio_dev) + VIRTIO_CONFIG_S_DRIVER_OK);
-	DEBUG("VirtioNet:  Initilization Completed \n");
+	ut_log("VirtioNet:  Initilization Completed status:%x\n",virtio_get_status(virtio_dev));
 	return 1;
 }
 
@@ -148,6 +147,34 @@ static int dettach_virtio_net_pci(device_t *pci_dev) { //TODO
 	return 0;
 }
 static spinlock_t virtionet_lock = SPIN_LOCK_UNLOCKED("virtio_net");
+static int virtio_net_poll_device(void *private_data, int enable_interrupt, int total_pkts){
+	unsigned char *addr;
+	unsigned int len = 0;
+	device_t *pci_dev = (device_t *) private_data;
+	unsigned char *replace_buf;
+	virtio_dev_t *dev = (virtio_dev_t *) pci_dev->private_data;
+	int i;
+	int ret=0;
+
+	for (i = 0; i < total_pkts; i++) {
+		addr = (unsigned char *) virtio_removeFromQueue(dev->vq[0],
+				(unsigned int *) &len);
+		if (addr != 0){
+			netif_rx(addr, len, &replace_buf);
+			addBufToQueue(dev->vq[0], replace_buf, 4096);
+			ret = ret+1;
+		}else{
+			break;
+		}
+	}
+	if (ret > 0){
+		virtio_queue_kick(dev->vq[0]);
+	}
+	if (enable_interrupt){
+		virtio_enable_cb(dev->vq[0]);
+	}
+	return ret;
+}
 static void virtio_net_interrupt(registers_t regs, void *private_data) {
 	/* reset the irq by resetting the status  */
 	unsigned char isr;
@@ -158,14 +185,17 @@ static void virtio_net_interrupt(registers_t regs, void *private_data) {
 	unsigned long flags;
 	unsigned char *replace_buf;
 	int i;
-
+//BRK;
 //	spin_lock_irqsave(&virtionet_lock, flags);
 
 	dev = (virtio_dev_t *) pci_dev->private_data;
 	if (dev->msi == 0)
 		isr = inb(dev->pci_ioaddr + VIRTIO_PCI_ISR);
-
-	//virtqueue_disable_cb(dev->vq[0]);
+#if 1
+	virtio_disable_cb(dev->vq[0]);
+	netif_rx_enable_polling(private_data, virtio_net_poll_device);
+	//virtio_net_poll_device(private_data,0,10);
+#else
 	for (i = 0; i < 10; i++) {
 		addr = (unsigned char *) virtio_removeFromQueue(dev->vq[0],
 				(unsigned int *) &len);
@@ -177,7 +207,7 @@ static void virtio_net_interrupt(registers_t regs, void *private_data) {
 			break;
 		}
 	}
-
+#endif
 //	spin_unlock_irqrestore(&virtionet_lock, flags);
 }
 
@@ -208,7 +238,6 @@ static int netdriver_xmit(unsigned char* data, unsigned int len,
 		mm_putFreePages(addr, 0);
 		virtio_send_errors++;
 	}
-
 	send_pkts = 0;
 	virtio_queue_kick(dev->vq[1]);
 	spin_unlock_irqrestore(&virtionet_lock, flags);

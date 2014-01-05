@@ -21,7 +21,7 @@ int add_deviceClass(void *addr){
     return 1;
 }
 
-#define MAX_DEVICES 200
+#define MAX_DEVICES 100
 struct {
 	pci_addr_t addr;
 	pci_dev_header_t header;
@@ -36,7 +36,7 @@ static void scan_devices(){
 #define MAX_PCI_FUNC 32
 
 	device_count=0;
-	for (i = 0; i < MAX_BUS ; i++) {
+	for (i = 0; i < MAX_BUS && i < 2 ; i++) {
 		for (j = 0; j < MAX_PCI_DEV; j++) {
 	        for (k=0;  k< MAX_PCI_FUNC; k++){
 	        	if (device_count >= (MAX_DEVICES-1)) return 0;
@@ -49,7 +49,7 @@ static void scan_devices(){
 
 	        	ret = pci_generic_read(&device_list[device_count].addr, 0, sizeof(pci_dev_header_t), &device_list[device_count].header);
 	        	if (ret != 0 || device_list[device_count].header.vendor_id==0xffff) continue;
-	        	DEBUG("scan devices %d:%d:%d  %x:%x\n",i,j,k,device_list[device_count].header.vendor_id,device_list[device_count].header.device_id);
+	        	ut_log("	scan devices %d:%d:%d  %x:%x\n",i,j,k,device_list[device_count].header.vendor_id,device_list[device_count].header.device_id);
 	        	device_count++;
 	        }
 		}
@@ -77,6 +77,7 @@ int init_devClasses(unsigned long unused) {
 			attach = devClass->attach;
 			if (probe != NULL && attach != NULL) {
 				if (probe(dev) == 1) {
+					ut_log("	Attach call : dev:%x %d:%d:%d\n ",dev,dev->pci_addr.bus,dev->pci_addr.device,dev->pci_addr.function);
 					ret=devClass->attach(dev);
 #if 1
 					dev->next=devClass->devices;

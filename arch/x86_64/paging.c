@@ -489,7 +489,6 @@ int ar_dup_pageTable(struct mm_struct *src_mm,struct mm_struct *dest_mm)
 }
 
 int ar_check_valid_address(unsigned long addr, int len) {
-
 	addr_t *v; /* virtual address */
 	addr_t *pl4, *pl3, *pl2, *pl1, *p; /* physical address */
 	struct vm_area_struct *vma;
@@ -499,9 +498,9 @@ int ar_check_valid_address(unsigned long addr, int len) {
 
 	struct mm_struct *mm = g_current_task->mm;
 
-	/* 1. check for the kernel address */
-	vma = vm_findVma(g_kernel_mm, (addr & PAGE_MASK), 4); /* check kernel addr */
-	if (vma != 0){
+	/* 1. check if it is  user level space */
+	vma = vm_findVma(mm, (addr & PAGE_MASK), 4);
+	if (vma != 0) {
 		if ((addr+len) <= vma->vm_end){
 			return JSUCCESS;
 		}
@@ -513,9 +512,9 @@ int ar_check_valid_address(unsigned long addr, int len) {
 		return JFAIL;
 	}
 
-	/* 2. check for user level space */
-	vma = vm_findVma(mm, (addr & PAGE_MASK), 4);
-	if (vma != 0) {
+	/* 2. check for the kernel address */
+	vma = vm_findVma(g_kernel_mm, (addr & PAGE_MASK), 4); /* check kernel addr */
+	if (vma != 0){
 		if ((addr+len) <= vma->vm_end){
 			return JSUCCESS;
 		}

@@ -28,6 +28,15 @@ OBJECTS += kernel/debug.o kernel/device.o  kernel/init.o  kernel/ipc.o  kernel/m
 user: 
 	make SOURCE_ROOT=$$PWD -C userland clean
 	make SOURCE_ROOT=$$PWD -C userland
+
+test_net:
+	make SOURCE_ROOT=$$PWD -C modules/test_net
+	cp modules/test_net/test_net.o test/root/
+
+test_file:
+	make SOURCE_ROOT=$$PWD -C modules/test_file
+	cp modules/test_file/test_file.o test/root/
+	gcc modules/test_file/test_file.c -static -o test/root/test_file
 	
 all: lwip.a
 	make SOURCE_ROOT=$$PWD -C kernel

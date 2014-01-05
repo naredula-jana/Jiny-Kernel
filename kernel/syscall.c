@@ -262,10 +262,14 @@ long int SYS_time(__time_t *time) {
 	SYSCALL_DEBUG("Return time :%x seconds \n", *time);
 	return *time;
 }
-unsigned long SYS_gettimeofday(time_t *tv, struct timezone *tz) {
+unsigned long SYS_gettimeofday(time_t *tv, struct timezone *unused_arg_tz) {
 
 	if (tv == 0)
 		return SYSCALL_FAIL;
+
+	if (ar_check_valid_address((addr_t)tv,sizeof(time_t))==JFAIL){
+		BUG();
+	}
 	ut_get_wallclock(&(tv->tv_sec),&(tv->tv_usec));
 	SYSCALL_DEBUG("gettimeofday sec:%d(%x) usec:%d(%x)\n", tv->tv_sec,tv->tv_sec, tv->tv_usec,tv->tv_usec);
 	return SYSCALL_SUCCESS;

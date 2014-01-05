@@ -9,7 +9,7 @@ INCLUDE=. -DNETWORKING -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURC
 
 
 
-CC=gcc -g -gdwarf-2
+CC=gcc -g -gdwarf-2 -D _KERNEL
 
 AT=
 

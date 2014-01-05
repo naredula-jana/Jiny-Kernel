@@ -53,9 +53,11 @@ struct queue_struct {
 		unsigned char *buf;
 		unsigned int len; /* actual data length , not the buf lenegth, buf always constant length */
 	} data[MAX_QUEUE_LENGTH];
+	spinlock_t spin_lock; /* lock to protect while adding and revoing from queue */
 	int stat_processed[MAX_CPUS];
 	int queue_len;
 	int error_full;
+
 };
 static struct queue_struct queue;
 
@@ -68,6 +70,7 @@ static int count_net_drivers = 0;
 static int count_protocol_drivers = 0;
 static struct net_handlers net_drivers[MAX_HANDLERS];
 static struct net_handlers protocol_drivers[MAX_HANDLERS];
+static int poll_devices();
 
 int g_network_ip=0x0ad181b0; /* 10.209.129.176  */
 static int stat_from_driver = 0;
@@ -87,9 +90,13 @@ static unsigned char *get_freebuf(){
 	return (unsigned char *)alloc_page(0);
 }
 static int add_to_queue(unsigned char *buf, int len, unsigned char **replace_outbuf) {
+	unsigned long flags;
+	int ret=0;
 	if (buf == 0 || len == 0)
-		return 0;
+		return ret;
+
 	//ut_log("Recevied from  network and keeping in queue: len:%d  stat count:%d prod:%d cons:%d\n",len,stat_queue_len,queue.producer,queue.consumer);
+	spin_lock_irqsave(&(queue.spin_lock), flags);
 	if (queue.data[queue.producer].len == 0) {
 		queue.data[queue.producer].len = len;
 		*replace_outbuf = queue.data[queue.producer].buf;
@@ -98,13 +105,18 @@ static int add_to_queue(unsigned char *buf, int len, unsigned char **replace_out
 		queue.queue_len++;
 		if (queue.producer >= MAX_QUEUE_LENGTH)
 			queue.producer = 0;
-		return 1;
+		ret = 1;
+		goto last;
 	}
 	queue.error_full++;
-
-	return 0;
+last:
+	spin_unlock_irqrestore(&(queue.spin_lock), flags);
+	return ret;
 }
 static int remove_from_queue(unsigned char **buf, unsigned int *len, unsigned char *replace_inbuf) {
+	unsigned long flags;
+	int ret=0;
+	spin_lock_irqsave(&(queue.spin_lock), flags);
 	if ((queue.data[queue.consumer].buf != 0)
 			&& (queue.data[queue.consumer].len != 0)) {
 		*buf = queue.data[queue.consumer].buf;
@@ -119,11 +131,13 @@ static int remove_from_queue(unsigned char **buf, unsigned int *len, unsigned ch
 		queue.stat_processed[getcpuid()]++;
 		if (queue.consumer >= MAX_QUEUE_LENGTH)
 			queue.consumer = 0;
-		return 1;
+		ret  = 1;
 	}
-	return 0;
+	spin_unlock_irqrestore(&(queue.spin_lock), flags);
+	return ret;
 }
 void *g_netBH_lock = 0; /* All BH code will serialised by this lock */
+static int stat_netrx_bh_recvs=0;
 /*   Release the buffer after calling the callback */
 static int netRx_BH(void *arg) {
 	unsigned char *data;
@@ -132,14 +146,17 @@ static int netRx_BH(void *arg) {
 	unsigned char *replace_buf = get_freebuf();
 
 	while (1) {
-		ipc_waiton_waitqueue(&queue.waitq, 1000);
+		poll_devices();
 
-		mutexLock(g_netBH_lock);
 		qret = remove_from_queue(&data, &len, replace_buf);
-		mutexUnLock(g_netBH_lock);
+		if (qret ==0 ){
+			ipc_waiton_waitqueue(&queue.waitq, 1000);
+			qret = remove_from_queue(&data, &len, replace_buf);
+		}
 
 		while ( qret == 1) {
 			int ret = 0;
+			stat_netrx_bh_recvs++;
 			if (count_protocol_drivers > 0) {
 				ret = protocol_drivers[0].callback(data, len,
 						protocol_drivers[0].private);
@@ -149,9 +166,7 @@ static int netRx_BH(void *arg) {
 			}
 			replace_buf = data;
 
-			mutexLock(g_netBH_lock);
 			qret = remove_from_queue(&data, &len, replace_buf);
-			mutexUnLock(g_netBH_lock);
 		}
 	}
 	return 1;
@@ -209,6 +224,75 @@ int unregisterNetworkHandler(int type,
 	return 1;
 }
 static int network_enabled=0;
+
+#define MAX_POLL_DEVICES 5
+struct device_under_poll_struct{
+	void *private_data;
+	int (*poll_func)(void *private_data, int enable_interrupt, int total_pkts);
+	int active;
+};
+static struct device_under_poll_struct device_under_poll[MAX_POLL_DEVICES];
+
+int netif_rx_enable_polling(void *private_data,
+		int (*poll_func)(void *private_data, int enable_interrupt,
+				int total_pkts)) {
+	int i;
+	for (i = 0; i < MAX_POLL_DEVICES; i++) {
+		if (device_under_poll[i].private_data == 0 || device_under_poll[i].private_data == private_data) {
+			device_under_poll[i].private_data = private_data;
+			device_under_poll[i].poll_func = poll_func;
+			device_under_poll[i].active = 1;
+			ipc_wakeup_waitqueue(&queue.waitq);
+			return 1;
+		}
+	}
+	return 0;
+}
+static int init_polldevices(){
+	int i;
+	for (i = 0; i < MAX_POLL_DEVICES; i++) {
+		device_under_poll[i].private_data =0;
+		device_under_poll[i].active = 0;
+	}
+}
+static int poll_devices() {
+	int i,j;
+	int ret = 0;
+	static int poll_underway = 0;
+
+	mutexLock(g_netBH_lock);
+	if (poll_underway == 0) {
+		poll_underway = 1;
+		ret = 1;
+	}
+	mutexUnLock(g_netBH_lock);
+	if (ret == 0)
+		return ret;
+
+	for (i = 0; i < MAX_POLL_DEVICES; i++) {
+		if (device_under_poll[i].private_data != 0
+				&& device_under_poll[i].active == 1) {
+			int max_pkts=50;
+			int total_pkts=0;
+			int pkts=0;
+			for (j=0; j<20; j++){
+				pkts = device_under_poll[i].poll_func(device_under_poll[i].private_data, 0, max_pkts);
+				if (pkts==0 ) break;
+				total_pkts = total_pkts+pkts;
+			}
+			if (total_pkts == 0){
+				device_under_poll[i].active = 0;
+				device_under_poll[i].poll_func(device_under_poll[i].private_data, 1, max_pkts); /* enable interrupts */
+			}else{
+				if (total_pkts > 2){ /* if there are more then 2 unprocessed packets wake up any sleeping thread to picku[p */
+					ipc_wakeup_waitqueue(&queue.waitq);
+				}
+			}
+		}
+	}
+	poll_underway = 0;
+	return 1;
+}
 int netif_rx(unsigned char *data, unsigned int len, unsigned char **replace_buf) {
 	if (network_enabled==0){
 		*replace_buf = data;
@@ -247,6 +331,7 @@ int init_networking() {
 	unsigned long pid;
 	int i;
 
+	init_polldevices();
 	ut_memset((unsigned char *) &queue, 0, sizeof(struct queue_struct));
 	for (i=0; i<MAX_QUEUE_LENGTH; i++){
 		queue.data[i].buf = get_freebuf();
@@ -255,12 +340,13 @@ int init_networking() {
 			BUG();
 		}
 	}
-
+	queue.spin_lock = SPIN_LOCK_UNLOCKED("netq_lock");
 	ipc_register_waitqueue(&queue.waitq, "netRx_BH",WAIT_QUEUE_WAKEUP_ONE);
+	//ipc_register_waitqueue(&queue.waitq, "netRx_BH",0);
 	g_netBH_lock = mutexCreate("mutex_netBH");
 	pid = sc_createKernelThread(netRx_BH, 0, (unsigned char *) "netRx_BH_1");
 	pid = sc_createKernelThread(netRx_BH, 0, (unsigned char *) "netRx_BH_2");
-//	pid = sc_createKernelThread(netRx_BH, 0, (unsigned char *) "netRx_BH_3");
+	pid = sc_createKernelThread(netRx_BH, 0, (unsigned char *) "netRx_BH_3");
 	network_enabled = 1;
 	return 0;
 }
@@ -556,6 +642,7 @@ int SYS_recvfrom(int sockfd, const void *buf, size_t len, int flags,
 		file->inode->stat_in++;
 	else
 		file->inode->stat_err++;
+
 	return ret;
 }
 
@@ -563,8 +650,8 @@ void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
 	if (socket_api == 0)
 		return;
 	socket_api->network_status(arg1, arg2);
-	ut_printf(" queue full error:%d  producer:%d consumer:%d  from_net:%d to_net:%d\n",
+	ut_printf(" queue full error:%d  producer:%d consumer:%d  from_net:%d to_net:%d rxBhRecvs:%d\n",
 			queue.error_full, queue.producer, queue.consumer, stat_from_driver,
-			stat_to_driver);
+			stat_to_driver,stat_netrx_bh_recvs);
 	return;
 }

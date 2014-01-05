@@ -114,15 +114,17 @@ static int apic_getcpuid() {
 
 	return id;
 }
-int getcpuid() {
+inline int getcpuid() {
 	unsigned long cpuid;
 	if (imps_num_cpus == 1)
 		return 0;
 
 	asm volatile("movq %%gs:0x48,%0" : "=r" (cpuid));
 
-	if (cpuid >= MAX_CPUS || cpuid < 0 || cpuid >= imps_num_cpus)
+	if (cpuid >= MAX_CPUS || cpuid < 0 || cpuid >= imps_num_cpus){
+		BUG();
 		return 0;
+	}
 
 	return cpuid;
 }

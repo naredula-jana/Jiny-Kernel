@@ -71,7 +71,7 @@ int read_msi(device_t *dev) {
 	if ((ret = vm_mmap(0, (unsigned long)__va(msix->msix_table_res), 0x1000, PROT_WRITE,
 			MAP_FIXED, msix->msix_table_res,"msix")) == 0) /* this is for SMP */
 	{
-		ut_printf("ERROR : PCI mmap fails for \n");
+		ut_log("ERROR : PCI mmap fails for \n");
 		return 0;
 	}
 
@@ -87,7 +87,7 @@ int enable_msix(device_t *dev){
 	msix->msix_ctrl = msix->msix_ctrl | 0x8000; // enable msix
 	pci_write(&dev->pci_addr, dev->pci_hdr.capabilities_pointer + PCIR_MSIX_CTRL, 2, &msix->msix_ctrl);
 
-	DEBUG("MSIX Configured ISR vector:%d  numvector:%d ctrl:%x\n", msix->isr_vector, msix->msix_msgnum, msix->msix_ctrl);
+	ut_log("MSIX Configured ISR vector:%d  numvector:%d ctrl:%x\n", msix->isr_vector, msix->msix_msgnum, msix->msix_ctrl);
 	return 1;
 }
 

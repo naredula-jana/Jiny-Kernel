@@ -71,19 +71,7 @@ int cmd(unsigned char *arg1,unsigned  char *arg2) {
 	return ret;
 }
 commands_t cmd_list[] = {
-	/*	{ "t1 ", "t1 file", "t1", Jcmd_memleak },
-		{ "vmcore      ", "vmcore", "vmcore", sh_vmcore_test },
-		{"set  <var> <value>", "set config variables", "set", conf_set },
-		{"debug  ", "debug ", "debug", debug_trace },
-		{"cmd  <cmd> <arg1> <arg2>", "execute commands", "cmd", cmd },
-		{ "kill <pid> ","kill process", "kill", sh_kill },
-		{ "mmap <file> <addr>", "mmap file", "mmap",sh_mmap },
-		{ "amem <order>", "mem allocate ", "amem", sh_alloc_mem },
-		{ "fmem <address>", "mem allocate ", "fmem", sh_free_mem },
-		{ "del <file>", "flush file-remove from page cache       ", "del",sh_del },
-		{ "cp <f1> <f2>", "copy f1 f2       ", "cp", sh_cp },
-		{ "sync <f1>", "sync f1       ", "sync", sh_sync },
-		{ "sd ","start pci device       ", "sd", sh_pci }, */
+
 				 {
 				0, 0, 0, cmd } /* at last check for command */
 };
@@ -365,7 +353,7 @@ static int sh_create(unsigned char *arg1, unsigned char *arg2) {
 	ret = sc_createKernelThread(exec_thread, &tmp_arg, arg1);
 
 //	sc_sleep(5000000);
-	return 1;
+	return ret;
 }
 static int print_help(unsigned char *arg1, unsigned char *arg2) {
 	int i;
@@ -531,11 +519,21 @@ static int get_cmd(unsigned char *line) {
 	return cmd;
 }
 
+#define USERLEVEL_SHELL "./busybox"
 int shell_main(void *arg) {
 	int i, cmd_type;
+	void *ret=1;
 
-	sh_create("./busybox", "sh");  // start the user level shell
-
+//	ret = fs_open(USERLEVEL_SHELL,0,0);
+	if (ret != 0){
+//		fs_close(ret);
+		ret = sh_create(USERLEVEL_SHELL, "sh");  // start the user level shell
+	}else{
+		/* attach kernel shell to serial line since user level shell fails */
+		g_kernel_mm->fs.input_device = DEVICE_SERIAL;
+		g_kernel_mm->fs.output_device = DEVICE_SERIAL;
+	}
+	ut_log(" user shell thread creation ret :%x\n",ret);
 	ut_strncpy(g_current_task->name, "shell", MAX_TASK_NAME);
 	for (i = 0; i < MAX_CMD_HISTORY; i++)
 		cmd_history[i][0] = '\0';
