@@ -3,7 +3,7 @@
 [JINY](https://github.com/naredula-jana/Jiny-Kernel) is designed from ground up for superior performance on virtual machine.
 
 1. **What is JINY?**.
- - Jiny is a  unix like kernel with same interface similar to linux, linux app can directly run on it without recompiling.
+ - Jiny is a Thin/Tiny unix like kernel with same interface similar to linux, linux app can directly run on it without recompiling.
  - Designed from ground up: It is designed from the ground up to give superior performance on vm. The performance gain will come from reducing memory and cpu overhead when compare to traditional os like linux,freebsd etc.
  - High priority versus normal priority apps: The apps running on Jiny OS are divided in to high priority and normal priority. 
      - **High priority App**: Runs single app in ring-0, kernel cooperates to give maximum performance by reducing memory and cpu overhead. Any linux app can be converted in to high priority app by recompiling without any modification. Recompilation is required as the syscalls in libc need to be modified. App will be launched by starting Jiny vm using qemu/kvm. Currently Jiny can accommodate only one high priority app. The performance will be high when compare to the similar app in the linux/freebsd vm because of efficient cpu and memory utilization. In apps that have high system call usage the performance will be better even when compare to the same app on the metal. JVM, memcached etc  are well suitable to run as high priority app.  
@@ -26,17 +26,19 @@
 3. **For What purpose Jiny can be used?**
 
  In the Past, it was used for:
-  -  To model the page cache(MRU+LRU) suitable for hadoop like applications. 
+  -  To model the page cache(MRU+LRU) suitable for hadoop like applications, The results was published in [pagecache optimization for hadoop @  opencirrus-2011](../master/doc/PageCache-Open-Cirrus.pdf). 
   -  To model Host based filesystem(HFS): HFS is filesystem run in guest OS but does file i/o using the shared memory between the guest and host os. HFS does not need any block drivers, it communicated with block devices using the shared memory between guest and host OS.  
  	
  In the future, it can be used :
-   - Running single apps like  JVM( tomcat or any java server), memcached  etc inside the Jiny vm as high priority app. Here the app will run much faster when compare to the same app in other vm's like freebsd or linux. 
+   - Running single apps like  JVM( tomcat or any java server), memcached  etc inside the Jiny vm as high priority app. Here the app will run much faster when compare to the same app in other vm's like freebsd or linux. Single app running in Jiny for some workloads can have superior performance when to compare to the same app on metal. Thin OS like JIny along with virtulization hardware can act like a performance enhancer for the apps on the metal.
   - Running multiple normal priority application like any traditional unix like systems with optimizations for vm. 
 
-##Benchmarks:
-**Application(app) used for testing:** C application read and writes in to a /dev/null file repeatedly in a tight loop, this is a system call intensive application. [This app](../master/modules/test_file/test_file.c) is executed on the metal and inside the Jiny as High priority and normal priority  and inside the linux vm. The app as completed the tight loop very fast(6 sec) as high priority app in Jiny when compare to others(44 sec).   
+##Benchmark:
+**Overview:** An application execution time on the metal is compared with the same app wrapped using thin OS like Jiny and launched as vm. The single app running in Jiny vm outperforms by completing in 6 seconds when compare to the same running on the metal that took 44sec. The key reason for superior performance in Jiny os is, it accelerates the app by allowing  it to run in ring-0 so that the overhead of system calls and context switches are minimized. The protection of system from app malfunctioning is left to virtulization hardware. To run in Jiny vm, the app need to recompile without any changes using the modified c library.
 
-####Time taken by the app to complete the tight loop in different environments:
+**Application(app) used for testing:** A simple C application that read and writes in to a /dev/null file repeatedly in a tight loop is used, this is a system call intensive application. [The app](../master/modules/test_file/test_file.c) is executed in four environments on the metal, inside the Jiny as High priority, as normal priority inside Jiny  and inside the linux vm.   
+
+####Completion time of app in different environments:
 
 1. **case-1:** app as high priority inside Jiny vm:      6 sec
 2. **case-2:** same app on the metal(linux host): 44 sec
@@ -45,16 +47,19 @@
 
 ####Reasons for High priority app superior performance when compare to the same app on metal:
 
-- **From cpu point of view**: when app runs inside jiny vm(case-1), virtualization hardware(like intel VT-x) is active and it will protect system  from malfunctioning of the app, here app runs in ring-0 along with Jiny kernel. means if the app crashes it will not bring down the host, but only the vm crashes at the maximum. when app on the metal(case-2) runs, virtualization hardware is passive/disabled and the os surrounding(i.e host os) will make sure that the malfunctioning of the app will not bring down the host by running the app in ring-3. 
+- **From cpu point of view**: when app runs inside jiny vm(case-1), virtualization hardware(like intel VT-x) is active and it will protect system  from app malfunctioning, here app runs in ring-0 along with Jiny kernel. means if the app crashes it will not bring down the host, but only the vm crashes at the maximum. when app on the metal(case-2) runs, virtualization hardware is passive/disabled and the os surrounding(i.e host os) will make sure that the app malfunctioning will not bring down the host by running the app in ring-3. 
 
- One of key difference between case-1 and case-2 is, in case-1 vt-x hardware is used while in case-2 host os software does the job of system protection from app malfunctioning. Jiny OS will allow the app to run in the same addrss space, it does not spend cpu cycles to protect the system or os from app malfunciton, at the maximum the vm goes down since only one app is running it is equal to single app crashing without effecting the system.
+ One of key difference between case-1 and case-2 is, in case-1 vt-x hardware is used while in case-2 host os software does the job of system protection from app malfunctioning. Jiny OS will allow the app to run in the same address space, it does not spend cpu cycles to protect the system or os from app malfunciton, at the maximum the vm goes down since only one app is running it is equal to single app crashing without effecting the system.
 
         
 - **From end user point of view**: To run the app inside the Jiny vm as high priority app, it need to recompile so the syscall located in libc will replaced with corresponding function calls. app is not required any change , only libc will be modified. start time in the first case will be slightly slower since vm need to be started before the app. so long running applications like servers will be suitable for high priority app.
 
+**What type of apps are suitable?.**
+ App that has given improvement if they are ported to kernel module are well suited to run as high priority app in Jiny.
+
 ####Conclusion
  1. Virtulization hardware along with thin OS like Jiny can function as hardware assit  layer to speedup the app on metal. Launching single app using Jiny Vm will be useful not only from virtulization point of view but also to increase the speed.
- 2. In the test we have used syscall intensive app that as shown huge improvement when compare to app on metal, but other workload like io intensive may not give that large improvement, since speeds virtulization io path are improving continuously both in software or hardware,  so  io intensive  apps also will become better in the future.
+ 2. In the test,I have used syscall intensive app that as shown huge improvement when compare to app on metal, but other workload like io intensive may not give that large improvement.  Speeds of virtulization io path are improving continuously both in software or hardware,  so  io intensive  apps also will become better in the future.
  3. Most of apps as  high priority app in Jiny will  show big performance improvement when compare the same app in linux or freebsd vm's. 
 
 ## Features currently Available:
