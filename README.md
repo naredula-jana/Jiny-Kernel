@@ -31,7 +31,7 @@
  	
  In the future, it can be used :
    - Running single apps like  JVM( tomcat or any java server), memcached  etc inside the Jiny vm as high priority app. Here the app will run much faster when compare to the same app in other vm's like freebsd or linux. Single app running in Jiny for some workloads can have superior performance when to compare to the same app on metal. Thin OS like JIny along with virtulization hardware can act like a performance enhancer for the apps on the metal.
-  - Running multiple normal priority application like any traditional unix like systems with optimizations for vm. 
+   - Running multiple normal priority application like any traditional unix like systems with optimizations for vm. 
 
 ##Benchmark:
 **Overview:** An application execution time on the metal is compared with the same app wrapped using thin OS like Jiny and launched as vm. The single app running in Jiny vm outperforms by completing in 6 seconds when compare to the same running on the metal that took 44sec. The key reason for superior performance in Jiny os is, it accelerates the app by allowing  it to run in ring-0 so that the overhead of system calls and context switches are minimized. The protection of system from app malfunctioning is left to virtulization hardware. To run in Jiny vm, the app need to recompile without any changes using the modified c library.
