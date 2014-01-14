@@ -147,7 +147,7 @@ struct cpu_state {
 } __attribute__ ((aligned (64))) ;
 
 
-struct cpu_state g_cpu_state[];
+extern struct cpu_state g_cpu_state[];
 #define is_kernelThread(task) (task->mm == g_kernel_mm)
 #define IPI_INTERRUPT 200
 #define IPI_CLEARPAGETABLE 201

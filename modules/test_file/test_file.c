@@ -12,13 +12,14 @@ int file_test();
 #ifdef _KERNEL
 /*  TODO : this is temporary solution, In permanent solution app is not required any changes only libc will have changes  */
 #include "libc_highpriority.h"
-#else  /* for noraml priority */
+#else  /* for normal priority */
 #include<stdio.h>
+#endif
+
 int file_test();
 main(int argc, char *argv[]) {
 	file_test();
 }
-#endif
 
 unsigned char buf[4096];
 
@@ -28,25 +29,6 @@ typedef struct {
 	unsigned long tv_usec;
 } time_t;
 static unsigned char *tmp_arg[100];
-void create_thread(void (*func)(void *arg)) {
-#ifdef _KERNEL
-	int ret;
-
-	tmp_arg[0] = 0;
-	tmp_arg[1] = 0;
-	tmp_arg[2] = 0;
-
-	ret = sc_createKernelThread(func, &tmp_arg, "test_file_thread");
-#else
-	int i = fork();
-
-	if (i == 0) {
-		func(0);
-	} else {
-		return i;
-	}
-#endif
-}
 
 int file_test() {
 	int i, ret, tret;
@@ -71,10 +53,6 @@ int file_test() {
 		close(fd);
 		printf(" after closing the file\n");
 	}
-#ifdef _KERNEL
-	Jcmd_lsmod("stat",0);
-#endif
-	exit(0);
 }
 
 

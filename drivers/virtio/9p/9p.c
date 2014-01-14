@@ -197,3 +197,115 @@ int p9_pdu_write(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 
 	return errcode;
 }
+/****************************************************************************************/
+static int stat_request=0;
+#include "../virtio.h"
+#include "../virtio_pci.h"
+void *p9_dev = 0;
+wait_queue_t p9_waitq;
+unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The call will be blocked till the reply is receivied */
+	p9_fcall_t pdu;
+	int ret, i;
+	unsigned long addr;
+	va_list ap;
+	va_start(ap, fmt);
+
+	p9_pdu_init(&pdu, client->type, client->tag, client, client->pkt_buf,
+			client->pkt_len);
+	stat_request++;
+	ret = p9_pdu_write(&pdu, fmt, ap);
+	va_end(ap);
+	p9_pdu_finalize(&pdu);
+
+	//ut_printf(" cd :%x cl:%x pd:%x  \n",client->user_data, client->userdata_len,client->pkt_buf);
+#if 1
+	if (client->user_data!= 0){
+		pc_check_valid_addr(client->user_data, client->userdata_len);
+	}
+#endif
+	struct scatterlist sg[4];
+	unsigned int out, in;
+	sg[0].page_link = (unsigned long)client->pkt_buf;
+	sg[0].length = 1024;
+	//sg[0].length = client->pkt_len/2;
+	sg[0].offset = 0;
+	out = 1;
+	if (client->type == P9_TYPE_TREAD) {
+		sg[1].page_link = client->pkt_buf + 1024;
+		sg[1].length = 11; /* exactly 11 bytes for read response header , data will be from user buffer*/
+		sg[1].offset = 0;
+		sg[2].page_link = client->user_data;
+		sg[2].length = client->userdata_len;
+		sg[2].offset = 0;
+		in = 2;
+	} else if (client->type == P9_TYPE_TWRITE) {
+		sg[1].page_link = (unsigned long)client->user_data;
+		sg[1].length = client->userdata_len;
+		sg[1].offset = 0;
+		sg[0].length = 23; /* this for header , eventhough it is having space pick the data from sg[1] */
+
+		sg[2].page_link = client->pkt_buf + 1024;
+		sg[2].length = client->pkt_len-1024;
+		sg[2].offset = 0;
+		out = 2;
+		in = 1;
+	} else {
+		sg[1].page_link = client->pkt_buf + 1024;
+		sg[1].length = client->pkt_len-1024;
+		sg[1].offset = 0;
+		in = 1;
+	}
+	struct virtqueue *vq=virtio_jdriver_getvq(p9_dev,0);
+	if (vq ==0){
+		BUG();
+	}
+	virtio_enable_cb(vq);
+	virtio_add_buf_to_queue(vq, sg, out, in, sg[0].page_link, 0);
+	virtio_queue_kick(vq);
+
+	ipc_waiton_waitqueue(&p9_waitq, 50);
+	unsigned int len;
+	len = 0;
+	i = 0;
+	addr = 0;
+	while (i < 50 && addr == 0) {
+		addr = virtio_removeFromQueue(vq, &len); /* TODO : here sometime returns zero because of some race condition, the packet is not recevied */
+		i++;
+		if (addr == 0) {
+			//ut_log("sleep in P9 so sleeping for while requests:%d intr:%d\n",stat_request,stat_intr);
+			//sc_sleep(300);
+			ipc_waiton_waitqueue(&p9_waitq, 30);
+		}
+	}
+	if (addr != (unsigned long)client->pkt_buf) {
+		BUG();
+		DEBUG("9p write : got invalid address : %x \n", addr);
+		return 0;
+	}
+	return client->pkt_buf;
+}
+
+int p9_read_rpc(p9_client_t *client, const char *fmt, ...) {
+	unsigned char *recv;
+	p9_fcall_t pdu;
+	int ret;
+	uint32_t total_len;
+	unsigned char type;
+	uint16_t tag;
+
+	va_list ap;
+	va_start(ap, fmt);
+
+	recv = client->pkt_buf + 1024;
+	p9_pdu_init(&pdu, 0, 0, client, recv, 1024);
+	ret = p9_pdu_read_v(&pdu, "dbw", &total_len, &type, &tag);
+	client->recv_type = type;
+	ret = p9_pdu_read(&pdu, fmt, ap);
+	va_end(ap);
+	//ut_log("Recv Header ret:%x:%d total len :%x stype:%x(%d) rtype:%x(%d) tag:%x \n", ret,ret, total_len, client->type, client->type, type, type, tag);
+	if (type == 107) { // TODO better way of handling other and this error
+		recv[100] = '\0';
+		DEBUG(" recv error data :%s: \n ", &recv[9]);
+	}
+	return ret;
+}

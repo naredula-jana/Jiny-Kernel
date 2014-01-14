@@ -92,7 +92,7 @@ struct virtio_net_hdr_mrg_rxbuf {
  * command goes in between.
  */
 struct virtio_net_ctrl_hdr {
-	__u8 class;
+	__u8 var_class;
 	__u8 cmd;
 } __attribute__((packed));
 

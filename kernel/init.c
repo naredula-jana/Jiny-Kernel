@@ -16,6 +16,8 @@
 #include "mach_dep.h"
 #include "interface.h"
 
+int g_conf_debug_level = 1;
+int __gxx_personality_v0=0; /*TODO:  WORKAROUND: this is to link c++ files with gcc */
 /* SLAB cache for vm_area_struct structures */
 kmem_cache_t *vm_area_cachep;
 /* SLAB cache for mm_struct structures (tsk->mm) */
@@ -36,6 +38,7 @@ extern int init_devClasses(unsigned long arg1);
 extern int init_modules(unsigned long arg1);
 extern int  init_log_file(unsigned long arg1);
 extern int init_jslab(unsigned long arg1);
+extern int init_jdevices(unsigned long arg1);
 int init_kernel_vmaps(unsigned long arg1);
 int  init_code_readonly(unsigned long arg1);
 int init_kmemleak(unsigned long arg1);
@@ -72,9 +75,9 @@ static inittable_t inittable[] = {
 		{init_code_readonly,0,       "Making code readonly"},
 		{init_kernel_vmaps, 0, "Kernel Vmaps"},
 		{init_symbol_table,0,       "symboltable"},
-		{init_devClasses,0,       "devicesclasses"},
-		{init_modules,0,       "modules"},
-// moved up		{init_kernel_vmaps, 0, "Kernel Vmaps"},
+//		{init_devClasses,0,       "devicesclasses"},
+		{init_jdevices,0,       "devices in c++ "},
+//		{init_modules,0,       "modules"},
 //		{init_log_file,0, "log file "},
 		{0,0,0}
 };
@@ -261,7 +264,7 @@ void cmain() {  /* This is the first c function to be executed */
 
 	g_cpu_state[0].current_task = g_current_task;
 	/* Clear the screen.  */
-	ut_cls();
+	//ut_cls();
 
 	for (i=0; inittable[i].func != 0; i++){
 		ut_log("INITIALIZING :%s  ...\n",inittable[i].comment);
@@ -279,7 +282,7 @@ void cmain() {  /* This is the first c function to be executed */
 	ut_log("	cpuid result %x : %x :%x :%x \n",val[0],val[1],val[2],val[3]);
 	g_cpu_features=val[3]; /* edx */
 
-#if 1
+#if 0
 	sc_createKernelThread(shell_main, 0, (unsigned char *)"shell_main");
 	sc_createKernelThread(housekeeper_thread, 0, (unsigned char *)"house_keeper");
 #endif
@@ -287,10 +290,26 @@ void cmain() {  /* This is the first c function to be executed */
 	g_boot_completed=1;
 	sti(); /* start the interrupts finally */
 
-//	sc_createKernelThread(shell_main, 0, (unsigned char *)"shell_main");
-//	sc_createKernelThread(housekeeper_thread, 0, (unsigned char *)"house_keeper");
-
+#if 1
+	sc_createKernelThread(shell_main, 0, (unsigned char *)"shell_main");
+	sc_createKernelThread(housekeeper_thread, 0, (unsigned char *)"house_keeper");
+#endif
 	ut_log("	Initalization COMPLETED\n");
 	idleTask_func();
 	return;
+}
+
+void Jcmd_shutdown(){
+//	ut_printf(" before shutdown with new instruction\n");
+//	cli();
+//	__asm__("rsm");
+#if 0
+	asm("movq rax, 0x1000 ;  movq ax, rss\n\t" );
+    "mov ax, ss\n\t" \
+    "mov sp, 0xf000\n\t" \
+    "mov ax, 0x5307\n\t" \
+    "mov bx, 0x0001\n\t" \
+    "mov cx, 0x0003\n\t" \
+    "int 0x15\n\t");
+#endif
 }

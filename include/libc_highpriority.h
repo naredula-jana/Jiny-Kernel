@@ -18,12 +18,4 @@
 #define read SYS_fs_read
 #define open SYS_fs_open
 #define exit SYS_sc_exit
-static void init_module(unsigned char *arg1, unsigned char *arg2){
-	ut_printf(" Starting the module\n");
-	create_thread(file_test);
-}
-static void clean_module(){
-	ut_printf(" Stopping the module \n");
-}
 
-extern void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2);

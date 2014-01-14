@@ -9,7 +9,7 @@
  *
  */
 #define DEBUG_ENABLE 1
-#include "device.h"
+#include "pci.h"
 #include "common.h"
 #include "mm.h"
 #include "task.h"
@@ -145,7 +145,7 @@ static int get_bar(pci_addr_t *addr, int barno, uint32_t *start, uint32_t *len)
 	DEBUG("   barno:%d start :%i len:%i \n",barno,*start,*len);
 	return 0;
 }
-
+#if 0
 static int read_dev_conf(uint8_t bus , uint8_t dev_no,uint8_t func ,device_t *dev)
 {
 	pci_bar_t *pci_bars=&dev->pci_bars[0];
@@ -187,11 +187,55 @@ static int read_dev_conf(uint8_t bus , uint8_t dev_no,uint8_t func ,device_t *de
 	}
 	return 0;
 }
-
-int read_pci_info(device_t *dev)
+#endif
+int read_pci_info_new(pci_device_t *dev)
 {
-	DEBUG(" Scanning PCI devices for vendor:%d device:%d \n",dev->pci_hdr.vendor_id, dev->pci_hdr.device_id);
-    return read_dev_conf(dev->pci_addr.bus, dev->pci_addr.device, dev->pci_addr.function, dev);
+	pci_bar_t *pci_bars=&dev->pci_bars[0];
+	pci_addr_t *addr = &dev->pci_addr;
+	int bar_count=0;
+	uint8_t bus , dev_no, func;
+	pci_dev_header_t *header=&dev->pci_header;
+	//pci_addr_t *addr=&dev->pci_addr;
+	int ret;
+	int i,count_start;
+
+	bus = addr->bus;
+	dev_no= addr->device;
+	func = addr->function;
+#if 0
+	addr->bus=bus;
+	addr->device=dev_no;
+	addr->function=func;
+#endif
+
+	header->vendor_id=0;
+	header->device_id=0;
+	pci_bars[bar_count].addr=0;
+	count_start=bar_count;
+	ret = pci_generic_read(addr, 0, sizeof(pci_dev_header_t), header);
+
+	if(ret != 0) {
+		return JFAIL;
+	}
+
+	if (header->vendor_id != 0xffff && header->vendor_id == dev->pci_header.vendor_id && header->device_id == dev->pci_header.device_id)
+	{
+		DEBUG(" PCI bus:%d devic:%d func:%d  vendor:%x devices:%x int:%x:%x baser:%i \n",bus,dev,func,header->vendor_id,header->device_id,header->interrupt_line,header->interrupt_pin,header->base_address_registers[0]);
+		DEBUG("   base addr :%i :%i :%i :%i \n",header->base_address_registers[0],header->base_address_registers[1],header->base_address_registers[2],header->base_address_registers[3]);
+		for(i=0; i<5;i++)
+		{
+			get_bar(addr,i,&pci_bars[bar_count].addr,&pci_bars[bar_count].len);
+			if (pci_bars[bar_count].addr != 0)
+			{
+				pci_bars[bar_count].len= (~pci_bars[bar_count].len)+1;
+				pci_bars[bar_count].name="";
+				bar_count++;
+			}
+		}
+		dev->pci_bar_count=bar_count;
+		return JSUCCESS;
+	}
+	return JFAIL;
 }
 
 

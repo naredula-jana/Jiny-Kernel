@@ -91,8 +91,10 @@ typedef struct __pci_bar_t {
 	uint32_t len;
 	char *name;
 }pci_bar_t;
+#define MAX_PCI_BARS 20
 
 
+int pci_generic_read(pci_addr_t *d, uint16_t pos, uint16_t len, void *buf);
 
 #define	PCIR_MSIX_CTRL		0x2
 #define	PCIR_MSIX_TABLE		0x4
@@ -146,6 +148,22 @@ int enable_msix(device_t *dev);
 
 void init_pci_device(uint16_t vendor_id, uint16_t device_id, int msi_enabled , int *(init)(pci_dev_header_t pci,pci_bar_t bars[], uint32_t len,uint32_t *msi_vector));
 int init_virtio_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len,uint32_t *msi_vector);
+
+
+typedef struct pci_device {
+	pci_addr_t pci_addr;
+	pci_dev_header_t pci_header;
+	pci_bar_t pci_bars[MAX_PCI_BARS];
+	int pci_bar_count;
+	unsigned long pci_ioaddr, pci_iolen;
+	unsigned long pci_mmio;
+	unsigned long pci_mmiolen;
+	struct pcicfg_msix msix_cfg;
+	int msi;
+}pci_device_t;
+int read_pci_info_new(pci_device_t *dev);
+int pci_enable_msix(pci_addr_t *addr,struct pcicfg_msix *msix,uint8_t capabilities_pointer);
+int pci_read_msi(pci_addr_t *addr,pci_dev_header_t *pci_hdr, pci_bar_t *bars, uint32_t bars_count,  struct pcicfg_msix *msix);
 
 
 #endif

@@ -10,6 +10,7 @@
 #include "multiboot.h"
 #include "task.h"
 #include "spinlock.h"
+//#include "ipc.h"
 
 #ifndef NULL
 #define NULL ((void *) 0)
@@ -87,7 +88,7 @@ typedef struct {
 // Enables registration of callbacks for interrupts or IRQs.
 // For IRQs, to ease confusion, use the #defines above as the
 // first parameter.
-typedef int (*isr_t)();
+typedef int (*isr_t)(void *);
 extern int g_serial_output;
 extern void *g_inode_lock; /* vfs */
 extern void *g_netBH_lock; /* netBH */

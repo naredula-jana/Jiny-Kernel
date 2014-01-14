@@ -581,7 +581,7 @@ static int p9Setattr(struct inode *inodep,uint64_t size) {
     return  p9Request(REQUEST_SETATTR, inodep, size, 0, 0, 0, 0);
 }
 
-int p9_initFs() {
+int p9_initFs(void *p9driver) {
 //	p9ClientInit(); /* TODO need to include here */
 	p9_fs.open = p9Open;
 	p9_fs.read = p9Read;
@@ -595,6 +595,7 @@ int p9_initFs() {
 	p9_fs.setattr = p9Setattr; //TODO
 
 	fs_registerFileSystem(&p9_fs);
+	p9_dev = p9driver;
 
 	return 1;
 }

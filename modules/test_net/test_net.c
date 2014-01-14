@@ -165,6 +165,9 @@ void start_udp_client(){
 	server.sin_addr.s_addr = 0xb080d10a; /* 10.209.128.176 */
 	n=2000000;
 //	n=200;
+#ifdef _KERNEL
+	Jcmd_reset_cpu_stat(0,0);
+#endif
 	gettimeofday(&start_time,0);
 #if 1
 	for (i=0; i<n; i++){

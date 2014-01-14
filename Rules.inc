@@ -10,21 +10,25 @@ INCLUDE=. -DNETWORKING -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURC
 
 
 CC=gcc -g -gdwarf-2 -D _KERNEL
+CPP=g++ -g -std=gnu++0x -lsupc++ -fno-exceptions  -fno-dwarf2-cfi-asm -D _KERNEL 
+#CPP=g++ -std=gnu++0x  -fno-dwarf2-cfi-asm -D _KERNEL
 
 AT=
 
 ARCH=64
 
 C_SOURCES=$(wildcard *.c)
+CPP_SOURCES=$(wildcard *.cc)
 ASM_SOURCES=$(wildcard *.s)
 GNUASM_SOURCES=$(wildcard *.S)
 SOURCES=$(C_SOURCES) $(ASM_SOURCES)
 XEN_INCLUDE=/opt_src/xen/xen-4.1.1/dist/install/usr/include -I/opt_src/lwip/src/include -I/opt_src/lwip/src/include/ipv4 -I$(SOURCE_ROOT)/drivers/xen/ -I$(SOURCE_ROOT)/modules/lwip_net/ -I$(SOURCE_ROOT)/drivers/xen/arch/
 
+CPP_OBJECTS=$(patsubst %.cc,%.o,$(CPP_SOURCES))
 C_OBJECTS=$(patsubst %.c,%.o,$(C_SOURCES))
 GNUASM_OBJECTS=$(patsubst  %.S,%.o,$(GNUASM_SOURCES))
 ASM_OBJECTS=$(patsubst %.s,%.o,$(ASM_SOURCES))
-OBJECTS=$(C_OBJECTS) $(ASM_OBJECTS) $(GNUASM_OBJECTS)
+OBJECTS=$(C_OBJECTS) $(ASM_OBJECTS) $(GNUASM_OBJECTS) $(CPP_OBJECTS)
 
 ARCH_DIR=x86_64
 CFLAGS= -m64 -mno-red-zone -nostdlib  -nodefaultlibs -Wimplicit -Wall   -I$(INCLUDE) -I$(XEN_INCLUDE)  -DARCH_X86_64
@@ -48,6 +52,11 @@ ifdef MEMLEAK_TOOL
 INCLUDE += -DMEMLEAK_TOOL
 endif
 
+
+%.o: %.cc
+	@echo "$<"
+	$(AT)$(CPP) -c $(CFLAGS) $< -o $@
+	objcopy --localize-symbol=dwarf_entry $@ $@
 %.o: %.c
 	@echo "$<"
 	$(AT)$(CC) -c $(CFLAGS) $< -o $@

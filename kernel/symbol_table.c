@@ -14,7 +14,7 @@
  *    Jcmd_xxx_stat  - display stats
  */
 #include "common.h"
-#include "device.h"
+
 
 symb_table_t *g_symbol_table = 0;
 unsigned long g_total_symbols = 0;
@@ -75,7 +75,7 @@ int init_symbol_table(unsigned long unused) {
 			cmds++;
 			continue;
 		}
-
+#if 0
 		ut_strcpy(sym, g_symbol_table[i].name);
 		sym[12] = '\0'; /* Jcmd_ */
 		ut_strcpy(dst, (unsigned char *)"deviceClass_");
@@ -88,9 +88,10 @@ int init_symbol_table(unsigned long unused) {
 		sym[7] = '\0'; /* Jcmd_ */
 		ut_strcpy(dst, (unsigned char *)"MODULE_");
 		if (ut_strcmp(sym, dst) == 0) {
-            add_module((void *)g_symbol_table[i].address);
+			add_driver_module((void *)g_symbol_table[i].address);
 			continue;
 		}
+#endif
 	}
 	g_total_symbols = i;
 	ut_log("	confs:%d  cmds:%d  totalsymbols:%d \n",
@@ -128,7 +129,7 @@ int ut_symbol_execute(int type, char *name, uint8_t *argv1,uint8_t *argv2){
 		    if (argv1==0) return 0;
 		    *conf=(int)ut_atoi((unsigned char *)argv1);
 		    return 1;
-		}else {
+		}else {/*this is Jcmd_  leave 5 characters and match */
 			if (ut_strcmp((unsigned char *)&g_symbol_table[i].name[5], (unsigned char *)name) != 0) continue;
 			func=(void *)g_symbol_table[i].address;
 			func(argv1,argv2);

@@ -6,6 +6,7 @@
 #include "task.h"
 #include "ipc.h"
 
+#include "jiny_api.h"
 #define MAX_AUX_VEC_ENTRIES 25 
 
 struct iovec {
@@ -29,9 +30,9 @@ int SYS_sc_exit(int status);
 void sc_delete_task(struct task_struct *task);
 int sc_task_stick_to_cpu(unsigned long pid, int cpu_id);
 int SYS_sc_kill(unsigned long pid,unsigned long signal);
-void SYS_sc_execve(uint8_t *file,uint8_t **argv,uint8_t **env);
+
 int Jcmd_threadlist_stat( uint8_t *arg1,uint8_t *arg2);
-unsigned long sc_createKernelThread(int (*fn)(void *),uint8_t *argv,uint8_t *name);
+
 void sc_schedule();
 
 /* ipc */
@@ -48,6 +49,7 @@ void *mm_malloc (size_t size, int flags);
 void mm_free (const void *objp);
 extern void *vmalloc(int size, int flags);
 extern void vfree();
+unsigned long jalloc_page(int flags);
 #define alloc_page(flags) jalloc_page(flags)
 #define free_page(p) jfree_page(p)
 #define memset ut_memset
@@ -114,28 +116,9 @@ unsigned long SYS_fs_fdatasync(unsigned long fd );
 unsigned long SYS_fs_fadvise(unsigned long fd,unsigned long offset, unsigned long len,int advise);
 
 /* Utilities */
-void ut_showTrace(unsigned long *stack_top);
-int ut_strcmp(uint8_t *str1, uint8_t *str2);
-void ut_printf (const char *format, ...);
-void ut_memcpy(uint8_t *dest, uint8_t *src, long len);
-void ut_memset(uint8_t *dest, uint8_t val, long len);
-int ut_memcmp(uint8_t *m1, uint8_t *m2,int len);
-uint8_t *ut_strcpy(uint8_t *dest, const uint8_t *src);
-uint8_t *ut_strncpy(uint8_t *dest, const uint8_t *src,int n);
-uint8_t *ut_strcat(uint8_t *dest, const uint8_t *src);
-uint8_t *ut_strstr(uint8_t *s1,uint8_t *s2);
-int ut_strlen(const uint8_t * s);
-unsigned long ut_atol(uint8_t *p);
-unsigned int ut_atoi(uint8_t *p);
-int ut_sprintf(uint8_t * buf, const uint8_t *fmt, ...);
-int ut_snprintf(uint8_t * buf, size_t size, const char *fmt, ...);
-void ut_log(const char *format, ...);
-unsigned long ut_get_symbol_addr(unsigned char *name);
+
 void ut_getBackTrace(unsigned long *rbp, unsigned long task_addr, backtrace_t *bt);
-int ut_symbol_execute(int type, char *name, uint8_t *argv1,uint8_t *argv2);
-int ut_symbol_show(int type);
-int strace_wait(void);
-int ut_get_wallclock(unsigned long *sec, unsigned long *usec);
+
 
 /* architecture depended */
 void ar_registerInterrupt(uint8_t n, isr_t handler,char *name, void *private_data);
@@ -157,8 +140,7 @@ int getmaxcpus();
 int apic_send_ipi_vector(int cpu, uint8_t vector);
 void apic_disable_partially();
 
-uint8_t dr_kbGetchar();
-void ut_putchar(uint8_t c);
+
 int read_apic_isr(int isr);
 void local_apic_send_eoi(void);
 
@@ -178,7 +160,7 @@ int init_networking();
 /**************************  Networking ***/
 #define NETWORK_PROTOCOLSTACK 1
 #define NETWORK_DRIVER 2
-int registerNetworkHandler(int type, int (*callback)(uint8_t *buf, unsigned int len, void *private_data), void *private_data);
+int registerNetworkHandler(int type, int (*callback)(uint8_t *buf, unsigned int len, void *private_data), void *private_data, unsigned char *mac);
 int netif_rx(uint8_t *data, unsigned int len, uint8_t **replace_buf);
 int netif_tx(uint8_t *data, unsigned int len);
 int netif_rx_enable_polling(void *private_data, int (*poll_func)(void *private_data, int enable_interrupt, int total_pkts));
@@ -217,6 +199,37 @@ unsigned long SYS_sendto(int sockfd, const void *buf, size_t len, int flags,
                const struct sockaddr *dest_addr, int addrlen);
 int SYS_recvfrom(int sockfd, const void *buf, size_t len, int flags,  const struct sockaddr *dest_addr, int addrlen);
 
+/* Utilities */
+void ut_showTrace(unsigned long *stack_top);
+int ut_strcmp(uint8_t *str1, uint8_t *str2);
+void ut_printf (const char *format, ...);
+void ut_memcpy(uint8_t *dest, uint8_t *src, long len);
+void ut_memset(uint8_t *dest, uint8_t val, long len);
+int ut_memcmp(uint8_t *m1, uint8_t *m2,int len);
+uint8_t *ut_strcpy(uint8_t *dest, const uint8_t *src);
+uint8_t *ut_strncpy(uint8_t *dest, const uint8_t *src,int n);
+uint8_t *ut_strcat(uint8_t *dest, const uint8_t *src);
+uint8_t *ut_strstr(uint8_t *s1,uint8_t *s2);
+int ut_strlen(const uint8_t * s);
+unsigned long ut_atol(uint8_t *p);
+unsigned int ut_atoi(uint8_t *p);
+int ut_sprintf(uint8_t * buf, const uint8_t *fmt, ...);
+int ut_snprintf(uint8_t * buf, size_t size, const char *fmt, ...);
+void ut_log(const char *format, ...);
+unsigned long ut_get_symbol_addr(unsigned char *name);
+int ut_symbol_execute(int type, char *name, uint8_t *argv1,uint8_t *argv2);
+int ut_symbol_show(int type);
+int strace_wait(void);
+int ut_get_wallclock(unsigned long *sec, unsigned long *usec);
+void ut_putchar(uint8_t c);
 
+/* scheduling */
+unsigned long sc_createKernelThread(int (*fn)(void *, void *),uint8_t *argv,uint8_t *name);
+void SYS_sc_execve(uint8_t *file,uint8_t **argv,uint8_t **env);
+unsigned char **sc_get_thread_argv();
+void sc_set_fsdevice(unsigned int in, unsigned int out);
+
+
+uint8_t dr_kbGetchar(int device_id);
 #endif
 

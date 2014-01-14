@@ -12,10 +12,10 @@
 typedef unsigned short u16;
 #define ENOMEM 1
 #define gfp_t int
-enum {
-          false   = 0,
-          true    = 1
- };
+
+#define  false   0
+#define  true    1
+
 struct scatterlist {
         unsigned long   page_link;
         unsigned int    offset;
@@ -98,11 +98,24 @@ struct virtqueue {
 	struct list_head list;
 	void (*callback)(struct virtqueue *vq);
 	const char *name;
-	struct virtio_device *vdev;
+#if 0
+	//struct virtio_device *vdev;
+#else
+	int queue_number;
+	unsigned long pci_ioaddr;
+#endif
+
 	void *priv;
 	int qType; /* recv or sending */
 };
-
+struct virtqueue *vring_new_virtqueue(unsigned int num,
+				      unsigned int vring_align,
+				 //     virtio_dev_t *vdev,
+				      unsigned long pci_ioaddr,
+				      void *pages,
+				      void (*notify)(struct virtqueue *),
+				      void (*callback)(struct virtqueue *),
+				      const char *name, int queue_number);
 /**
  * operations for virtqueue
  * virtqueue_add_buf: expose buffer to other end

@@ -6,11 +6,11 @@
  * resource counting etc..
  */
 
-#ifdef __SMP__
-#define LOCK "lock ; "
-#else
-#define LOCK ""
-#endif
+//#ifdef __SMP__
+#define LOCK "\n\tlock ; "
+//#else
+//#define LOCK ""
+//#endif
 
 /*
  * Make sure gcc doesn't try to be clever and move things around
@@ -27,46 +27,42 @@ typedef struct { volatile int counter; } atomic_t;
 #define atomic_read(v)		((v)->counter)
 #define atomic_set(v,i)		(((v)->counter) = (i))
 
-static __inline__ void atomic_add(int i, volatile atomic_t *v)
+static __inline__ void atomic_add(int i, atomic_t *v)
+{
+	asm volatile(LOCK "addl %1,%0"
+		     : "+m" (v->counter)
+		     : "ir" (i));
+}
+static __inline__ void atomic_sub(int i, atomic_t *v)
 {
 	__asm__ __volatile__(
-		LOCK "addl %1,%0"
-		:"=m" (__atomic_fool_gcc(v))
-		:"ir" (i), "m" (__atomic_fool_gcc(v)));
+			  LOCK "subl %1,%0"
+		     : "+m" (v->counter)
+		     : "ir" (i));
 }
 
-static __inline__ void atomic_sub(int i, volatile atomic_t *v)
+static __inline__ void atomic_inc(atomic_t *v)
 {
 	__asm__ __volatile__(
-		LOCK "subl %1,%0"
-		:"=m" (__atomic_fool_gcc(v))
-		:"ir" (i), "m" (__atomic_fool_gcc(v)));
+			   LOCK "incl %0"
+		     : "+m" (v->counter));
 }
 
-static __inline__ void atomic_inc(volatile atomic_t *v)
+static inline void atomic_dec(atomic_t *v)
 {
 	__asm__ __volatile__(
-		LOCK "incl %0"
-		:"=m" (__atomic_fool_gcc(v))
-		:"m" (__atomic_fool_gcc(v)));
+			  LOCK "decl %0"
+		     : "+m" (v->counter));
 }
 
-static __inline__ void atomic_dec(volatile atomic_t *v)
-{
-	__asm__ __volatile__(
-		LOCK "decl %0"
-		:"=m" (__atomic_fool_gcc(v))
-		:"m" (__atomic_fool_gcc(v)));
-}
-
-static __inline__ int atomic_dec_and_test(volatile atomic_t *v)
+static __inline__ int atomic_dec_and_test(atomic_t *v)
 {
 	unsigned char c;
 
 	__asm__ __volatile__(
-		LOCK "decl %0; sete %1"
-		:"=m" (__atomic_fool_gcc(v)), "=qm" (c)
-		:"m" (__atomic_fool_gcc(v)));
+			  LOCK "decl %0; sete %1"
+		     : "+m" (v->counter), "=qm" (c)
+		     : : "memory");
 	return c != 0;
 }
 

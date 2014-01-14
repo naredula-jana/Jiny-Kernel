@@ -1,3 +1,4 @@
+#if 0
 /*
 * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -9,7 +10,6 @@
 *
 */
 #include "common.h"
-#include "device.h"
 #include "task.h"
 #include "vfs.h"
 #include "interface.h"
@@ -43,7 +43,7 @@ int conf_set(unsigned char *arg1, unsigned char *arg2);
 
 static int debug_trace(unsigned char *arg1, unsigned char *arg2);
 
-int g_conf_debug_level = 1;
+
 
 int conf_set(unsigned char *arg1,unsigned char *arg2) {
 	int ret;
@@ -188,8 +188,7 @@ void Jcmd_mutextest(){
 #endif
 /**********************************************************************/
 static int sh_pci(unsigned char *arg1, unsigned char *arg2) {
-	//device_t dev;
-	//list_pci();
+
 
 	init_devClasses();
     return 1;
@@ -546,3 +545,4 @@ int shell_main(void *arg) {
 	}
 	return 1;
 }
+#endif

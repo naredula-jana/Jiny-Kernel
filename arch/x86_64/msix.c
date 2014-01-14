@@ -9,7 +9,7 @@
  *
  */
 #define DEBUG_ENABLE 1
-#include "device.h"
+#include "pci.h"
 #include "mm.h"
 #include "task.h"
 
@@ -40,17 +40,15 @@ static void update_msix_table(struct pcicfg_msix *msix, int mask) {
 #define MSI_VECTORS_START 101
 static int msi_start_vector = MSI_VECTORS_START;
 
-int read_msi(device_t *dev) {
+int pci_read_msi(pci_addr_t *addr, pci_dev_header_t *pci_hdr,pci_bar_t *bars, uint32_t bars_total,  struct pcicfg_msix *msix) {
 	uint32_t ret;
 	uint16_t buf;
 	uint32_t val;
 	uint32_t bar_offset;
-	struct pcicfg_msix *msix = &dev->msix_cfg;
 
-	pci_addr_t *addr = &dev->pci_addr;
-	uint8_t pos=dev->pci_hdr.capabilities_pointer;
+	uint8_t pos=pci_hdr->capabilities_pointer;
 //	pci_bar_t *bars=&dev->pci_bars[0];
-	uint32_t bars_total = dev->pci_bar_count;
+	//uint32_t bars_total = dev->pci_bar_count;
 
 	ret = pci_read(addr, pos, 2, &buf);
 	ret = pci_read(addr, pos + PCIR_MSIX_CTRL, 2, &msix->msix_ctrl);
@@ -65,11 +63,11 @@ int read_msi(device_t *dev) {
 	ret = pci_read(addr, pos + PCIR_MSIX_TABLE, 4, &bar_offset);
 	msix->msix_table_bar = PCIR_BAR(bar_offset & PCIM_MSIX_BIR_MASK);
 	if (bar_offset >= bars_total) return 0;
-	msix->msix_table_res = dev->pci_bars[bar_offset].addr;
+	msix->msix_table_res = bars[bar_offset].addr;
 	msix->msix_table = __va(msix->msix_table_res);
 
 	if ((ret = vm_mmap(0, (unsigned long)__va(msix->msix_table_res), 0x1000, PROT_WRITE,
-			MAP_FIXED, msix->msix_table_res,"msix")) == 0) /* this is for SMP */
+			MAP_FIXED, msix->msix_table_res,"msix")) == 0) /* TODO: need clear solution, this is for SMP */
 	{
 		ut_log("ERROR : PCI mmap fails for \n");
 		return 0;
@@ -80,14 +78,13 @@ int read_msi(device_t *dev) {
 	return msix->isr_vector;
 }
 
-int enable_msix(device_t *dev){
-	struct pcicfg_msix *msix = &dev->msix_cfg;
-
+int pci_enable_msix(pci_addr_t *addr ,struct pcicfg_msix *msix,uint8_t capabilities_pointer){
 	update_msix_table(msix, 0);
 	msix->msix_ctrl = msix->msix_ctrl | 0x8000; // enable msix
-	pci_write(&dev->pci_addr, dev->pci_hdr.capabilities_pointer + PCIR_MSIX_CTRL, 2, &msix->msix_ctrl);
+	pci_write(addr, capabilities_pointer + PCIR_MSIX_CTRL, 2, &msix->msix_ctrl);
 
-	ut_log("MSIX Configured ISR vector:%d  numvector:%d ctrl:%x\n", msix->isr_vector, msix->msix_msgnum, msix->msix_ctrl);
+	ut_log("MSIX... Configured ISR vector:%d  numvector:%d ctrl:%x\n", msix->isr_vector, msix->msix_msgnum, msix->msix_ctrl);
 	return 1;
 }
+
 

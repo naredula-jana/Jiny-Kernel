@@ -72,10 +72,14 @@ static struct {
 }input_devices[MAX_INPUT_DEVICES];
 
 
-unsigned char dr_kbGetchar(int device_id) {
-	int i;
+unsigned char dr_kbGetchar(int input_id) {
+	int i,device_id;
 	unsigned char c;
 
+	if (input_id==-1)
+		device_id = g_current_task->mm->fs.input_device;
+	else
+		device_id = input_id;
 	for (i = 0; i < MAX_INPUT_DEVICES; i++) {
 		if (input_devices[i].device_id == device_id)
 			break;

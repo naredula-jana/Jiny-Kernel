@@ -401,7 +401,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	/* populate vm with vmaps */
 	if (mm->exec_fp == 0) {
 		vfree(tmp_stack);
-		ut_printf("Error execve : Failed to open the file \n");
+		ut_printf("Error execve : Failed to open the file:%s: \n",file);
 		SYS_sc_exit(701);
 		return;
 	}
@@ -523,7 +523,7 @@ static int free_mm(struct mm_struct *mm) {
 #define CLONE_VM 0x100
 #define CLONE_KERNEL_THREAD 0x10000
 #define CLONE_VFORK 0x1000
-unsigned long sc_createKernelThread(int(*fn)(void *), unsigned char *args, unsigned char *thread_name) {
+unsigned long sc_createKernelThread(int(*fn)(void *, void *), unsigned char *args, unsigned char *thread_name) {
 	unsigned long pid;
 	unsigned long flags;
 	struct list_head *pos;
@@ -545,6 +545,13 @@ last:
 	spin_unlock_irqrestore(&g_global_lock, flags);
 
 	return pid;
+}
+unsigned char **sc_get_thread_argv(){
+	return g_current_task->thread.argv;
+}
+void sc_set_fsdevice(unsigned int in, unsigned int out){
+		g_kernel_mm->fs.input_device = DEVICE_SERIAL;
+		g_kernel_mm->fs.output_device = DEVICE_SERIAL;
 }
 static int curr_cpu_assigned=0;
 static void init_task_struct(struct task_struct *p,struct mm_struct *mm){
@@ -590,11 +597,11 @@ static void init_task_struct(struct task_struct *p,struct mm_struct *mm){
 	if (free_pid_no==0) free_pid_no++;
 	p->pid = free_pid_no;
 }
-unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void *ctid,  void *args) {
+unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void *fd_p,  void *args) {
 	struct task_struct *p;
 	struct mm_struct *mm;
 	unsigned long flags;
-	void *fn=ctid;
+	void *fn=fd_p;
 	unsigned long ret_pid=0;
 
 	SYSCALL_DEBUG("clone ctid:%x child_stack:%x flags:%x args:%x \n",fn,child_stack,clone_flags,args);
@@ -1038,7 +1045,7 @@ static void schedule_userSecondHalf(){ /* user thread second Half: _schedule fun
 }
 static void schedule_kernelSecondHalf(){ /* kernel thread second half:_schedule function task can lands here. */
 	spin_unlock_irqrestore(&g_global_lock, g_current_task->flags);
-	g_current_task->thread.real_ip(0);
+	g_current_task->thread.real_ip(g_current_task->thread.argv);
 }
 void sc_remove_dead_tasks(){
 	unsigned long intr_flags;

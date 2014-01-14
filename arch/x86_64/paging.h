@@ -109,7 +109,7 @@ addr_t initialise_paging();
   Causes the specified page directory to be loaded into the
   CR3 register.
  **/
-void switch_page_directory(addr_t *new);
+void switch_page_directory(addr_t *new_dir);
 
 
 /**

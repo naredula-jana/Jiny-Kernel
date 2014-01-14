@@ -1,3 +1,4 @@
+#if 0
 #define DEBUG_ENABLE 1
 #include "common.h"
 #include "pci.h"
@@ -114,7 +115,7 @@ int load_udp_server() {
 	if (init == 1)
 		return 0;
 
-	registerNetworkHandler(NETWORK_PROTOCOLSTACK, process_pkt, NULL);
+	registerNetworkHandler(NETWORK_PROTOCOLSTACK, process_pkt, NULL,0);
 	ut_printf("UDPServer : Initilization completed\n");
 	return 1;
 }
@@ -126,3 +127,4 @@ static int unload_udp_server() {
 
 static int kkk=0;
 
+#endif

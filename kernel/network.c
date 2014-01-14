@@ -43,7 +43,6 @@ flow-3)  low_level_output -> netif_tx -> driver_callback-netdriver_xmit --- ( pr
 
 //#define DEBUG_ENABLE 1
 #include "common.h"
-#include "device.h"
 
 #define MAX_QUEUE_LENGTH 600
 struct queue_struct {
@@ -65,6 +64,7 @@ static struct queue_struct queue;
 struct net_handlers {
 	void *private;
 	int (*callback)(unsigned char *buf, unsigned int len, void *private_data);
+	unsigned char *mac;
 };
 static int count_net_drivers = 0;
 static int count_protocol_drivers = 0;
@@ -172,16 +172,15 @@ static int netRx_BH(void *arg) {
 	return 1;
 }
 int net_getmac(unsigned char *mac) {
-	device_t *pci_dev;
+	unsigned char *driver_mac = net_drivers[0].mac;
 	int i;
 
-	if (mac == 0) {
+	if (driver_mac == 0) {
 		return JFAIL;
 	}
 	if (count_net_drivers > 0) {
-		pci_dev = net_drivers[0].private;
 		for (i = 0; i < 6; i++) {
-			mac[i]=pci_dev->mac[i];
+			mac[i]=driver_mac[i];
 		}
 		return JSUCCESS;
 	}
@@ -189,14 +188,16 @@ int net_getmac(unsigned char *mac) {
 }
 int registerNetworkHandler(int type,
 		int (*callback)(unsigned char *buf, unsigned int len,
-				void *private_data), void *private_data) {
+				void *private_data), void *private_data, unsigned char *mac) {
 	if (type == NETWORK_PROTOCOLSTACK) {
 		protocol_drivers[count_protocol_drivers].callback = callback;
 		protocol_drivers[count_protocol_drivers].private = private_data;
+		protocol_drivers[count_protocol_drivers].mac=0;
 		count_protocol_drivers++;
 	} else {
 		net_drivers[count_net_drivers].callback = callback;
 		net_drivers[count_net_drivers].private = private_data;
+		net_drivers[count_net_drivers].mac = mac;
 		count_net_drivers++;
 	}
 	return 1;

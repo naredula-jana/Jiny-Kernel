@@ -30,7 +30,7 @@
 #include <lwip/netif.h>
 
 #include "common.h"
-#include "device.h"
+
 
 #define down(x) sys_arch_sem_wait(x,100)
 /* Define those to better describe your network interface. */
@@ -549,7 +549,7 @@ static int load_LwipTcpIpStack(unsigned char *arg_ip, unsigned char *arg_unused)
 		struct ip_addr gw = { htonl(0x0ad18001) };
 		networking_set_addr(&ipaddr, &netmask, &gw);
 	}
-	registerNetworkHandler(NETWORK_PROTOCOLSTACK, lwip_netif_rx, NULL);
+	registerNetworkHandler(NETWORK_PROTOCOLSTACK, lwip_netif_rx, NULL,0);
 	ut_log("	LWIP: Latest Network is ready with IP.\n");
 	//start_webserver();
 

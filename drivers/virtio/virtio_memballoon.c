@@ -1,3 +1,4 @@
+#if 0  /* Need to convert in to c++ , similar to net and p9 */
 #define DEBUG_ENABLE 1
 #include "common.h"
 #include "device.h"
@@ -171,5 +172,5 @@ static int dettach_virtio_memballon_pci(device_t *pci_dev) {
 	return 0;
 }
 DEFINE_DRIVER(virtio_memballon_pci, virtio_pci, probe_virtio_memballon_pci, attach_virtio_memballon_pci, dettach_virtio_memballon_pci);
-
+#endif
 

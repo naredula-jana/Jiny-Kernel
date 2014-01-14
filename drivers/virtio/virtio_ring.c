@@ -480,11 +480,12 @@ irqreturn_t vring_interrupt(int irq, void *_vq)
 
 struct virtqueue *vring_new_virtqueue(unsigned int num,
 				      unsigned int vring_align,
-				      virtio_dev_t *vdev,
+				 //     virtio_dev_t *vdev,
+				      unsigned long pci_ioaddr,
 				      void *pages,
 				      void (*notify)(struct virtqueue *),
 				      void (*callback)(struct virtqueue *),
-				      const char *name)
+				      const char *name, int queue_number)
 {
 	struct vring_virtqueue *vq;
 	unsigned int i;
@@ -502,7 +503,12 @@ struct virtqueue *vring_new_virtqueue(unsigned int num,
 
 	vring_init(&vq->vring, num, pages, vring_align);
 	vq->vq.callback = callback;
-	vq->vq.vdev = vdev;
+#if 1
+	vq->vq.pci_ioaddr = pci_ioaddr;
+	vq->vq.queue_number = queue_number;
+#else
+	//vq->vq.vdev = vdev;
+#endif
 	vq->vq.name = name;
 	vq->notify = notify;
 	vq->broken = false;
@@ -569,6 +575,7 @@ unsigned int virtqueue_get_vring_size(struct virtqueue *_vq)
 	return vq->vring.num;
 }
 /**********************************************************************************/
+#if 0 /* TODO: remove later */
 unsigned char virtio_get_status(virtio_dev_t *dev) {
 	uint16_t addr = dev->pci_ioaddr + VIRTIO_PCI_STATUS;
 	return inb(addr);
@@ -577,4 +584,5 @@ void virtio_set_status(virtio_dev_t *dev, unsigned char status) {
 	uint16_t addr = dev->pci_ioaddr + VIRTIO_PCI_STATUS;
 	outb(addr, status);
 }
+#endif
 

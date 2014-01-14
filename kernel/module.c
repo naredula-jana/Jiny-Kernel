@@ -43,6 +43,7 @@ typedef struct {
 
 	int (*init_module)(unsigned char *arg1, unsigned char *arg2);
 	int (*clean_module)(unsigned char *arg1, unsigned char *arg2);
+	int (*highpriority_app_main)(int argc, unsigned char *argv);
 }module_t;
 
 #define MAX_MODULES 100
@@ -50,6 +51,8 @@ static module_t *g_modules[MAX_MODULES];
 static int total_modules=0;
 
 static void sort_symbols(module_t *modulep);
+static int remove_module(module_t *modulep);
+
 unsigned long ut_mod_get_symbol_addr(unsigned char *name);
 static unsigned long _get_symbol_addr(module_t *modulep, unsigned char *name);
 static int complete_read(struct file *file, unsigned char *buf, int total_size) {
@@ -139,8 +142,10 @@ static int get_symboltable( Elf64_Sym *symb, int total_symb,
 			unsigned char *name=module->str_table + tsemb->st_name;
 			if (ut_strcmp(name, (uint8_t *)"init_module") == 0) {
 				module->init_module = tsemb->st_value + module->secs[SEC_TEXT].addr;
-			} else if (ut_strcmp(name, (uint8_t *)"clean_module") == 0) {
+			} else if ((ut_strcmp(name, (uint8_t *)"clean_module") == 0) && (module->highpriority_app_main==0)) {
 				module->clean_module = tsemb->st_value + module->secs[SEC_TEXT].addr;
+			} else if (ut_strcmp(name, (uint8_t *)"main") == 0) {
+				module->highpriority_app_main = tsemb->st_value + module->secs[SEC_TEXT].addr;
 			}
 		}
 	}
@@ -293,7 +298,22 @@ static void free_module(module_t *modulep){
 	mm_free(modulep);
 }
 
+static void hp_main(module_t *modulep){ /* kernel thread */
+	Jcmd_reset_cpu_stat();
+	modulep->highpriority_app_main(0,0);
+	Jcmd_lsmod("stat",0);
+	remove_module(modulep);
+	SYS_sc_exit(0);
+}
+static int launch_hp_task(module_t *modulep){
+	int ret;
 
+	if(modulep == 0) return JFAIL;
+	ret = sc_createKernelThread(hp_main, modulep, "hp_task");
+	ut_printf(" launched high priority taks: pid %d \n",ret);
+
+	return JSUCCESS;
+}
 symb_table_t *module_load_kernel_symbols(unsigned char *start_addr, unsigned long mod_len){ /* load kernel symbols from kernel file loaded as a module */
 	struct elfhdr *elf_ex;
 	char *error=0;
@@ -658,9 +678,11 @@ void Jcmd_insmod(unsigned char *filename, unsigned char *arg){
 		total_modules++;
 	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
-	if (modulep->init_module==0 || modulep->clean_module==0){
-		error = "init_module or clean_module function not found";
-		goto out;
+	if (modulep->highpriority_app_main == 0) {
+		if ((modulep->init_module == 0 || modulep->clean_module == 0)) {
+			error = "init_module or clean_module or main function not found";
+			goto out;
+		}
 	}
 
 
@@ -669,7 +691,11 @@ out:  ;
 		ut_printf("ERROR : %s\n",error);
 	}else{
 		sort_symbols(modulep);
-		modulep->init_module(0,0);
+		if (modulep->highpriority_app_main != 0){
+			launch_hp_task(modulep);
+		}else{
+			modulep->init_module(0,0);
+		}
 		ut_printf(" Successfull loaded the module\n");
 		return;
 	}
@@ -772,6 +798,21 @@ void Jcmd_reset_cpu_stat() {
 	}
 	stat_cpu_rip_unknown_hit=0;
 }
+static int remove_module(module_t *modulep) {
+	int i;
+
+	for (i = 0; i < total_modules; i++) {
+		if (modulep == g_modules[i]) {
+			free_module(modulep);
+			g_modules[i] = 0;
+			total_modules--;
+			if (i < total_modules)
+				g_modules[i] = g_modules[total_modules];
+			return JSUCCESS;
+		}
+	}
+	return JFAIL;
+}
 void Jcmd_rmmod(unsigned char *filename, unsigned char *arg){
 	int i;
 	int ret=JFAIL;
@@ -780,13 +821,7 @@ void Jcmd_rmmod(unsigned char *filename, unsigned char *arg){
 	for (i=0; i<total_modules; i++ ){
 		modulep=g_modules[i];
 		if (ut_strcmp(modulep->name , filename)==0){
-			free_module(modulep);
-
-			g_modules[i]=0;
-			total_modules--;
-			if (i<total_modules)
-				g_modules[i]=g_modules[total_modules];
-			ret = JSUCCESS;
+			ret = remove_module(modulep);
 			goto last ;
 		}
 	}
@@ -852,7 +887,7 @@ last:
 }
 int perf_stat_rip_hit(unsigned long rip){
 	module_t *modulep=0;
-	int i,j;
+	int j;
 	for (j=0; j<total_modules ; j++ ){
 		int min=0;
 		int max;

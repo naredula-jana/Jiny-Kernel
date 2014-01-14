@@ -9,7 +9,7 @@ LWIP_OBJ=$(LWIP_USER_OBJ) /opt_src/lwip/src/api/sockets.o /opt_src/lwip/src/api/
  /opt_src/lwip/src/netif/slipif.o  /opt_src/lwip/src/netif/etharp.o /opt_src/lwip/src/netif/ethernetif.o
  
 XEN_OBJ=drivers/xen/xen_init.o drivers/xen/xenbus.o drivers/xen/evntchn.o drivers/xen/gntmap.o drivers/xen/gnttab.o drivers/xen/net_front.o 
-VIRTIO_OBJ= drivers/virtio/virtio_ring.o drivers/virtio/virtio_pci.o drivers/virtio/virtio_memballoon.o drivers/virtio/net/virtio_net.o drivers/virtio/net/test_udpserver.o drivers/virtio/9p/virtio_9p.o drivers/virtio/9p/9p.o drivers/virtio/9p/p9_fs.o
+VIRTIO_OBJ= drivers/virtio/virtio_ring.o drivers/virtio/virtio_memballoon.o drivers/virtio/net/test_udpserver.o  drivers/virtio/9p/9p.o drivers/virtio/9p/p9_fs.o
 MEMLEAK_OBJ=mm/memleak/memleak.o mm/memleak/os_dep.o mm/memleak/prio_tree.o  mm/memleak/memleak_hook.o
 
 OBJECTS= arch/$(ARCH_DIR)/boot.o arch/$(ARCH_DIR)/vsyscall_emu_64.o arch/$(ARCH_DIR)/init.o arch/$(ARCH_DIR)/syscall.o arch/$(ARCH_DIR)/clock.o arch/$(ARCH_DIR)/isr.o arch/$(ARCH_DIR)/descriptor_tables.o arch/$(ARCH_DIR)/pci.o arch/$(ARCH_DIR)/msix.o arch/$(ARCH_DIR)/paging.o arch/$(ARCH_DIR)/interrupt.o  drivers/display.o drivers/keyboard.o drivers/serial.o mm/memory.o  mm/jslab.o mm/mmap.o mm/pagecache.o fs/binfmt_elf.o fs/vfs.o $(MEMLEAK_OBJ) $(VIRTIO_OBJ)
@@ -22,13 +22,17 @@ ifdef LWIP_NONMODULE
 OBJECTS += $(LWIP_OBJ) 
 endif
 
-OBJECTS += kernel/debug.o kernel/device.o  kernel/init.o  kernel/ipc.o  kernel/module.o  kernel/network.o  kernel/shell.o  kernel/symbol_table.o  kernel/syscall.o  kernel/task.o  kernel/util.o
-
+OBJECTS += kernel/debug.o kernel/jdevices.o kernel/init.o  kernel/ipc.o  kernel/module.o  kernel/network.o  kernel/kshell.o  kernel/symbol_table.o  kernel/syscall.o  kernel/task.o  kernel/util.o
+OBJECTS +=drivers/virtio/driver_virtio_pci.o
  
 user: 
 	make SOURCE_ROOT=$$PWD -C userland clean
 	make SOURCE_ROOT=$$PWD -C userland
 
+kshell:
+	make SOURCE_ROOT=$$PWD -C modules/kshell
+	cp modules/kshell/kshell.o test/root/
+	
 test_net:
 	make SOURCE_ROOT=$$PWD -C modules/test_net
 	cp modules/test_net/test_net.o test/root/
@@ -58,7 +62,7 @@ endif
 	make SOURCE_ROOT=$$PWD -C mm/memleak
 	make SOURCE_ROOT=$$PWD -C fs
 	rm drivers.a  fs.a mm.a $(ARCH_DIR).a
-	gcc -g -I. $(LINK_FLAG)  $(OBJECTS) -nostdlib -Wl,-N -Wl,-Ttext -Wl,40100000 -Tdata=40200000 -o bin/kernel_bin
+	g++ -nostdlib -g -I. -feliminate-dwarf2-dups $(LINK_FLAG)  $(OBJECTS) -Wl,-N -Wl,-Ttext -Wl,40100000 -Tdata=40200000 -o bin/kernel_bin
 	objdump -D -l bin/kernel_bin > bin/obj_file
 #	nm -l bin/kernel_bin | sort > util/in
 #	util/gen_symboltbl util/in bin/mod_file > util/out

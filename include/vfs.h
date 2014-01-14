@@ -14,6 +14,12 @@
 #include "mm.h"
 #include "task.h"
 
+enum {
+	DEVICE_SERIAL=1,
+	DEVICE_KEYBOARD=2,
+	DEVICE_DISPLAY_VGI=3
+};
+
 #define MAX_FILENAME 200
 #define HOST_SHM_ADDR 0xd0000000
 #define HOST_SHM_CTL_ADDR 0xd1000000
@@ -104,12 +110,13 @@ enum { /* Inode types*/
 	DIRECTORY_FILE=0x4000,
 	SYM_LINK_FILE=0xA000
 };
+#if 0
 enum {
 	DEVICE_SERIAL=1,
 	DEVICE_KEYBOARD=2,
 	DEVICE_DISPLAY_VGI=3
 };
-
+#endif
 struct file {
 	unsigned char filename[MAX_FILENAME];
 	int type;

@@ -76,7 +76,7 @@
 #define DEBUGCTLMSR_BTF         (1UL <<  1) /* Single-Step on branches */
 
 extern uint32_t g_cpu_features;
-static inline eflag_write(uint64_t value){
+static inline void eflag_write(uint64_t value){
 	__asm__ volatile ("pushq %0; popfq" : : "r" (value));
 }
 

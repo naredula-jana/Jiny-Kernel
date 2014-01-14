@@ -265,7 +265,8 @@ void ar_irqHandler(void *p,unsigned int int_no)
 		isr_t handler = g_interrupt_handlers[int_no].action;
 		if (int_no == 128)
 		{
-			handler(&ctx, g_interrupt_handlers[int_no].private_data);
+			//handler(&ctx, g_interrupt_handlers[int_no].private_data);
+			handler( g_interrupt_handlers[int_no].private_data);
 		}else
 		{
 			handler(g_interrupt_handlers[int_no].private_data);
