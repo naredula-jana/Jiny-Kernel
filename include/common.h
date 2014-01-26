@@ -88,7 +88,7 @@ typedef struct {
 // Enables registration of callbacks for interrupts or IRQs.
 // For IRQs, to ease confusion, use the #defines above as the
 // first parameter.
-typedef int (*isr_t)(void *);
+typedef int (*isr_t)(void *arg);
 extern int g_serial_output;
 extern void *g_inode_lock; /* vfs */
 extern void *g_netBH_lock; /* netBH */

@@ -39,11 +39,11 @@ static int Hfs_open(uint32_t fid, unsigned char *filename, int flags, int arg_mo
 	return ret;
 }
 #endif
-static void update_size(struct inode *inode,uint64_t offset, int len ) {
-	if (inode !=0 && len > 0) {
-		if (inode->u.file.stat.st_size < (offset+len))
-			inode->u.file.stat.st_size = offset+len;
-	}
+static void update_size(void *inode,uint64_t offset, int len ) {
+//TODO	if (inode !=0 && len > 0) {
+//		if (inode->u.file.stat.st_size < (offset+len))
+//			inode->u.file.stat.st_size = offset+len;
+//	}
 	return ;
 }
 static int peer_pos=-1;
@@ -64,7 +64,7 @@ extern wait_queue_t g_hfs_waitqueue;
 extern int client_put_buf(struct buf_desc *buf);
 extern int client_get_buf(struct client_queue *q, struct buf_desc *buf, int type);
 /* This is central switch where the call from vfs routed to the Hfs functions */
-static int HfsRequest(unsigned char type, struct inode *inode, uint64_t offset,
+static int HfsRequest(unsigned char type, void *inode, uint64_t offset,
 		unsigned char *data, int data_len, int flags, int mode) {
 	int ret = -1;
 	Request_t *request;
@@ -78,7 +78,7 @@ static int HfsRequest(unsigned char type, struct inode *inode, uint64_t offset,
 	request->type = type;
 	request->file_offset = offset;
 	request->request_len = data_len;
-	ut_strcpy((unsigned char *)request->filename, inode->filename);
+// TODO : need to get the filename 	ut_strcpy((unsigned char *)request->filename, inode->filename);
 	client_put_buf(&buf);
 
 	generate_interrupt_to_peer();
@@ -113,7 +113,7 @@ static int HfsRequest(unsigned char type, struct inode *inode, uint64_t offset,
 	return ret;
 }
 
-static int HfsOpen(struct inode *inodep, int flags, int mode) {
+static int HfsOpen(void *inodep, int flags, int mode) {
 	HfsClientInit();
 	return HfsRequest(REQUEST_OPEN, inodep, 0, 0, 0, flags, mode);
 }
@@ -123,31 +123,31 @@ static int HfsLseek(struct file *filep, unsigned long offset, int whence) {
 	return 1;
 }
 
-static int HfsFdatasync(struct inode *inodep) {
+static int HfsFdatasync(void *inodep) {
 
 	return 1;
 }
-static long HfsWrite(struct inode *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
+static long HfsWrite(void *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
 	HfsClientInit();
     return  HfsRequest(REQUEST_WRITE, inodep, offset, data, data_len, 0, 0);
 }
 
-static long HfsRead(struct inode *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
+static long HfsRead(void *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
 	HfsClientInit();
     return  HfsRequest(REQUEST_READ, inodep, offset, data, data_len, 0, 0);
 }
 
-static int HfsRemove(struct inode *inodep) {
+static int HfsRemove(void *inodep) {
 	HfsClientInit();
     return  HfsRequest(REQUEST_REMOVE, inodep, 0, 0, 0, 0, 0);
 }
 
-static int HfsStat(struct inode *inodep, struct fileStat *statp) {
+static int HfsStat(void *inodep, struct fileStat *statp) {
 	HfsClientInit();
     return  HfsRequest(REQUEST_STAT, inodep, 0, (unsigned char *)statp, 0, 0, 0);
 }
 
-static int HfsClose(struct inode *inodep) {
+static int HfsClose(void *inodep) {
 	HfsClientInit();
     return  HfsRequest(REQUEST_CLOSE, inodep, 0, 0, 0, 0, 0);
 }

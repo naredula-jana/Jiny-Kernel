@@ -38,16 +38,16 @@ void ipi_pagetable_interrupt(){
 	return;
 }
 int vma_page_remove(struct page *page){
-	struct inode *inode;
+	void *inode;
 	struct list_head *p;
 	struct vm_area_struct *vma;
 	struct mm_struct *mm;
 	int found=0;
 
-	inode=page->inode;
+	inode=page->fs_inode;
 	if (inode ==0) return found;
-	if (inode->flags & INODE_EXECUTING) return 1;
-	list_for_each(p, &(inode->vma_list)) {
+	if (fs_get_inode_flags(inode) & INODE_EXECUTING) return 1;
+	list_for_each(p, (struct list_head *)fs_get_inode_vma_list(inode)) {
 		vma=list_entry(p, struct vm_area_struct, inode_vma_link);
 		mm=vma->vm_mm;
 		if (mm == 0){
@@ -67,6 +67,7 @@ int vma_page_remove(struct page *page){
 	}
 	return found;
 }
+extern unsigned long fs_vinode_close(void *arg);
 static int vma_unlink(struct mm_struct *mm, struct vm_area_struct *vma) {
 	struct vm_area_struct *tmp;
 	int ret = -1;
@@ -92,7 +93,7 @@ last:
 	if (ret == 1){ /* success case */
 		if (vma->vm_inode != 0){
 			list_del( &(vma->inode_vma_link));
-			fs_putInode(vma->vm_inode);
+			fs_vinode_close(vma->vm_inode);
 		}
 	}
 	return ret;
@@ -143,12 +144,12 @@ static int vma_link(struct mm_struct *mm, struct vm_area_struct *vma) {
 last:
 	if (ret >= 0){ /* success case */
 		if (vma->vm_inode != 0){
-			struct inode *inode;
-			atomic_inc(&vma->vm_inode->count);
+			void *inode;
+			fs_set_inode_used(vma->vm_inode);
 			inode = vma->vm_inode;
 #if 1
 			if (mm != g_kernel_mm){
-				list_add( &(vma->inode_vma_link), &(inode->vma_list.next));
+				list_add( &(vma->inode_vma_link), ((struct list_head *)fs_get_inode_vma_list(inode))->next);
 			}
 #endif
 		}
@@ -161,6 +162,7 @@ struct vm_area_struct *vm_findVma(struct mm_struct *mm, unsigned long addr, unsi
 	struct vm_area_struct *vma;
 	if (mm == 0) return 0;
 	vma = mm->mmap;
+	//BRK;
 	if (vma == 0)
 		return 0;
 	while (vma) {
@@ -223,9 +225,9 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, 
 	vma->vm_inode = 0;
 	vma->vm_private_data = pgoff;
 	if (file != 0) {
-		if (file->inode != 0) {
+		if (file->vinode != 0) {
 			vma->vm_flags = vma->vm_flags | MAP_FIXED;
-			vma->vm_inode = file->inode;
+			vma->vm_inode = file->vinode;
 			//if (len > (file->inode->file_size)) /*TODO: need to do stat and find the file length*/
 			//vma->vm_end=addr+file->inode->file_size;
 
@@ -412,8 +414,8 @@ int Jcmd_maps(char *arg1, char *arg2) {
 			len = len - ut_snprintf(buf+max_len-len,len,"%9s [ %p - %p ] - (+%p) flag:%x prot:%x stats:%d (%d/%d)\n",vma->name, vma->vm_start, vma->vm_end,
 					vma->vm_private_data,vma->vm_flags,vma->vm_prot,vma->stat_page_count,vma->stat_page_faults,vma->stat_page_wrt_faults);
 		} else {
-			len = len - ut_snprintf(buf+max_len-len,len,"%9s [ %p - %p ] - %s(+%p) flag:%x prot:%x stats:%d (%d/%d)\n",vma->name, vma->vm_start, vma->vm_end,
-					inode->filename, vma->vm_private_data,vma->vm_flags,vma->vm_prot, vma->stat_page_count,vma->stat_page_faults,vma->stat_page_wrt_faults);
+		//TODO	len = len - ut_snprintf(buf+max_len-len,len,"%9s [ %p - %p ] - %s(+%p) flag:%x prot:%x stats:%d (%d/%d)\n",vma->name, vma->vm_start, vma->vm_end,
+		//			inode->filename, vma->vm_private_data,vma->vm_flags,vma->vm_prot, vma->stat_page_count,vma->stat_page_faults,vma->stat_page_wrt_faults);
 		}
 		for (i=0; i<10 && i<vma->stat_log_index; i++){
 			len = len - ut_snprintf(buf+max_len-len,len,"	  vad:%x- faulip:%x - rw:%d option:%x \n",vma->stat_log[i].vaddr,vma->stat_log[i].fault_addr,vma->stat_log[i].rw_flag,vma->stat_log[i].optional);

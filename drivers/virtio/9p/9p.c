@@ -255,6 +255,7 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 		sg[1].offset = 0;
 		in = 1;
 	}
+#if 1 /* TODO: this should be called using the driver */
 	struct virtqueue *vq=virtio_jdriver_getvq(p9_dev,0);
 	if (vq ==0){
 		BUG();
@@ -262,7 +263,7 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 	virtio_enable_cb(vq);
 	virtio_add_buf_to_queue(vq, sg, out, in, sg[0].page_link, 0);
 	virtio_queue_kick(vq);
-
+#endif
 	ipc_waiton_waitqueue(&p9_waitq, 50);
 	unsigned int len;
 	len = 0;

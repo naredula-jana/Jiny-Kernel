@@ -99,7 +99,7 @@ struct vm_area_struct {
 	/* Information about our backing store: */
 	unsigned long vm_pgoff; /* Offset (within vm_file) in PAGE_SIZE
 	 units, *not* PAGE_CACHE_SIZE */
-	struct inode *vm_inode; /* File we map to (can be NULL). */
+	void *vm_inode; /* File we map to (can be NULL). */
 	unsigned long vm_private_data; /* was vm_pte (shared mem) */
 	struct list_head inode_vma_link; /* vmas connected to inode */
 
@@ -127,7 +127,7 @@ typedef struct page {
 	unsigned int age; /* youngest =1 or eldest =100 */
 	unsigned int large_page_size; /* used for large page or contegous pages */
 
-	struct inode *inode; /* overloaded used by slab for large page implementataion */
+	void *fs_inode; /* overloaded used by slab for large page implementataion */
 	uint64_t offset; /* offset in the inode */
 	struct list_head lru_link; /* LRU list: the page can be in freelist,active or inactive in of the list   */
 	unsigned char list_type; /* LRU list # is stored */

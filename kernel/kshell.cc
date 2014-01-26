@@ -223,8 +223,10 @@ int kshell::main(void *arg) {
 //	ret = fs_open(USERLEVEL_SHELL,0,0);
 	if (ret != 0) {
 //		fs_close(ret);
+#if 1
 		ret = sh_create((unsigned char *) USERLEVEL_SHELL,
 				(unsigned char *) "sh"); // start the user level shell
+#endif
 	} else {
 		/* attach kernel shell to serial line since user level shell fails */
 		sc_set_fsdevice(DEVICE_SERIAL, DEVICE_SERIAL);

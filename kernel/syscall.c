@@ -21,6 +21,14 @@ struct __sysctl_args {
 	size_t newlen; /* size of new value */
 };
 
+struct timespec {
+    long   tv_sec;        /* seconds */
+    long   tv_nsec;       /* nanoseconds */
+};
+struct timeval {
+    long         tv_sec;     /* seconds */
+    long    tv_usec;    /* microseconds */
+};
 
 unsigned long SYS_sysctl(struct __sysctl_args *args );
 unsigned long SYS_getdents(unsigned int fd, uint8_t *user_buf,int size);
@@ -32,32 +40,9 @@ unsigned long SYS_uname(unsigned long *args);
 
 unsigned long SYS_futex(unsigned long *a);
 unsigned long SYS_arch_prctl(unsigned long code,unsigned long addr);
-struct timespec {
-    long   tv_sec;        /* seconds */
-    long   tv_nsec;       /* nanoseconds */
-};
-struct timeval {
-    long         tv_sec;     /* seconds */
-    long    tv_usec;    /* microseconds */
-};
 
-struct stat {
-	unsigned long int st_dev; /* ID of device containing file */
-	unsigned long int st_ino; /* inode number */
-	unsigned long int st_nlink; /* number of hard links */
-	unsigned int st_mode; /* protection */
-	unsigned int st_uid; /* user ID of owner */
-	unsigned int st_gid; /* group ID of owner */
-    int __pad0;
-	unsigned long int st_rdev; /* device ID (if special file) */
-	long int st_size; /* total size, in bytes */
-	long int st_blksize; /* blocksize for file system I/O */
-	long int st_blocks; /* number of 512B blocks allocated */
-	struct timespec st_atime; /* time of last access */
-	struct timespec st_mtime; /* time of last modification */
-	struct timespec st_ctime; /* time of last status change */
-	long int __unused[3];
-};
+
+
 typedef long int __time_t;
 long int SYS_time(__time_t *time);
 
@@ -333,187 +318,7 @@ unsigned long SYS_ioctl(int d, int request, unsigned long *addr) {//TODO
 	}
 	return SYSCALL_SUCCESS;
 }
-unsigned long SYS_fs_readlink(uint8_t *path, char *buf, int bufsiz) {
-	struct file *fp;
-	int ret = -2; /* no such file exists */
 
-	SYSCALL_DEBUG("readlink (ppath:%x(%s) buf:%x \n", path, path, buf);
-
-	if (path == 0 || buf == 0)
-		return ret;
-
-	buf[0] = '\0';
-	fp = (struct file *) fs_open((uint8_t *) path, 0, 0);
-	if (fp == 0) {
-		return ret;
-	}
-
-	if (fp->inode->type == SYM_LINK_FILE) {
-		ret = fs_read(fp, buf, bufsiz);
-	}
-	fs_close(fp);
-
-	SYSCALL_DEBUG("RET readlink (ppath:%x(%s) buf:%s: \n", path, path, buf);
-	return ut_strlen(buf);
-}
-static int copy_stat_touser(struct file *fp,struct stat *buf){
-	struct fileStat fstat;
-	int ret;
-
-	ret = fs_stat(fp, &fstat);
-	ut_memset((uint8_t *) buf, 0, sizeof(struct stat));
-	if (fp->type == IN_FILE || fp->type == OUT_FILE) {
-
-	} else {
-		buf->st_size = fstat.st_size;
-		buf->st_ino = fstat.inode_no;
-		buf->st_blksize = 4096; //TODO
-		buf->st_blocks = 8; //TODO
-		buf->st_nlink = 4; //TODO
-	}
-
-	buf->st_mtime.tv_sec = fstat.mtime;
-	buf->st_mtime.tv_nsec = 0;
-	buf->st_atime.tv_sec = fstat.atime;
-	buf->st_atime.tv_nsec = 0;
-
-	buf->st_mode = (fstat.mode | fstat.type) & 0xfffffff;
-	buf->st_dev = 2054;
-	buf->st_rdev = 0;
-
-	/* TODO : fill the rest of the fields from fstat */
-	buf->st_gid = TEMP_GID;
-	buf->st_uid = TEMP_UID;
-
-	buf->__unused[0] = buf->__unused[1] = buf->__unused[2] = 0;
-	buf->__pad0 = 0;
-
-
-	if (fstat.type == SYM_LINK_FILE) {
-		buf->st_blocks = 0; //TODO
-		buf->st_nlink = 1; //TODO
-	}
-	return ret;
-}
-unsigned long SYS_fs_stat(const char *path, struct stat *buf) {
-	struct file *fp;
-	struct fileStat fstat;
-	int ret = -2; /* no such file exists */
-
-	SYSCALL_DEBUG(
-			"Stat (ppath:%x(%s) buf:%x size:%d\n", path, path, buf, sizeof(struct stat));
-
-	if (path == 0 || buf == 0)
-		return ret;
-
-	fp = (struct file *) fs_open((uint8_t *) path, 0, 0);
-	if (fp == 0) {
-		return ret;
-	}
-
-	ret = copy_stat_touser(fp,buf);
-	fs_close(fp);
-	ret = SYSCALL_SUCCESS;
-	/*
-	 *stat(".", {st_dev=makedev(8, 6), st_ino=5381699, st_mode=S_IFDIR|0775, st_nlink=4,
-	 *          st_uid=500, st_gid=500, st_blksize=4096, st_blocks=8, st_size=4096, st_atime=2012/09/29-23:41:20,
-	 *          st_mtime=2012/09/16-11:29:50, st_ctime=2012/09/16-11:29:50}) = 0
-	 *
-	 */
-	SYSCALL_DEBUG(
-			" stat END : st_size: %d st_ino:%d nlink:%x mode:%x uid:%x gid:%x blksize:%x ret:%x mtime: %x :%x sec\n", buf->st_size, buf->st_ino, buf->st_nlink, buf->st_mode, buf->st_uid, buf->st_gid, buf->st_blksize, ret, buf->st_mtime.tv_sec, fstat.mtime);
-	return ret;
-}
-unsigned long SYS_fs_fstat(int fd, struct stat *buf) {
-	struct file *fp;
-	int ret;
-	SYSCALL_DEBUG("fstat  fd:%x buf:%x \n", fd, buf);
-
-	fp = fd_to_file(fd);
-	if (fp <= 0 || buf == 0)
-		return -1;
-
-	ret = copy_stat_touser(fp,buf);
-	if (buf){
-		SYSCALL_DEBUG("fstat ret: file size:%d mode:%x inode:%x  \n",buf->st_size,buf->st_mode,buf->st_ino);
-	}
-	return ret;
-}
-/************************* getdents ******************************/
-struct linux_dirent {
-	unsigned long d_ino; /* Inode number */
-	unsigned long d_off; /* Offset to next linux_dirent */
-	unsigned short d_reclen; /* Length of this linux_dirent */
-	char d_name[]; /* Filename (null-terminated) */
-};
-
-unsigned long SYS_getdents(unsigned int fd, uint8_t *user_buf, int size) {
-	struct file *fp = 0;
-	int ret = -1;
-
-	SYSCALL_DEBUG("getidents fd:%d userbuf:%x size:%d \n", fd, user_buf, size);
-	fp = fd_to_file(fd);
-	if (fp <= 0 || user_buf == 0) {
-		ret = -1;
-		return ret;
-	}
-
-	ret = fs_readdir(fp, user_buf, size,&fp->offset);
-	return ret;
-}
-/*********************** end of getdents *************************/
-
-kmem_cache_t *g_slab_filep;
-unsigned long SYS_fs_fcntl(int fd, int cmd, int args) {
-	struct file *fp_old,*fp_new;
-	int i;
-	int new_fd=args;
-	int ret = SYSCALL_FAIL;
-
-	SYSCALL_DEBUG("fcntl(Partial)  fd:%x cmd:%x args:%x\n", fd, cmd, args);
-	if (cmd == F_DUPFD){
-		fp_old = fd_to_file(fd);
-		if (fp_old==0 ) return SYSCALL_FAIL;
-		fp_new = mm_slab_cache_alloc(g_slab_filep, 0);
-		if (fp_new==0 ) return SYSCALL_FAIL;
-
-		if (new_fd > g_current_task->mm->fs.total && new_fd<MAX_FDS){
-			g_current_task->mm->fs.total = new_fd +1;
-			g_current_task->mm->fs.filep[new_fd]=fp_new;
-			fs_dup(fp_old,fp_new);
-			ret = new_fd;
-			goto last;
-		}
-		for (i = new_fd; i < MAX_FDS; i++) {
-			if (g_current_task->mm->fs.filep[i] == 0) {
-				if (i >= g_current_task->mm->fs.total ){
-					g_current_task->mm->fs.total = i+1;
-				}
-				g_current_task->mm->fs.filep[i]=fp_new;
-				fs_dup(fp_old,fp_new);
-				ret = i;
-				goto last;
-			}
-		}
-		mm_slab_cache_free(g_slab_filep, fp_new);
-		ret = SYSCALL_FAIL;
-		goto last;
-	}else if (cmd == F_SETFD){
-		if (args == FD_CLOSEXEC){
-			fp_old = fd_to_file(fd);
-			if (fp_old==0 ) return SYSCALL_FAIL;
-			fp_old->flags = FD_CLOSEXEC;
-			ret = SYSCALL_SUCCESS;
-		}
-	}else if (cmd == F_GETFD){
-		fp_old = fd_to_file(fd);
-		if (fp_old==0 ) return SYSCALL_FAIL;
-		ret = fp_old->flags;
-	}
-last:
-	SYSCALL_DEBUG("fcntlret  fd:%x ret:%x(%d)\n",fd,ret,ret);
-	return ret;
-}
 
 unsigned long SYS_futex(unsigned long *a) {//TODO
 	SYSCALL_DEBUG("futex  addr:%x \n", a);

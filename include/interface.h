@@ -46,15 +46,18 @@ void mm_slab_cache_free (kmem_cache_t *cachep, void *objp);
 extern kmem_cache_t *kmem_cache_create(const uint8_t *, size_t,size_t, unsigned long,void (*)(void *, kmem_cache_t *, unsigned long),void (*)(void *, kmem_cache_t *, unsigned long));
 void *mm_slab_cache_alloc (kmem_cache_t *cachep, int flags);
 void *mm_malloc (size_t size, int flags);
+void *ut_calloc(size_t size);
 void mm_free (const void *objp);
 extern void *vmalloc(int size, int flags);
-extern void vfree();
+
 unsigned long jalloc_page(int flags);
+int jfree_page(unsigned long p);
 #define alloc_page(flags) jalloc_page(flags)
 #define free_page(p) jfree_page(p)
 #define memset ut_memset
 #define ut_free mm_free
 #define ut_malloc(x) mm_malloc(x,0)
+void vfree(addr_t addr);
 
 
 /* vm */
@@ -75,9 +78,10 @@ int pc_init(uint8_t *start_addr,unsigned long len);
 int Jcmd_pagecache_stat(char *arg1,char *arg2);
 int pc_pageDirted(struct page *p);
 int pc_pagecleaned(struct page *page);
-struct page *pc_getInodePage(struct inode *inode,unsigned long offset);
+
+
 unsigned long fs_getVmaPage(struct vm_area_struct *vma,unsigned long offset);
-int pc_insertPage(struct inode *inode,struct page *page);
+
 int pc_deletePage(struct page *page);
 int pc_putFreePage(struct page *page);
 page_struct_t *pc_get_dirty_page();
@@ -90,13 +94,12 @@ int pc_housekeep(void);
 /*vfs */
 unsigned long fs_registerFileSystem(struct filesystem *fs);
 //struct inode *fs_getInode(char *filename);
-unsigned long fs_putInode(struct inode *inode);
+unsigned long fs_putInode(void *fs_inode);
 int Jcmd_ls(uint8_t *arg1,uint8_t *arg2);
 struct file *fs_open(uint8_t *filename,int mode,int flags);
 int fs_close(struct file *file);
-struct page *fs_genericRead(struct inode *inode,unsigned long offset);
 long fs_read(struct file *fp ,uint8_t *buff ,unsigned long len);
-unsigned long fs_fadvise(struct inode *inode,unsigned long offset, unsigned long len,int advise);
+unsigned long fs_fadvise(void *inode,unsigned long offset, unsigned long len,int advise);
 unsigned long fs_lseek(struct file *fp ,unsigned long offset, int whence);
 unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsigned long stack_len,unsigned long aux_addr);
 int fs_write(struct file *file,uint8_t *buff ,unsigned long len);
@@ -195,9 +198,9 @@ int SYS_listen(int fd,int length);
 int SYS_accept(int fd);
 int SYS_bind(int fd, struct sockaddr  *addr, int len);
 int SYS_connect(int fd, struct sockaddr  *addr, int len);
-unsigned long SYS_sendto(int sockfd, const void *buf, size_t len, int flags,
-               const struct sockaddr *dest_addr, int addrlen);
-int SYS_recvfrom(int sockfd, const void *buf, size_t len, int flags,  const struct sockaddr *dest_addr, int addrlen);
+unsigned long SYS_sendto(int sockfd,  void *buf, size_t len, int flags,
+                struct sockaddr *dest_addr, int addrlen);
+int SYS_recvfrom(int sockfd,  void *buf, size_t len, int flags,  struct sockaddr *dest_addr, int addrlen);
 
 /* Utilities */
 void ut_showTrace(unsigned long *stack_top);

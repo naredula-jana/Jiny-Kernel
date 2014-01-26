@@ -25,12 +25,13 @@ extern int p9_initFs(void *p);
 }
 #include "jdevice.h"
 
+
 /************************   utilities used by vitio drivr ***************************/
 struct virtio_feature_desc {
 	int feature_bit;
-	char *name;
+	const char *name;
 };
-void display_virtiofeatures(unsigned long feature, struct virtio_feature_desc *desc) {
+static void display_virtiofeatures(unsigned long feature, struct virtio_feature_desc *desc) {
 	int i,j,bit;
 	for (i = 0; i < 32; i++) {
 		bit = (feature >> i) & (0x1);
@@ -99,19 +100,19 @@ static int addBufToQueue(struct virtqueue *vq, unsigned char *buf,
 
 	return ret;
 }
-static int virtio_stat(jdriver *arg){
-	virtio_jdriver *driver =(virtio_jdriver *)arg;
 
-	ut_printf(" Send(P,K): %d,%d  Recv(P,K,I):%d,%d,%d\n",driver->stats_sends,driver->stat_send_kicks,driver->stat_recvs,driver->stat_recv_kicks,driver->stat_recv_interrupts);
-}
 /*******************************  virtio_jdriver ********************************/
+int virtio_jdriver::print_stats(){
 
+	ut_printf("%s: Send(P,K): %d,%d  Recv(P,K,I):%d,%d,%d\n",this->name, this->stat_sends,this->stat_send_kicks,this->stat_recvs,this->stat_recv_kicks,this->stat_recv_interrupts);
+	return JSUCCESS;
+}
 int virtio_jdriver::virtio_create_queue(uint16_t index, int qType) {
 	int size;
 	uint16_t num;
 	unsigned long queue;
 	unsigned long pci_ioaddr = device->pci_device.pci_ioaddr;
-#if 1
+
 	outw(pci_ioaddr + VIRTIO_PCI_QUEUE_SEL, index);
 
 	num = inw(pci_ioaddr + VIRTIO_PCI_QUEUE_NUM);
@@ -138,7 +139,7 @@ int virtio_jdriver::virtio_create_queue(uint16_t index, int qType) {
 			"VIRTQUEUE", index);
 	virtqueue_enable_cb_delayed(vq[index]);
 	vq[index]->qType = qType;
-#endif
+
 	return 1;
 }
 /******************************************* virtio net *********************************/
@@ -188,64 +189,20 @@ static int virtio_net_poll_device(void *private_data, int enable_interrupt,
 }
 static spinlock_t virtionet_lock = SPIN_LOCK_UNLOCKED(
 		(unsigned char *) "new1_virtio_net");
-static int virtio_send_errors = 0;
+
 static int netdriver_xmit(unsigned char* data, unsigned int len,
 		void *private_data) {
 	virtio_net_jdriver *net_driver = (virtio_net_jdriver *) private_data;
-	static int send_pkts = 0;
-	jdevice *dev;
-	int i, ret;
-	unsigned long flags;
-
-	dev = (jdevice *) net_driver->device;
-	if (dev == 0 || data == 0)
-		return 0;
-
-	unsigned long addr;
-	addr = (unsigned long) alloc_page(0);
-	if (addr == 0)
-		return 0;
-	ut_memset((unsigned char *) addr, 0, 10);
-	ut_memcpy((unsigned char *) addr + 10, data, len);
-	ret = -ENOSPC;
-
-	spin_lock_irqsave(&virtionet_lock, flags);
-	ret = addBufToQueue(net_driver->vq[1], (unsigned char *) addr, len + 10);
-	net_driver->stats_sends++;
-	send_pkts++;
-	if (ret == -ENOSPC) {
-		mm_putFreePages((unsigned long) addr, 0);
-		virtio_send_errors++;
-	}
-	send_pkts = 0;
-	virtio_queue_kick(net_driver->vq[1]);
-	net_driver->stat_send_kicks++;
-	spin_unlock_irqrestore(&virtionet_lock, flags);
-#if 1
-	i = 0;
-	while (i < 50) {
-		i++;
-		spin_lock_irqsave(&virtionet_lock, flags);
-		addr = (unsigned long) virtio_removeFromQueue(net_driver->vq[1], &len);
-		spin_unlock_irqrestore(&virtionet_lock, flags);
-		if (addr) {
-			mm_putFreePages(addr, 0);
-		} else {
-			return 1;
-		}
-	}
-#endif
-	return 1;
+	return net_driver->write(data,len);
 }
 
 static int virtio_net_interrupt(void *private_data) {
 	jdevice *dev;
-	unsigned char isr;
 	virtio_net_jdriver *driver = (virtio_net_jdriver *) private_data;
 
 	dev = (jdevice *) driver->device;
 	if (dev->pci_device.msi == 0)
-		isr = inb(dev->pci_device.pci_ioaddr + VIRTIO_PCI_ISR);
+		 inb(dev->pci_device.pci_ioaddr + VIRTIO_PCI_ISR);
 
 	driver->stat_recv_interrupts++;
 	virtio_disable_cb(driver->vq[0]);
@@ -254,16 +211,23 @@ static int virtio_net_interrupt(void *private_data) {
 	return 0;
 
 }
-static int net_attach_device(class jdevice *jdev) {
+int virtio_net_jdriver::probe_device(class jdevice *jdev) {
+
+	if ((jdev->pci_device.pci_header.vendor_id == VIRTIO_PCI_VENDOR_ID) && (jdev->pci_device.pci_header.device_id == VIRTIO_PCI_NET_DEVICE_ID)) {
+		ut_log(" Matches inside the NETPROBE.... \n");
+		return JSUCCESS;
+	}
+	return JFAIL;
+}
+int virtio_net_jdriver::attach_device(class jdevice *jdev) {
 	unsigned long addr;
 	unsigned long features;
 	int i;
-	virtio_net_jdriver *net_driver = (virtio_net_jdriver *) jdev->driver;
 	pci_dev_header_t *pci_hdr = &jdev->pci_device.pci_header;
 	unsigned long pci_ioaddr = jdev->pci_device.pci_ioaddr;
 	uint32_t msi_vector;
 
-	net_driver->device = jdev;
+	this->device = jdev;
 	virtio_set_pcistatus(pci_ioaddr,
 			virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_ACKNOWLEDGE);
 	ut_log("	VirtioNet: Initializing VIRTIO PCI NET status :%x : \n",
@@ -296,35 +260,35 @@ static int net_attach_device(class jdevice *jdev) {
 		addr = pci_ioaddr + 24;
 	}
 	for (i = 0; i < 6; i++)
-		net_driver->mac[i] = inb(addr + i);
-	ut_log("	VirtioNet:  pioaddr:%x MAC address : %x :%x :%x :%x :%x :%x mis_vector:%x   :\n",addr, net_driver->mac[0], net_driver->mac[1], net_driver->mac[2], net_driver->mac[3], net_driver->mac[4], net_driver->mac[5],msi_vector);
+		this->mac[i] = inb(addr + i);
+	ut_log("	VirtioNet:  pioaddr:%x MAC address : %x :%x :%x :%x :%x :%x mis_vector:%x   :\n",addr, this->mac[0], this->mac[1], this->mac[2], this->mac[3], this->mac[4], this->mac[5],msi_vector);
 
-	net_driver->virtio_create_queue(0, 1);
+	this->virtio_create_queue(0, 1);
 	if (msi_vector > 0) {
 		outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 0);
 	}
-	net_driver->virtio_create_queue(1, 2);
+	this->virtio_create_queue(1, 2);
 	if (msi_vector > 0) {
 		outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 1);
 		outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 0xffff);
 	}
 
-	virtio_disable_cb(net_driver->vq[1]); /* disable interrupts on sending side */
+	virtio_disable_cb(this->vq[1]); /* disable interrupts on sending side */
 
 	if (msi_vector > 0) {
 		for (i = 0; i < 3; i++)
 			ar_registerInterrupt(msi_vector + i, virtio_net_interrupt,
-					"virt_net_msi", (void *) net_driver);
+					"virt_net_msi", (void *) this);
 	}
 
 
 	for (i = 0; i < 120; i++) /* add buffers to recv q */
-		addBufToQueue(net_driver->vq[0], 0, 4096);
+		addBufToQueue(this->vq[0], 0, 4096);
 
 	inb(pci_ioaddr + VIRTIO_PCI_ISR);
-	virtio_queue_kick(net_driver->vq[0]);
+	virtio_queue_kick(this->vq[0]);
 
-	registerNetworkHandler(NETWORK_DRIVER, netdriver_xmit, (void *) net_driver,net_driver->mac);
+	registerNetworkHandler(NETWORK_DRIVER, netdriver_xmit, (void *) this,this->mac);
 
 	virtio_set_pcistatus(pci_ioaddr,
 			virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER_OK);
@@ -333,40 +297,85 @@ static int net_attach_device(class jdevice *jdev) {
 
 	return 1;
 }
-static int net_probe_device(class jdevice *jdev) {
 
-	if ((jdev->pci_device.pci_header.vendor_id == VIRTIO_PCI_VENDOR_ID) && (jdev->pci_device.pci_header.device_id == VIRTIO_PCI_NET_DEVICE_ID)) {
-		ut_log(" Matches inside the NETPROBE.... \n");
-		return JSUCCESS;
-	}
+int virtio_net_jdriver::dettach_device(jdevice *jdev){
 	return JFAIL;
 }
+int virtio_net_jdriver::read(unsigned char *buf, int len){
+	return 0;
+}
+int virtio_net_jdriver::write(unsigned char *data, int len){
+		jdevice *dev;
+		int i, ret;
+		unsigned long flags;
 
+		dev = (jdevice *) this->device;
+		if (dev == 0 || data == 0)
+			return 0;
+
+		unsigned long addr;
+		addr = (unsigned long) alloc_page(0);
+		if (addr == 0)
+			return 0;
+		ut_memset((unsigned char *) addr, 0, 10);
+		ut_memcpy((unsigned char *) addr + 10, data, len);
+		ret = -ENOSPC;
+
+		spin_lock_irqsave(&virtionet_lock, flags);
+		ret = addBufToQueue(this->vq[1], (unsigned char *) addr, len + 10);
+		this->stat_sends++;
+
+		if (ret == -ENOSPC) {
+			mm_putFreePages((unsigned long) addr, 0);
+		}
+
+		virtio_queue_kick(this->vq[1]);
+		this->stat_send_kicks++;
+		spin_unlock_irqrestore(&virtionet_lock, flags);
+
+		i = 0;
+		while (i < 50) {
+			i++;
+			spin_lock_irqsave(&virtionet_lock, flags);
+			addr = (unsigned long) virtio_removeFromQueue(this->vq[1], (unsigned int *)&len);
+			spin_unlock_irqrestore(&virtionet_lock, flags);
+			if (addr) {
+				mm_putFreePages(addr, 0);
+			} else {
+				return 1;
+			}
+		}
+
+	return 1;
+}
 /***************************************************************************************************/
 extern wait_queue_t p9_waitq;
 static int virtio_9p_interrupt(void *private_data) { // TODO: handling similar  type of interrupt generating while serving P9 interrupt.
-	unsigned char isr;
-	int ret;
 	virtio_p9_jdriver *driver = (virtio_p9_jdriver *) private_data;
 
 	if (driver->device->pci_device.msi == 0)
-		isr = inb(driver->device->pci_device.pci_ioaddr + VIRTIO_PCI_ISR);
+		 inb(driver->device->pci_device.pci_ioaddr + VIRTIO_PCI_ISR);
 
-	ret = ipc_wakeup_waitqueue(&p9_waitq); /* wake all the waiting processes */
+	auto ret = ipc_wakeup_waitqueue(&p9_waitq); /* wake all the waiting processes */
 	if (ret == 0) {
 		//ut_log("ERROR:New  p9 wait No one is waiting requests:%d intr:%d\n",stat_request,stat_intr);
 	}
 	return 0;
 }
+int virtio_p9_jdriver::probe_device(class jdevice *jdev) {
 
-static int p9_attach_device(class jdevice *jdev) {
-	pci_dev_header_t *pci_hdr = &jdev->pci_device.pci_header;
-	unsigned long pci_ioaddr = jdev->pci_device.pci_ioaddr;
-	virtio_p9_jdriver *p9_driver = (virtio_p9_jdriver *) jdev->driver;
-	unsigned long addr;
-	unsigned long features;
+	if ((jdev->pci_device.pci_header.vendor_id == VIRTIO_PCI_VENDOR_ID)
+			&& (jdev->pci_device.pci_header.device_id == VIRTIO_PCI_9P_DEVICE_ID)) {
+		ut_log(" Matches the P9Probe \n");
+		return JSUCCESS;
+	}
+	return JFAIL;
+}
+int virtio_p9_jdriver::attach_device(class jdevice *jdev) {
+	auto pci_ioaddr = jdev->pci_device.pci_ioaddr;
+	unsigned long  features;
 
-	p9_driver->device = jdev;
+	this->device = jdev;
 	virtio_set_pcistatus(pci_ioaddr,
 			virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_ACKNOWLEDGE);
 	ut_log("	Virtio P9: Initializing VIRTIO PCI NET status :%x : \n",
@@ -375,11 +384,11 @@ static int p9_attach_device(class jdevice *jdev) {
 	virtio_set_pcistatus(pci_ioaddr,
 			virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER);
 
-	addr = pci_ioaddr + VIRTIO_PCI_HOST_FEATURES;
+	auto addr = pci_ioaddr + VIRTIO_PCI_HOST_FEATURES;
 	features = inl(addr);
 	ut_log("	Virtio P9: Initializing VIRTIO PCI 9P hostfeatures :%x:\n", features);
 
-	p9_driver->virtio_create_queue(0, 2);
+	this->virtio_create_queue(0, 2);
 	if (jdev->pci_device.msix_cfg.isr_vector > 0) {
 #if 0
 		outw(virtio_dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR,0);
@@ -396,45 +405,41 @@ static int p9_attach_device(class jdevice *jdev) {
 	ar_registerInterrupt(32 + jdev->pci_device.pci_header.interrupt_line,
 			virtio_9p_interrupt, "virt_p9_irq", (void *) jdev->driver);
 
-#if 0
-	virtio_dev_t *virtio_dev;
-	virtio_dev = (virtio_dev_t *)ut_malloc(sizeof(virtio_dev_t));
-	virtio_dev->pci_ioaddr = jdev->pci_device.pci_ioaddr;
-	virtio_dev->pci_iolen= jdev->pci_device.pci_iolen;
-	virtio_dev->pci_mmio = jdev->pci_device.pci_mmio;
-	virtio_dev->pci_mmiolen = jdev->pci_device.pci_mmiolen;
-	virtio_dev->vq[0]=p9_driver->vq[0];
-	virtio_dev->vq[1]=p9_driver->vq[1];
-	p9_driver->virtio_dev = virtio_dev;
-	p9_dev = virtio_dev;
-#endif
-	p9_initFs(p9_driver);
+	p9_initFs(this);
 	return 1;
 }
-
-static int p9_probe_device(class jdevice *jdev) {
-
-	if ((jdev->pci_device.pci_header.vendor_id == VIRTIO_PCI_VENDOR_ID)
-			&& (jdev->pci_device.pci_header.device_id == VIRTIO_PCI_9P_DEVICE_ID)) {
-		ut_log(" Matches the P9Probe \n");
-		return JSUCCESS;
-	}
+int virtio_p9_jdriver::dettach_device(jdevice *jdev){
 	return JFAIL;
+}
+int virtio_p9_jdriver::read(unsigned char *buf, int len){
+	return 0;
+}
+int virtio_p9_jdriver::write(unsigned char *buf, int len){
+	return 0;
 }
 
 /*************************************************************************************************/
 virtio_p9_jdriver p9_jdriver;
 virtio_net_jdriver net_jdriver;
 
+
 extern "C" {
+static void *vptr_p9[7]={(void *)&virtio_p9_jdriver::probe_device,(void *)&virtio_p9_jdriver::attach_device,(void *)&virtio_p9_jdriver::dettach_device,(void *)&virtio_p9_jdriver::read,(void *)&virtio_p9_jdriver::write,(void *)&virtio_jdriver::print_stats,0};
 void init_p9_jdriver() {
-	p9_jdriver.name = "p9_driver";
-	p9_jdriver.init_func(p9_probe_device, p9_attach_device,virtio_stat);
+	void **p=(void **)&p9_jdriver;
+	*p=&vptr_p9[0];
+
+	p9_jdriver.name = (unsigned char *)"p9_driver";
+
 	register_jdriver(&p9_jdriver);
 }
+void *vptr_net[7]={(void *)&virtio_net_jdriver::probe_device,(void *)&virtio_net_jdriver::attach_device,(void *)&virtio_net_jdriver::dettach_device,(void *)&virtio_net_jdriver::read,(void *)&virtio_net_jdriver::write,(void *)&virtio_jdriver::print_stats,0};
 void init_net_jdriver() {
-	net_jdriver.name = "net_driver";
-	net_jdriver.init_func(net_probe_device, net_attach_device,virtio_stat);
+	void **p=(void **)&net_jdriver;
+	*p=&vptr_net[0];
+
+	net_jdriver.name = (unsigned char *)"net_driver";
+
 	register_jdriver(&net_jdriver);
 }
 struct virtqueue *virtio_jdriver_getvq(void *driver, int index){

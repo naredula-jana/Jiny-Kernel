@@ -110,20 +110,14 @@ enum { /* Inode types*/
 	DIRECTORY_FILE=0x4000,
 	SYM_LINK_FILE=0xA000
 };
-#if 0
-enum {
-	DEVICE_SERIAL=1,
-	DEVICE_KEYBOARD=2,
-	DEVICE_DISPLAY_VGI=3
-};
-#endif
+
 struct file {
 	unsigned char filename[MAX_FILENAME];
 	int type;
 	uint64_t offset;
 	int flags;
 
-	struct inode *inode;
+	void *vinode;
 	void *private_pipe;
 
 };
@@ -137,41 +131,6 @@ struct fileStat {
 };
 #define PAGELIST_HASH_SIZE 40
 #define get_pagelist_index(offset)  ((offset/PAGE_SIZE)%PAGELIST_HASH_SIZE)
-struct inode {
-	atomic_t count; /* usage count */
-	int nrpages;	/* total pages */
-	atomic_t stat_locked_pages;
-
-	int flags; /* short leaved (MRU) or long leaved (LRU) */
-	time_t mtime; /* last modified time */
-	unsigned long fs_private;
-	struct filesystem *vfs;
-
-	int type;
-
-	union {
-		struct {
-			unsigned long open_mode;
-			char stat_insync;
-			struct fileStat stat;
-		}file;
-		struct {
-			int sock_type;
-			unsigned long local_addr;
-			unsigned short local_port;
-		}socket;
-	}u;
-
-	int stat_out,stat_in,stat_err;
-	long stat_last_offset;
-
-	unsigned char filename[MAX_FILENAME];
-	struct list_head page_list[PAGELIST_HASH_SIZE];
-	struct list_head vma_list;	
-	struct list_head inode_link;	
-};
-
-
 
 struct dirEntry { /* Do not change the entries , the size of struct is caluclated */
 	unsigned long inode_no; /* Inode number */
@@ -179,22 +138,23 @@ struct dirEntry { /* Do not change the entries , the size of struct is caluclate
 	unsigned short d_reclen; /* Length of this dirent */
 	char filename[]; /* Filename (null-terminated) */
 };
-
+#if 1
 typedef struct fileStat fileStat_t;
 struct filesystem {
-	int (*open)(struct inode *inode, int flags, int mode);
+	int (*open)(void *inode, int flags, int mode);
 	int (*lseek)(struct file *file,  unsigned long offset, int whence);
-	long (*write)(struct inode *inode, uint64_t offset, unsigned char *buff, unsigned long len);
-	long (*read)(struct inode *inode, uint64_t offset,  unsigned char *buff, unsigned long len);
-	long (*readDir)(struct inode *inode, struct dirEntry *dir_ptr, unsigned long dir_max, int *offset);
-	int (*remove)(struct inode *inode);
-	int (*stat)(struct inode *inode, struct fileStat *stat);
-	int (*close)(struct inode *inodep);
-	int (*fdatasync)(struct inode *inodep);
-	int (*setattr)(struct inode *inode, uint64_t size);//TODO : currently used for truncate, later need to expand
+	long (*write)(void *inode, uint64_t offset, unsigned char *buff, unsigned long len);
+	long (*read)(void *inode, uint64_t offset,  unsigned char *buff, unsigned long len);
+	long (*readDir)(void *inode, struct dirEntry *dir_ptr, unsigned long dir_max, int *offset);
+	int (*remove)(void *inode);
+	int (*stat)(void *inode, struct fileStat *stat);
+	int (*close)(void *inodep);
+	int (*fdatasync)(void *inodep);
+	int (*setattr)(void *inode, uint64_t size);//TODO : currently used for truncate, later need to expand
+	int (*unmount)();
 };
-
+#endif
 #define fd_to_file(fd) (fd >= 0 && g_current_task->mm->fs.total > fd) ? (g_current_task->mm->fs.filep[fd]) : ((struct file *)0)
-
+int fs_data_sync(int num_pages);
 
 #endif

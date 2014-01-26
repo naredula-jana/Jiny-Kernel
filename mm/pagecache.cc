@@ -9,13 +9,13 @@
 *
 */
 //#define DEBUG_ENABLE 1
-#if 0
+#include "../fs/file.h"
+extern "C" {
 #include "common.h"
 #include "mm.h"
 #include "vfs.h"
 #include "list.h"
 #include "../util/host_fs/filecache_schema.h"
-
 #define DEBUG_ENABLE 1
 enum {
         FRONT=0,
@@ -38,7 +38,7 @@ typedef struct page_list {
 	atomic_t count;
 } page_list_t;
 
-
+#define NULL  0
 page_struct_t *pagecache_map;
 uint8_t *pc_startaddr;
 uint8_t *pc_endaddr;
@@ -224,10 +224,10 @@ int pc_check_valid_addr(uint8_t *addr, int len){
 	return 1;
 }
 int pc_get_page(struct page *page){
-	struct inode *inode;
+	struct fs_inode *inode;
 
 	mutexLock(g_inode_lock);
-	inode=page->fs_inode;
+	inode=(struct fs_inode *)page->fs_inode;
 	if (inode != 0) {
 		atomic_inc(&(inode->stat_locked_pages));
 	}else{
@@ -239,8 +239,8 @@ int pc_get_page(struct page *page){
 	return JSUCCESS;
 }
 int pc_put_page(struct page *page){
-	struct inode *inode;
-	inode=page->fs_inode;
+	struct fs_inode *inode;
+	inode=(struct fs_inode *)page->fs_inode;
 
 	mutexLock(g_inode_lock);
 	if (inode != 0) {
@@ -300,11 +300,16 @@ int pc_init(uint8_t *start_addr, unsigned long len) {
 }
 /*  Remove page from page cache */
 int pc_deletePage(struct page *page) {
-	struct inode *inode;
+	struct fs_inode *inode;
 	int ret=JFAIL;
 
+	inode =(struct fs_inode *) page->fs_inode;
+	if (inode == 0) {
+		BUG();
+	}
+
 	mutexLock(g_inode_lock);
-	if (page->count.counter!=0 || (page->fs_inode->flags&INODE_EXECUTING)){ /* the page is  active */
+	if (page->count.counter!=0 || (inode->flags & INODE_EXECUTING)){ /* the page is  active */
 		goto last;
 	}
 	if (page->lru_link.next != 0 || page->lru_link.prev != 0) {
@@ -313,10 +318,7 @@ int pc_deletePage(struct page *page) {
 	if (page->list.next == 0 || page->list.prev == 0) {
 		BUG();
 	}
-	inode = page->fs_inode;
-	if (inode == 0) {
-		BUG();
-	}
+
 
 
 	list_del(&(page->list));
@@ -355,10 +357,10 @@ int pc_pageDirted(struct page *page) { /* TODO : split the dirty list into LRU a
 }
 int pc_pagecleaned(struct page *page) {
 	int ret;
-	struct inode *inode;
+	struct fs_inode *inode;
 
 	assert(page !=0);
-	inode = page->fs_inode;
+	inode = (struct fs_inode *)page->fs_inode;
 	assert (inode != 0);
 
 	mutexLock(g_inode_lock);
@@ -373,11 +375,10 @@ int pc_pagecleaned(struct page *page) {
 	return 1;
 }
 
-struct page *pc_getInodePage(struct inode *inode, unsigned long offset) {
+struct page *pc_getInodePage(struct fs_inode *inode, unsigned long offset) {
 	struct list_head *p;
-	struct page *page=NULL;
+	struct page *page = NULL;
 	int i,list_index;
-	unsigned long flags;
 	unsigned long page_offset = (offset / PC_PAGESIZE) * PC_PAGESIZE;
 
 	i = 0;
@@ -402,7 +403,7 @@ last:
 }
 
 /* page enters in to page cache here */
-int pc_insertPage(struct inode *inode, struct page *page) {
+int pc_insertPage(struct fs_inode *inode, struct page *page) {
 	struct list_head *p;
 	struct page *tmp_page;
 	unsigned long flags;
@@ -412,7 +413,7 @@ int pc_insertPage(struct inode *inode, struct page *page) {
 
 	assert(page!=0);
 
-	if (page->offset > inode->u.file.stat.st_size)
+	if (page->offset > inode->fileStat.st_size)
 		return ret;
 	if (!(page->list.next == 0 && page->list.prev == 0
 			&& page->lru_link.next == 0 && page->lru_link.prev == 0)) {
@@ -511,7 +512,8 @@ int pc_housekeep(void){
 
     		mutexLock(g_inode_lock);
 			page = _pagelist_remove(&active_list);
-			if (page->fs_inode->flags & INODE_EXECUTING){ /* TODO : other parameters like age of page need to be included */
+			struct fs_inode *inode=(struct fs_inode *)page->fs_inode;
+			if (inode->flags & INODE_EXECUTING){ /* TODO : other parameters like age of page need to be included */
 				_pagelist_add(page, &active_list, TAIL);
 			}else{
 				_pagelist_add(page, &inactive_list, TAIL);
@@ -554,7 +556,7 @@ int pc_is_freepages_available(void){
 
 int Jcmd_pc(char *arg1,char *arg2)
 {
-	ut_printf(" PageCache Total Pages : %d = %dM\n",pc_totalpages,(pc_totalpages*4)/1024);
+	ut_printf("c++ PageCache Total Pages : %d = %dM\n",pc_totalpages,(pc_totalpages*4)/1024);
 	ut_printf(" FREE List        : %3d %3d \n",free_list.count.counter,list_count(&free_list.head));
 	ut_printf(" Active clean List: %3d %3d \n",active_list.count.counter,list_count(&active_list.head));
 	ut_printf(" Dirty List       : %3d %3d\n",dirty_list.count.counter,list_count(&dirty_list.head));
@@ -562,4 +564,4 @@ int Jcmd_pc(char *arg1,char *arg2)
 	ut_printf(" Total Inuse Pages : %d \n",(active_list.count.counter+inactive_list.count.counter+dirty_list.count.counter));
 	return 1;
 }
-#endif
+}

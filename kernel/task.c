@@ -371,8 +371,8 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	}
 
 	mm->exec_fp = (struct file *)fs_open(file, 0, 0);
-	if (mm->exec_fp != 0 && mm->exec_fp->inode!= 0)
-		mm->exec_fp->inode->flags = mm->exec_fp->inode->flags | INODE_EXECUTING ;
+	if (mm->exec_fp != 0 && mm->exec_fp->vinode!= 0)
+		fs_set_flags(mm->exec_fp, INODE_EXECUTING) ;
 	ut_strncpy(g_current_task->name, file, MAX_TASK_NAME);
 
 
@@ -386,11 +386,11 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	free_mm(old_mm);
 
 	/* check for symbolic link */
-	if (mm->exec_fp != 0 && (mm->exec_fp->inode->type != REGULAR_FILE)) {
+	if (mm->exec_fp != 0 && (fs_get_type(mm->exec_fp) != REGULAR_FILE)) {
 		struct fileStat  file_stat;
 		unsigned char newfilename[MAX_FILENAME];
 		fs_stat(mm->exec_fp,&file_stat);
-		if (mm->exec_fp->inode->type == SYM_LINK_FILE){
+		if (fs_get_type(mm->exec_fp) == SYM_LINK_FILE){
 			if (fs_read(mm->exec_fp, newfilename, MAX_FILENAME)!=0){
 				fs_close(mm->exec_fp);
 				mm->exec_fp = (struct file *)fs_open(newfilename, 0, 0);
@@ -1248,7 +1248,7 @@ unsigned long g_jiffie_errors=0;
 unsigned long g_jiffie_tick=0;
 int g_conf_cpu_stats=1;
 
-void timer_callback(struct fault_ctx *ctx, registers_t regs) {
+void timer_callback(void *unused_args) {
 	int jiff_incremented=0;
 
 	/* 1. increment timestamp */

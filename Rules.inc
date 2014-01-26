@@ -8,10 +8,12 @@ SMP=1
 INCLUDE=. -DNETWORKING -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURCE_ROOT)/modules/lwip_net/ -I $(SOURCE_ROOT)/arch/x86_64/
 
 
+NEW_GCC=/data/opt/gcc-4.8.2/bin/
 
-CC=gcc -g -gdwarf-2 -D _KERNEL
-CPP=g++ -g -std=gnu++0x -lsupc++ -fno-exceptions  -fno-dwarf2-cfi-asm -D _KERNEL 
-#CPP=g++ -std=gnu++0x  -fno-dwarf2-cfi-asm -D _KERNEL
+CC=$(NEW_GCC)gcc -g -gdwarf-2 -Wimplicit
+CPP=$(NEW_GCC)g++ -g -std=gnu++0x -fno-rtti -lsupc++ -fno-exceptions -gdwarf-2   
+LCPP=$(NEW_GCC)g++
+
 
 AT=
 
@@ -31,7 +33,7 @@ ASM_OBJECTS=$(patsubst %.s,%.o,$(ASM_SOURCES))
 OBJECTS=$(C_OBJECTS) $(ASM_OBJECTS) $(GNUASM_OBJECTS) $(CPP_OBJECTS)
 
 ARCH_DIR=x86_64
-CFLAGS= -m64 -mno-red-zone -nostdlib  -nodefaultlibs -Wimplicit -Wall   -I$(INCLUDE) -I$(XEN_INCLUDE)  -DARCH_X86_64
+CFLAGS= -m64 -mno-red-zone -nostdlib -D _KERNEL  -nodefaultlibs  -Wall   -I$(INCLUDE) -I$(XEN_INCLUDE)  -DARCH_X86_64
 CFLAGS_ASM= -nostdlib -nostdinc -nodefaultlibs -D__ASM__   -I$(INCLUDE) -DARCH_X86_64
 LINK_FLAG= 
 INCLUDE=. -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURCE_ROOT)/include/$(ARCH_DIR)/ -I $(SOURCE_ROOT)/arch/$(ARCH_DIR) -I $(XEN_INCLUDE)

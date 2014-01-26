@@ -13,26 +13,25 @@ static int stat_reads=0;
 static int stat_writes=0;
 
 int Jcmd_p9(){
-	ut_printf("P9 reads:%d writes:%d  \n",stat_reads,stat_writes);
+	int i;
+	int count=0;
+
+	for (i = 0; i < MAX_P9_FILES; i++) {
+		if (client.files[i].fid != 0) {
+			count++;
+		}
+	}
+	ut_printf("P9 reads:%d writes:%d  count:%d\n",stat_reads,stat_writes,count);
 	return 1;
 }
-static int p9ClientInit() {
-	static int init = 0;
+static int p9_mount() {
+	unsigned long addr, i;
 	uint32_t msg_size;
 	int ret;
+	static int root_id=132;
 	unsigned char version[200];
-	unsigned long addr,i;
+	ut_log("p9 mount\n");
 
-	if (init != 0)
-		return 1;
-	init = 1;
-
-	client.pkt_buf = (unsigned char *) mm_getFreePages(MEM_CLEAR, 2);
-	client.pkt_len = PAGE_SIZE*4;
-	ut_memset(client.pkt_buf,0,client.pkt_len);
-
-	client.lock = mutexCreate("mutex_p9");
-    if (client.lock == 0) return 0;
 	client.type = P9_TYPE_TVERSION;
 	client.tag = 0xffff;
 
@@ -45,15 +44,41 @@ static int p9ClientInit() {
 
 	client.type = P9_TYPE_TATTACH;
 	client.tag = 0x13;
-	client.root_fid = 132;
+	client.root_fid = root_id;
+	root_id = root_id +200;
 	addr = p9_write_rpc(&client, "ddss", client.root_fid, ~0, "jana", "");
 	if (addr != 0) {
 		ret = p9_read_rpc(&client, "");
 	}
-	for (i=0; i<MAX_P9_FILES; i++) {
-		client.files[i].fid=0;
+	for (i = 0; i < MAX_P9_FILES; i++) {
+		client.files[i].fid = 0;
 	}
-	client.next_free_fid = client.root_fid+1;
+	client.next_free_fid = client.root_fid + 1;
+}
+static int p9ClientInit() {
+	static int init = 0;
+	uint32_t msg_size;
+	int ret;
+	unsigned char version[200];
+	unsigned long addr,i;
+
+	if (init != 0){
+		if (client.root_fid == 0){
+			p9_mount();
+		}
+		return 1;
+	}
+	init = 1;
+
+	client.pkt_buf = (unsigned char *) mm_getFreePages(MEM_CLEAR, 2);
+	client.pkt_len = PAGE_SIZE*4;
+	ut_memset(client.pkt_buf,0,client.pkt_len);
+
+	client.lock = mutexCreate("mutex_p9");
+    if (client.lock == 0) return 0;
+
+
+	p9_mount();
 	return 1;
 }
 
@@ -285,7 +310,7 @@ static uint32_t p9_read(uint32_t fid, uint64_t offset, unsigned char *data,
 			ret = p9_read_rpc(&client, "d", &read_len);
 			if (client.recv_type != P9_TYPE_RREAD) {
 				read_len = 0;
-				ut_log("P9 ERROR Read fid:%d max_size:%d read_len:%d ret%d recvtype:%d \n",fid,data_len,read_len,ret,client.recv_type);
+				ut_log("P9 ERROR Read.. fid:%d max_size:%d read_len:%d ret%d recvtype:%d \n",fid,data_len,read_len,ret,client.recv_type);
 			}
 
 		}
@@ -383,7 +408,7 @@ static uint32_t p9_remove(uint32_t fid) {
 			ret = JSUCCESS;
 			for (i = 0; i < MAX_P9_FILES; i++) {
 				if (client.files[i].fid ==fid) { /* remove the fid as the file is sucessfully removed */
-					client.files[i].fid = 0;
+					ut_memset(&client.files[i],0,sizeof(p9_file_t));
 					break;
 				}
 			}
@@ -406,7 +431,7 @@ static uint32_t p9_close(uint32_t fid) {
 			ret = JSUCCESS;
 			for (i = 0; i < MAX_P9_FILES; i++) {
 				if (client.files[i].fid == fid) { /* remove the fid as the file is sucessfully closed */
-					client.files[i].fid = 0;
+					ut_memset(&client.files[i],0,sizeof(p9_file_t));
 					break;
 				}
 			}
@@ -457,17 +482,17 @@ static uint32_t p9_stat(uint32_t fid, struct fileStat *stat) {
 
 	return ret;
 }
-static void update_size(struct inode *inode,uint64_t offset, int len ) {
+static void update_size(void *inode,uint64_t offset, int len ) {
 	if (inode !=0 && len > 0) {
-		if (inode->u.file.stat.st_size < (offset+len))
-			inode->u.file.stat.st_size = offset+len;
+		if (fs_get_size(inode) < (offset+len))
+			fs_set_size(inode, offset+len);
 	}
 	return ;
 }
 struct filesystem p9_fs;
 extern void *p9_dev;
 /* This is central switch where the call from vfs routed to the p9 functions */
-static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, unsigned char *data, int data_len, int flags, int mode) {
+static int p9Request(unsigned char type, void *inode, uint64_t offset, unsigned char *data, int data_len, int flags, int mode) {
 	uint32_t fid;
 	unsigned char *createFilename;
 	int ret = JFAIL ;
@@ -475,47 +500,48 @@ static int p9Request(unsigned char type, struct inode *inode, uint64_t offset, u
 	if (inode == 0 || p9_dev == 0)
 		return ret;
 
+	fid = fs_get_private(inode);
 	mutexLock(client.lock);
 	if (type == REQUEST_OPEN) {
-		fid = p9_walk(inode->filename, flags, &createFilename);
+		fid = p9_walk(fs_get_filename(inode), flags, &createFilename);
 		DEBUG("P9 open filename :%s: flags:%x mode:%x  createfilename :%s:\n",inode->filename,flags,mode,createFilename);
 		if (fid > 0) {
-			inode->fs_private = fid;
+
+			fs_set_private(inode, fid);
 			ret = p9_open(fid, createFilename, flags, mode);
 		} else {
             ret = JFAIL;
 		}
 	} else if (type == REQUEST_READ) {
-		fid = inode->fs_private;
-		ret = p9_read(fid, offset, data, data_len,inode->type);
+
+		ret = p9_read(fid, offset, data, data_len,fs_get_inode_type(inode));
 		update_size(inode,offset,ret);
 	} else if (type == REQUEST_WRITE) {
-		fid = inode->fs_private;
+
 		ret = p9_write(fid, offset, data, data_len);
 		update_size(inode,offset,ret);
 	} else if (type == REQUEST_REMOVE) {
-		fid = inode->fs_private;
+
 		ret = p9_remove(fid);
 	} else if (type == REQUEST_STAT) {
 		struct fileStat *fp = (struct fileStat *)data;
-		fid = inode->fs_private;
+
 		ret = p9_stat(fid, fp);
 		if (ret==JSUCCESS){
-			inode->type = fp->type;
-			inode->u.file.stat_insync = 1;
-			ut_memcpy(&(inode->u.file.stat),data,sizeof(struct fileStat));
+
+			ut_memcpy(fs_get_stat(inode,fp->type),data,sizeof(struct fileStat));
 		}
 	} else if (type == REQUEST_CLOSE) {
-		fid = inode->fs_private;
+
 		ret = p9_close(fid);
 	}else if (type == REQUEST_READDIR) {
-		fid = inode->fs_private;
+
 		ret = p9_readdir(fid,data,data_len, offset);
 	}else if (type == REQUEST_SETATTR) {
-		fid = inode->fs_private;
+
 		ret = p9_setattr(fid,offset);
 		if (ret == JSUCCESS){
-			inode->u.file.stat.st_size = offset;
+			fs_set_offset(inode,offset);
 		}
 	}
 
@@ -534,53 +560,66 @@ static int p9Lseek(struct file *filep, unsigned long offset, int whence) {
 	return 1;
 }
 
-static int p9Fdatasync(struct inode *inodep) {
+static int p9Fdatasync(void *inodep) {
 
 	return 1;
 }
-static long p9Write(struct inode *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
+static long p9Write(void *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
 	long ret;
 	p9ClientInit();
     ret = (long) p9Request(REQUEST_WRITE, inodep, offset, data, data_len, 0, 0);
     if (ret > 0){
-    	inodep->stat_last_offset = offset;
-    	inodep->stat_out++;
+    	fs_set_offset(inodep,offset);
+    	//inodep->stat_last_offset = offset;
+    	//inodep->stat_out++;
     }else{
-    	inodep->stat_err++;
+    	//inodep->stat_err++;
     }
     return ret;
 }
 
-static long p9Read(struct inode *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
+static long p9Read(void *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
 	p9ClientInit();
     return  (long)p9Request(REQUEST_READ, inodep, offset, data, data_len, 0, 0);
 }
 
-static long p9ReadDir(struct inode *inodep, struct dirEntry *dir_ptr, unsigned long dir_max, int *offset) {
+static long p9ReadDir(void *inodep, struct dirEntry *dir_ptr, unsigned long dir_max, int *offset) {
 	p9ClientInit();
     return  (long)p9Request(REQUEST_READDIR, inodep, offset, dir_ptr, dir_max, 0, 0);
 }
 
-static int p9Remove(struct inode *inodep) {
+static int p9Remove(void *inodep) {
 	p9ClientInit();
     return  p9Request(REQUEST_REMOVE, inodep, 0, 0, 0, 0, 0);
 }
 
-static int p9Stat(struct inode *inodep, struct fileStat *statp) {
+static int p9Stat(void *inodep, struct fileStat *statp) {
 	p9ClientInit();
     return  p9Request(REQUEST_STAT, inodep, 0, statp, 0, 0, 0);
 }
 
-static int p9Close(struct inode *inodep) {
+static int p9Close(void *inodep) {
 	p9ClientInit();
     return  p9Request(REQUEST_CLOSE, inodep, 0, 0, 0, 0, 0);
 }
 
-static int p9Setattr(struct inode *inodep,uint64_t size) {
+static int p9Setattr(void *inodep,uint64_t size) {
 	p9ClientInit();
     return  p9Request(REQUEST_SETATTR, inodep, size, 0, 0, 0, 0);
 }
-
+static int p9_unmount(){
+	int i;
+	for (i = 0; i < MAX_P9_FILES; i++) {
+		if (client.files[i].fid != 0) {
+			p9_close(client.files[i].fid);
+		}
+		ut_memset(&client.files[i],0,sizeof(p9_file_t));
+	}
+	p9_close(client.root_fid);
+	client.root_fid = 0;
+	ut_log("p9 UNmount\n");
+	return JSUCCESS;
+}
 int p9_initFs(void *p9driver) {
 //	p9ClientInit(); /* TODO need to include here */
 	p9_fs.open = p9Open;
@@ -593,9 +632,11 @@ int p9_initFs(void *p9driver) {
 	p9_fs.fdatasync = p9Fdatasync; //TODO
 	p9_fs.lseek = p9Lseek; //TODO
 	p9_fs.setattr = p9Setattr; //TODO
+	p9_fs.unmount = p9_unmount;
 
 	fs_registerFileSystem(&p9_fs);
 	p9_dev = p9driver;
 
 	return 1;
 }
+

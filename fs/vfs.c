@@ -14,12 +14,13 @@
 #include "vfs.h"
 #include "interface.h"
 
+#if 0
+
 
 static struct filesystem *vfs_fs = 0;
 static kmem_cache_t *slab_inodep;
 static LIST_HEAD(inode_list);
 void *g_inode_lock = 0; /* protects inode_list */
-//spinlock_t g_userspace_stdio_lock = SPIN_LOCK_UNLOCKED("userspace_stdio");
 
 #define OFFSET_ALIGN(x) ((x/PC_PAGESIZE)*PC_PAGESIZE) /* the following 2 need to be removed */
 
@@ -146,7 +147,7 @@ int fs_data_sync(int num_pages) {
 		if (page == 0){
 			goto last;
 		}
-		struct inode *inode = page->inode;
+		struct inode *inode = page->fs_inode;
 		uint64_t len = inode->u.file.stat.st_size;
 		if (len < (page->offset + PC_PAGESIZE)) {
 			len = len - page->offset;
@@ -158,7 +159,7 @@ int fs_data_sync(int num_pages) {
 			len = PC_PAGESIZE;
 		}
 		assert (page->magic_number == PAGE_MAGIC);
-		ret = vfs_fs->write(page->inode, page->offset, pcPageToPtr(page), len);
+		ret = vfs_fs->write(page->fs_inode, page->offset, pcPageToPtr(page), len);
 		if (ret == len) {
 			pc_pagecleaned(page);
 			write_count++;
@@ -197,9 +198,6 @@ restart:
 	return SYSCALL_SUCCESS;
 }
 
-int SYS_sync(){
-	return fs_sync();
-}
 int Jcmd_sync() {
 	return fs_sync();
 }
@@ -302,7 +300,8 @@ static struct inode *fs_getInode(uint8_t *arg_filename, int flags, int mode) {
 	last: return ret_inode;
 }
 
-unsigned long fs_putInode(struct inode *inode) {
+unsigned long fs_putInode(void *arg) {
+	struct inode *inode=arg;
 	int ret = 0;
 
 	if (inode == 0)
@@ -344,12 +343,13 @@ struct file *fs_open(uint8_t *filename, int flags, int mode) {
 	/* special files handle here before going to regular files */
 	if (ut_strcmp((uint8_t *) filename, (uint8_t *) "/dev/sockets")
 			== 0) {
-		filep->inode = mm_slab_cache_alloc(slab_inodep, 0);
-		if (filep->inode == NULL) goto error;
-		inode_init(filep->inode, (uint8_t *)"/dev/sockets", 0);
+		filep->vinode = mm_slab_cache_alloc(slab_inodep, 0);
+		if (filep->vinode == NULL) goto error;
+		inode_init(filep->vinode, (uint8_t *)"/dev/sockets", 0);
 		filep->offset = 0;
 		filep->type = NETWORK_FILE;
-		filep->inode->type = NETWORK_FILE;
+		struct inode *inode=filep->vinode;
+		inode->type = NETWORK_FILE;
 		return filep;
 	} else {
 		filep->type = REGULAR_FILE;
@@ -359,7 +359,7 @@ struct file *fs_open(uint8_t *filename, int flags, int mode) {
 	if (inodep == 0)
 		goto error;
 
-	filep->inode = inodep;
+	filep->vinode = inodep;
 	if (flags & O_APPEND) {
 		filep->offset = inodep->u.file.stat.st_size;
 	} else {
@@ -381,48 +381,7 @@ error:
 	return 0;
 }
 
-unsigned long SYS_fs_open(char *filename, int mode, int flags) {
-	struct file *filep;
-	int total;
-	int i;
-	int ret= SYSCALL_FAIL;
 
-	SYSCALL_DEBUG("open: filename :%s: mode:%x flags:%x \n", filename, mode, flags);
-	if (ut_strcmp((uint8_t *) filename, (uint8_t *) "/dev/tty") == 0) {
-		ret = 1;
-		goto last;
-	}
-	if (ut_strcmp((uint8_t *) filename, (uint8_t *) "/dev/null") == 0) {
-		filep  = mm_slab_cache_alloc(g_slab_filep, 0);
-		filep->type = DEV_NULL_FILE;
-	}else{
-		filep = (struct file *) fs_open((uint8_t *) filename, flags, mode);
-	}
-	total = g_current_task->mm->fs.total;
-	if (filep != 0 && total < MAX_FDS) {
-		for (i = 3; i < MAX_FDS; i++) { /* fds: 0,1,2 are for in/out/error */
-			if (g_current_task->mm->fs.filep[i] == 0) {
-				break;
-			}
-		}
-		if (i == MAX_FDS){
-			goto fail;
-		}
-		g_current_task->mm->fs.filep[i] = filep;
-		if (i >= total)
-			g_current_task->mm->fs.total = i + 1;
-
-		ret = i;
-		goto last;
-	}
-fail:
-	if (filep != 0)
-		fs_close(filep);
-
-last:
-	SYSCALL_DEBUG("open return value: %d \n", ret);
-	return ret;
-}
 /*********************************************************************************************/
 static void inode_sync(struct inode *inode, unsigned long truncate) {
 	struct page *page;
@@ -465,18 +424,12 @@ unsigned long fs_fdatasync(struct file *filep) {
 	if (vfs_fs == 0 || filep == 0)
 		return 0;
 
-	inode = filep->inode;
+	inode = filep->vinode;
 	inode_sync(inode,0);
 
 	return 0;
 }
-unsigned long SYS_fs_fdatasync(unsigned long fd) {
-	struct file *file;
 
-	SYSCALL_DEBUG("fdatasync fd:%d \n", fd);
-	file = fd_to_file(fd);
-	return fs_fdatasync(file);
-}
 /*****************************************************************************************************/
 unsigned long fs_lseek(struct file *file, unsigned long offset, int whence) {
 	if (vfs_fs == 0)
@@ -486,34 +439,20 @@ unsigned long fs_lseek(struct file *file, unsigned long offset, int whence) {
 	return vfs_fs->lseek(file, offset, whence);
 }
 
-unsigned long SYS_fs_lseek(unsigned long fd, unsigned long offset, int whence) {
-	struct file *file;
 
-	SYSCALL_DEBUG("lseek fd:%d offset:%x whence:%x \n", fd, offset, whence);
-	file = fd_to_file(fd);
-	if (vfs_fs == 0 || file == 0)
-		return -1;
-	if (whence == SEEK_SET) {
-		file->offset = offset;
-	} else if (whence == SEEK_CUR) {
-		file->offset = file->offset + offset;
-	} else
-		return -1;
-
-	return file->offset;
-}
 unsigned long fs_readdir(struct file *file, struct dirEntry *dir_ent,
 		int len, int *offset) {
 	if (vfs_fs == 0)
 		return 0;
 	if (file == 0)
 		return 0;
-	if (file->inode && file->inode->type != DIRECTORY_FILE) {
+	struct inode *inode=file->vinode;
+	if (file->vinode && inode->type != DIRECTORY_FILE) {
 		ut_log("ERROR: SYS_getdents  file type error\n");
 		return -1;
 		//BUG();
 	}
-	return vfs_fs->readDir(file->inode, dir_ent, len,  offset);
+	return vfs_fs->readDir(file->vinode, dir_ent, len,  offset);
 }
 /************************************************************************************************/
 
@@ -541,7 +480,12 @@ int fs_write(struct file *filep, uint8_t *buff, unsigned long len) {
 	//	spin_unlock_irqrestore(&g_userspace_stdio_lock, flags);
 		return len;
 	}else if (filep->type == OUT_PIPE_FILE) {
+#if PIPE_IMPL
 		return fs_send_to_pipe(filep, buff, len);
+#else
+		BUG();
+		return 0;
+#endif
 	}else if (filep->type == IN_PIPE_FILE ){
 		ut_log(" ERROR: Using INPIPE instead of OUTPIPE\n");
 		return -1;
@@ -549,11 +493,11 @@ int fs_write(struct file *filep, uint8_t *buff, unsigned long len) {
 
 	DEBUG("Write  filename from hs  :%s: offset:%d inode:%x \n", filep->filename, filep->offset, filep->inode);
 	tmp_len = 0;
-
-	if (filep->inode && filep->inode->type == DIRECTORY_FILE) { //TODO : check for testing
+	struct inode *inode=filep->vinode;
+	if (inode && inode->type == DIRECTORY_FILE) { //TODO : check for testing
 		BUG();
 	}
-	if (filep->offset > (filep->inode->u.file.stat.st_size)) return -1;
+	if (filep->offset > (inode->u.file.stat.st_size)) return -1;
 #if 0
 	if (filep->inode->u.file.open_mode == O_RDONLY){
 		return -1;
@@ -561,7 +505,7 @@ int fs_write(struct file *filep, uint8_t *buff, unsigned long len) {
 #endif
 	while (tmp_len < len) {
 		try_again:
-		page = pc_getInodePage(filep->inode, filep->offset);
+		page = pc_getInodePage(filep->vinode, filep->offset);
 		if (page == NULL) {
 			page = pc_getFreePage();
 			if (page == NULL) {
@@ -569,7 +513,7 @@ int fs_write(struct file *filep, uint8_t *buff, unsigned long len) {
 				goto error;
 			}
 			page->offset = OFFSET_ALIGN(filep->offset);
-			if (pc_insertPage(filep->inode, page) == JFAIL) {
+			if (pc_insertPage(filep->vinode, page) == JFAIL) {
 				pc_putFreePage(page);
 				ut_log("Fail to insert page \n");
 				ret = -1;
@@ -591,7 +535,7 @@ int fs_write(struct file *filep, uint8_t *buff, unsigned long len) {
 		pc_put_page(page);
 
 		filep->offset = filep->offset + size;
-		struct inode *inode = filep->inode;
+		struct inode *inode = filep->vinode;
 		if (inode->u.file.stat.st_size < filep->offset)
 			inode->u.file.stat.st_size = filep->offset;
 		tmp_len = tmp_len + size;
@@ -610,49 +554,10 @@ error:
 	return ret;
 }
 
-int SYS_fs_write(unsigned long fd, uint8_t *buff, unsigned long len) {
-	struct file *file;
-	int ret;
 
-	//SYSCALL_DEBUG("write fd:%d buff:%x len:%x data:%s:\n", fd, buff, len,buff);
-	file = fd_to_file(fd);
-
-	if (file == 0){
-		ut_log("ERROR write fd:%d buff:%x len:%x \n", fd, buff, len);
-		return -1; // TODO : temporary
-	}
-	if (file->type == NETWORK_FILE) {
-		return socket_write(file, buff, len);
-	}
-	ret = fs_write(file, buff, len);
-	SYSCALL_DEBUG("write return : fd:%d ret:%d \n",fd,ret);
-	return ret;
-}
-long SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt) {
-	int i;
-	long ret, tret;
-	struct file *file;
-
-	SYSCALL_DEBUG("writev: fd:%d iovec:%x count:%d\n", fd, iov, iovcnt);
-
-	file = fd_to_file(fd);
-	ret = 0;
-	for (i = 0; i < iovcnt; i++) {
-		if (fd == 1 || fd == 2) {
-			ut_printf("write %s\n", iov[i].iov_base);/* TODO need to terminate the buf with \0  */
-			ret = ret + iov[i].iov_len;
-			continue;
-		}
-		tret = fs_write(file, iov[i].iov_base, iov[i].iov_len);
-		if (tret > 0)
-			ret = ret + tret;
-		else
-			goto last;
-	}
-	last: return ret;
-}
 /*******************************************************************************************************/
-struct page *fs_genericRead(struct inode *inode, unsigned long offset) {
+static struct page *fs_genericRead(struct inode *inode,unsigned long offset);
+static struct page *fs_genericRead(struct inode *inode, unsigned long offset) {
 	struct page *page;
 	int tret;
 	int err = 0;
@@ -704,7 +609,7 @@ long fs_read(struct file *filep, uint8_t *buff, unsigned long len) {
 
 
 	ret = 0;
-	if ((vfs_fs == 0) || (filep == 0))
+	if ((vfs_fs == 0) || (vfs_fs->read == 0)|| (filep == 0))
 		return 0;
 
 	if (ar_check_valid_address((addr_t)buff,len)==JFAIL){
@@ -734,17 +639,22 @@ long fs_read(struct file *filep, uint8_t *buff, unsigned long len) {
 		//	SYSCALL_DEBUG("read char :%s: %x:\n",buff,buff[0]);
 		return 1;
 	}else if (filep->type == IN_PIPE_FILE) {
+#if PIPE_IMPL
 		return fs_recv_from_pipe(filep, buff, len);
+#else
+		BUG();
+		return 0;
+#endif
 	}if (filep->type == OUT_PIPE_FILE) {
 		ut_log(" ERROR: looks like using OUT_PIPE_FILE instead of IN_PIPE_FILE \n");
 		return -1;
 	}
 
 	DEBUG("Read filename from hs  :%s: offset:%d inode:%x buff:%x len:%x \n", filep->filename, filep->offset, filep->inode, buff, len);
-	inode = filep->inode;
+	inode = filep->vinode;
 	//TODO 	if (inode->length <= filep->offset) return 0;
 
-	page = fs_genericRead(filep->inode, filep->offset);
+	page = fs_genericRead(filep->vinode, filep->offset);
 	if (page == 0){
 		goto last;
 	}
@@ -771,48 +681,6 @@ last:
 	return ret;
 }
 
-long SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt) {
-	int i;
-	long ret, tret;
-	struct file *file;
-
-	SYSCALL_DEBUG("readv: fd:%d iovec:%x count:%d\n", fd, iov, iovcnt);
-	file = fd_to_file(fd);
-	ret = 0;
-	for (i = 0; i < iovcnt; i++) {
-		tret = fs_read(file, iov[i].iov_base, iov[i].iov_len);
-		if (tret > 0)
-			ret = ret + tret;
-		else
-			goto last;
-	}
-	last: return ret;
-}
-int SYS_fs_read(unsigned long fd, uint8_t *buff, unsigned long len) {
-	struct file *file;
-	int ret;
-
-	SYSCALL_DEBUG("read fd:%d buff:%x len:%x \n",fd,buff,len);
-
-	file = fd_to_file(fd);
-	if (file == 0){
-		ut_log("ERRO read fd:%d buff:%x len:%x \n", fd, buff, len);
-		return 0;
-	}
-
-	if (file->type == NETWORK_FILE) {
-		return socket_read(file, buff, len);
-	} else if (file->type == DEV_NULL_FILE) {
-		//ut_memset(buff,0,len-1);
-		return len;
-	}
-	if ((vfs_fs == 0) || (vfs_fs->read == 0))
-		return 0;
-
-	ret = fs_read(file, buff, len);
-	SYSCALL_DEBUG("read ret :%d\n",ret);
-	return ret;
-}
 /***************************************************************************************************/
 struct file *fs_dup(struct file *old_filep, struct file *new_filep) {
 
@@ -824,97 +692,69 @@ struct file *fs_dup(struct file *old_filep, struct file *new_filep) {
 
 	/* 1. close the resources of  new */
 	if (new_filep->type == REGULAR_FILE || new_filep->type == NETWORK_FILE) {
-		fs_putInode(new_filep->inode);
+		fs_putInode(new_filep->vinode);
 	}else if (new_filep->type == OUT_PIPE_FILE || new_filep->type == IN_PIPE_FILE) {
+#if PIPE_IMPL
 		fs_destroy_pipe(new_filep);
+#else
+		BUG();
+		return 0;
+#endif
 	}
 
 	/* 2. copy from old */
 	ut_memcpy((uint8_t *)new_filep, (uint8_t *)old_filep, sizeof(struct file));
-	if ((new_filep->type == REGULAR_FILE || new_filep->type == NETWORK_FILE) && new_filep->inode != 0) {
-		atomic_inc(&new_filep->inode->count);
+	if ((new_filep->type == REGULAR_FILE || new_filep->type == NETWORK_FILE) && new_filep->vinode != 0) {
+		struct inode *ninode=new_filep->vinode;
+		atomic_inc(&ninode->count);
 	}else if (new_filep->type == OUT_PIPE_FILE || new_filep->type == IN_PIPE_FILE) {
+#if PIPE_IMPL
 		fs_dup_pipe(new_filep);
+#else
+		BUG();
+		return 0;
+#endif
 	}
 	return new_filep;
 }
-int SYS_fs_dup2(int fd_old, int fd_new);
-int SYS_fs_dup(int fd_old) {
-	int i;
-	for (i = 3; i < MAX_FDS; i++) { /* fds: 0,1,2 are for in/out/error */
-		if (g_current_task->mm->fs.filep[i] == 0) {
-			break;
-		}
-	}
-	if (i==MAX_FDS) return SYSCALL_FAIL;
-	return SYS_fs_dup2(fd_old, i);
-}
-int SYS_fs_dup2(int fd_old, int fd_new) {
-	int ret = fd_new; /* on success */
-	struct file *fp_new, *fp_old;
-	SYSCALL_DEBUG("dup2  fd_new:%x fd_old:%x \n", fd_new, fd_old);
-	fp_new = fd_to_file(fd_new);
-	fp_old = fd_to_file(fd_old);
-	if ( fp_old == 0){
-		ret = SYSCALL_FAIL;
-		goto last;
-	}
-	fp_new = fs_dup(fp_old, fp_new);
-	if (fp_new ==0){
-		ret = SYSCALL_FAIL;
-	}
-	g_current_task->mm->fs.filep[fd_new] = fp_new;
 
-last:
-	SYSCALL_DEBUG("dup2 Return ret:%d new_fd:%d \n",ret,fd_new);
-	return ret;
-}
 /*************************************************************************************************/
 int fs_close(struct file *filep) {
 	if (filep == 0 || vfs_fs == 0)
 		return 0;
 	if (filep->type == REGULAR_FILE) {
-		if (filep->inode != 0) {
+		if (filep->vinode != 0) {
 			//ret = vfs_fs->close(filep->inode);
-			fs_putInode(filep->inode);
+			fs_putInode(filep->vinode);
 		}
 	} else if (filep->type == NETWORK_FILE) {
 		socket_close(filep);
 	} else if ((filep->type == OUT_FILE) || (filep->type == IN_FILE) || (filep->type == DEV_NULL_FILE)) { /* nothng todo */
 		//ut_log("Closing the IO file :%x name :%s: \n",filep,g_current_task->name);
 	} else if (filep->type == OUT_PIPE_FILE || filep->type == IN_PIPE_FILE) {
+#if PIPE_IMPL
 		fs_destroy_pipe(filep);
+#else
+		BUG();
+		return 0;
+#endif
 // TODO : need to release kernel resource
 	}
-	filep->inode = 0;
+	filep->vinode = 0;
 	mm_slab_cache_free(g_slab_filep, filep);
 	return SYSCALL_SUCCESS;
 }
 
-unsigned long SYS_fs_close(unsigned long fd) {
-	struct file *file;
 
-	SYSCALL_DEBUG("close fd:%d \n", fd);
-	if (fd == 1) {
-		SYSCALL_DEBUG("close fd:%d NOT CLOSING Temporary fix \n", fd);
-		return 0; //TODO : temporary
-	}
-	file = fd_to_file(fd);
-	if (file == 0)
-		return SYSCALL_FAIL;
-	g_current_task->mm->fs.filep[fd] = 0;
-
-	return fs_close(file);
-}
 /************************************************************************************************/
 static int vfsRemove(struct file *filep) {
 	int ret;
 
-	ret = vfs_fs->remove(filep->inode);
+	ret = vfs_fs->remove(filep->vinode);
 	if (ret == 1) {
-		if (filep->inode != 0)
-			fs_putInode(filep->inode);
-		filep->inode = 0;
+		if (filep->vinode != 0)
+			fs_putInode(filep->vinode);
+		filep->vinode = 0;
 		mm_slab_cache_free(g_slab_filep, filep);
 	}
 	return ret;
@@ -928,17 +768,18 @@ int fs_remove(struct file *file) {
 /**************************************************************************************************/
 int fs_stat(struct file *filep, struct fileStat *stat) {
 	int ret;
+	struct inode *inode=filep->vinode;
 	if (vfs_fs == 0 || filep == 0)
 		return 0;
-	if (filep->inode && filep->inode->u.file.stat_insync == 1 ) {
+	if (inode && inode->u.file.stat_insync == 1 ) {
 		DEBUG(" stat filename :%s: \n",filep->filename);
 		ret = JSUCCESS;
-		ut_memcpy(stat,&(filep->inode->u.file.stat),sizeof(struct fileStat));
+		ut_memcpy(stat,&(inode->u.file.stat),sizeof(struct fileStat));
 	} else {
 		//BRK;
-		ret = vfs_fs->stat(filep->inode, stat);
+		ret = vfs_fs->stat(filep->vinode, stat);
 		if (ret == JSUCCESS) {
-			stat->st_size = filep->inode->u.file.stat.st_size;
+			stat->st_size = inode->u.file.stat.st_size;
 //TODO
 		}
 	}
@@ -946,6 +787,46 @@ int fs_stat(struct file *filep, struct fileStat *stat) {
 }
 
 /*************************************************************/
+void* fs_get_stat_locked_pages(struct inode *inodep){
+return &inodep->stat_locked_pages;
+}
+void fs_set_inode_used(struct inode *inodep){
+	atomic_inc(&inodep->count);
+}
+int fs_get_inode_flags(struct inode *inodep){
+	return inodep->flags;
+}
+void *fs_get_inode_vma_list(struct inode *inodep){
+	return &(inodep->vma_list);
+}
+void *fs_get_stat(struct inode *inodep, int type){
+	inodep->type = type;
+	inodep->u.file.stat_insync = 1;
+	return &(inodep->u.file.stat);
+}
+int fs_get_inode_type(struct inode *inodep){
+	return inodep->type;
+}
+unsigned char *fs_get_filename(struct inode *inodep){
+	return inodep->filename;
+}
+void fs_set_private(struct inode *inodep, int fid){
+	inodep->fs_private = fid;
+}
+int fs_get_private(struct inode *inodep){
+	return inodep->fs_private;
+}
+uint64_t fs_get_size(struct inode *inodep){
+	return inodep->u.file.stat.st_size ;
+}
+int fs_set_size(struct inode *inodep, unsigned long size){
+	inodep->u.file.stat.st_size = size;
+	return JSUCCESS;
+}
+int fs_set_offset(struct inode *inodep, unsigned long offset){
+	inodep->stat_last_offset = offset;
+	return JSUCCESS;
+}
 unsigned long fs_fadvise(struct inode *inode, unsigned long offset,
 		unsigned long len, int advise) {
 	struct page *page;
@@ -979,19 +860,7 @@ unsigned long fs_fadvise(struct inode *inode, unsigned long offset,
 	return count;
 }
 
-unsigned long SYS_fs_fadvise(unsigned long fd, unsigned long offset,
-		unsigned long len, int advise) {
-	struct file *file;
-	struct inode *inode;
 
-	SYSCALL_DEBUG(
-			"fadvise fd:%d offset:%d len:%d advise:%x \n", fd, offset, len, advise);
-	file = fd_to_file(fd);
-	if (file == 0 || file->inode == 0)
-		return 0;
-	inode = file->inode;
-	return fs_fadvise(inode, offset, len, advise);
-}
 /******************************************************************************/
 unsigned long fs_getVmaPage(struct vm_area_struct *vma, unsigned long offset) {
 	struct page *page;
@@ -1011,6 +880,8 @@ unsigned long fs_getVmaPage(struct vm_area_struct *vma, unsigned long offset) {
 	return ret; /* return physical address */
 }
 /***************************************** pipe ****************************************/
+#if PIPE_IMPL
+
 #define MAX_PIPES 100
 struct {
 #define MAX_PIPE_BUFS 20
@@ -1024,7 +895,7 @@ struct {
 } pipes[MAX_PIPES];
 static int init_pipe_done = 0;
 /* TODO : locking need to added */
-struct file *fs_create_filep(int *fd) {
+static struct file *fs_create_filep(int *fd) {
 	int i;
 	struct file *fp;
 
@@ -1043,7 +914,7 @@ struct file *fs_create_filep(int *fd) {
 	}
 	return 0;
 }
-int fs_destroy_filep(int fd) {
+static int fs_destroy_filep(int fd) {
 	struct file *fp;
 	if (fd < 0 || fd > MAX_FDS) {
 		return -1;
@@ -1266,6 +1137,12 @@ restart:
 	//ut_printf(" recv from :%s: pipe-%d : %d\n",g_current_task->name, i,ret);
 	return ret;
 }
+/*************************** End of pipe ******************************/
+#else
+int SYS_pipe(){
+	BUG();
+}
+#endif
 
 /***************************************************************************************/
 unsigned long fs_registerFileSystem(struct filesystem *fs) {
@@ -1281,3 +1158,13 @@ int init_vfs() {
 
 	return 0;
 }
+int fs_get_type(struct file *fp){
+	struct inode *inode = fp->vinode;
+	return inode->type;
+}
+int fs_set_flags(struct file *fp, int flags){
+	struct inode *inode = fp->vinode;
+	inode->flags= inode->flags | flags;
+	return JSUCCESS;
+}
+#endif

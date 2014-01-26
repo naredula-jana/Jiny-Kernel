@@ -504,7 +504,7 @@ void Jcmd_insmod(unsigned char *filename, unsigned char *arg){
 		error = "Fail to open the module file";
 		goto out;
 	}else{ /* flush the old file contents */
-		fs_fadvise(file->inode, 0, 0 , POSIX_FADV_DONTNEED);
+		fs_fadvise(file->vinode, 0, 0 , POSIX_FADV_DONTNEED);
 	}
 	source.file=file;
 	fs_lseek(file, 0, 0);

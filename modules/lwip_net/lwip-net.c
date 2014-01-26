@@ -386,6 +386,10 @@ new_netconn_send(struct netconn *conn, struct netbuf *buf)
 
   return err;
 }
+int lwip_peek_msgs(struct netconn *conn){
+	return conn->recvmbox.count;
+
+}
 int
 new_netconn_sendto(struct netconn *conn, struct netbuf *buf, ip_addr_t *addr, u16_t port)
 {

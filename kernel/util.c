@@ -185,8 +185,9 @@ uint8_t *ut_strcat(uint8_t *dest, const uint8_t *src)
 {
 	while (*dest != 0)
 	{
-		*dest = *dest++;
-	}
+	//	*dest = *dest++;  TODO: gcc 4.8 compiler interprets different from 4.4
+		dest++;
+ 	}
 
 	do
 	{

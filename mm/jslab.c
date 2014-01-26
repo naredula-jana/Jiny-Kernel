@@ -124,14 +124,14 @@ static void free_obj(unsigned long addr) {
 	if (PageLargePage(page)) {/* large page object */
 		int i;
 
-		cachep = (jcache_t *) page->inode; /* TODO : overloaded , need to rename from inode to private */
+		cachep = (jcache_t *) page->fs_inode; /* TODO : overloaded , need to rename from inode to private */
 		assert(cachep);
 		for (i = 0; i < (1 << cachep->page_order); i++) {
 			struct page *p = virt_to_page((addr+(i*PAGE_SIZE)) & PAGE_MASK);
 			PageClearLargePage(p);
 			PageClearSlab(p);
-			assert(p->inode);
-			p->inode = 0;
+			assert(p->fs_inode);
+			p->fs_inode = 0;
 		}
 		mm_putFreePages(addr, cachep->page_order);
 		cachep->stat_frees++;
@@ -181,7 +181,7 @@ static void * _alloc_obj(jcache_t *cachep) {
 			struct page *p = virt_to_page((addr+(i*PAGE_SIZE)) & PAGE_MASK);
 			PageSetLargePage(p);
 			PageSetSlab(p);
-			p->inode = (struct inode *)cachep; // TODO : currently overloaded
+			p->fs_inode = (struct inode *)cachep; // TODO : currently overloaded
 		}
 		cachep->stat_allocs++;
 		cachep->stat_total_objs++;
@@ -501,6 +501,11 @@ int jfree_page(unsigned long p){
 			return 0;
 	}
 	return mm_putFreePages(p, 0);
+}
+void *ut_calloc(size_t size){
+	void *addr = ut_malloc(size);
+	ut_memset(addr,0,size);
+	return addr;
 }
 /*************************** simple vmalloc subsystem ******************************************/
 #if 1

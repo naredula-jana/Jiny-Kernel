@@ -24,26 +24,25 @@ static int device_count = 0;
 class jdriver *jdriver_list[MAX_DRIVERS];
 static int driver_count = 0;
 
-void jdevice::init(uint8_t bus, uint8_t device, uint8_t function) {
+int jdevice::init_pci(uint8_t bus, uint8_t device, uint8_t function) {
 	pci_device.pci_addr.bus = bus;
 	pci_device.pci_addr.device = device;
 	pci_device.pci_addr.function = function;
-	driver = 0;
-}
-void jdevice::print_stats() {
-	ut_printf(" bus:dev:func: %2x:%2x:%2x driver : ",
-			pci_device.pci_addr.bus, pci_device.pci_addr.device,
-			pci_device.pci_addr.function);
-	if (driver != 0) {
-		driver->print_stats();
-	}else{
-		ut_printf("\n");
-	}
-}
-int jdevice::read_pci() {
 	pci_dev_header_t *pci_hdr;
 	pci_bar_t *bars;
-	int len;
+	int ret,len;
+	driver = 0;
+
+	ret = pci_generic_read(
+			&this->pci_device.pci_addr, 0,
+			sizeof(pci_dev_header_t),
+			&this->pci_device.pci_header);
+	if (ret != 0  || this->pci_device.pci_header.vendor_id
+					== 0xffff)
+		return JFAIL;
+	ut_log("	scan devices %d:%d:%d  %x:%x\n", bus, device, function,
+			this->pci_device.pci_header.vendor_id,
+			this->pci_device.pci_header.device_id);
 
 	ut_log(" reading pci info : bus:dev:fuc : %x:%x:%x \n",pci_device.pci_addr.bus,pci_device.pci_addr.device,pci_device.pci_addr.function);
 	if (read_pci_info_new(&pci_device) != JSUCCESS){
@@ -68,35 +67,20 @@ int jdevice::read_pci() {
 	}
 	return JSUCCESS;
 }
-int jdriver::init_func(int (*probe)(jdevice *jdev),
-		int (*attach)(jdevice *jdev),int (*stat)(jdriver *jdev)) {
-	func_probe = probe;
-	func_attach = attach;
-	func_stat = stat;
-	return JSUCCESS;
-}
-int jdriver::probe_device(class jdevice *jdev) {
-	ut_log(" inside the default probe\n");
-	return func_probe(jdev);
-}
-int jdriver::attach_device(class jdevice *jdev) {
-	ut_log(" inside the default probe\n");
-	return func_attach(jdev);
-}
-int jdriver::dettach_device(class jdevice *jdev) {
-	ut_log(" inside the default probe\n");
-	return JSUCCESS;
-}
-/*******************************************************************************/
-
-void jdriver::print_stats() {
-	ut_printf(" %s :", name);
-	if (func_stat){
-		func_stat(this);
+void jdevice::print_stats() {
+	if (ut_strcmp(name, (unsigned char *) "pci") != 0) {
+		ut_printf("%s: ", name);
+	} else {
+		ut_printf("pci bus:dev:func: %2x:%2x:%2x : ", pci_device.pci_addr.bus,
+				pci_device.pci_addr.device, pci_device.pci_addr.function);
+	}
+	if (driver != 0) {
+		driver->print_stats();
 	}else{
 		ut_printf("\n");
 	}
 }
+
 void register_jdriver(class jdriver *driver) {
 
 	jdriver_list[driver_count] = driver;
@@ -105,14 +89,13 @@ void register_jdriver(class jdriver *driver) {
 
 /*********************************************************************************/
 extern "C" {
-int scan_jdevices() {
+static int scan_pci_devices() {
 	int i, j, k, d;
 	int ret;
 #define MAX_BUS 32
 #define MAX_PCI_DEV 32
 #define MAX_PCI_FUNC 32
 
-	device_count = 0;
 	for (i = 0; i < MAX_BUS && i < 2; i++) {
 		for (j = 0; j < MAX_PCI_DEV; j++) {
 			for (k = 0; k < MAX_PCI_FUNC; k++) {
@@ -122,21 +105,13 @@ int scan_jdevices() {
 						(class jdevice *) ut_malloc(sizeof(class jdevice));
 				ut_memset((unsigned char *) jdevice_list[device_count], 0,
 						sizeof(class jdevice));
-				jdevice_list[device_count]->init(i, j, k);
-
-				ret = pci_generic_read(
-						&jdevice_list[device_count]->pci_device.pci_addr, 0,
-						sizeof(pci_dev_header_t),
-						&jdevice_list[device_count]->pci_device.pci_header);
-				if (ret != 0  || jdevice_list[device_count]->pci_device.pci_header.vendor_id
-								== 0xffff)
+				if (jdevice_list[device_count]->init_pci(i, j, k)==JFAIL){
+					ut_free(jdevice_list[device_count]);
 					continue;
-				ut_log("	scan devices %d:%d:%d  %x:%x\n", i, j, k,
-						jdevice_list[device_count]->pci_device.pci_header.vendor_id,
-						jdevice_list[device_count]->pci_device.pci_header.device_id);
+				}
 
-				jdevice_list[device_count]->read_pci();
-#if 1
+				jdevice_list[device_count]->name = (unsigned char *)"pci";
+				/* attach the device to the know driver */
 				for (d = 0; d < driver_count; d++) {
 					if (jdriver_list[d]->probe_device(
 							jdevice_list[device_count]) == JSUCCESS) {
@@ -146,7 +121,6 @@ int scan_jdevices() {
 						break;
 					}
 				}
-#endif
 				device_count++;
 			}
 		}
@@ -155,10 +129,23 @@ int scan_jdevices() {
 }
 extern void init_p9_jdriver();
 extern void init_net_jdriver();
+extern void init_keyboard_jdriver();
+extern void init_serial_jdriver();
+
 void init_jdevices(unsigned long unused_arg1) {
+	device_count = 0;
+
 	init_p9_jdriver();
 	init_net_jdriver();
-	scan_jdevices();
+	init_keyboard_jdriver();
+	init_serial_jdriver();
+	jdevice_list[0] = (class jdevice *) ut_malloc(sizeof(class jdevice));
+	jdevice_list[1] = (class jdevice *) ut_malloc(sizeof(class jdevice));
+	jdevice_list[0]->name = (unsigned char *)"/dev/keyboard";
+	jdevice_list[1]->name = (unsigned char *)"/dev/serial";
+	device_count=2;
+
+	scan_pci_devices();
 }
 void Jcmd_jdevices() {
 	int i;
@@ -167,4 +154,10 @@ void Jcmd_jdevices() {
 		jdevice_list[i]->print_stats();
 	}
 }
+void *test_addr[5];
+void Jcmd_virttest() {
+
+	jdriver_list[0]->print_stats();
+}
+extern "C" void __cxa_pure_virtual() { while (1); }  /* TODO : to avoid compilation error */
 }

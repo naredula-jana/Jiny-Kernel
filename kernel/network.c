@@ -136,6 +136,9 @@ static int remove_from_queue(unsigned char **buf, unsigned int *len, unsigned ch
 	spin_unlock_irqrestore(&(queue.spin_lock), flags);
 	return ret;
 }
+int network_call_softnet(unsigned char *data, int len){
+	return protocol_drivers[0].callback(data, len, protocol_drivers[0].private);
+}
 void *g_netBH_lock = 0; /* All BH code will serialised by this lock */
 static int stat_netrx_bh_recvs=0;
 /*   Release the buffer after calling the callback */
@@ -157,15 +160,18 @@ static int netRx_BH(void *arg) {
 		while ( qret == 1) {
 			int ret = 0;
 			stat_netrx_bh_recvs++;
-			if (count_protocol_drivers > 0) {
-				ret = protocol_drivers[0].callback(data, len,
+			if (attach_rawpkt_to_socket(data,len,&replace_buf)==JSUCCESS){
+				replace_buf = 0;
+			}else{
+				if (count_protocol_drivers > 0) {
+					ret = protocol_drivers[0].callback(data, len,
 						protocol_drivers[0].private);
-			}
-			if (ret == 0) {
+				}
+				if (ret == 0) {
 
+				}
+				replace_buf = data;
 			}
-			replace_buf = data;
-
 			qret = remove_from_queue(&data, &len, replace_buf);
 		}
 	}
@@ -306,7 +312,7 @@ int netif_rx(unsigned char *data, unsigned int len, unsigned char **replace_buf)
 	}
 	stat_from_driver++;
 	if (*replace_buf < (unsigned char *)0x10000){ /* invalid address*/
-		BUG();
+		*replace_buf=get_freebuf();
 	}
 	return 1;
 }
@@ -346,306 +352,12 @@ int init_networking() {
 	//ipc_register_waitqueue(&queue.waitq, "netRx_BH",0);
 	g_netBH_lock = mutexCreate("mutex_netBH");
 	pid = sc_createKernelThread(netRx_BH, 0, (unsigned char *) "netRx_BH_1");
-	pid = sc_createKernelThread(netRx_BH, 0, (unsigned char *) "netRx_BH_2");
-	pid = sc_createKernelThread(netRx_BH, 0, (unsigned char *) "netRx_BH_3");
+	//pid = sc_createKernelThread(netRx_BH, 0, (unsigned char *) "netRx_BH_2");
+	//pid = sc_createKernelThread(netRx_BH, 0, (unsigned char *) "netRx_BH_3");
 	network_enabled = 1;
 	return 0;
 }
-/*******************************************************************************************
- Socket layer
- ********************************************************************************************/
-static struct Socket_API *socket_api = 0;
-int register_to_socketLayer(struct Socket_API *api) {
-	if (api == 0)
-		return 0;
-	socket_api = api;
-	return 1;
-}
-int unregister_to_socketLayer() {
-	socket_api = 0;
-	return 1;
-}
-
-int socket_close(struct file *file) {
-	int ret;
-	if (file->inode->count.counter > 1){
-		fs_putInode(file->inode);
-		return 1;
-	}
-	if (socket_api == 0){
-		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
-	}
-	if (file->inode->fs_private != 0){
-		ret = socket_api->close((void *)file->inode->fs_private, file->inode->u.socket.sock_type);
-	}else{
-		ret = SYSCALL_SUCCESS;
-	}
-	fs_putInode(file->inode);
-	return ret;
-}
-
-int socket_read(struct file *file, unsigned char *buff, unsigned long len) {
-	int ret;
-
-	if (socket_api == 0){
-		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
-	}
-
-	if (buff==0){
-		return socket_api->check_data((void *)file->inode->fs_private);
-	}
-	ret = socket_api->read((void *)file->inode->fs_private, buff, len);
-
-	SYSCALL_DEBUG("sock read: read bytes :%d \n", ret);
-	if (ret > 0)
-		file->inode->stat_in++;
-	else
-		file->inode->stat_err++;
-	return ret;
-}
-
-int socket_write(struct file *file, unsigned char *buff, unsigned long len) {
-	int ret;
-	unsigned char *kbuf;
-	int klen;
-
-	if (socket_api == 0){
-		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
-	}
-
-	klen = 3000;
-	kbuf = mm_malloc(klen, 0);
-	if (len < klen)
-		klen = len;
-	ut_memcpy(kbuf, buff, klen);
-	ret = socket_api->write((void *)file->inode->fs_private, kbuf, klen, file->inode->u.socket.sock_type, 0, 0);
-	mm_free(kbuf);
-	SYSCALL_DEBUG("sock write: written bytes :%d \n", ret);
-	if (ret > 0)
-		file->inode->stat_out++;
-	else
-		file->inode->stat_err++;
-
-	return ret;
-}
-
-/*
- * socket(AF_INET,SOCK_STREAM,0);
- */
-int SYS_socket(int family, int arg_type, int z) {
-	void *conn;
-	int ret=-1;
-	int type=arg_type;
-
-	SYSCALL_DEBUG("socket : family:%x type:%x arg3:%x\n", family, type, z);
-	if (socket_api == 0){
-		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
-	}
-
-	if (socket_api->open) {
-		conn = socket_api->open(type);
-		if (conn == 0){
-
-		}
-	} else {
-		ret = -1;
-		goto last;
-	}
-
-	ret = SYS_fs_open("/dev/sockets", 0, 0);
-	if (ret < 0){
-		socket_api->close(conn, 0);
-		goto last;
-	}
-	struct file *file = g_current_task->mm->fs.filep[ret];
-	if (file == 0) {
-		socket_api->close(conn, 0);
-		ret = -3;
-		goto last;
-	}
-	file->inode->fs_private = (unsigned long)conn;
-	file->inode->u.socket.sock_type = type;
-
-last:
-	SYSCALL_DEBUG("socket ret :%x (%d) \n",ret,-ret);
-	if (ret < 0) ret = SYSCALL_FAIL;
-	return ret;
-}
-static int sock_check(int sockfd){
-	if (socket_api == 0 || (sockfd<0 || sockfd>MAX_FDS)){
-		SYSCALL_DEBUG("ERROR: socket CHECK1 FAILED fd :%x \n",sockfd);
-		return JFAIL;
-	}
-	struct file *file = g_current_task->mm->fs.filep[sockfd];
-	if (file==0 || file->type != NETWORK_FILE || file->inode==0){
-		SYSCALL_DEBUG("ERROR: socket CHECK2 FAILED fd :%x \n",sockfd);
-		return JFAIL;
-	}
-	return JSUCCESS;
-}
-int SYS_bind(int fd, struct sockaddr *addr, int len) {
-	int ret;
-	if (sock_check(fd) == JFAIL || addr == 0){
-		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
-	}
-	SYSCALL_DEBUG("Bind fd:%d ip:%x port:%x len:%d\n", fd, addr->addr, addr->sin_port, len);
-	if (socket_api->bind == 0)
-		return SYSCALL_FAIL;
-
-	struct file *file = g_current_task->mm->fs.filep[fd];
-	if (file == 0)
-		return SYSCALL_FAIL;
-#if 0  // TODO : remove later , only for testing ftp app
-	if (fd !=3 ){
-		static int test_port=3001;
-		addr->sin_port=test_port;
-		test_port++;
-	}
-#endif
-
-	ret = socket_api->bind((void *)file->inode->fs_private, addr, file->inode->u.socket.sock_type);
-	file->inode->u.socket.local_addr = addr->addr;
-	file->inode->u.socket.local_port = addr->sin_port;
-	SYSCALL_DEBUG("Bindret :%x (%d) port:%x\n",ret,ret,addr->sin_port);
-	return ret;
-}
-#define AF_INET         2       /* Internet IP Protocol         */
-static uint32_t net_htonl(uint32_t n)
-{
-  return ((n & 0xff) << 24) |
-    ((n & 0xff00) << 8) |
-    ((n & 0xff0000UL) >> 8) |
-    ((n & 0xff000000UL) >> 24);
-}
-
-int SYS_getsockname(int sockfd, struct sockaddr *addr, int *addrlen){
-	int ret=SYSCALL_SUCCESS;
-	SYSCALL_DEBUG("getsockname %d \n", sockfd);
-	if (sock_check(sockfd) == JFAIL || addr == 0){
-		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
-	}
-
-	struct file *file = g_current_task->mm->fs.filep[sockfd];
-	if (file == 0 || file->inode->u.socket.sock_type==0){
-		SYSCALL_DEBUG("FAIL  getsockname %d \n", sockfd);
-		return SYSCALL_FAIL;
-	}
-	addr->family = AF_INET;
-	addr->addr = file->inode->u.socket.local_addr ;
-	addr->addr = net_htonl(g_network_ip);
-	addr->sin_port = file->inode->u.socket.local_port;
-	//ret = socket_api->get_addr(file->inode->fs_private, addr);
-
-	SYSCALL_DEBUG("getsocknameret %d ip:%x port:%x ret:%d\n", sockfd, addr->addr, addr->sin_port,ret);
-	return ret;
-}
-int SYS_accept(int fd) {
-	struct file *file,*new_file;
-
-	SYSCALL_DEBUG("accept %d \n", fd);
-	if (sock_check(fd) == JFAIL )
-		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
-
-	if (socket_api->accept == 0)
-		return 0;
-	file = g_current_task->mm->fs.filep[fd];
-	if (file == 0)
-		return SYSCALL_FAIL;
-	void *conn = socket_api->accept((void *)file->inode->fs_private);
-	if (conn == 0)
-		return SYSCALL_FAIL;
-	int i = SYS_fs_open("/dev/sockets", 0, 0);
-	if (i == 0) {
-		socket_api->close(conn,0);
-		return SYSCALL_FAIL;
-	}
-	new_file = g_current_task->mm->fs.filep[i];
-	new_file->inode->fs_private = (unsigned long)conn;
-	new_file->inode->u.socket.local_addr = file->inode->u.socket.local_addr;
-	new_file->inode->u.socket.local_port = file->inode->u.socket.local_port;
-
-	new_file->inode->u.socket.sock_type = SOCK_STREAM;
-	new_file->flags = file->flags;
-
-	if (i > 0)
-		file->inode->stat_out++;
-	else
-		file->inode->stat_err++;
-	SYSCALL_DEBUG("accept retfd %d \n", i);
-	return i;
-}
-
-int SYS_listen(int fd, int length) {
-	SYSCALL_DEBUG("listen fd:%d len:%d\n", fd, length);
-	if (sock_check(fd) == JFAIL )
-		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
-	return SYSCALL_SUCCESS;
-}
-int SYS_connect(int fd, struct sockaddr *addr, int len) {
-	int ret;
-	struct sockaddr ksock_addr;
-
-	SYSCALL_DEBUG("connect %d  addr:%x port:%d len:%d\n", fd, addr->addr, addr->sin_port, len);
-	if (sock_check(fd) == JFAIL )
-		return 0; /* TCP/IP sockets are not supported */
-
-	if (socket_api->connect == 0)
-		return 0;
-	if (fd > MAX_FDS || fd < 0)
-		return 0;
-	struct file *file = g_current_task->mm->fs.filep[fd];
-	if (file == 0)
-		return SYSCALL_FAIL;
-	ksock_addr.addr = addr->addr;
-	if (file->inode->fs_private == 0) return SYSCALL_FAIL;
-
-	ret = socket_api->connect((void *)file->inode->fs_private, &(ksock_addr.addr),
-			addr->sin_port);
-	SYSCALL_DEBUG("connect ret:%d  addr:%x\n", ret, ksock_addr.addr);
-	return ret;
-
-}
-unsigned long SYS_sendto(int sockfd, const void *buf, size_t len, int flags,
-		const struct sockaddr *dest_addr, int addrlen) {
-	int ret;
-
-	SYSCALL_DEBUG("SENDTO fd:%x buf:%x len:%d flags:%x dest_addr:%x addrlen:%d\n", sockfd, buf, len, flags, dest_addr, addrlen);
-
-	if (sock_check(sockfd) == JFAIL
-			|| g_current_task->mm->fs.filep[sockfd] == 0)
-		return 0;
-	struct file *file = g_current_task->mm->fs.filep[sockfd];
-
-	if (file->inode->u.socket.sock_type != SOCK_DGRAM){
-		return 0;
-	}
-	ret = socket_api->write((void *)file->inode->fs_private, buf, len, file->inode->u.socket.sock_type,
-			dest_addr->addr, dest_addr->sin_port);
-	if (ret > 0)
-		file->inode->stat_out++;
-	else
-		file->inode->stat_err++;
-	return ret;
-}
-
-int SYS_recvfrom(int sockfd, const void *buf, size_t len, int flags,
-		const struct sockaddr *dest_addr, int addrlen) {
-	int ret;
-	SYSCALL_DEBUG("RECVfrom fd:%d  buf:%x dest_addr:%x\n", sockfd, buf, dest_addr);
-	if (sock_check(sockfd) == JFAIL  || g_current_task->mm->fs.filep[sockfd] == 0)
-		return 0;
-	struct file *file = g_current_task->mm->fs.filep[sockfd];
-
-	ret = socket_api->read_from((void *)file->inode->fs_private, buf, len, dest_addr, addrlen);
-
-	SYSCALL_DEBUG("RECVFROM return with len :%d \n", ret);
-	if (ret > 0)
-		file->inode->stat_in++;
-	else
-		file->inode->stat_err++;
-
-	return ret;
-}
+extern struct Socket_API *socket_api;
 
 void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
 	if (socket_api == 0)
