@@ -97,3 +97,6 @@
  -   [Page cache optimizations for Hadoop, published in open cirrus-2011 summit](../master/doc/PageCache-Open-Cirrus.pdf) .
  -   [Memory optimization techniques](../master/doc/malloc_paper_techpulse_submit_final.pdf).
  -   [Jiny pagecache implementation](../master/doc/pagecache.txt)
+
+ #Related Projects:#
+ -[Vmstate](https://github.com/naredula-jana/vmstate): Virtualmachine state capture and analysis.

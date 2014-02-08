@@ -54,6 +54,12 @@ static int p9_mount() {
 		client.files[i].fid = 0;
 	}
 	client.next_free_fid = client.root_fid + 1;
+	return JSUCCESS;
+}
+static int p9_remount=0;
+int Jcmd_mount(){
+	p9_remount = 1;
+	return ;
 }
 static int p9ClientInit() {
 	static int init = 0;
@@ -64,9 +70,10 @@ static int p9ClientInit() {
 
 	if (init != 0){
 		if (client.root_fid == 0){
-			p9_mount();
+			if (p9_remount == 0) return JFAIL;
+			return p9_mount();
 		}
-		return 1;
+		return JSUCCESS;
 	}
 	init = 1;
 
@@ -77,9 +84,7 @@ static int p9ClientInit() {
 	client.lock = mutexCreate("mutex_p9");
     if (client.lock == 0) return 0;
 
-
-	p9_mount();
-	return 1;
+	return p9_mount();
 }
 
 static int p9_open(uint32_t fid, unsigned char *filename, int flags, int arg_mode) {
@@ -551,7 +556,7 @@ static int p9Request(unsigned char type, void *inode, uint64_t offset, unsigned 
 }
 
 static int p9Open(struct inode *inodep, int flags, int mode) {
-	p9ClientInit();
+	if (p9ClientInit() == JFAIL) return JFAIL;
 	return p9Request(REQUEST_OPEN, inodep, 0, 0, 0, flags, mode);
 }
 
@@ -579,27 +584,27 @@ static long p9Write(void *inodep, uint64_t offset, unsigned char *data, unsigned
 }
 
 static long p9Read(void *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
-	p9ClientInit();
+	if (p9ClientInit() == JFAIL) return JFAIL;
     return  (long)p9Request(REQUEST_READ, inodep, offset, data, data_len, 0, 0);
 }
 
 static long p9ReadDir(void *inodep, struct dirEntry *dir_ptr, unsigned long dir_max, int *offset) {
-	p9ClientInit();
+	if (p9ClientInit() == JFAIL) return JFAIL;
     return  (long)p9Request(REQUEST_READDIR, inodep, offset, dir_ptr, dir_max, 0, 0);
 }
 
 static int p9Remove(void *inodep) {
-	p9ClientInit();
+	if (p9ClientInit() == JFAIL) return JFAIL;
     return  p9Request(REQUEST_REMOVE, inodep, 0, 0, 0, 0, 0);
 }
 
 static int p9Stat(void *inodep, struct fileStat *statp) {
-	p9ClientInit();
+	if (p9ClientInit() == JFAIL) return JFAIL;
     return  p9Request(REQUEST_STAT, inodep, 0, statp, 0, 0, 0);
 }
 
 static int p9Close(void *inodep) {
-	p9ClientInit();
+	if (p9ClientInit() == JFAIL) return JFAIL;
     return  p9Request(REQUEST_CLOSE, inodep, 0, 0, 0, 0, 0);
 }
 
