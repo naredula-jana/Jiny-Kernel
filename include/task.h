@@ -52,7 +52,6 @@ struct fs_struct {
 	struct file *filep[MAX_FDS];
 	int total;
 	unsigned char cwd[200]; // change to MAX_FILENAME
-	unsigned int input_device,output_device; /* for user level thread serial line will be input/output*/
 };
 
 struct mm_struct {

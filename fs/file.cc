@@ -5,7 +5,8 @@
 * (at your option) any later version.
 *
 *   fs/file.cc
-*   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
+*/
+/*   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
 *        file--- vinode->fs_inode->(file,dir)
          file--- vinode->socket
          file--- vinode->pipe
@@ -31,6 +32,16 @@ kmem_cache_t *socket::slab_objects = 0;
 socket *socket::list[MAX_SOCKETS];
 int socket::list_size = 0;
 
+void vinode::update_stat_in(int in_req,int in_byte){
+	if (in_byte <= 0) return;
+	stat_in = stat_in+in_req;
+	stat_in_bytes = stat_in_bytes+in_byte;
+}
+void vinode::update_stat_out(int out_req,int out_byte){
+	if (out_byte <= 0) return;
+	stat_out = stat_out+out_req;
+	stat_out_bytes = stat_out_bytes+out_byte;
+}
 /******************************************** fs_inode class **********************************/
 
 static void *vptr_vinode[7] = {
@@ -139,6 +150,12 @@ int fs_inode::write(unsigned long offset, unsigned char *data, int len) {
 	int size, page_offset;
 	struct page *page;
 
+
+	if (file_type == DIRECTORY_FILE) { //TODO : check for testing
+		BUG();
+	}
+	if ( offset > (fileStat.st_size))
+		return -1;
 	ret = 0;
 	tmp_len = 0;
 	while (tmp_len < len) {
@@ -209,7 +226,7 @@ int fs_inode::close() {
 
 	return ret;
 }
-int fs_inode::ioctl() {
+int fs_inode::ioctl(unsigned long arg1,unsigned long arg2) {
 	return JSUCCESS;
 }
 /***************************************************************************************/
@@ -425,7 +442,7 @@ struct file *fs_open(uint8_t *filename, int flags, int mode) {
 	} else {
 		filep->type = REGULAR_FILE;
 	}
-#if 1
+
 	inodep = fs_getInode((uint8_t *) filep->filename, mode, flags);
 	if (inodep == 0)
 		goto error;
@@ -441,8 +458,6 @@ struct file *fs_open(uint8_t *filename, int flags, int mode) {
 			inode_sync(inodep, 1); /* truncate the file */
 		}
 	}
-#endif
-
 	return filep;
 
 error:
@@ -466,15 +481,15 @@ long fs_read(struct file *filep, uint8_t *buff, unsigned long len) {
 	if (ar_check_valid_address((addr_t) buff, len) == JFAIL) {
 		BUG();
 	}
-	if (filep->type == OUT_FILE) {
-		ut_log(" ERROR: read on OUT_FILE : name: %s\n", g_current_task->name);
+	if (buff == 0 || len == 0) return 0;
+	if (filep->type == OUT_FILE || filep->type == OUT_PIPE_FILE) {
+		ut_log(" ERROR: read on OUT_FILE : name: %s type:%d\n", g_current_task->name,filep->type);
 		//return -1;
 		BUG();
 	}
 	if (filep->type == IN_FILE) {
-		if (buff == 0 || len == 0)
-			return 0;
-		buff[0] = dr_kbGetchar(g_current_task->mm->fs.input_device);
+		vinode *vinode = (struct vinode *) filep->vinode;
+		ret = vinode->read(filep->offset, buff, len);
 
 		if (buff[0] == CTRL_D || buff[0] == CTRL_C) {
 			ut_log(" RECVIED special character :%x thread name :%s:\n", buff[0],
@@ -490,25 +505,15 @@ long fs_read(struct file *filep, uint8_t *buff, unsigned long len) {
 		ut_printf("%s", buff);
 		//	SYSCALL_DEBUG("read char :%s: %x:\n",buff,buff[0]);
 		return 1;
-	} else if (filep->type == IN_PIPE_FILE) {
-#if PIPE_IMPL
-		return fs_recv_from_pipe(filep, buff, len);
-#else
-		BUG();
-		return 0;
-#endif
-	}
-	if (filep->type == OUT_PIPE_FILE) {
-		ut_log(
-				" ERROR: looks like using OUT_PIPE_FILE instead of IN_PIPE_FILE \n");
-		return -1;
 	}
 
 	DEBUG("Read filename from hs  :%s: offset:%d inode:%x buff:%x len:%x \n", filep->filename, filep->offset, filep->inode, buff, len);
-	fs_inode *fs_inode = (struct fs_inode *) filep->vinode;
+	vinode *vinode = (struct vinode *) filep->vinode;
 	//TODO 	if (inode->length <= filep->offset) return 0;
-
-	ret = fs_inode->read(filep->offset, buff, len);
+	if (vinode == 0){
+		BUG();
+	}
+	ret = vinode->read(filep->offset, buff, len);
 	if (ret > 0) {
 		filep->offset = filep->offset + ret;
 	}
@@ -535,30 +540,19 @@ int fs_write(struct file *filep, uint8_t *buff, unsigned long len) {
 		}
 		//	spin_unlock_irqrestore(&g_userspace_stdio_lock, flags);
 		return len;
-	} else if (filep->type == OUT_PIPE_FILE) {
-#if PIPE_IMPL
-		return fs_send_to_pipe(filep, buff, len);
-#else
-		BUG();
-		return 0;
-#endif
 	} else if (filep->type == IN_PIPE_FILE) {
 		ut_log(" ERROR: Using INPIPE instead of OUTPIPE\n");
 		return -1;
 	}
 
-	DEBUG(
-			"Write  filename from hs  :%s: offset:%d inode:%x \n", filep->filename, filep->offset, filep->inode);
+	DEBUG("Write  filename from hs  :%s: offset:%d inode:%x \n", filep->filename, filep->offset, filep->inode);
 
 	struct fs_inode *inode = (struct fs_inode *) filep->vinode;
-	if (inode && inode->file_type == DIRECTORY_FILE) { //TODO : check for testing
+	if (inode ==0){
 		BUG();
 	}
-	if (filep->offset > (inode->fileStat.st_size))
-		return -1;
 
 	ret = inode->write(filep->offset, buff, len);
-
 	if (ret < 0) {
 		ut_log(" fs_write fails error:%x pid:%d \n", ret, g_current_task->pid);
 		return 0;
@@ -574,17 +568,13 @@ struct file *fs_dup(struct file *old_filep, struct file *new_filep) {
 	}
 
 	/* 1. close the resources of  new */
-	if (new_filep->type == REGULAR_FILE || new_filep->type == NETWORK_FILE) {
+	if (new_filep->type == REGULAR_FILE || new_filep->type == NETWORK_FILE || new_filep->type == OUT_PIPE_FILE
+			 || new_filep->type == IN_PIPE_FILE) {
 		struct vinode *vinode=(struct vinode *)new_filep->vinode;
+		if (vinode ==0){
+			BUG();
+		}
 		vinode->close();
-	} else if (new_filep->type == OUT_PIPE_FILE
-			|| new_filep->type == IN_PIPE_FILE) {
-#if PIPE_IMPL
-		fs_destroy_pipe(new_filep);
-#else
-		BUG();
-		return 0;
-#endif
 	}
 
 	/* 2. copy from old */
@@ -594,14 +584,13 @@ struct file *fs_dup(struct file *old_filep, struct file *new_filep) {
 			&& new_filep->vinode != 0) {
 		struct fs_inode *ninode = (struct fs_inode *) new_filep->vinode;
 		atomic_inc(&ninode->count);
-	} else if (new_filep->type == OUT_PIPE_FILE
-			|| new_filep->type == IN_PIPE_FILE) {
-#if PIPE_IMPL
-		fs_dup_pipe(new_filep);
-#else
-		BUG();
-		return 0;
-#endif
+	} else if (new_filep->type == OUT_PIPE_FILE || new_filep->type == IN_PIPE_FILE) {
+		struct fs_inode *ninode = (struct fs_inode *) new_filep->vinode;
+		if (ninode == 0){
+			BUG();
+		}
+		atomic_inc(&ninode->count);
+		//fs_dup_pipe(new_filep);
 	}
 	return new_filep;
 }
@@ -609,24 +598,18 @@ struct file *fs_dup(struct file *old_filep, struct file *new_filep) {
 int fs_close(struct file *filep) {
 	if (filep == 0 || vfs_fs == 0)
 		return 0;
-	if (filep->type == REGULAR_FILE) {
+	if (filep->type == REGULAR_FILE || filep->type == OUT_PIPE_FILE || filep->type == IN_PIPE_FILE) {
 		if (filep->vinode != 0) {
 			struct vinode *vinode= (struct vinode *)filep->vinode;
 			vinode->close();
+		}else{
+			BUG();
 		}
 	} else if (filep->type == NETWORK_FILE) {
 		socket_close(filep);
 	} else if ((filep->type == OUT_FILE) || (filep->type == IN_FILE)
 			|| (filep->type == DEV_NULL_FILE)) { /* nothng todo */
 		//ut_log("Closing the IO file :%x name :%s: \n",filep,g_current_task->name);
-	} else if (filep->type == OUT_PIPE_FILE || filep->type == IN_PIPE_FILE) {
-#if PIPE_IMPL
-		fs_destroy_pipe(filep);
-#else
-		BUG();
-		return 0;
-#endif
-// TODO : need to release kernel resource
 	}
 	filep->vinode = 0;
 	mm_slab_cache_free(g_slab_filep, filep);

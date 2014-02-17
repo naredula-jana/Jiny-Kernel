@@ -163,7 +163,7 @@ int socket::write(unsigned long offset, unsigned char *data, int len) {
 int socket::close(){
 	return JSUCCESS;
 }
-int socket::ioctl(){
+int socket::ioctl(unsigned long arg1,unsigned long arg2){
 	return JSUCCESS;
 }
 

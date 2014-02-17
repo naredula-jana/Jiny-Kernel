@@ -190,7 +190,7 @@ void ut_putchar(unsigned char c) {
 	unsigned long flags;
 
 	//1. Serial output
-	if (g_current_task->mm->fs.output_device == DEVICE_SERIAL) {
+	if (g_boot_completed==0 || get_output_device() == DEVICE_SERIAL){
 		char buf[5];
 		if (c == '\n') {
 			buf[0] = '\r';

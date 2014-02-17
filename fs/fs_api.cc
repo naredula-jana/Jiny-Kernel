@@ -26,7 +26,8 @@ struct timeval {
     long    tv_usec;    /* microseconds */
 };
 
-static struct file *fs_create_filep(int *fd, struct file *in_fp) {
+/* TODO : locking need to added */
+struct file *fs_create_filep(int *fd, struct file *in_fp) {
 	int i;
 	struct file *fp;
 
@@ -43,14 +44,15 @@ static struct file *fs_create_filep(int *fd, struct file *in_fp) {
 				g_current_task->mm->fs.total = i + 1;
 			}
 			g_current_task->mm->fs.filep[i] = fp;
-			*fd = i;
+			if (fd != 0)
+				*fd = i;
 			return fp;
 		}
 	}
 
 	return 0;
 }
-static int fs_destroy_filep(int fd) {
+int fs_destroy_filep(int fd) {
 	struct file *fp;
 	if (fd < 0 || fd > MAX_FDS) {
 		return -1;
@@ -486,9 +488,6 @@ extern int fs_sync();
 int SYS_sync(){
 	return fs_sync();
 }
-int SYS_pipe(){
-	BUG();
-}
 
 extern struct list_head fs_inode_list;
 int Jcmd_ls(uint8_t *arg1, uint8_t *arg2) {
@@ -572,6 +571,12 @@ int Jcmd_sync() {
 	return fs_sync();
 }
 
+
+int get_output_device(){
+
+	struct vinode *v=(struct vinode *)g_current_task->mm->fs.filep[0]->vinode;
+	return v->ioctl(0,0);
+}
 int fs_get_type(struct file *fp){
 	struct fs_inode *inode = (struct fs_inode *)fp->vinode;
 	return inode->file_type;

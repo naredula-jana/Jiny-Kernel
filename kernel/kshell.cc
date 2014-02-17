@@ -135,7 +135,7 @@ int kshell::get_cmd(unsigned char *line) {
 	while (i < MAX_LINE_LENGTH) {
 		int c;
 
-		while ((line[i] = dr_kbGetchar(-1)) == 0)
+		while ((line[i] = dr_kbGetchar(DEVICE_KEYBOARD)) == 0)
 			;
 
 		c = line[i];
@@ -229,13 +229,15 @@ int kshell::main(void *arg) {
 #endif
 	} else {
 		/* attach kernel shell to serial line since user level shell fails */
-		sc_set_fsdevice(DEVICE_SERIAL, DEVICE_SERIAL);
+//		sc_set_fsdevice(DEVICE_KEYBOARD, DEVICE_KEYBOARD);
 	}
+
 	ut_log(" user shell thread creation ret :%x\n", ret);
 	//ut_strncpy(g_current_task->name, "shell", MAX_TASK_NAME);
 	for (i = 0; i < MAX_CMD_HISTORY; i++)
 		cmd_history[i][0] = '\0';
 
+	sc_set_fsdevice(DEVICE_KEYBOARD, DEVICE_KEYBOARD);
 	curr_line[0] = '\0';
 	while (1) {
 		ut_printf(CMD_PROMPT);

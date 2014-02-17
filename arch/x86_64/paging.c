@@ -44,7 +44,7 @@ static void mk_pte(pte_t *pte, addr_t fr,int global,int user,int rw)
 	}
 	pte->frame = fr;
 }
-static void mk_pde(pde_t *pde, addr_t fr,int page_size,int global,int user)  
+static void mk_pde(pde_t *pde, addr_t fr,int large_page,int global,int user)
 {
 	pde->present=1;
 	pde->rw=1;
@@ -56,7 +56,7 @@ static void mk_pde(pde_t *pde, addr_t fr,int page_size,int global,int user)
 	pde->pcd=1;
 	pde->accessed=0;
 	pde->dirty=0;
-	if (page_size ==1 )
+	if (large_page ==1 )
 		pde->ps=1;
 	else
 		pde->ps=0;

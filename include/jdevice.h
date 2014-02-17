@@ -5,16 +5,24 @@ extern "C" {
 #include "pci.h"
 #include "interface.h"
 }
+#include "../fs/file.h"
 class jdriver;
 
-class jdevice {
+class jdevice: public vinode {
 public:
 	unsigned char *name;
 	jdriver* driver;
 
+
+	int read(unsigned long offset, unsigned char *data, int len);
+	int write(unsigned long offset, unsigned char *data, int len);
+	int close();
+	int ioctl(unsigned long arg1,unsigned long arg2);
+
 	/* pci details */
 	pci_device_t pci_device;
 	int init_pci(uint8_t bus, uint8_t device, uint8_t function);
+	int init(unsigned char *name);
 
 	void print_stats();
 };
@@ -32,6 +40,7 @@ public:
 	virtual int read(unsigned char *buf, int len)=0;
 	virtual int write(unsigned char *buf, int len)=0;
 	virtual int print_stats()=0;
+	virtual int ioctl(unsigned long arg1,unsigned long arg2)=0;
 };
 
 class virtio_jdriver: public jdriver {
@@ -41,6 +50,7 @@ public:
 
 	int virtio_create_queue(uint16_t index, int qType);
 	int print_stats();
+	int ioctl(unsigned long arg1,unsigned long arg2);
 	struct virtqueue *vq[5];
 };
 

@@ -118,8 +118,7 @@ struct file {
 	int flags;
 
 	void *vinode;
-	void *private_pipe;
-
+//	void *private_pipe;
 };
 struct fileStat {
 	uint32_t mode;

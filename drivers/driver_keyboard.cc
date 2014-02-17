@@ -1,3 +1,14 @@
+/*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+*   drivers/driver_keyboard.cc
+*   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
+*
+*/
+extern "C" {
 #include "keyboard.h"
 #include "common.h"
 #include "task.h"
@@ -75,10 +86,11 @@ static struct {
 unsigned char dr_kbGetchar(int input_id) {
 	int i,device_id;
 	unsigned char c;
-
+#if 0
 	if (input_id==-1)
 		device_id = g_current_task->mm->fs.input_device;
 	else
+#endif
 		device_id = input_id;
 	for (i = 0; i < MAX_INPUT_DEVICES; i++) {
 		if (input_devices[i].device_id == device_id)
@@ -133,7 +145,7 @@ int ar_addInputKey(int device_id, unsigned char c) {
 
 	return 1;
 }
-static void keyboard_handler(registers_t regs) {
+static int keyboard_handler(void *unused_private_data) {
 	unsigned char c, control_kbd, lastKey;
 	int ret;
 
@@ -149,9 +161,9 @@ static void keyboard_handler(registers_t regs) {
 	control_kbd = inb(0x61);
 	outb(0x61, control_kbd | 0x80); /* set the "enable kbd" bit */
 	outb(0x61, control_kbd); /* write back the original control value */
-
+	return 0;
 }
-int init_driver_keyboard(unsigned long unused) {
+int init_driver_keyboard() {
 	int i;
 
 	for (i = 0; i < MAX_INPUT_DEVICES; i++) {
@@ -169,6 +181,67 @@ int init_driver_keyboard(unsigned long unused) {
 		}
 	}
 
-	ar_registerInterrupt(33, keyboard_handler, "keyboard", NULL);
+	ar_registerInterrupt(33, keyboard_handler, "keyboard", (void *)0);
 	return 0;
+}
+}
+#include "jdevice.h"
+class keyboard_jdriver: public jdriver {
+public:
+	int probe_device(jdevice *dev);
+	int attach_device(jdevice *dev);
+	int dettach_device(jdevice *dev);
+	int read(unsigned char *buf, int len);
+	int write(unsigned char *buf, int len);
+	int print_stats();
+	int ioctl(unsigned long arg1,unsigned long arg2);
+};
+
+int keyboard_jdriver::probe_device(class jdevice *jdev) {
+
+	if (ut_strcmp(jdev->name , (unsigned char *)"/dev/keyboard") == 0){
+		return JSUCCESS;
+	}
+	return JFAIL;
+}
+int keyboard_jdriver::attach_device(class jdevice *jdev) {
+	return JSUCCESS;
+}
+int keyboard_jdriver::dettach_device(class jdevice *jdev) {
+	return JSUCCESS;
+}
+int keyboard_jdriver::read(unsigned char *buf, int len){
+	int ret=0;
+
+	if (len >0 && buf!=0){
+		buf[0] = dr_kbGetchar(DEVICE_KEYBOARD);
+		stat_recvs++;
+		ret=1;
+	}
+	return ret;
+}
+int keyboard_jdriver::write(unsigned char *buf, int len){
+	return 0;
+}
+int keyboard_jdriver::print_stats(){
+
+	return JSUCCESS;
+}
+int keyboard_jdriver::ioctl(unsigned long arg1,unsigned long arg2 ){
+	if (arg1 ==0){
+		return DEVICE_KEYBOARD;
+	}
+	return DEVICE_KEYBOARD;
+}
+keyboard_jdriver keyboard_driver;
+extern "C" {
+static void *vptr_keyboard[8]={(void *)&keyboard_jdriver::probe_device,(void *)&keyboard_jdriver::attach_device,(void *)&keyboard_jdriver::dettach_device,(void *)&keyboard_jdriver::read,
+		(void *)&keyboard_jdriver::write,(void *)&keyboard_jdriver::print_stats,(void *)&keyboard_jdriver::ioctl,0};
+void init_keyboard_jdriver() {
+	void **p=(void **)&keyboard_driver;
+	*p=&vptr_keyboard[0];
+
+	keyboard_driver.name = (unsigned char *)"keyboard_driver";
+	register_jdriver(&keyboard_driver);
+}
 }

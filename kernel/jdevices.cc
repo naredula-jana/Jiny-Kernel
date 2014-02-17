@@ -8,17 +8,11 @@
 *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
 *
 */
-
-extern "C" {
-#include "common.h"
-#include "pci.h"
-#include "interface.h"
-}
-
 #include "jdevice.h"
 
+
 #define MAX_DEVICES 200
-class jdevice *jdevice_list[MAX_DEVICES];
+static class jdevice *jdevice_list[MAX_DEVICES];
 static int device_count = 0;
 #define MAX_DRIVERS 100
 class jdriver *jdriver_list[MAX_DRIVERS];
@@ -77,18 +71,55 @@ void jdevice::print_stats() {
 	if (driver != 0) {
 		driver->print_stats();
 	}else{
-		ut_printf("\n");
+		ut_printf(" - No driver");
 	}
+	ut_printf("\n");
 }
-
+int jdevice::read(unsigned long unused, unsigned char *buf, int len){
+	if (driver != 0){
+		return driver->read(buf,len);
+	}
+	return -1;
+}
+int jdevice::write(unsigned long unused, unsigned char *buf, int len){
+	if (driver != 0){
+		return driver->write(buf,len);
+	}
+	return -1;
+}
+int jdevice::ioctl(unsigned long arg1,unsigned long arg2){
+	if (driver != 0){
+		return driver->ioctl(arg1,arg2);
+	}
+	return -1;
+}
+int jdevice::close(){
+	if (driver != 0){
+		/* TODO : ioctl function need to implement in driver */
+		return -1;
+	}
+	return -1;
+}
+static void *vptr_jdevice[7] = {
+		(void *) &jdevice::read, (void *) &jdevice::write,
+		(void *) &jdevice::close, (void *) &jdevice::ioctl, 0 };
+int jdevice::init(unsigned char *dev_name) {
+	int i;
+	void **p = (void **) this;
+	*p = &vptr_jdevice[0];
+	name = dev_name;
+}
 void register_jdriver(class jdriver *driver) {
 
 	jdriver_list[driver_count] = driver;
 	driver_count++;
 }
+/************************ Input/output devices : keyboard , serial,vga ***********************************************/
+
 
 /*********************************************************************************/
 extern "C" {
+
 static int scan_pci_devices() {
 	int i, j, k, d;
 	int ret;
@@ -102,7 +133,7 @@ static int scan_pci_devices() {
 				if (device_count >= (MAX_DEVICES - 1))
 					return JSUCCESS;
 				jdevice_list[device_count] =
-						(class jdevice *) ut_malloc(sizeof(class jdevice));
+						(class jdevice *) ut_calloc(sizeof(class jdevice));
 				ut_memset((unsigned char *) jdevice_list[device_count], 0,
 						sizeof(class jdevice));
 				if (jdevice_list[device_count]->init_pci(i, j, k)==JFAIL){
@@ -110,14 +141,12 @@ static int scan_pci_devices() {
 					continue;
 				}
 
-				jdevice_list[device_count]->name = (unsigned char *)"pci";
+				jdevice_list[device_count]->init((unsigned char *)"pci");
 				/* attach the device to the know driver */
 				for (d = 0; d < driver_count; d++) {
-					if (jdriver_list[d]->probe_device(
-							jdevice_list[device_count]) == JSUCCESS) {
+					if (jdriver_list[d]->probe_device(jdevice_list[device_count]) == JSUCCESS) {
 						jdevice_list[device_count]->driver = jdriver_list[d];
-						jdriver_list[d]->attach_device(
-								jdevice_list[device_count]);
+						jdriver_list[d]->attach_device(jdevice_list[device_count]);
 						break;
 					}
 				}
@@ -131,21 +160,41 @@ extern void init_p9_jdriver();
 extern void init_net_jdriver();
 extern void init_keyboard_jdriver();
 extern void init_serial_jdriver();
-
+struct jdevice keyboard_device,serial_device;
 void init_jdevices(unsigned long unused_arg1) {
 	device_count = 0;
+	int d,k;
 
 	init_p9_jdriver();
 	init_net_jdriver();
 	init_keyboard_jdriver();
 	init_serial_jdriver();
-	jdevice_list[0] = (class jdevice *) ut_malloc(sizeof(class jdevice));
-	jdevice_list[1] = (class jdevice *) ut_malloc(sizeof(class jdevice));
-	jdevice_list[0]->name = (unsigned char *)"/dev/keyboard";
-	jdevice_list[1]->name = (unsigned char *)"/dev/serial";
+	ut_memset((unsigned char *)&keyboard_device,0,sizeof(class jdevice));
+	ut_memset((unsigned char *)&serial_device,0,sizeof(class jdevice));
+	jdevice_list[0] = &keyboard_device;
+	jdevice_list[1] = &serial_device;
+	jdevice_list[0]->init((unsigned char *)"/dev/keyboard");
+	jdevice_list[1]->init((unsigned char *)"/dev/serial");
 	device_count=2;
-
+#if 1
+	/* attach the device to the know driver */
+	for (d = 0; d < driver_count; d++) {
+		for (k=0; k<device_count; k++){
+			if (jdriver_list[d]->probe_device(jdevice_list[k]) == JSUCCESS) {
+				jdevice_list[k]->driver = jdriver_list[d];
+				jdriver_list[d]->attach_device(jdevice_list[k]);
+				break;
+			}
+		}
+	}
+#endif
 	scan_pci_devices();
+}
+void *get_keyboard_device(int type){
+	if (type == DEVICE_KEYBOARD)
+		return (void *)&keyboard_device;
+	else
+		return (void *)&serial_device;
 }
 void Jcmd_jdevices() {
 	int i;

@@ -6,7 +6,7 @@
 *
 *   fs/file.h
 *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
-*        file--- vinode->inode->(file,dir)
+*        file--- vinode->fs_inode->(file,dir)
          file--- vinode->socket
          file--- vinode->pipe
          file--- vinode->device
@@ -15,22 +15,34 @@ extern "C" {
 #include "common.h"
 #include "mm.h"
 #include "interface.h"
+extern void *g_inode_lock; /* protects inode_list */
+extern kmem_cache_t *g_slab_filep;
+#define ENOSPC          28      /* No space left on device */
+#define EAGAIN          11      /* Try again */
+
+extern int fs_dup_pipe(struct file *fp);
+struct file *fs_create_filep(int *fd, struct file *in_fp);
+int fs_destroy_filep(int fd);
 }
 
+#define PIPE_IMPL 1
 class vinode {
 public:
 	atomic_t count; /* usage count */
 	unsigned char filename[MAX_FILENAME];
+	int file_type; /* type of file */
+
 	int stat_out,stat_in,stat_err;
 	int stat_in_bytes,stat_out_bytes;
-	long stat_last_offset;
 
-	/* TODO : preserve the order */
+	void update_stat_in(int in_req,int in_byte);
+	void update_stat_out(int out_req,int out_byte);
+
+	/* TODO : preserve the order, this is C++ fix  */
 	virtual int read(unsigned long offset, unsigned char *data, int len)=0;
 	virtual int write(unsigned long offset, unsigned char *data, int len)=0;
 	virtual int close()=0;
-	virtual int ioctl()=0;
-
+	virtual int ioctl(unsigned long arg1,unsigned long arg2)=0;
 };
 #define MAX_SOCKET_QUEUE_LENGTH 100
 struct queue_struct {
@@ -60,7 +72,7 @@ public:
 	int read(unsigned long offset, unsigned char *data, int len);
 	int write(unsigned long offset, unsigned char *data, int len);
 	int close();
-	int ioctl();
+	int ioctl(unsigned long arg1,unsigned long arg2);
 
 	int add_to_queue(unsigned char *buf, int len);
 	int remove_from_queue(unsigned char **buf,  int *len);
@@ -84,6 +96,7 @@ public:
 	unsigned long fs_private;
 	struct filesystem *vfs;
 	unsigned long open_mode;
+	long stat_last_offset;
 
 	struct page *fs_genericRead( unsigned long offset);
 
@@ -93,7 +106,7 @@ public:
 	struct list_head page_list[PAGELIST_HASH_SIZE];
 
 	int flags; /* short leaved (MRU) or long leaved (LRU) */
-	int file_type; /* type of file */
+
 	struct fileStat fileStat;
 	char fileStat_insync;
 	hard_link_t *hard_links;
@@ -103,31 +116,21 @@ public:
 	int read(unsigned long offset, unsigned char *data, int len);
 	int write(unsigned long offset, unsigned char *data, int len);
 	int close();
-	int ioctl();
+	int ioctl(unsigned long arg1,unsigned long arg2);
 	static kmem_cache_t *slab_objects;
-
 };
-#if 0
+
 class pipe :public vinode {
 
 public:
-	#define MAX_PIPE_BUFS 20
-	struct {
-		uint8_t *data;
-		int size;
-		int start_offset;
-	} bufs[MAX_PIPE_BUFS];
-	int in_index, out_index;
-	int count;
-
-	int init(uint8_t *filename);
-	int open();
-	int read(unsigned long offset, unsigned char *data, int len);
-	int write(unsigned long offset, unsigned char *data, int len);
+	long pipe_index;
+	int init(int type);
+	int read(unsigned long unsued, unsigned char *data, int len);
+	int write(unsigned long unused, unsigned char *data, int len);
 	int close();
-	int ioctl();
+	int ioctl(unsigned long arg1,unsigned long arg2);
 };
-#endif
+
 /*******************************************************************************/
 
 

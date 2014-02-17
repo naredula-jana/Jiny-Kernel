@@ -361,9 +361,9 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	for (i=0; i<g_current_task->mm->fs.total;i++){
 		mm->fs.filep[i]=fs_dup(g_current_task->mm->fs.filep[i],0);
 	}
+
+
 	mm->fs.total = g_current_task->mm->fs.total;
-	mm->fs.input_device = DEVICE_SERIAL;
-	mm->fs.output_device = 	DEVICE_SERIAL;
 	ut_strcpy(mm->fs.cwd,g_current_task->mm->fs.cwd);
 	/* every process page table should have soft links to kernel page table */
 	if (ar_dup_pageTable(g_kernel_mm, mm)!=1){
@@ -375,11 +375,11 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 		fs_set_flags(mm->exec_fp, INODE_EXECUTING) ;
 	ut_strncpy(g_current_task->name, file, MAX_TASK_NAME);
 
-
 	release_resources(g_current_task, 0);
 
 	old_mm=g_current_task->mm;
 	g_current_task->mm = mm;
+	sc_set_fsdevice(DEVICE_SERIAL, DEVICE_SERIAL);
 
 	 /* from this point onwards new address space comes into picture, no memory belonging to previous address space like file etc should  be used */
 	flush_tlb(mm->pgd);
@@ -550,8 +550,13 @@ unsigned char **sc_get_thread_argv(){
 	return g_current_task->thread.argv;
 }
 void sc_set_fsdevice(unsigned int in, unsigned int out){
-		g_kernel_mm->fs.input_device = DEVICE_SERIAL;
-		g_kernel_mm->fs.output_device = DEVICE_SERIAL;
+	struct mm_struct *mm=g_current_task->mm;
+	if (mm->fs.filep[0] != 0){
+		mm->fs.filep[0]->vinode = get_keyboard_device(in);
+	}
+	if (mm->fs.filep[1] != 0){
+		mm->fs.filep[1]->vinode = get_keyboard_device(out);
+	}
 }
 static int curr_cpu_assigned=0;
 static void init_task_struct(struct task_struct *p,struct mm_struct *mm){
@@ -636,8 +641,8 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void 
 			mm->fs.filep[i]=fs_dup(g_current_task->mm->fs.filep[i],0);
 		}
 		mm->fs.total = g_current_task->mm->fs.total;
-		mm->fs.input_device = g_current_task->mm->fs.input_device;
-		mm->fs.output_device = g_current_task->mm->fs.output_device;
+		//sc_set_fsdevice(DEVICE_SERIAL, DEVICE_SERIAL);
+
 		ut_strcpy(mm->fs.cwd,g_current_task->mm->fs.cwd);
 
 		DEBUG("BEFORE duplicating pagetables and vmaps \n");
@@ -918,13 +923,13 @@ int init_tasking(unsigned long unused) {
 	for (i=0; i<g_kernel_mm->fs.total; i++){
 		g_kernel_mm->fs.filep[i]=mm_slab_cache_alloc(g_slab_filep, 0);
 		if (i==0){
+		//	g_kernel_mm->fs.filep[i]->vinode = get_keyboard_device(DEVICE_KEYBOARD);
+			g_kernel_mm->fs.filep[i]->vinode = get_keyboard_device(DEVICE_SERIAL);
 			g_kernel_mm->fs.filep[i]->type = IN_FILE;
 		}else{
 			g_kernel_mm->fs.filep[i]->type = OUT_FILE;
 		}
 	}
-	g_kernel_mm->fs.input_device = DEVICE_KEYBOARD;
-	g_kernel_mm->fs.output_device = DEVICE_DISPLAY_VGI;
 	ut_strcpy(g_kernel_mm->fs.cwd,"/");
 
 	free_pid_no = 1; /* pid should never be 0 */
