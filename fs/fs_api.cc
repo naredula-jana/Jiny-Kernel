@@ -571,12 +571,13 @@ int Jcmd_sync() {
 	return fs_sync();
 }
 
-
+#if 0
 int get_output_device(){
 
-	struct vinode *v=(struct vinode *)g_current_task->mm->fs.filep[0]->vinode;
+	struct vinode *v=(struct vinode *)g_current_task->mm->fs.filep[1]->vinode;
 	return v->ioctl(0,0);
 }
+#endif
 int fs_get_type(struct file *fp){
 	struct fs_inode *inode = (struct fs_inode *)fp->vinode;
 	return inode->file_type;

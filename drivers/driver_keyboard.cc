@@ -13,6 +13,7 @@ extern "C" {
 #include "common.h"
 #include "task.h"
 #include "mach_dep.h"
+
 char codes[128] = {
         /*0    1    2    3    4    5    6    7    8    9    A    B    C    D    E    F*/  
   /*0*/   0,  27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '_', '=','\b', '\t',
@@ -189,42 +190,65 @@ int init_driver_keyboard() {
 class keyboard_jdriver: public jdriver {
 public:
 	int probe_device(jdevice *dev);
-	int attach_device(jdevice *dev);
+	jdriver *attach_device(jdevice *dev);
 	int dettach_device(jdevice *dev);
 	int read(unsigned char *buf, int len);
 	int write(unsigned char *buf, int len);
 	int print_stats();
 	int ioctl(unsigned long arg1,unsigned long arg2);
 };
-
+keyboard_jdriver keyboard_driver;
 int keyboard_jdriver::probe_device(class jdevice *jdev) {
 
-	if (ut_strcmp(jdev->name , (unsigned char *)"/dev/keyboard") == 0){
+	if ((ut_strcmp(jdev->name , (unsigned char *)"/dev/keyboard") == 0) || (ut_strcmp(jdev->name , (unsigned char *)"/dev/vga") == 0)){
 		return JSUCCESS;
 	}
 	return JFAIL;
 }
-int keyboard_jdriver::attach_device(class jdevice *jdev) {
-	return JSUCCESS;
+jdriver *keyboard_jdriver::attach_device(class jdevice *jdev) {
+	COPY_OBJ(keyboard_jdriver,&keyboard_driver,new_obj,jdev);
+	return (jdriver *)new_obj;
 }
 int keyboard_jdriver::dettach_device(class jdevice *jdev) {
 	return JSUCCESS;
 }
-int keyboard_jdriver::read(unsigned char *buf, int len){
+int keyboard_jdriver::read(unsigned char *buff, int len){
 	int ret=0;
 
-	if (len >0 && buf!=0){
-		buf[0] = dr_kbGetchar(DEVICE_KEYBOARD);
+	if (len >0 && buff!=0){
+		buff[0] = dr_kbGetchar(DEVICE_KEYBOARD);
 		stat_recvs++;
 		ret=1;
+#if 0
+		if (buff[0] == CTRL_D || buff[0] == CTRL_C) {
+			ut_log(" RECVIED special character :%x thread name :%s:\n", buff[0],
+					g_current_task->name);
+		}
+#endif
+
+		if (buff[0] == CTRL_D || buff[0] == CTRL_C) {/* for CTRL-D */
+			return 0;
+		}
+		if (buff[0] == 0xd)
+			buff[0] = '\n';
+		buff[1] = '\0';
+		ut_printf("%s", buff);
 	}
 	return ret;
 }
-int keyboard_jdriver::write(unsigned char *buf, int len){
-	return 0;
+
+int keyboard_jdriver::write(unsigned char *buff, int len){
+	int i;
+	int ret=0;
+	for (i = 0; i < len; i++) {
+		ut_putchar_ondevice(buff[i], DEVICE_DISPLAY_VGI);
+		ret++;
+	}
+	stat_sends = stat_sends+ret;
+	return ret;
 }
 int keyboard_jdriver::print_stats(){
-
+	ut_printf(" sends:%d recvs: %d",stat_sends,stat_recvs);
 	return JSUCCESS;
 }
 int keyboard_jdriver::ioctl(unsigned long arg1,unsigned long arg2 ){
@@ -233,7 +257,7 @@ int keyboard_jdriver::ioctl(unsigned long arg1,unsigned long arg2 ){
 	}
 	return DEVICE_KEYBOARD;
 }
-keyboard_jdriver keyboard_driver;
+
 extern "C" {
 static void *vptr_keyboard[8]={(void *)&keyboard_jdriver::probe_device,(void *)&keyboard_jdriver::attach_device,(void *)&keyboard_jdriver::dettach_device,(void *)&keyboard_jdriver::read,
 		(void *)&keyboard_jdriver::write,(void *)&keyboard_jdriver::print_stats,(void *)&keyboard_jdriver::ioctl,0};

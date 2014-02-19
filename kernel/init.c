@@ -300,6 +300,7 @@ void cmain() {  /* This is the first c function to be executed */
 }
 
 void Jcmd_shutdown(){
+
 //	ut_printf(" before shutdown with new instruction\n");
 //	cli();
 //	__asm__("rsm");

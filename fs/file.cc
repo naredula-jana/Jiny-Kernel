@@ -469,8 +469,7 @@ error:
 	return 0;
 }
 
-#define CTRL_C 3
-#define CTRL_D 4
+
 long fs_read(struct file *filep, uint8_t *buff, unsigned long len) {
 	int ret;
 
@@ -486,25 +485,6 @@ long fs_read(struct file *filep, uint8_t *buff, unsigned long len) {
 		ut_log(" ERROR: read on OUT_FILE : name: %s type:%d\n", g_current_task->name,filep->type);
 		//return -1;
 		BUG();
-	}
-	if (filep->type == IN_FILE) {
-		vinode *vinode = (struct vinode *) filep->vinode;
-		ret = vinode->read(filep->offset, buff, len);
-
-		if (buff[0] == CTRL_D || buff[0] == CTRL_C) {
-			ut_log(" RECVIED special character :%x thread name :%s:\n", buff[0],
-					g_current_task->name);
-		}
-
-		if (buff[0] == CTRL_D || buff[0] == CTRL_C) {/* for CTRL-D */
-			return 0;
-		}
-		if (buff[0] == 0xd)
-			buff[0] = '\n';
-		buff[1] = '\0';
-		ut_printf("%s", buff);
-		//	SYSCALL_DEBUG("read char :%s: %x:\n",buff,buff[0]);
-		return 1;
 	}
 
 	DEBUG("Read filename from hs  :%s: offset:%d inode:%x buff:%x len:%x \n", filep->filename, filep->offset, filep->inode, buff, len);
@@ -529,28 +509,16 @@ int fs_write(struct file *filep, uint8_t *buff, unsigned long len) {
 	if (ar_check_valid_address((unsigned long) buff, len) == JFAIL) {
 		BUG();
 	}
-
 	if (filep->type == DEV_NULL_FILE) {
 		return len;
 	}
-	if (filep->type == OUT_FILE) {
-		//	spin_lock_irqsave(&g_userspace_stdio_lock, flags);
-		for (i = 0; i < len; i++) {
-			ut_putchar((int) buff[i]);
-		}
-		//	spin_unlock_irqrestore(&g_userspace_stdio_lock, flags);
-		return len;
-	} else if (filep->type == IN_PIPE_FILE) {
-		ut_log(" ERROR: Using INPIPE instead of OUTPIPE\n");
-		return -1;
-	}
-
-	DEBUG("Write  filename from hs  :%s: offset:%d inode:%x \n", filep->filename, filep->offset, filep->inode);
-
-	struct fs_inode *inode = (struct fs_inode *) filep->vinode;
-	if (inode ==0){
+	struct vinode *inode = (struct vinode *) filep->vinode;
+	if (inode ==0 || inode->file_type != filep->type ){
 		BUG();
 	}
+
+
+	DEBUG("Write  filename from hs  :%s: offset:%d inode:%x \n", filep->filename, filep->offset, filep->inode);
 
 	ret = inode->write(filep->offset, buff, len);
 	if (ret < 0) {
@@ -585,7 +553,7 @@ struct file *fs_dup(struct file *old_filep, struct file *new_filep) {
 		struct fs_inode *ninode = (struct fs_inode *) new_filep->vinode;
 		atomic_inc(&ninode->count);
 	} else if (new_filep->type == OUT_PIPE_FILE || new_filep->type == IN_PIPE_FILE) {
-		struct fs_inode *ninode = (struct fs_inode *) new_filep->vinode;
+		struct vinode *ninode = (struct vinode *) new_filep->vinode;
 		if (ninode == 0){
 			BUG();
 		}

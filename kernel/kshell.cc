@@ -37,7 +37,11 @@ kshell ksh;
 enum {
 	CMD_GETVAR = 1, CMD_FILLVAR, CMD_UPARROW, CMD_DOWNARROW, CMD_LEFTARROW
 };
-
+int putchar(unsigned char c){
+	unsigned char buf[10];
+	buf[0]=c;
+	return SYS_fs_write(1,buf,1);
+}
 void kshell::tokenise(unsigned char *p, unsigned char *tokens[]) {
 	int i, k, j;
 
@@ -87,18 +91,18 @@ int kshell::process_command(int cmd, unsigned char *p) {
 		if (his_line_no < 0)
 			his_line_no = MAX_CMD_HISTORY - 1;
 		ut_strcpy(p, cmd_history[his_line_no]);
-		ut_putchar((int) '\n');
+		putchar((int) '\n');
 		return 0;
 	} else if (cmd == CMD_DOWNARROW) {
 		his_line_no++;
 		if (his_line_no >= MAX_CMD_HISTORY)
 			his_line_no = 0;
 		ut_strcpy(p, cmd_history[his_line_no]);
-		ut_putchar((int) '\n');
+		putchar((int) '\n');
 		return 0;
 	} else if (cmd == CMD_LEFTARROW) {
 		curr_line[0] = '\0';
-		ut_putchar((int) '\n');
+		putchar((int) '\n');
 		return 0;
 	}
 	if (p[0] != '\0') {
@@ -130,7 +134,7 @@ int kshell::get_cmd(unsigned char *line) {
 	i = 0;
 	cmd = CMD_FILLVAR;
 	for (i = 0; line[i] != '\0' && i < MAX_LINE_LENGTH; i++) {
-		ut_putchar((int) line[i]);
+		putchar((int) line[i]);
 	}
 	while (i < MAX_LINE_LENGTH) {
 		int c;
@@ -166,11 +170,11 @@ int kshell::get_cmd(unsigned char *line) {
 		}
 		if (line[i] == '\n' || line[i] == '\r') {
 			cmd = CMD_GETVAR;
-			ut_putchar((int) '\n');
+			putchar((int) '\n');
 			line[i] = '\0';
 			break;
 		}
-		ut_putchar(line[i]);
+		putchar(line[i]);
 		i++;
 	}
 	line[i] = '\0';
@@ -210,6 +214,7 @@ static int sh_create(unsigned char *bin_file, unsigned char *name) {
 	tmp_arg[0] = bin_file;
 	tmp_arg[1] = name;
 	tmp_arg[2] = 0;
+	sc_set_fsdevice(DEVICE_SERIAL, DEVICE_SERIAL);  /* all user level thread on serial line */
 	ret = sc_createKernelThread(thread_launch_user, (unsigned char *) &tmp_arg,
 			name);
 
@@ -237,7 +242,8 @@ int kshell::main(void *arg) {
 	for (i = 0; i < MAX_CMD_HISTORY; i++)
 		cmd_history[i][0] = '\0';
 
-	sc_set_fsdevice(DEVICE_KEYBOARD, DEVICE_KEYBOARD);
+	sc_sleep(500); /* this sleep is to make sure the user level thread come up, other wise we force it to use the keyboard */
+	sc_set_fsdevice(DEVICE_KEYBOARD, DEVICE_KEYBOARD); /* kshell on vga console */
 	curr_line[0] = '\0';
 	while (1) {
 		ut_printf(CMD_PROMPT);

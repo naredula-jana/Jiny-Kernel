@@ -379,7 +379,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 
 	old_mm=g_current_task->mm;
 	g_current_task->mm = mm;
-	sc_set_fsdevice(DEVICE_SERIAL, DEVICE_SERIAL);
+//	sc_set_fsdevice(DEVICE_SERIAL, DEVICE_SERIAL);
 
 	 /* from this point onwards new address space comes into picture, no memory belonging to previous address space like file etc should  be used */
 	flush_tlb(mm->pgd);
@@ -549,13 +549,16 @@ last:
 unsigned char **sc_get_thread_argv(){
 	return g_current_task->thread.argv;
 }
-void sc_set_fsdevice(unsigned int in, unsigned int out){
+void sc_set_fsdevice(unsigned int device_in, unsigned int device_out){
 	struct mm_struct *mm=g_current_task->mm;
 	if (mm->fs.filep[0] != 0){
-		mm->fs.filep[0]->vinode = get_keyboard_device(in);
+		mm->fs.filep[0]->vinode = get_keyboard_device(device_in,IN_FILE);
 	}
 	if (mm->fs.filep[1] != 0){
-		mm->fs.filep[1]->vinode = get_keyboard_device(out);
+		mm->fs.filep[1]->vinode = get_keyboard_device(device_out,OUT_FILE);
+	}
+	if (mm->fs.filep[2] != 0){
+		mm->fs.filep[2]->vinode = get_keyboard_device(device_out,OUT_FILE);
 	}
 }
 static int curr_cpu_assigned=0;

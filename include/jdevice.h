@@ -35,7 +35,7 @@ public:
 	int stat_sends,stat_recvs,stat_recv_interrupts;
 	/* TODO : Do not change the order of virtual functions, c++ linking is implemented in handcoded */
 	virtual int probe_device(jdevice *dev)=0;
-	virtual int attach_device(jdevice *dev)=0;
+	virtual jdriver *attach_device(jdevice *dev)=0; /* attach the driver by creating a new driver if it is sucessfull*/
 	virtual int dettach_device(jdevice *dev)=0;
 	virtual int read(unsigned char *buf, int len)=0;
 	virtual int write(unsigned char *buf, int len)=0;
@@ -54,11 +54,15 @@ public:
 	struct virtqueue *vq[5];
 };
 
+#define COPY_OBJ(CLASS_NAME,OBJECT_NAME, NEW_OBJ, jdev) jdriver *NEW_OBJ; NEW_OBJ=(jdriver *)ut_calloc(sizeof(CLASS_NAME)); \
+	ut_memcpy((unsigned char *)NEW_OBJ,(unsigned char *) (OBJECT_NAME), sizeof(CLASS_NAME)); \
+	NEW_OBJ->device = jdev;
 
 class virtio_net_jdriver: public virtio_jdriver {
+	int net_attach_device(jdevice *dev);
 public:
 	int probe_device(jdevice *dev);
-	int attach_device(jdevice *dev);
+	jdriver *attach_device(jdevice *dev);
 	int dettach_device(jdevice *dev);
 	int read(unsigned char *buf, int len);
 	int write(unsigned char *buf, int len);
@@ -67,13 +71,17 @@ public:
 };
 
 class virtio_p9_jdriver: public virtio_jdriver {
+	int p9_attach_device(jdevice *dev);
+
 public:
 	int probe_device(jdevice *dev);
-	int attach_device(jdevice *dev);
+	jdriver *attach_device(jdevice *dev);
 	int dettach_device(jdevice *dev);
 	int read(unsigned char *buf, int len);
 	int write(unsigned char *buf, int len);
 	void *virtio_dev; /* TODO : need to remove later */
+
+
 };
 
 

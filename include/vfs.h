@@ -97,14 +97,15 @@ extern unsigned long g_hostShmLen;
 struct file;
 struct inode;
 
+/* device can support multiple types*/
 enum { /* Inode types*/
-	NETWORK_FILE=2,
+	NETWORK_FILE=0x1,
 
-	OUT_FILE=3,  /* special in/out files */
-	IN_FILE=4,
-	OUT_PIPE_FILE=5,
-	IN_PIPE_FILE=6,
-	DEV_NULL_FILE=7,
+	OUT_FILE=0x2,  /* special in/out files */
+	IN_FILE=0x4,
+	OUT_PIPE_FILE=0x8,
+	IN_PIPE_FILE=0x10,
+	DEV_NULL_FILE=0x20,
 
 	REGULAR_FILE=0x8000,
 	DIRECTORY_FILE=0x4000,

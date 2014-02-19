@@ -185,12 +185,12 @@ int Jcmd_dmesg(unsigned char *arg1){
 	return 0;
 }
 
-void ut_putchar(unsigned char c) {
+void ut_putchar_ondevice(unsigned char c, int device) {
 	unsigned char *ptr;
 	unsigned long flags;
 
 	//1. Serial output
-	if (g_boot_completed==0 || get_output_device() == DEVICE_SERIAL){
+	if (device == DEVICE_SERIAL){
 		char buf[5];
 		if (c == '\n') {
 			buf[0] = '\r';
@@ -241,6 +241,10 @@ void ut_putchar(unsigned char c) {
 
 //	if (g_boot_completed) mutexUnLock(g_print_lock);
 	spin_unlock_irqrestore(&putchar_lock, flags);
+}
+
+void ut_putchar(unsigned char c) {
+	return ut_putchar_ondevice(c,DEVICE_SERIAL);
 }
 
 struct writer_struct{

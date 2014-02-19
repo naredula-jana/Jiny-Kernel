@@ -114,8 +114,6 @@ void register_jdriver(class jdriver *driver) {
 	jdriver_list[driver_count] = driver;
 	driver_count++;
 }
-/************************ Input/output devices : keyboard , serial,vga ***********************************************/
-
 
 /*********************************************************************************/
 extern "C" {
@@ -145,8 +143,7 @@ static int scan_pci_devices() {
 				/* attach the device to the know driver */
 				for (d = 0; d < driver_count; d++) {
 					if (jdriver_list[d]->probe_device(jdevice_list[device_count]) == JSUCCESS) {
-						jdevice_list[device_count]->driver = jdriver_list[d];
-						jdriver_list[d]->attach_device(jdevice_list[device_count]);
+						jdevice_list[device_count]->driver = jdriver_list[d]->attach_device(jdevice_list[device_count]);
 						break;
 					}
 				}
@@ -160,7 +157,8 @@ extern void init_p9_jdriver();
 extern void init_net_jdriver();
 extern void init_keyboard_jdriver();
 extern void init_serial_jdriver();
-struct jdevice keyboard_device,serial_device;
+struct jdevice keyboard_device,serial_in_device;
+struct jdevice vga_device,serial_out_device;
 void init_jdevices(unsigned long unused_arg1) {
 	device_count = 0;
 	int d,k;
@@ -170,31 +168,48 @@ void init_jdevices(unsigned long unused_arg1) {
 	init_keyboard_jdriver();
 	init_serial_jdriver();
 	ut_memset((unsigned char *)&keyboard_device,0,sizeof(class jdevice));
-	ut_memset((unsigned char *)&serial_device,0,sizeof(class jdevice));
+	ut_memset((unsigned char *)&vga_device,0,sizeof(class jdevice));
+	ut_memset((unsigned char *)&serial_in_device,0,sizeof(class jdevice));
+	ut_memset((unsigned char *)&serial_out_device,0,sizeof(class jdevice));
 	jdevice_list[0] = &keyboard_device;
-	jdevice_list[1] = &serial_device;
+	jdevice_list[1] = &vga_device;
+	jdevice_list[2] = &serial_in_device;
+	jdevice_list[3] = &serial_out_device;
 	jdevice_list[0]->init((unsigned char *)"/dev/keyboard");
-	jdevice_list[1]->init((unsigned char *)"/dev/serial");
-	device_count=2;
-#if 1
+	jdevice_list[1]->init((unsigned char *)"/dev/vga");
+	jdevice_list[2]->init((unsigned char *)"/dev/serial_in");
+	jdevice_list[3]->init((unsigned char *)"/dev/serial_out");
+	keyboard_device.file_type = IN_FILE;
+	vga_device.file_type = OUT_FILE;
+	serial_in_device.file_type = IN_FILE;
+	serial_out_device.file_type = OUT_FILE;
+	device_count=4;
+
 	/* attach the device to the know driver */
-	for (d = 0; d < driver_count; d++) {
-		for (k=0; k<device_count; k++){
+	for (k = 0; k < device_count; k++) {
+		for (d = 0; d < driver_count; d++) {
 			if (jdriver_list[d]->probe_device(jdevice_list[k]) == JSUCCESS) {
-				jdevice_list[k]->driver = jdriver_list[d];
-				jdriver_list[d]->attach_device(jdevice_list[k]);
+				jdevice_list[k]->driver = jdriver_list[d]->attach_device(
+						jdevice_list[k]);
 				break;
 			}
 		}
 	}
-#endif
+
 	scan_pci_devices();
 }
-void *get_keyboard_device(int type){
-	if (type == DEVICE_KEYBOARD)
-		return (void *)&keyboard_device;
-	else
-		return (void *)&serial_device;
+void *get_keyboard_device(int device_type,int file_type){
+	if (device_type == DEVICE_KEYBOARD){
+		if (file_type == IN_FILE)
+			return (void *)&keyboard_device;
+		else
+			return (void *)&vga_device;
+	}else{
+		if (file_type == IN_FILE)
+			return (void *)&serial_in_device;
+		else
+			return (void *)&serial_out_device;
+	}
 }
 void Jcmd_jdevices() {
 	int i;

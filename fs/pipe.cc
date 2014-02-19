@@ -49,7 +49,8 @@ static int fs_create_pipe(struct pipe *wpipe, struct pipe *rpipe) {
 		init_pipes();
 	}
 	if (wpipe==0 || rpipe==0) return ret;
-
+	wpipe->file_type = OUT_PIPE_FILE;
+	rpipe->file_type = IN_PIPE_FILE;
 	mutexLock(g_inode_lock);
 	for (i = 0; i < MAX_PIPES; i++) {
 		if (pipes[i].count == 0) {

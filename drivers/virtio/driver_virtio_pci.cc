@@ -102,6 +102,9 @@ static int addBufToQueue(struct virtqueue *vq, unsigned char *buf,
 }
 
 /*******************************  virtio_jdriver ********************************/
+int virtio_jdriver::ioctl(unsigned long arg1, unsigned long arg2){
+	return 0;
+}
 int virtio_jdriver::print_stats(){
 
 	ut_printf("%s: Send(P,K): %d,%d  Recv(P,K,I):%d,%d,%d\n",this->name, this->stat_sends,this->stat_send_kicks,this->stat_recvs,this->stat_recv_kicks,this->stat_recv_interrupts);
@@ -116,8 +119,7 @@ int virtio_jdriver::virtio_create_queue(uint16_t index, int qType) {
 	outw(pci_ioaddr + VIRTIO_PCI_QUEUE_SEL, index);
 
 	num = inw(pci_ioaddr + VIRTIO_PCI_QUEUE_NUM);
-	DEBUG(
-			"virtio NUM-%d : %x  :%x\n", index, num, vring_size(num, VIRTIO_PCI_VRING_ALIGN));
+	ut_log("	virtio create queue NUM-%d : num %x(%d)  :%x\n", index, num,num, vring_size(num, VIRTIO_PCI_VRING_ALIGN));
 	if (num == 0) {
 		vq[index] = 0;
 		return 0;
@@ -125,7 +127,7 @@ int virtio_jdriver::virtio_create_queue(uint16_t index, int qType) {
 
 	size = PAGE_ALIGN(vring_size(num, VIRTIO_PCI_VRING_ALIGN));
 
-	DEBUG("Creating PAGES order: %d size:%d  \n", get_order(size), size);
+	ut_log("	virtio Creating PAGES order: %d size:%d  \n", get_order(size), size);
 	//vring_size(num);
 	queue = mm_getFreePages(MEM_CLEAR, get_order(size));
 
@@ -219,7 +221,7 @@ int virtio_net_jdriver::probe_device(class jdevice *jdev) {
 	}
 	return JFAIL;
 }
-int virtio_net_jdriver::attach_device(class jdevice *jdev) {
+int virtio_net_jdriver::net_attach_device(class jdevice *jdev) {
 	unsigned long addr;
 	unsigned long features;
 	int i;
@@ -298,6 +300,12 @@ int virtio_net_jdriver::attach_device(class jdevice *jdev) {
 	return 1;
 }
 
+jdriver *virtio_net_jdriver::attach_device(class jdevice *jdev) {
+	COPY_OBJ(virtio_net_jdriver,this,new_obj,jdev);
+	((virtio_net_jdriver *)new_obj)->net_attach_device(jdev);
+	return (jdriver *)new_obj;
+}
+
 int virtio_net_jdriver::dettach_device(jdevice *jdev){
 	return JFAIL;
 }
@@ -371,7 +379,7 @@ int virtio_p9_jdriver::probe_device(class jdevice *jdev) {
 	}
 	return JFAIL;
 }
-int virtio_p9_jdriver::attach_device(class jdevice *jdev) {
+int virtio_p9_jdriver::p9_attach_device(class jdevice *jdev) {
 	auto pci_ioaddr = jdev->pci_device.pci_ioaddr;
 	unsigned long  features;
 
@@ -403,10 +411,15 @@ int virtio_p9_jdriver::attach_device(class jdevice *jdev) {
 
 	ipc_register_waitqueue(&p9_waitq, "waitq_p9", 0);
 	ar_registerInterrupt(32 + jdev->pci_device.pci_header.interrupt_line,
-			virtio_9p_interrupt, "virt_p9_irq", (void *) jdev->driver);
+			virtio_9p_interrupt, "virt_p9_irq", (void *) this);
 
 	p9_initFs(this);
 	return 1;
+}
+jdriver *virtio_p9_jdriver::attach_device(class jdevice *jdev) {
+	COPY_OBJ(virtio_p9_jdriver,this,new_obj,jdev);
+	((virtio_p9_jdriver *)new_obj)->p9_attach_device(jdev);
+	return (jdriver *)new_obj;
 }
 int virtio_p9_jdriver::dettach_device(jdevice *jdev){
 	return JFAIL;
@@ -419,8 +432,8 @@ int virtio_p9_jdriver::write(unsigned char *buf, int len){
 }
 
 /*************************************************************************************************/
-virtio_p9_jdriver p9_jdriver;
-virtio_net_jdriver net_jdriver;
+static virtio_p9_jdriver p9_jdriver;
+static virtio_net_jdriver net_jdriver;
 
 
 extern "C" {

@@ -19,10 +19,13 @@ extern void *g_inode_lock; /* protects inode_list */
 extern kmem_cache_t *g_slab_filep;
 #define ENOSPC          28      /* No space left on device */
 #define EAGAIN          11      /* Try again */
+#define CTRL_C 3
+#define CTRL_D 4
 
 extern int fs_dup_pipe(struct file *fp);
 struct file *fs_create_filep(int *fd, struct file *in_fp);
 int fs_destroy_filep(int fd);
+extern void ut_putchar_ondevice(unsigned char c, int device);
 }
 
 #define PIPE_IMPL 1
