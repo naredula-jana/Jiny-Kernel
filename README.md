@@ -33,6 +33,15 @@
    -  Running single apps like  JVM( tomcat or any java server), memcached  etc inside the Jiny vm as high priority app. Single app can be wrapped by a thin os like Jiny to enhance the performance.  Here the app will run much faster when compare to the same app in other vm's like freebsd or linux. Thin OS like JIny along with virtulization hardware can act like a performance enhancer for the apps on the metal.
    -  Running multiple normal priority application like any traditional unix like systems with optimizations for vm. 
 
+3. **How different is Jiny from OS like Linux?**
+   
+ - Thin kernel : Jiny is thin kernel, it is having very small set of drivers based on virtio, since it runs on hypervisor. Currently it supports only on x86_64 architecture. this makes the size of code small when compare to linux.
+ -  OS for Cloud: designed from groundup  to run on hypervisor, So it runs fater when compare to linux.
+ -  Object oriented: written in object oriented language like c++11.
+ -  Single app inside the vm: Designed to run single application effeciently when compare to traditional os.
+ 
+
+ 
 ##Benchmark:
 **Overview:** An application execution time on the metal is compared with the same app wrapped using thin OS like Jiny and launched as vm. The single app running in Jiny vm outperforms by completing in 6 seconds when compare to the same running on the metal that took 44sec. The key reason for superior performance in Jiny os is, it accelerates the app by allowing  it to run in ring-0 so that the overhead of system calls and context switches are minimized. The protection of system from app malfunctioning is left to virtulization hardware. To run in Jiny vm, the app need to recompile without any changes using the modified c library.
 
@@ -98,5 +107,5 @@
  -   [Memory optimization techniques](../master/doc/malloc_paper_techpulse_submit_final.pdf).
  -   [Jiny pagecache implementation](../master/doc/pagecache.txt)
 
- #Related Projects:#
+##Related Projects:
  -[Vmstate](https://github.com/naredula-jana/vmstate): Virtualmachine state capture and analysis.

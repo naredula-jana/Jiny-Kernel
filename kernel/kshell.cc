@@ -184,7 +184,7 @@ unsigned char *envs[] = { (unsigned char *) "HOSTNAME=jana",
 		(unsigned char *) "USER=jana", (unsigned char *) "HOME=/",
 		(unsigned char *) "PWD=/", 0 };
 static int thread_launch_user(void *arg1, void *arg2) {
-	unsigned char **argv = sc_get_thread_argv();
+	void **argv = sc_get_thread_argv();
 	if (argv == 0) {
 		unsigned char *arg[5];
 		arg[0] = (unsigned char *) arg1;
@@ -194,7 +194,7 @@ static int thread_launch_user(void *arg1, void *arg2) {
 		SYS_sc_execve((unsigned char *) arg1, arg, envs);
 	} else {
 		//unsigned char name[100];
-		unsigned char *arg[5];
+		void *arg[5];
 
 		//ut_strcpy(name, (const unsigned char *)argv[0]);
 		arg[0] = argv[0];
@@ -202,20 +202,20 @@ static int thread_launch_user(void *arg1, void *arg2) {
 		arg[2] = argv[2];
 		arg[3] = 0;
 		//	BRK;
-		SYS_sc_execve(argv[0], arg, envs);
+		SYS_sc_execve((unsigned char *)argv[0], (unsigned char **)arg, envs);
 	}
 	ut_printf(" ERROR: COntrol Never Reaches\n");
 	return 1;
 }
-unsigned char *tmp_arg[5];
-static int sh_create(unsigned char *bin_file, unsigned char *name) {
+void *tmp_arg[5];
+static int sh_create(unsigned char *bin_file, unsigned char *name, unsigned char *arg) {
 	int ret;
 
-	tmp_arg[0] = bin_file;
-	tmp_arg[1] = name;
-	tmp_arg[2] = 0;
+	tmp_arg[0] =(void *) bin_file;
+	tmp_arg[1] =(void *) name;
+	tmp_arg[2] =(void *) arg;
 	sc_set_fsdevice(DEVICE_SERIAL, DEVICE_SERIAL);  /* all user level thread on serial line */
-	ret = sc_createKernelThread(thread_launch_user, (unsigned char *) &tmp_arg,
+	ret = sc_createKernelThread(thread_launch_user, (void **) &tmp_arg,
 			name);
 
 	return ret;
@@ -229,8 +229,10 @@ int kshell::main(void *arg) {
 	if (ret != 0) {
 //		fs_close(ret);
 #if 1
+	//	ret = sh_create((unsigned char *) USERLEVEL_SHELL,
+	//			(unsigned char *) "sh", (unsigned char *)"start"); // start the user level shell
 		ret = sh_create((unsigned char *) USERLEVEL_SHELL,
-				(unsigned char *) "sh"); // start the user level shell
+				(unsigned char *) "sh", 0); // start the user level shell
 #endif
 	} else {
 		/* attach kernel shell to serial line since user level shell fails */

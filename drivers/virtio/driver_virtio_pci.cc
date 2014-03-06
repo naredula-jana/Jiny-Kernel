@@ -21,10 +21,9 @@ extern "C" {
 #include "net/virtio_net.h"
 #include "mach_dep.h"
 extern int p9_initFs(void *p);
-
 }
 #include "jdevice.h"
-
+extern int register_netdevice(jdevice *device);
 
 /************************   utilities used by vitio drivr ***************************/
 struct virtio_feature_desc {
@@ -102,9 +101,7 @@ static int addBufToQueue(struct virtqueue *vq, unsigned char *buf,
 }
 
 /*******************************  virtio_jdriver ********************************/
-int virtio_jdriver::ioctl(unsigned long arg1, unsigned long arg2){
-	return 0;
-}
+
 int virtio_jdriver::print_stats(){
 
 	ut_printf("%s: Send(P,K): %d,%d  Recv(P,K,I):%d,%d,%d\n",this->name, this->stat_sends,this->stat_send_kicks,this->stat_recvs,this->stat_recv_kicks,this->stat_recv_interrupts);
@@ -290,8 +287,9 @@ int virtio_net_jdriver::net_attach_device(class jdevice *jdev) {
 	inb(pci_ioaddr + VIRTIO_PCI_ISR);
 	virtio_queue_kick(this->vq[0]);
 
+#if 0
 	registerNetworkHandler(NETWORK_DRIVER, netdriver_xmit, (void *) this,this->mac);
-
+#endif
 	virtio_set_pcistatus(pci_ioaddr,
 			virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER_OK);
 	ut_log("VirtioNet:  Initilization Completed status:%x\n",
@@ -303,6 +301,7 @@ int virtio_net_jdriver::net_attach_device(class jdevice *jdev) {
 jdriver *virtio_net_jdriver::attach_device(class jdevice *jdev) {
 	COPY_OBJ(virtio_net_jdriver,this,new_obj,jdev);
 	((virtio_net_jdriver *)new_obj)->net_attach_device(jdev);
+	register_netdevice(jdev);
 	return (jdriver *)new_obj;
 }
 
@@ -355,6 +354,15 @@ int virtio_net_jdriver::write(unsigned char *data, int len){
 		}
 
 	return 1;
+}
+int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2){
+	unsigned char *arg_mac = (unsigned char *)arg2;
+	if (arg_mac ==0)
+	return JFAIL;
+	else{
+		ut_memcpy(arg_mac,mac,7);
+		return JSUCCESS;
+	}
 }
 /***************************************************************************************************/
 extern wait_queue_t p9_waitq;
@@ -430,7 +438,9 @@ int virtio_p9_jdriver::read(unsigned char *buf, int len){
 int virtio_p9_jdriver::write(unsigned char *buf, int len){
 	return 0;
 }
-
+int virtio_p9_jdriver::ioctl(unsigned long arg1, unsigned long arg2){
+	return 0;
+}
 /*************************************************************************************************/
 static virtio_p9_jdriver p9_jdriver;
 static virtio_net_jdriver net_jdriver;
@@ -446,7 +456,7 @@ void init_p9_jdriver() {
 
 	register_jdriver(&p9_jdriver);
 }
-void *vptr_net[7]={(void *)&virtio_net_jdriver::probe_device,(void *)&virtio_net_jdriver::attach_device,(void *)&virtio_net_jdriver::dettach_device,(void *)&virtio_net_jdriver::read,(void *)&virtio_net_jdriver::write,(void *)&virtio_jdriver::print_stats,0};
+void *vptr_net[8]={(void *)&virtio_net_jdriver::probe_device,(void *)&virtio_net_jdriver::attach_device,(void *)&virtio_net_jdriver::dettach_device,(void *)&virtio_net_jdriver::read,(void *)&virtio_net_jdriver::write,(void *)&virtio_jdriver::print_stats,(void *)&virtio_net_jdriver::ioctl,0};
 void init_net_jdriver() {
 	void **p=(void **)&net_jdriver;
 	*p=&vptr_net[0];

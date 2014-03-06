@@ -283,6 +283,7 @@ void ar_irqHandler(void *p,unsigned int int_no)
 #endif
 }
 extern void timer_callback(registers_t regs);
+#if 0
 void init_timer() {
 	addr_t frequency = 100;
 	// Firstly, register our timer callback.
@@ -304,5 +305,5 @@ void init_timer() {
 	outb(0x40, l);
 	outb(0x40, h);
 }
-
+#endif
 

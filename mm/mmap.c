@@ -32,10 +32,10 @@
  */
 /* TODO : locking the entire vmap layer */
 int stat_vma_removes=0;
-void ipi_pagetable_interrupt(){
+int ipi_pagetable_interrupt(void *unused){
 //	ut_log(" ipi interrupts clearing pagetables :cpuid :%d\n",getcpuid());
 	ar_flushTlbGlobal();
-	return;
+	return 0;
 }
 int vma_page_remove(struct page *page){
 	void *inode;

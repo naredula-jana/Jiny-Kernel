@@ -9,11 +9,12 @@ extern "C" {
 class jdriver;
 
 class jdevice: public vinode {
+
 public:
 	unsigned char *name;
 	jdriver* driver;
 
-
+	jdevice();
 	int read(unsigned long offset, unsigned char *data, int len);
 	int write(unsigned long offset, unsigned char *data, int len);
 	int close();
@@ -50,7 +51,7 @@ public:
 
 	int virtio_create_queue(uint16_t index, int qType);
 	int print_stats();
-	int ioctl(unsigned long arg1,unsigned long arg2);
+
 	struct virtqueue *vq[5];
 };
 
@@ -66,6 +67,7 @@ public:
 	int dettach_device(jdevice *dev);
 	int read(unsigned char *buf, int len);
 	int write(unsigned char *buf, int len);
+	int ioctl(unsigned long arg1,unsigned long arg2);
 
 	unsigned char mac[7];
 };
@@ -79,6 +81,7 @@ public:
 	int dettach_device(jdevice *dev);
 	int read(unsigned char *buf, int len);
 	int write(unsigned char *buf, int len);
+	int ioctl(unsigned long arg1,unsigned long arg2);
 	void *virtio_dev; /* TODO : need to remove later */
 
 

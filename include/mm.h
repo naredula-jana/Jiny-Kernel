@@ -21,6 +21,12 @@
 typedef struct jcache_s jcache_t;
 #define JSLAB_FLAGS_DEBUG 0x10000
 #ifdef JINY_SLAB
+#if 0
+jcache_t *
+jslab_create_cache (const uint8_t *name, size_t size, size_t offset,
+	unsigned long flags, void (*ctor)(void*, jcache_t *, unsigned long),
+	void (*dtor)(void*, jcache_t *, unsigned long));
+#endif
 #define kmem_cache_t jcache_t
 #define mm_slab_cache_alloc jslab_alloc_from_cache
 #define mm_malloc jslab_alloc_from_predefined

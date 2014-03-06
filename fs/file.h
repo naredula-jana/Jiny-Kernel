@@ -48,7 +48,7 @@ public:
 	virtual int ioctl(unsigned long arg1,unsigned long arg2)=0;
 };
 #define MAX_SOCKET_QUEUE_LENGTH 100
-struct queue_struct {
+struct sock_queue_struct {
 	wait_queue_t waitq;
 	int producer, consumer;
 	struct {
@@ -68,7 +68,7 @@ public:
 	uint16_t local_port;
 	struct sockaddr dest_addr;
 
-	struct queue_struct queue;
+	struct sock_queue_struct queue;
 	void *proto_connection;
 	static kmem_cache_t *slab_objects;
 
@@ -80,9 +80,11 @@ public:
 	int add_to_queue(unsigned char *buf, int len);
 	int remove_from_queue(unsigned char **buf,  int *len);
 
-	static vinode *init();
+	static vinode *create_new();
+	static int attach_rawpkt(unsigned char *c, unsigned int len, unsigned char **replace_buf);
 	static class socket *list[MAX_SOCKETS];
 	static int list_size;
+	static class network_stack *net_stack;
 };
 typedef struct hard_link hard_link_t;
 typedef struct hard_link{
@@ -135,6 +137,7 @@ public:
 };
 
 /*******************************************************************************/
+
 
 
 #define fd_to_file(fd) (fd >= 0 && g_current_task->mm->fs.total > fd) ? (g_current_task->mm->fs.filep[fd]) : ((struct file *)0)

@@ -9,7 +9,7 @@
 *
 */
 //#define DEBUG_ENABLE 1
-
+#define JFS 1
 #include "file.h"
 extern "C"{
 #include "common.h"
@@ -19,6 +19,7 @@ struct Socket_API *socket_api = 0;
 static int direct_sockrecv=0;
 extern int network_call_softnet(unsigned char *data, int len);
 int lwip_peek_msgs(void *arg);
+extern int g_network_ip;
 }
 /*
  * Posting Thread:
@@ -42,8 +43,31 @@ int lwip_peek_msgs(void *arg);
 #5  0x000000004011831c in socket::read (this=0x7f8c8020, offset=0, data=0x7f8a24e0 "", len=1224) at socket.cc:106
 #6  0x0000000040119c7a in SYS_recvfrom (sockfd=3, buf=0x7f8a24e0, len=1224, flags=0, dest_addr=0x7f8a398d, addrlen=2137669392) at socket.cc:481
 
- */
 
+attach_rawpkt -> add_to_queue
+remove_from_queue->net_stack:read
+
+ */
+int socket::attach_rawpkt(unsigned char *c, unsigned int len, unsigned char **replace_buf){
+	unsigned char *port;
+	socket *sock;
+	if (direct_sockrecv!=1){
+		return JFAIL;
+	}
+	sock = socket::list[0];
+	if (sock != 0){
+		port= (unsigned char *)sock->dest_addr.sin_port;
+	}else{
+		return JFAIL;
+	}
+	/* TODO: need to queue to the proper socket based on: src_ip-port,dest_ip-port, protocol. */
+	//if ( c[33] == 0x11 && port[0]==c[46] && port[1]==c[47]){ /* udp packets with matching remote port */
+		if ( sock->add_to_queue(c,len)==JSUCCESS){
+			*replace_buf = (unsigned char *)alloc_page(0);
+		}
+	//}
+	return JFAIL;
+}
 int socket::add_to_queue(unsigned char *buf, int len) {
 	unsigned long flags;
 	int ret=JFAIL;
@@ -78,7 +102,6 @@ int socket::remove_from_queue(unsigned char **buf,  int *len) {
 				&& (queue.data[queue.consumer].len != 0)) {
 			*buf = queue.data[queue.consumer].buf;
 			*len = queue.data[queue.consumer].len;
-
 			//	ut_log("netrecv : receving from queue len:%d  prod:%d cons:%d\n",queue.data[queue.consumer].len,queue.producer,queue.consumer);
 
 			queue.data[queue.consumer].len = 0;
@@ -99,43 +122,35 @@ int socket::remove_from_queue(unsigned char **buf,  int *len) {
 static void *vptr_socket[7]={(void *)&socket::read,(void *)&socket::write,(void *)&socket::close,
 		(void *)&socket::ioctl,0};
 
-vinode* socket::init(){
-	socket *sock= (socket *) mm_slab_cache_alloc(socket::slab_objects, 0);
-	if (sock == 0) return 0;
 
-	int i;
-	void **p=(void **)sock;
-	*p=&vptr_socket[0];
-	socket::list[socket::list_size] = sock;
-	socket::list_size++;
 
-	ut_memset((unsigned char *) &sock->queue, 0, sizeof(struct queue_struct));
-	for (i=0; i<MAX_SOCKET_QUEUE_LENGTH; i++){
-		sock->queue.data[i].buf = 0;
-		sock->queue.data[i].len = 0; /* this represent actual data length */
-	}
-	sock->queue.spin_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"socketnetq_lock");
-	ipc_register_waitqueue(&sock->queue.waitq, "socket_waitq",WAIT_QUEUE_WAKEUP_ONE);
-
-	return (vinode *)sock;
-}
-
-int socket::read(unsigned long offset, unsigned char *data, int len) {
+int socket::read(unsigned long offset, unsigned char *app_data, int app_len) {
 	int ret = 0;
 	unsigned char *buf=0;
 	int buf_len;
+
+	if (proto_connection == 0) return SYSCALL_FAIL;
 	/* push a packet in to protocol stack  */
 	while (direct_sockrecv==1){
 		ret = remove_from_queue(&buf, &buf_len);
+
 		if (ret == JSUCCESS){
-			ret = network_call_softnet(buf,buf_len);
+			if (net_stack != 0){
+			//	net_stack->read(buf,buf_len,app_data,app_len);
+			}else{
+
+			}
+//			ret = network_call_softnet(buf,buf_len);
 		}
+
+#ifdef LWIP_NONMODULE // TODO : need to replaced with the generic function
 		if (lwip_peek_msgs(proto_connection) > 0){
 			break;
 		}
+#endif
 	}
 	/* read the packet from protocol stack */
-	ret = socket_api->read_from( proto_connection, data, len, (uint32_t *)&dest_addr, sizeof(dest_addr));
+	ret = socket_api->read_from( proto_connection, app_data, app_len, (uint32_t *)&dest_addr, sizeof(dest_addr));
 	SYSCALL_DEBUG("RECVFROM return with len :%d \n", ret);
 	if (ret > 0){
 		stat_in++;
@@ -150,6 +165,7 @@ int socket::read(unsigned long offset, unsigned char *data, int len) {
 int socket::write(unsigned long offset, unsigned char *data, int len) {
 	int ret = 0;
 
+	if (proto_connection == 0) return SYSCALL_FAIL;
 	ret = socket_api->write((void *) proto_connection, data, len, sock_type, dest_addr.addr, dest_addr.sin_port);
 	SYSCALL_DEBUG("Write return with len :%d \n", ret);
 	if (ret > 0){
@@ -159,7 +175,26 @@ int socket::write(unsigned long offset, unsigned char *data, int len) {
 		stat_err++;
 	return ret;
 }
+vinode* socket::create_new(){
+	socket *sock= (socket *) mm_slab_cache_alloc(socket::slab_objects, 0);
+	if (sock == 0) return 0;
 
+	int i;
+	void **p=(void **)sock;
+	*p=&vptr_socket[0];
+	socket::list[socket::list_size] = sock;
+	socket::list_size++;
+
+	ut_memset((unsigned char *) &sock->queue, 0, sizeof(struct sock_queue_struct));
+	for (i=0; i<MAX_SOCKET_QUEUE_LENGTH; i++){
+		sock->queue.data[i].buf = 0;
+		sock->queue.data[i].len = 0; /* this represent actual data length */
+	}
+	sock->queue.spin_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"socketnetq_lock");
+	ipc_register_waitqueue(&sock->queue.waitq, "socket_waitq",WAIT_QUEUE_WAKEUP_ONE);
+
+	return (vinode *)sock;
+}
 int socket::close(){
 	return JSUCCESS;
 }
@@ -178,25 +213,7 @@ int Jcmd_sockrecv(){
 	ut_printf(" direct_sockrecv :%d\n",direct_sockrecv);
 	return 0;
 }
-int attach_rawpkt_to_socket(unsigned char *c, unsigned int len, unsigned char **replace_buf){
-	unsigned char *port;
-	socket *sock;
-	if (direct_sockrecv!=1){
-		return JFAIL;
-	}
-	sock = socket::list[0];
-	if (sock != 0){
-		port= (unsigned char *)sock->dest_addr.sin_port;
-	}else{
-		return JFAIL;
-	}
-	//if ( c[33] == 0x11 && port[0]==c[46] && port[1]==c[47]){ /* udp packets with matching remote port */
-		if ( sock->add_to_queue(c,len)==JSUCCESS){
-			*replace_buf = (unsigned char *)alloc_page(0);
-		}
-	//}
-	//return JFAIL;
-}
+
 
 int register_to_socketLayer(struct Socket_API *api) {
 	if (api == 0)
@@ -224,21 +241,22 @@ static int sock_check(int sockfd){
 int socket_close(struct file *file) {
 	int ret;
 	struct socket *inode=(struct socket *)file->vinode;
-#if JFS
+#if  0
 	if (inode->count.counter > 1){
 		fs_putInode(inode);
 		return 1;
 	}
+#endif
 	if (socket_api == 0){
 		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
 	}
-	if (inode->fs_private != 0){
-		ret = socket_api->close((void *)inode->fs_private, inode->u.socket.sock_type);
+	if (inode->proto_connection != 0){
+		ret = socket_api->close((void *)inode->proto_connection, inode->sock_type);
 	}else{
 		ret = SYSCALL_SUCCESS;
 	}
-	fs_putInode(inode);
-#endif
+//	fs_putInode(inode);
+
 	return ret;
 }
 #if 0
@@ -391,16 +409,16 @@ int SYS_getsockname(int sockfd, struct sockaddr *addr, int *addrlen){
 		return SYSCALL_FAIL;
 	}else{
 		inode=(struct socket *)file->vinode;
-		if (inode->u.socket.sock_type==0){
+		if (inode->sock_type==0){
 			SYSCALL_DEBUG("FAIL  getsockname %d \n", sockfd);
 			return SYSCALL_FAIL;
 		}
 	}
 
 	addr->family = AF_INET;
-	addr->addr = inode->u.socket.local_addr ;
+	addr->addr = inode->local_addr ;
 	addr->addr = net_htonl(g_network_ip);
-	addr->sin_port = inode->u.socket.local_port;
+	addr->sin_port = inode->local_port;
 	//ret = socket_api->get_addr(file->inode->fs_private, addr);
 
 	SYSCALL_DEBUG("getsocknameret %d ip:%x port:%x ret:%d\n", sockfd, addr->addr, addr->sin_port,ret);
@@ -421,7 +439,7 @@ int SYS_accept(int fd) {
 	if (file == 0)
 		return SYSCALL_FAIL;
 	struct socket *inode=(struct socket *)file->vinode;
-	void *conn = socket_api->accept((void *)inode->fs_private);
+	void *conn = socket_api->accept((void *)inode->proto_connection);
 	if (conn == 0)
 		return SYSCALL_FAIL;
 	int i = SYS_fs_open("/dev/sockets", 0, 0);
@@ -432,11 +450,11 @@ int SYS_accept(int fd) {
 
 	new_file = g_current_task->mm->fs.filep[i];
 	struct socket *new_inode=(struct socket *)new_file->vinode;
-	new_inode->fs_private = (unsigned long)conn;
-	new_inode->u.socket.local_addr = inode->u.socket.local_addr;
-	new_inode->u.socket.local_port = inode->u.socket.local_port;
+	new_inode->proto_connection = (unsigned long)conn;
+	new_inode->local_addr = inode->local_addr;
+	new_inode->local_port = inode->local_port;
 
-	new_inode->u.socket.sock_type = SOCK_STREAM;
+	new_inode->sock_type = SOCK_STREAM;
 	new_file->flags = file->flags;
 
 	if (i > 0)

@@ -17,7 +17,9 @@ static int device_count = 0;
 #define MAX_DRIVERS 100
 class jdriver *jdriver_list[MAX_DRIVERS];
 static int driver_count = 0;
+jdevice::jdevice(){
 
+}
 int jdevice::init_pci(uint8_t bus, uint8_t device, uint8_t function) {
 	pci_device.pci_addr.bus = bus;
 	pci_device.pci_addr.device = device;
@@ -65,12 +67,12 @@ void jdevice::print_stats() {
 	if (ut_strcmp(name, (unsigned char *) "pci") != 0) {
 		ut_printf("%s: ", name);
 	} else {
-		ut_printf("pci bus:dev:func: %2x:%2x:%2x : ", pci_device.pci_addr.bus,
-				pci_device.pci_addr.device, pci_device.pci_addr.function);
+		ut_printf("pci bus:dev:func: %2x:%2x:%2x : ", pci_device.pci_addr.bus, pci_device.pci_addr.device,
+				pci_device.pci_addr.function);
 	}
 	if (driver != 0) {
 		driver->print_stats();
-	}else{
+	} else {
 		ut_printf(" - No driver");
 	}
 	ut_printf("\n");
@@ -115,6 +117,10 @@ void register_jdriver(class jdriver *driver) {
 	driver_count++;
 }
 
+void *operator new(int sz) {
+    void *obj = ut_calloc(sz);
+    return obj;
+}
 /*********************************************************************************/
 extern "C" {
 
@@ -130,16 +136,14 @@ static int scan_pci_devices() {
 			for (k = 0; k < MAX_PCI_FUNC; k++) {
 				if (device_count >= (MAX_DEVICES - 1))
 					return JSUCCESS;
-				jdevice_list[device_count] =
-						(class jdevice *) ut_calloc(sizeof(class jdevice));
-				ut_memset((unsigned char *) jdevice_list[device_count], 0,
-						sizeof(class jdevice));
-				if (jdevice_list[device_count]->init_pci(i, j, k)==JFAIL){
+				//jdevice_list[device_count] = (class jdevice *) ut_calloc(sizeof(class jdevice));
+				jdevice_list[device_count] = new jdevice();
+				if (jdevice_list[device_count]->init_pci(i, j, k) == JFAIL) {
 					ut_free(jdevice_list[device_count]);
 					continue;
 				}
 
-				jdevice_list[device_count]->init((unsigned char *)"pci");
+				jdevice_list[device_count]->init((unsigned char *) "pci");
 				/* attach the device to the know driver */
 				for (d = 0; d < driver_count; d++) {
 					if (jdriver_list[d]->probe_device(jdevice_list[device_count]) == JSUCCESS) {

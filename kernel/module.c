@@ -7,7 +7,7 @@
  *   kernel/module.c
  *   Author: Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
  */
-
+#if 0
 #include "common.h"
 #include "interface.h"
 #include "elf.h"
@@ -915,3 +915,4 @@ int perf_stat_rip_hit(unsigned long rip){
 	stat_cpu_rip_unknown_hit++;
 	return JFAIL;
 }
+#endif

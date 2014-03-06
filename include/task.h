@@ -40,8 +40,8 @@ struct thread_struct {
 	void *sp; /* kernel stack pointer when scheduling start */
 	void *ip; /* kernel ip when scheduling start */
 	void *rbp; /* kernel rbp, currently used for getting back trace */
-	int(*real_ip)(void *);
-	unsigned char **argv;
+	int(*real_ip)(void *, void *);
+	void **argv;
 	struct user_thread userland;
 	struct user_regs user_regs;
 };

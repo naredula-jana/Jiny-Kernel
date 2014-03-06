@@ -40,7 +40,7 @@ flow-3)  low_level_output -> netif_tx -> driver_callback-netdriver_xmit --- ( pr
  recv path :  buf allocated in virtio , freed in netRX_BH after copying the content in protocol layer to pbuf
  send path : buf is allocated in netdriver_xmit(virtio)
  */
-
+#if 0
 //#define DEBUG_ENABLE 1
 #include "common.h"
 
@@ -360,11 +360,14 @@ int init_networking() {
 extern struct Socket_API *socket_api;
 
 void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
-	if (socket_api == 0)
+	if (socket_api == 0){
+		ut_printf(" No TCP/IP stack registered \n");
 		return;
+	}
 	socket_api->network_status(arg1, arg2);
 	ut_printf(" queue full error:%d  producer:%d consumer:%d  from_net:%d to_net:%d rxBhRecvs:%d\n",
 			queue.error_full, queue.producer, queue.consumer, stat_from_driver,
 			stat_to_driver,stat_netrx_bh_recvs);
 	return;
 }
+#endif

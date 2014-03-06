@@ -25,7 +25,7 @@ int ipc_waiton_waitqueue(wait_queue_t *waitqueue, unsigned long ticks);
 int sc_sleep( long ticks); /* each tick is 100HZ or 10ms */
 unsigned long SYS_sc_vfork();
 unsigned long SYS_sc_fork();
-unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, void *ctid,  void *args) ;
+unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid,  int(*fn)(void *, void *),  void **args) ;
 int SYS_sc_exit(int status);
 void sc_delete_task(struct task_struct *task);
 int sc_task_stick_to_cpu(unsigned long pid, int cpu_id);
@@ -37,6 +37,7 @@ void sc_schedule();
 
 /* ipc */
 void ipc_check_waitqueues();
+void ipc_release_resources(struct task_struct *task);
 
 /* mm */
 unsigned long mm_getFreePages(int gfp_mask, unsigned long order);
@@ -107,6 +108,8 @@ unsigned long fs_fdatasync(struct file *file);
 int fs_stat(struct file *file, struct fileStat *stat);
 unsigned long fs_readdir(struct file *file, struct dirEntry *dir_ent, int len, int *offset);
 struct file *fs_dup(struct file *old_filep, struct file *new_filep);
+int fs_set_flags(struct file *fp, int flags);
+int fs_get_type(struct file *fp);
 
 long SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt);
 long SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt);
@@ -121,7 +124,12 @@ unsigned long SYS_fs_fadvise(unsigned long fd,unsigned long offset, unsigned lon
 /* Utilities */
 
 void ut_getBackTrace(unsigned long *rbp, unsigned long task_addr, backtrace_t *bt);
-
+int perf_stat_rip_hit(unsigned long rip);
+unsigned long get_kvm_clock();
+void apic_set_task_priority(uint8_t prio);
+void apic_reenable();
+void *get_keyboard_device(int device_type,int file_type);
+void ipc_del_from_waitqueues(struct task_struct *task);
 
 /* architecture depended */
 void ar_registerInterrupt(uint8_t n, isr_t handler,char *name, void *private_data);
@@ -227,9 +235,9 @@ int ut_get_wallclock(unsigned long *sec, unsigned long *usec);
 void ut_putchar(uint8_t c);
 
 /* scheduling */
-unsigned long sc_createKernelThread(int (*fn)(void *, void *),uint8_t *argv,uint8_t *name);
+unsigned long sc_createKernelThread(int (*fn)(void *, void *),void **argv,uint8_t *name);
 void SYS_sc_execve(uint8_t *file,uint8_t **argv,uint8_t **env);
-unsigned char **sc_get_thread_argv();
+void **sc_get_thread_argv();
 void sc_set_fsdevice(unsigned int in, unsigned int out);
 
 

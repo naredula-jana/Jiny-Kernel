@@ -22,7 +22,7 @@ ifdef LWIP_NONMODULE
 OBJECTS += $(LWIP_OBJ) 
 endif
 
-OBJECTS += kernel/debug.o kernel/jdevices.o kernel/init.o  kernel/ipc.o  kernel/module.o  kernel/network.o  kernel/kshell.o  kernel/symbol_table.o  kernel/syscall.o  kernel/task.o  kernel/util.o
+OBJECTS += kernel/debug.o kernel/jdevices.o kernel/init.o  kernel/acpi.o kernel/ipc.o  kernel/module_app.o  kernel/network_sched.o  kernel/kshell.o  kernel/symbol_table.o  kernel/syscall.o  kernel/sched_task.o  kernel/util.o
 OBJECTS +=drivers/virtio/driver_virtio_pci.o
  
 user: 
@@ -33,6 +33,9 @@ kshell:
 	make SOURCE_ROOT=$$PWD -C modules/kshell
 	cp modules/kshell/kshell.o test/root/
 	
+udpip_stack:
+	make SOURCE_ROOT=$$PWD -C modules/udp_stack
+
 test_net:
 	make SOURCE_ROOT=$$PWD -C modules/test_net
 	cp modules/test_net/test_net.o test/root/
@@ -46,11 +49,13 @@ all: lwip.a
 	make SOURCE_ROOT=$$PWD -C kernel
 	make SOURCE_ROOT=$$PWD -C drivers
 #	make SOURCE_ROOT=$$PWD -C drivers/xen
+ifdef LWIP_ENABLE
 ifdef LWIP_NONMODULE
 	make SOURCE_ROOT=$$PWD -C modules/lwip_net
 else
 	make SOURCE_ROOT=$$PWD -C modules/lwip_net
 	ld -r $(LWIP_OBJ) -o lwip-module.o
+endif
 endif
 	make SOURCE_ROOT=$$PWD -C drivers/hostshm
 	make SOURCE_ROOT=$$PWD -C drivers/virtio
@@ -84,7 +89,9 @@ clean:
 	make SOURCE_ROOT=$$PWD -C arch/$(ARCH_DIR)/smp clean
 	make SOURCE_ROOT=$$PWD -C mm clean
 	make SOURCE_ROOT=$$PWD -C mm/memleak clean
+ifdef LWIP_ENABLE
 	\rm $(LWIP_OBJ)
+endif
 
 LWC     := $(shell find /opt_src/lwip/src/ -type f -name '*.c')
 LWC     := $(filter-out %6.c %ip6_addr.c, $(LWC))

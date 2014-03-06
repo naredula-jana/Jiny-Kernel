@@ -243,8 +243,12 @@ void ut_putchar_ondevice(unsigned char c, int device) {
 	spin_unlock_irqrestore(&putchar_lock, flags);
 }
 
-void ut_putchar(unsigned char c) {
-	return ut_putchar_ondevice(c,DEVICE_SERIAL);
+static void putchar(unsigned char c) {
+	unsigned char buf[2];
+
+	buf[0]=c;
+	if (!g_boot_completed) return ut_putchar_ondevice(c,DEVICE_DISPLAY_VGI);
+	return SYS_fs_write(1,buf,1);
 }
 
 struct writer_struct{
@@ -259,7 +263,7 @@ static int str_writer(struct writer_struct *writer,unsigned char c){
 		//	ut_putchar(c);
 		return 1;
 	}else if (writer->type==0){
-	    ut_putchar(c);
+		putchar(c);
 		return 1;
 	}else if (writer->buf != 0 && (writer->len > 0)){
 		writer->buf[0]=c;

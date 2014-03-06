@@ -433,7 +433,7 @@ struct file *fs_open(uint8_t *filename, int flags, int mode) {
 	}
 	/* special files handle here before going to regular files */
 	if (ut_strcmp((uint8_t *) filename, (uint8_t *) "/dev/sockets") == 0) {
-		filep->vinode = socket::init();
+		filep->vinode = socket::create_new();
 		if (filep->vinode == NULL)
 			goto error;
 		filep->offset = 0;
