@@ -11,6 +11,8 @@
          file--- vinode->pipe
          file--- vinode->device
 */
+#ifndef _JINYKERNEL_FILE_HH
+#define _JINYKERNEL_FILE_HH
 extern "C" {
 #include "common.h"
 #include "mm.h"
@@ -47,7 +49,7 @@ public:
 	virtual int close()=0;
 	virtual int ioctl(unsigned long arg1,unsigned long arg2)=0;
 };
-#define MAX_SOCKET_QUEUE_LENGTH 100
+#define MAX_SOCKET_QUEUE_LENGTH 500
 struct sock_queue_struct {
 	wait_queue_t waitq;
 	int producer, consumer;
@@ -61,16 +63,25 @@ struct sock_queue_struct {
 	int error_full;
 };
 #define MAX_SOCKETS 100
+class jdevice;
+class network_stack;
+class network_connection{
+public:
+	int type; /* udp or tcp */
+	uint32_t dest_ip,src_ip;
+	uint16_t dest_port,src_port;
+	uint8_t 	protocol; /* ip_protocol , tcp or udp */
+
+	jdevice *net_dev;
+	void *proto_connection;
+};
+#define MAX_NETWORK_STACKS 5
+
 class socket: public vinode {
 public:
-	int sock_type;
-	uint32_t local_addr;
-	uint16_t local_port;
-	struct sockaddr dest_addr;
-
+	class network_connection network_conn;
+	network_stack *net_stack;
 	struct sock_queue_struct queue;
-	void *proto_connection;
-	static kmem_cache_t *slab_objects;
 
 	int read(unsigned long offset, unsigned char *data, int len);
 	int write(unsigned long offset, unsigned char *data, int len);
@@ -80,11 +91,16 @@ public:
 	int add_to_queue(unsigned char *buf, int len);
 	int remove_from_queue(unsigned char **buf,  int *len);
 
-	static vinode *create_new();
+	static vinode *create_new(int type);
+	static int delete_sock(socket *sock);
 	static int attach_rawpkt(unsigned char *c, unsigned int len, unsigned char **replace_buf);
+
 	static class socket *list[MAX_SOCKETS];
 	static int list_size;
-	static class network_stack *net_stack;
+	static network_stack *net_stack_list[MAX_NETWORK_STACKS];
+	static jdevice *net_dev;
+	static int stat_raw_drop;
+	static void print_stats();
 };
 typedef struct hard_link hard_link_t;
 typedef struct hard_link{
@@ -140,7 +156,7 @@ public:
 
 
 
-#define fd_to_file(fd) (fd >= 0 && g_current_task->mm->fs.total > fd) ? (g_current_task->mm->fs.filep[fd]) : ((struct file *)0)
+#define fd_to_file(fd) (fd >= 0 && g_current_task->mm->fs->total > fd) ? (g_current_task->mm->fs->filep[fd]) : ((struct file *)0)
 
-
+#endif
 

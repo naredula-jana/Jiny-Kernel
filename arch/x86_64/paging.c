@@ -499,7 +499,7 @@ int ar_check_valid_address(unsigned long addr, int len) {
 	struct mm_struct *mm = g_current_task->mm;
 
 	/* 1. check if it is  user level space */
-	vma = vm_findVma(mm, (addr & PAGE_MASK), 4);
+	vma = vm_findVma(mm, (addr ), 4);
 	if (vma != 0) {
 		if ((addr+len) <= vma->vm_end){
 			return JSUCCESS;
@@ -519,7 +519,7 @@ int ar_check_valid_address(unsigned long addr, int len) {
 			return JSUCCESS;
 		}
 	}
-
+	Jcmd_maps(0,0);
 	BUG();
 	return JFAIL;
 }
@@ -572,9 +572,11 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 			int stack_var;
 		//	ut_printf("ERROR: user program Segmentaion Fault addr:%x  ip:%x :%s\n",addr,faulting_ip,g_current_task->name);
 			Jcmd_maps(0,0);
-			ut_log("page fault addr:%x ip:%x  \n",addr,faulting_ip);
+			ut_log("ERROR: Segmentation fault page fault addr:%x ip:%x  \n",addr,faulting_ip);
+			Jcmd_lsmod(0,0);
 			BUG();
-			ut_showTrace(&stack_var);
+			//ut_showTrace(&stack_var);
+
 			SYS_sc_exit(902);
 			return 1;
 		}

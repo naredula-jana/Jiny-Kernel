@@ -50,6 +50,7 @@ struct thread_struct {
 struct file;
 struct fs_struct {
 	struct file *filep[MAX_FDS];
+	atomic_t count;
 	int total;
 	unsigned char cwd[200]; // change to MAX_FILENAME
 };
@@ -58,7 +59,7 @@ struct mm_struct {
 	struct vm_area_struct *mmap; /* list of VMAs */
 	unsigned long pgd;
 	atomic_t count; /* How many references to "struct mm_struct" (users count as 1) */
-	struct fs_struct fs;
+	struct fs_struct *fs;
 	struct file *exec_fp; /* execute file */
 	unsigned long brk_addr, brk_len;
 	unsigned long anonymous_addr;
@@ -74,6 +75,15 @@ typedef struct task_queue {
 	struct list_head head;
 	char *name;
 } task_queue_t;
+
+enum {
+	THREAD_LOW_PRIORITY=0,
+	THREAD_HIGH_PRIORITY=1
+};
+#define CLONE_VM 0x100
+#define CLONE_KERNEL_THREAD 0x10000
+#define CLONE_VFORK 0x1000
+#define CLONE_FS 0x2000
 /*
  - task can be on run queue or in wait queues */
 struct task_struct {
@@ -85,6 +95,7 @@ struct task_struct {
 
 	unsigned long pid,ppid;
 	unsigned char name[MAX_TASK_NAME+1];
+	char thread_type;
 
 	int allocated_cpu;
 	int current_cpu;

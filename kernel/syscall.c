@@ -421,8 +421,8 @@ unsigned long SYS_chdir(uint8_t *filename) {
 	} else {
 		fs_close(fp);
 	}
-	ut_strncpy(g_current_task->mm->fs.cwd, filename, MAX_FILENAME);
-	ret = ut_strlen(g_current_task->mm->fs.cwd);
+	ut_strncpy(g_current_task->mm->fs->cwd, filename, MAX_FILENAME);
+	ret = ut_strlen(g_current_task->mm->fs->cwd);
 
 	return SYSCALL_SUCCESS;
 }
@@ -433,7 +433,7 @@ unsigned long SYS_getcwd(uint8_t *buf, int len) {
 	SYSCALL_DEBUG("getcwd  buf:%x len:%d  \n", buf, len);
 	if (buf == 0)
 		return ret;
-	ut_strncpy(buf, g_current_task->mm->fs.cwd, len);
+	ut_strncpy(buf, g_current_task->mm->fs->cwd, len);
 	ret = ut_strlen(buf);
 
 	return ret;

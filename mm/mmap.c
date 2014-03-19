@@ -183,6 +183,7 @@ unsigned long vm_dup_vmaps(struct mm_struct *src_mm,struct mm_struct *dest_mm){ 
 	while (vma) {
 		new_vma = mm_slab_cache_alloc(vm_area_cachep, 0);
 		if (new_vma == 0){
+			Jcmd_mem();
 			BUG();
 			return 0;
 		}
@@ -414,8 +415,8 @@ int Jcmd_maps(char *arg1, char *arg2) {
 			len = len - ut_snprintf(buf+max_len-len,len,"%9s [ %p - %p ] - (+%p) flag:%x prot:%x stats:%d (%d/%d)\n",vma->name, vma->vm_start, vma->vm_end,
 					vma->vm_private_data,vma->vm_flags,vma->vm_prot,vma->stat_page_count,vma->stat_page_faults,vma->stat_page_wrt_faults);
 		} else {
-		//TODO	len = len - ut_snprintf(buf+max_len-len,len,"%9s [ %p - %p ] - %s(+%p) flag:%x prot:%x stats:%d (%d/%d)\n",vma->name, vma->vm_start, vma->vm_end,
-		//			inode->filename, vma->vm_private_data,vma->vm_flags,vma->vm_prot, vma->stat_page_count,vma->stat_page_faults,vma->stat_page_wrt_faults);
+			len = len - ut_snprintf(buf+max_len-len,len,"%9s [ %p - %p ] - (+%p) flag:%x prot:%x stats:%d (%d/%d)\n",vma->name, vma->vm_start, vma->vm_end,
+					 vma->vm_private_data,vma->vm_flags,vma->vm_prot, vma->stat_page_count,vma->stat_page_faults,vma->stat_page_wrt_faults);
 		}
 		for (i=0; i<10 && i<vma->stat_log_index; i++){
 			len = len - ut_snprintf(buf+max_len-len,len,"	  vad:%x- faulip:%x - rw:%d option:%x \n",vma->stat_log[i].vaddr,vma->stat_log[i].fault_addr,vma->stat_log[i].rw_flag,vma->stat_log[i].optional);

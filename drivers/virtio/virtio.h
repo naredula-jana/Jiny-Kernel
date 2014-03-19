@@ -48,7 +48,7 @@ static inline dma_addr_t sg_phys(struct scatterlist *sg)
 #define to_vvq(_vq) container_of(_vq, struct vring_virtqueue, vq)
 #define kmalloc(x,flag) mm_malloc(x,1)
 #define kfree mm_free
-#define ENOSPC 2
+#define ERROR_VIRTIO_ENOSPC 2
 #define uninitialized_var(x) x = x
 #define irqreturn_t int
 

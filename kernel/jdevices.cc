@@ -10,7 +10,6 @@
 */
 #include "jdevice.h"
 
-
 #define MAX_DEVICES 200
 static class jdevice *jdevice_list[MAX_DEVICES];
 static int device_count = 0;

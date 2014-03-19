@@ -328,6 +328,7 @@ static int remove_module(module_t *modulep) {
 			modulep->free_module();
 			g_modules[i] = 0;
 			total_modules--;
+			ut_log(" REmoving the module \n");
 			if (i < total_modules)
 				g_modules[i] = g_modules[total_modules];
 			return JSUCCESS;
@@ -361,7 +362,7 @@ static int launch_hp_task(module_t *modulep) {
 
 	if (modulep == 0)
 		return JFAIL;
-	ret = sc_createKernelThread(hp_main, (void **) modulep, (uint8_t*) "hpriorty_task");
+	ret = sc_createKernelThread(hp_main, (void **) modulep, (uint8_t*) "hpriorty_task",CLONE_FS);
 	ut_printf(" launched high priority taks: pid %d \n", ret);
 
 	return JSUCCESS;
@@ -770,8 +771,15 @@ void Jcmd_insmod(unsigned char *filename, unsigned char *arg) {
 
 	return;
 }
-
+#define MAX_FUNC_HITS 1000
+struct func_debug {
+	unsigned long addr;
+	int hits;
+};
+static int func_hits_count=0;
+struct func_debug func_hits[MAX_FUNC_HITS];
 static int stat_cpu_rip_unknown_hit = 0;
+int g_conf_func_debug=982;
 void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
 	module_t *modulep = 0;
 	int i, j;
@@ -793,10 +801,7 @@ void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
 		for (j = 0; j < SEC_TOTAL; j++) {
 			ut_snprintf(buf, bsize, "	%2d: addr:%5x - %5x \n", modulep->secs[j].sec_index, modulep->secs[j].addr,
 					modulep->secs[j].addr + modulep->secs[j].length);
-			if (g_current_task->mm == g_kernel_mm)
-				ut_printf("%s", buf);
-			else
-				SYS_fs_write(1, buf, ut_strlen(buf));
+			SYS_fs_write(1, buf, ut_strlen(buf));
 		}
 		if (option != 0) {
 			for (j = 0; modulep->symbol_table[j].name != 0; j++) {
@@ -806,21 +811,20 @@ void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
 				ut_snprintf(buf, bsize, "	%3d:t:%2d s_idx:%2d hits:%4d (rip=%x) %s -> %x \n", j, modulep->symbol_table[j].type,
 						modulep->symbol_table[j].sec_index, modulep->symbol_table[j].stats.hits,
 						modulep->symbol_table[j].stats.rip, modulep->symbol_table[j].name, modulep->symbol_table[j].address);
-				if (g_current_task->mm == g_kernel_mm)
-					ut_printf("%s", buf);
-				else
-					SYS_fs_write(1, buf, ut_strlen(buf));
+				SYS_fs_write(1, buf, ut_strlen(buf));
 				total_hits = total_hits + modulep->symbol_table[j].stats.hits;
 			}
 		}
 		modulep->use_count--;
 	}
+	for (j=0; j<func_hits_count; j++){
+		ut_snprintf(buf, bsize, " addr: %x  hits:%d\n",func_hits[j].addr,func_hits[j].hits);
+		SYS_fs_write(1, buf, ut_strlen(buf));
+	}
 	ut_snprintf(buf, bsize, " Total modules: %d total Hits:%d  unknownhits:%d\n", total_modules, total_hits,
 			stat_cpu_rip_unknown_hit);
-	if (g_current_task->mm == g_kernel_mm)
-		ut_printf("%s", buf);
-	else
-		SYS_fs_write(1, buf, ut_strlen(buf));
+	SYS_fs_write(1, buf, ut_strlen(buf));
+
 	mm_free(buf);
 	return;
 }
@@ -840,6 +844,7 @@ void Jcmd_reset_cpu_stat() {
 		modulep->use_count--;
 	}
 	stat_cpu_rip_unknown_hit = 0;
+	func_hits_count=0;
 }
 
 void Jcmd_rmmod(unsigned char *filename, unsigned char *arg) {
@@ -894,16 +899,17 @@ int ut_mod_symbol_execute(int type, char *name, char *argv1, char *argv2) {
 				func1 = (void *) modulep->symbol_table[i].address;
 				ut_printf("FOUND: BEFORE executing:%s: :%x\n", name, func1);
 				func1();
-				ut_printf(":FOUND: after executing:%s: \n", name);
-				ret = 1;
-				goto last;
+				ut_printf("FOUND: AFTER executing:%s: \n", name);
+				return ret;
 			}
 		}
 	}
-	last: return ret;
+ return ret;
 }
+
 int perf_stat_rip_hit(unsigned long rip) {
 	module_t *modulep = 0;
+	int addr_found=0;
 	int j;
 	for (j = 0; j < total_modules; j++) {
 		int min = 0;
@@ -928,6 +934,21 @@ int perf_stat_rip_hit(unsigned long rip) {
 		if ((rip >= modulep->symbol_table[curr].address) && (rip <= modulep->symbol_table[curr + 1].address)) {
 			modulep->symbol_table[curr].stats.hits++;
 			modulep->symbol_table[curr].stats.rip = rip;
+			if (g_conf_func_debug == curr){
+				int f;
+				for (f=0; f<func_hits_count; f++){
+					if (func_hits[f].addr == rip){
+						func_hits[f].hits++;
+						addr_found=1;
+						break;
+					}
+				}
+				if (addr_found==0 && func_hits_count<MAX_FUNC_HITS){
+					func_hits[func_hits_count].addr = rip;
+					func_hits[func_hits_count].hits = 1;
+					func_hits_count++;
+				}
+			}
 		}
 		return JSUCCESS;
 	}

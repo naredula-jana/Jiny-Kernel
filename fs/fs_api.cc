@@ -10,7 +10,7 @@
 */
 //#define DEBUG_ENABLE 1
 
-#include "file.h"
+#include "file.hh"
 extern "C"{
 #include "common.h"
 #include "mm.h"
@@ -32,7 +32,7 @@ struct file *fs_create_filep(int *fd, struct file *in_fp) {
 	struct file *fp;
 
 	for (i = 3; i < MAX_FDS; i++) {
-		if (g_current_task->mm->fs.filep[i] == 0) {
+		if (g_current_task->mm->fs->filep[i] == 0) {
 			if (in_fp !=0 ){
 				fp = in_fp;
 			}else{
@@ -40,10 +40,10 @@ struct file *fs_create_filep(int *fd, struct file *in_fp) {
 			}
 			if (fp == 0)
 				return 0;
-			if (i >= g_current_task->mm->fs.total) {
-				g_current_task->mm->fs.total = i + 1;
+			if (i >= g_current_task->mm->fs->total) {
+				g_current_task->mm->fs->total = i + 1;
 			}
-			g_current_task->mm->fs.filep[i] = fp;
+			g_current_task->mm->fs->filep[i] = fp;
 			if (fd != 0)
 				*fd = i;
 			return fp;
@@ -57,8 +57,8 @@ int fs_destroy_filep(int fd) {
 	if (fd < 0 || fd > MAX_FDS) {
 		return -1;
 	}
-	fp = g_current_task->mm->fs.filep[fd];
-	g_current_task->mm->fs.filep[fd] = 0;
+	fp = g_current_task->mm->fs->filep[fd];
+	g_current_task->mm->fs->filep[fd] = 0;
 	mm_slab_cache_free(g_slab_filep, fp);
 	return 0;
 }
@@ -123,7 +123,7 @@ int SYS_fs_dup2(int fd_old, int fd_new);
 int SYS_fs_dup(int fd_old) {
 	int i;
 	for (i = 3; i < MAX_FDS; i++) { /* fds: 0,1,2 are for in/out/error */
-		if (g_current_task->mm->fs.filep[i] == 0) {
+		if (g_current_task->mm->fs->filep[i] == 0) {
 			break;
 		}
 	}
@@ -144,7 +144,7 @@ int SYS_fs_dup2(int fd_old, int fd_new) {
 	if (fp_new ==0){
 		ret = SYSCALL_FAIL;
 	}
-	g_current_task->mm->fs.filep[fd_new] = fp_new;
+	g_current_task->mm->fs->filep[fd_new] = fp_new;
 
 last:
 	SYSCALL_DEBUG("dup2 Return ret:%d new_fd:%d \n",ret,fd_new);
@@ -278,7 +278,7 @@ unsigned long SYS_fs_close(unsigned long fd) {
 	file = fd_to_file(fd);
 	if (file == 0)
 		return SYSCALL_FAIL;
-	g_current_task->mm->fs.filep[fd] = 0;
+	g_current_task->mm->fs->filep[fd] = 0;
 
 	return fs_close(file);
 }
@@ -446,19 +446,19 @@ unsigned long SYS_fs_fcntl(int fd, int cmd, int args) {
 		fp_new = (struct file *)mm_slab_cache_alloc(g_slab_filep, 0);
 		if (fp_new==0 ) return SYSCALL_FAIL;
 
-		if (new_fd > g_current_task->mm->fs.total && new_fd<MAX_FDS){
-			g_current_task->mm->fs.total = new_fd +1;
-			g_current_task->mm->fs.filep[new_fd]=fp_new;
+		if (new_fd > g_current_task->mm->fs->total && new_fd<MAX_FDS){
+			g_current_task->mm->fs->total = new_fd +1;
+			g_current_task->mm->fs->filep[new_fd]=fp_new;
 			fs_dup(fp_old,fp_new);
 			ret = new_fd;
 			goto last;
 		}
 		for (i = new_fd; i < MAX_FDS; i++) {
-			if (g_current_task->mm->fs.filep[i] == 0) {
-				if (i >= g_current_task->mm->fs.total ){
-					g_current_task->mm->fs.total = i+1;
+			if (g_current_task->mm->fs->filep[i] == 0) {
+				if (i >= g_current_task->mm->fs->total ){
+					g_current_task->mm->fs->total = i+1;
 				}
-				g_current_task->mm->fs.filep[i]=fp_new;
+				g_current_task->mm->fs->filep[i]=fp_new;
 				fs_dup(fp_old,fp_new);
 				ret = i;
 				goto last;
@@ -536,12 +536,7 @@ int Jcmd_ls(uint8_t *arg1, uint8_t *arg2) {
 		if (len < 500) break;
 	}
 	mutexUnLock(g_inode_lock);
-	for (i=0; i<socket::list_size;i++){
-		socket *sock=socket::list[i];
-		len = len - ut_snprintf(buf + max_len - len, len,"socket: local:%x:%x remote:%x:%x (%d:%d/%d:%d/%d)\n",
-				sock->local_addr,sock->local_port,sock->dest_addr.addr,sock->dest_addr.sin_port,sock->stat_in,sock->stat_in_bytes,sock->stat_out,sock->stat_out_bytes,sock->stat_err);
-
-	}
+	socket::print_stats();
 	len = len - ut_snprintf(buf+max_len-len, len,"Total pages :%d\n", total_pages);
 
 	len = ut_strlen(buf);

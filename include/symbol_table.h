@@ -15,15 +15,7 @@ enum {
   SYMBOL_CONF = 0x5,
   SYMBOL_TYPE_UNRESOLVED=0x6
 };
-#if 0
-typedef struct {
-	addr_t address;
-	char type;
-	unsigned char name[MAX_SYMBOLLEN];
-	char file_lineno[MAX_FILELEN];
-	unsigned long subsystem_type;
-}symb_table_t;
-#endif
+
 typedef struct {
 	unsigned char *name;
 	unsigned long address;

@@ -14,7 +14,7 @@
 */
 #define JFS 1
 #if JFS
-#include "file.h"
+#include "file.hh"
 extern "C" {
 struct page *pc_getInodePage(struct fs_inode *inode, unsigned long offset);
 int pc_insertPage(struct fs_inode *inode, struct page *page);
@@ -28,9 +28,7 @@ kmem_cache_t *g_slab_filep;
 }
 
 kmem_cache_t *fs_inode::slab_objects = 0;
-kmem_cache_t *socket::slab_objects = 0;
-socket *socket::list[MAX_SOCKETS];
-int socket::list_size = 0;
+
 
 void vinode::update_stat_in(int in_req,int in_byte){
 	if (in_byte <= 0) return;
@@ -272,7 +270,7 @@ static void transform_filename(uint8_t *arg_filename, uint8_t *filename) {
 	filename[0] = 0;
 	if (arg_filename[0] != '/') {
 		ut_strcpy((uint8_t *) filename,
-				(const uint8_t *) g_current_task->mm->fs.cwd);
+				(const uint8_t *) g_current_task->mm->fs->cwd);
 	}
 	i = 0;
 
@@ -433,7 +431,7 @@ struct file *fs_open(uint8_t *filename, int flags, int mode) {
 	}
 	/* special files handle here before going to regular files */
 	if (ut_strcmp((uint8_t *) filename, (uint8_t *) "/dev/sockets") == 0) {
-		filep->vinode = socket::create_new();
+		filep->vinode = socket::create_new(mode);
 		if (filep->vinode == NULL)
 			goto error;
 		filep->offset = 0;
@@ -566,16 +564,14 @@ struct file *fs_dup(struct file *old_filep, struct file *new_filep) {
 int fs_close(struct file *filep) {
 	if (filep == 0 || vfs_fs == 0)
 		return 0;
-	if (filep->type == REGULAR_FILE || filep->type == OUT_PIPE_FILE || filep->type == IN_PIPE_FILE) {
+	if (filep->type == REGULAR_FILE || filep->type == OUT_PIPE_FILE || filep->type == IN_PIPE_FILE || filep->type == NETWORK_FILE) {
 		if (filep->vinode != 0) {
 			struct vinode *vinode= (struct vinode *)filep->vinode;
 			vinode->close();
 		}else{
 			BUG();
 		}
-	} else if (filep->type == NETWORK_FILE) {
-		socket_close(filep);
-	} else if ((filep->type == OUT_FILE) || (filep->type == IN_FILE)
+	}  else if ((filep->type == OUT_FILE) || (filep->type == IN_FILE)
 			|| (filep->type == DEV_NULL_FILE)) { /* nothng todo */
 		//ut_log("Closing the IO file :%x name :%s: \n",filep,g_current_task->name);
 	}
@@ -596,9 +592,7 @@ int init_vfs() {
 	fs_inode::slab_objects = kmem_cache_create(
 			(const unsigned char *) "fs_vinodes", sizeof(struct fs_inode), 0,
 			JSLAB_FLAGS_DEBUG, 0, 0);
-	socket::slab_objects = kmem_cache_create(
-			(const unsigned char *) "socket_vinodes", sizeof(struct fs_inode),
-			0, JSLAB_FLAGS_DEBUG, 0, 0);
+
 	for (i = 0; i < MAX_SOCKETS; i++) {
 		socket::list[i] = 0;
 	}

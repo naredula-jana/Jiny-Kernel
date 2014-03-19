@@ -19,7 +19,10 @@ OBJECTS += arch/$(ARCH_DIR)/smp/smp-imps.o arch/$(ARCH_DIR)/smp/trampoline_64.o 
 endif
 
 ifdef LWIP_NONMODULE
-OBJECTS += $(LWIP_OBJ) 
+//OBJECTS += $(LWIP_OBJ) 
+endif
+ifdef JINY_UDPSTACK
+OBJECTS += modules/udp_stack/udp_stack.o
 endif
 
 OBJECTS += kernel/debug.o kernel/jdevices.o kernel/init.o  kernel/acpi.o kernel/ipc.o  kernel/module_app.o  kernel/network_sched.o  kernel/kshell.o  kernel/symbol_table.o  kernel/syscall.o  kernel/sched_task.o  kernel/util.o
@@ -57,6 +60,7 @@ else
 	ld -r $(LWIP_OBJ) -o lwip-module.o
 endif
 endif
+	make SOURCE_ROOT=$$PWD -C modules/udp_stack
 	make SOURCE_ROOT=$$PWD -C drivers/hostshm
 	make SOURCE_ROOT=$$PWD -C drivers/virtio
 	make SOURCE_ROOT=$$PWD -C drivers/virtio/9p
@@ -89,6 +93,7 @@ clean:
 	make SOURCE_ROOT=$$PWD -C arch/$(ARCH_DIR)/smp clean
 	make SOURCE_ROOT=$$PWD -C mm clean
 	make SOURCE_ROOT=$$PWD -C mm/memleak clean
+	make SOURCE_ROOT=$$PWD -C modules/udp_stack clean
 ifdef LWIP_ENABLE
 	\rm $(LWIP_OBJ)
 endif

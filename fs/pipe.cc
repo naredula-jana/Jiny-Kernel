@@ -7,7 +7,7 @@
 *   fs/pipe.cc
 */
 
-#include "file.h"
+#include "file.hh"
 static  int fs_send_to_pipe(long pipe_index, uint8_t *buf, int len);
 static  int fs_recv_from_pipe(long pipe_index, uint8_t *buf, int len);
 static  int fs_destroy_pipe(long pipe_index);

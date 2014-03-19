@@ -109,7 +109,7 @@ struct vring_virtqueue
 	/* They're supposed to lock for us. */
 	unsigned int in_use;
 #endif
-
+	unsigned int stat_alloc,stat_free; /* Jana added */
 	/* Tokens for callbacks. */
 	void *data[];
 };
@@ -166,12 +166,32 @@ static int vring_add_indirect(struct vring_virtqueue *vq,
 	return head;
 }
 extern int netbh_state;
-void print_vq(struct virtqueue *_vq){
+void print_vq(struct virtqueue *_vq) {
 	long diff;
+	if (_vq == 0) {
+		ut_printf("vq Empty \n");
+		return;
+	}
 	struct vring_virtqueue *vq = to_vvq(_vq);
-	diff=vq->vring.used->idx-vq->vring.avail->idx;
-	if (diff < 0) diff=diff*(-1);
-	ut_printf(" num_free:%d  free_head:%d used:%x avail:%x diff:%d \n",vq->num_free,vq->free_head,vq->vring.used->idx,vq->vring.avail->idx,diff);
+	diff = vq->vring.used->idx - vq->vring.avail->idx;
+	if (diff < 0)
+		diff = diff * (-1);
+	ut_printf("vq:%x size:%d num_free:%d  free_head:%d used:%x(%d) avail:%x(%d) diff:%d last_use_idx:%d alloc:%d free:%d\n", vq,vq->vring.num,  vq->num_free, vq->free_head,
+			vq->vring.used->idx, vq->vring.used->idx, vq->vring.avail->idx, vq->vring.avail->idx, diff, vq->last_used_idx,vq->stat_alloc,vq->stat_free);
+
+}
+static sync_avial_idx(struct vring_virtqueue *vq){
+	u16 new, old;
+	/* Descriptors and available array need to be set before we expose the
+	 * new available array entries. */
+	virtio_wmb();
+
+	old = vq->vring.avail->idx;
+	new = vq->vring.avail->idx = old + vq->num_added;
+	vq->num_added = 0;
+
+	/* Need to update avail index before checking if we should notify */
+	virtio_mb();
 }
 int virtio_add_buf_to_queue(struct virtqueue *_vq,
 			  struct scatterlist sg[],
@@ -200,7 +220,7 @@ int virtio_add_buf_to_queue(struct virtqueue *_vq,
 	BUG_ON(out + in > vq->vring.num);
 	BUG_ON(out + in == 0);
 
-	if (vq->num_free < out + in) {
+	if (vq->num_free < (out + in)) {
 #if 0
 		pr_debug("Can't add buf len %i - avail = %i  in:%d vringnum:%d\n",
 			 out + in, vq->num_free, in,  vq->vring.num);
@@ -213,13 +233,13 @@ int virtio_add_buf_to_queue(struct virtqueue *_vq,
 		if (out)
 			vq->notify(&vq->vq);
 		END_USE(vq);
-		return -ENOSPC;
+		return -ERROR_VIRTIO_ENOSPC;
 	}else{
 		//print_vq(_vq);
 	}
 
 	/* We're about to use some buffers from the free list. */
-	vq->num_free -= out + in;
+	vq->num_free -= (out + in);
 
 	head = vq->free_head;
 	for (i = vq->free_head; out; i = vq->vring.desc[i].next, out--) {
@@ -244,13 +264,18 @@ int virtio_add_buf_to_queue(struct virtqueue *_vq,
 
 add_head:
 	/* Set token. */
+	if (vq->data[head] != 0){
+		BRK;
+	}
 	vq->data[head] = data;
+	vq->stat_alloc++;
 
 	/* Put entry in available array (but don't update avail->idx until they
 	 * do sync).  FIXME: avoid modulus here? */
 	avail = (vq->vring.avail->idx + vq->num_added++) % vq->vring.num;
 	vq->vring.avail->ring[avail] = head;
 
+	sync_avial_idx(vq);
 	//pr_debug("Added buffer head %i to %p\n", head, vq);
 	END_USE(vq);
 
@@ -263,6 +288,7 @@ void virtio_queue_kick(struct virtqueue *_vq)
 	struct vring_virtqueue *vq = to_vvq(_vq);
 	u16 new, old;
 	START_USE(vq);
+#if 0
 	/* Descriptors and available array need to be set before we expose the
 	 * new available array entries. */
 	virtio_wmb();
@@ -273,6 +299,9 @@ void virtio_queue_kick(struct virtqueue *_vq)
 
 	/* Need to update avail index before checking if we should notify */
 	virtio_mb();
+#else
+	sync_avial_idx(vq);
+#endif
 #if 0
 	vq->notify(&vq->vq); // TODO : JANA extra to fix virtqueue
 	if (vq->event ?
@@ -348,16 +377,19 @@ void *virtio_removeFromQueue(struct virtqueue *_vq, unsigned int *len)
 	if (unlikely(i >= vq->vring.num)) {
 		//JANA removed BAD_RING(vq, "id %u out of range\n", i);
 		pr_debug("BAD RING -11 vq:%x \n",vq);
+		BRK;
 		return NULL;
 	}
 	if (unlikely(!vq->data[i])) {
 		// JANA removed BAD_RING(vq, "id %u is not a head!\n", i);
 		pr_debug("BAD RING -22 vq:%x \n",vq);
+		BRK;
 		return NULL;
 	}
 
 	/* detach_buf clears data, so grab it now. */
 	ret = vq->data[i];
+	vq->stat_free++;
 	detach_buf(vq, i);
 	vq->last_used_idx++;
 	/* If we expect an interrupt for the next entry, tell host
@@ -431,7 +463,7 @@ bool virtqueue_enable_cb_delayed(struct virtqueue *_vq)
 	return true;
 }
 
-
+#if 0
 void *virtqueue_detach_unused_buf(struct virtqueue *_vq)
 {
 	struct vring_virtqueue *vq = to_vvq(_vq);
@@ -456,7 +488,7 @@ void *virtqueue_detach_unused_buf(struct virtqueue *_vq)
 	END_USE(vq);
 	return NULL;
 }
-
+#endif
 
 irqreturn_t vring_interrupt(int irq, void *_vq)
 {
@@ -514,6 +546,8 @@ struct virtqueue *vring_new_virtqueue(unsigned int num,
 	vq->broken = false;
 	vq->last_used_idx = 0;
 	vq->num_added = 0;
+	vq->stat_alloc =0;
+	vq->stat_free=0;
 	//list_add_tail(&vq->vq.list, &vdev->vqs);
 #ifdef DEBUG
 	vq->in_use = false;
@@ -521,7 +555,8 @@ struct virtqueue *vring_new_virtqueue(unsigned int num,
 
 
 //JANA	vq->indirect = virtio_has_feature(vdev, VIRTIO_RING_F_INDIRECT_DESC);
-//JANA	vq->event = virtio_has_feature(vdev, VIRTIO_RING_F_EVENT_IDX);
+//JANA  vq->event = virtio_has_feature(vdev, VIRTIO_RING_F_EVENT_IDX);
+
 
 	/* No callback?  Tell other side not to bother us. */
 	if (!callback)
@@ -575,14 +610,5 @@ unsigned int virtqueue_get_vring_size(struct virtqueue *_vq)
 	return vq->vring.num;
 }
 /**********************************************************************************/
-#if 0 /* TODO: remove later */
-unsigned char virtio_get_status(virtio_dev_t *dev) {
-	uint16_t addr = dev->pci_ioaddr + VIRTIO_PCI_STATUS;
-	return inb(addr);
-}
-void virtio_set_status(virtio_dev_t *dev, unsigned char status) {
-	uint16_t addr = dev->pci_ioaddr + VIRTIO_PCI_STATUS;
-	outb(addr, status);
-}
-#endif
+
 

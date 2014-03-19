@@ -68,7 +68,7 @@ extern void * __vsyscall_page;
 unsigned long fs_loadElfLibrary(struct file *file, unsigned long tmp_stack, unsigned long stack_len, unsigned long aux_addr) {
 	struct elf_phdr *elf_phdata;
 	struct elf_phdr *eppnt;
-	unsigned long elf_bss, bss, len;
+	unsigned long elf_bss, bss_start, bss, len;
 	int retval, error, i, j;
 	struct elfhdr elf_ex;
 	unsigned long *aux_vec, aux_index, load_addr;
@@ -144,11 +144,13 @@ unsigned long fs_loadElfLibrary(struct file *file, unsigned long tmp_stack, unsi
 		elf_bss = eppnt->p_vaddr + eppnt->p_filesz;
 		//	padzero(elf_bss);
 
-		len = ELF_PAGESTART(eppnt->p_filesz + eppnt->p_vaddr + ELF_MIN_ALIGN - 1);
+		/* TODO :  bss start address in not at the PAGE_ALIGN or ELF_MIN_ALIGN , need to club this partial page with the data */
+	//	len = ELF_PAGESTART(eppnt->p_filesz + eppnt->p_vaddr + ELF_MIN_ALIGN - 1);
+		bss_start = eppnt->p_filesz + eppnt->p_vaddr;
 		bss = eppnt->p_memsz + eppnt->p_vaddr;
-		DEBUG(" bss :%x len:%x memsz:%x elf_bss:%x \n",bss,len,eppnt->p_memsz,elf_bss);
-		if (bss > len) {
-			vm_setupBrk(len, bss - len);
+		//ut_log(" bss start :%x end:%x memsz:%x elf_bss:%x \n",bss_start, bss,eppnt->p_memsz,elf_bss);
+		if (bss > bss_start) {
+			vm_setupBrk(bss_start, bss - bss_start);
 		}
 		error = 0;
 	}

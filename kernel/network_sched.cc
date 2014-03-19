@@ -17,6 +17,16 @@
  *   recvpath from dev (interrupt) :   jdriver -> netif_rx (to queue)
  *                   (polling)  : thread-> (from queue) netif_BH -> socket (attach_raw : unblocking + buffering)
  *      netif_BH and interrupt on the same cpu to minimize the lock.
+ *
+ * Network:speeding the network using the Vanjacbson paper
+        IST+softnet+socket: currently most of the protocol processing done in softnet centrally with the global lock)
+        Instead: Push all the work to the edge , and run in the app context , so that locking will be minimum.
+          On multiprocessor, the protocol work should be done on the processor that going to consume the data. This means ISR and softnet should do almost nothing and socket should do everything.
+         a) socket register signature with driver during the accept call for reaching the packet directly. this is channel for each socket.
+         b) driver queues the packet with matching signature into socket channel & wakesup the app if sleeping in the socket layer. packet is processed in the socket layer by the app.
+      https://lwn.net/Articles/169961/
+      http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf
+ *
  */
 
 extern "C" {
@@ -25,6 +35,8 @@ int g_network_ip=0x0ad18100; /* 10.209.129.0  */
 unsigned char g_mac[7];
 }
 #include "jdevice.h"
+#include "file.hh"
+#include "network.hh"
 #define MAX_QUEUE_LENGTH 600
 
 struct queue_struct {
@@ -152,17 +164,8 @@ int network_scheduler::netRx_BH(void *arg,void *arg2) {
 			int ret = 0;
 			stat_netrx_bh_recvs++;
 			if (socket::attach_rawpkt(data,len,&replace_buf)==JSUCCESS){
-				replace_buf = 0;
-			}else{
-#if 0
-				if (count_protocol_drivers > 0) {
-					ret = protocol_drivers[0].callback(data, len,
-						protocol_drivers[0].private_data);
-				}
-#endif
-				if (ret == 0) {
 
-				}
+			}else{
 				replace_buf = data;
 			}
 			qret = remove_from_queue(&data, &len, replace_buf);
@@ -265,12 +268,15 @@ int network_scheduler::init() {
 }
 int register_netdevice(jdevice *device){
 	net_sched.device = device;
+	socket::net_dev = device;
 	device->ioctl(0,(unsigned long)&g_mac);
-	g_network_ip = g_network_ip | g_mac[6];
+
+	g_network_ip = g_network_ip | g_mac[5];
+	ut_log(" register netdev : %x  ip:%x\n",g_mac[5],g_network_ip);
 	return JSUCCESS;
 }
 extern "C" {
-
+extern int init_udpstack();
 int netif_thread(void *arg1,void *arg2){
 	return net_sched.netRx_BH(arg1,arg2);
 }
@@ -278,7 +284,11 @@ int init_networking() {
 	int pid;
 
 	net_sched.init();
-	pid = sc_createKernelThread(netif_thread, 0, (unsigned char *) "netRx_BH_1");
+	pid = sc_createKernelThread(netif_thread, 0, (unsigned char *) "netRx_BH_1",0);
+#ifdef JINY_UDPSTACK
+	init_udpstack();
+#endif
+
 	return 0;
 }
 
@@ -291,14 +301,15 @@ int netif_rx_enable_polling(void *private_data, int (*poll_func)(void *private_d
 extern struct Socket_API *socket_api;
 
 void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
-	if (socket_api == 0){
-		ut_printf(" No TCP/IP stack registered \n");
-		return;
+	if (net_sched.device){
+		unsigned char mac[10];
+
+		net_sched.device->print_stats();
+		net_sched.device->ioctl(0,(unsigned long)&mac);
+		ut_printf(" mac: %x:%x:%x:%x:%x:%x  ip:%x\n",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5],g_network_ip);
 	}
-	socket_api->network_status(arg1, arg2);
-	//ut_printf(" queue full error:%d  producer:%d consumer:%d  from_net:%d to_net:%d rxBhRecvs:%d\n",
-	//		queue.error_full, queue.producer, queue.consumer, stat_from_driver,
-	//		stat_to_driver,stat_netrx_bh_recvs);
+	socket::print_stats();
+
 	return;
 }
 }

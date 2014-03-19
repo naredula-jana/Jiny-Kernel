@@ -1,5 +1,5 @@
 
-#include "network.hh"
+#include "../network.hh"
 
 unsigned short in_cksum(unsigned short *addr, int len){
     int nleft = len;
@@ -22,53 +22,77 @@ unsigned short in_cksum(unsigned short *addr, int len){
     answer = ~sum;
     return (answer);
 }
-
-
 class network_stack udpip_stack;
-int network_stack::read(network_conn *conn, uint8_t *raw_data, unsigned long raw_len, uint8_t *app_data, unsigned long app_maxlen){
-	return 1;
+int network_stack::open(network_connection *conn){
+	return JSUCCESS;
+}
+int network_stack::close(network_connection *conn){
+	return JSUCCESS;
+}
+int network_stack::read(network_connection *conn, uint8_t *raw_data, int raw_len, uint8_t *app_data, int app_maxlen){
+	struct ether_pkt *pkt=(struct ether_pkt *)(raw_data+10);
+	int len;
+	int hdr_len;
+
+	if (app_data ==0) return 0;
+	len=ntohs(pkt->iphdr.tot_len);
+	hdr_len = sizeof(struct iphdr) + sizeof(struct udphdr);
+	len = len - hdr_len;
+	if (len < 0) return 0;
+	if ((len>(raw_len-hdr_len)) || (len > app_maxlen)){
+		return 0;
+	}
+	ut_memcpy(app_data,&pkt->data,len);
+	//ut_printf("received length :%x \n",len);
+
+	return len;
 }
 
-int network_stack::write(network_conn *conn,uint8_t *app_data, unsigned long app_len){
-    struct pkt *pkt=(struct pkt *)temp_buff;
-    struct iphdr *ip=&(pkt->iphdr);
+
+int network_stack::write(network_connection *conn, uint8_t *app_data, int app_len){
+     struct ether_pkt *pkt=(struct ether_pkt *)temp_buff;
+     int len;
+     unsigned char brdcst[7]={0xff,0xff,0xff,0xff,0xff,0xff,0xff};
 
     /* mac header */
+     ut_memcpy(pkt->machdr.src,g_mac,6);
+     ut_memcpy(pkt->machdr.dest, brdcst,6);
+     pkt->machdr.type[0] = 0x08 ;
 
     /* ip header */
-    ip->version=4;
-    ip->ihl=5;
-    ip->tos=0;
-    ip->id=0;
-    ip->frag_off=0;
-    ip->ttl=255;
-    ip->protocol=IPPROTO_UDP;
-    ip->check=0;
-    ip->saddr=source_ip;
-    ip->daddr=dest_ip;
- //   ip->saddr=inet_addr("1.2.3.4");
- //   ip->daddr=inet_addr("127.0.0.1");
-
-
-     ip->tot_len=ut_htons(sizeof(struct iphdr)+sizeof(struct udphdr)+len);
+    pkt->iphdr.version=4;
+    pkt->iphdr.ihl=5;
+    pkt->iphdr.tos=0;
+    pkt->iphdr.id=0;
+    pkt->iphdr.frag_off=0;
+    pkt->iphdr.ttl=255;
+    pkt->iphdr.protocol=IPPROTO_UDP;
+    pkt->iphdr.check=0;
+    pkt->iphdr.saddr=htonl(conn->src_ip);
+    pkt->iphdr.daddr=conn->dest_ip;
+    pkt->iphdr.tot_len=htons(sizeof(struct iphdr)+sizeof(struct udphdr)+app_len);
+    pkt->iphdr.check=in_cksum((unsigned short*) &(pkt->iphdr),sizeof(struct iphdr));
 
     /* udp header */
-    struct udphdr *udp=&(pkt->udphdr);
-    udp->source=ut_htons(40000);
-    udp->dest=ut_htons(dport);
-    udp->checksum=0;
-//    char* data=(char*)buf+sizeof(struct iphdr)+sizeof(struct udphdr);ut_strcpy(data,"Harry Potter and the Philosopher's Stone");
-  //  udp->len=htons(sizeof(struct udphdr)+strlen(data));
- //   udp->checksum=in_cksum((unsigned short*) udp,8+strlen(data));
-
+    if (conn->src_port==0){
+    	conn->src_port = 100;
+    }
+    pkt->udphdr.source=conn->src_port;
+    pkt->udphdr.dest=conn->dest_port;
+    pkt->udphdr.checksum=0;
+    pkt->udphdr.len=htons(sizeof(struct udphdr)+app_len);
+    pkt->udphdr.checksum=in_cksum((unsigned short*) &(pkt->udphdr),8+app_len);
 
     ut_memcpy((unsigned char *)&pkt->data, app_data, app_len);
-    len=sizeof(struct pkt) -1 +app_len;
-    network_device->write(0,(unsigned char *)temp_buff,len);
 
-    return 1;
+    len=sizeof(struct ether_pkt) -1 +app_len;
+    return conn->net_dev->write(0,(unsigned char *)temp_buff,len);
 }
 network_stack net_stack;
-void init(){
-	socket::net_stack = net_stack;
+extern "C" {
+void init_udpstack(){
+	net_stack.name = "jiny_udp ip stack";
+	socket::net_stack_list[0] = &net_stack;
+	ut_log(" initilizing Jiny udpip stack \n");
+}
 }

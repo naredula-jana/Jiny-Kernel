@@ -179,28 +179,7 @@ int  init_code_readonly(unsigned long arg1){
 	spin_unlock_irqrestore(&g_global_lock, intr_flags);
 	return 0;
 }
-void idleTask_func() {
-	int k=0;
 
-	/* wait till initilization completed */
-	while(g_boot_completed==0);
-	init_code_readonly(0);
-
-	ut_log("Idle Thread Started cpuid: %d stack addrss:%x \n",getcpuid(),&k);
-	while (1) {
-		__asm__("hlt");
-
-		sc_schedule();
-	}
-}
-#if 0
-Jcmd_flush(){
-	flush_tlb(0x101000);
-	flush_tlb_entry(KERNEL_ADDR_START);
-	ar_flushTlbGlobal();
-	ut_log(" flushed TLB cpu:%d \n",getcpuid());
-}
-#endif
 /****************************************House Keeper *******************************************/
 
 void housekeeper_thread(void *arg){
@@ -287,8 +266,8 @@ void cmain() {  /* This is the first c function to be executed */
 	sti(); /* start the interrupts finally */
 
 #if 1
-	sc_createKernelThread(shell_main, 0, (unsigned char *)"shell_main");
-	sc_createKernelThread(housekeeper_thread, 0, (unsigned char *)"house_keeper");
+	sc_createKernelThread(shell_main, 0, (unsigned char *)"shell_main",0);
+	sc_createKernelThread(housekeeper_thread, 0, (unsigned char *)"house_keeper",0);
 #endif
 	ut_log("	Initalization COMPLETED\n");
 

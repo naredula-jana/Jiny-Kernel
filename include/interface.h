@@ -235,7 +235,7 @@ int ut_get_wallclock(unsigned long *sec, unsigned long *usec);
 void ut_putchar(uint8_t c);
 
 /* scheduling */
-unsigned long sc_createKernelThread(int (*fn)(void *, void *),void **argv,uint8_t *name);
+unsigned long sc_createKernelThread(int (*fn)(void *, void *),void **argv,uint8_t *name, unsigned long flags);
 void SYS_sc_execve(uint8_t *file,uint8_t **argv,uint8_t **env);
 void **sc_get_thread_argv();
 void sc_set_fsdevice(unsigned int in, unsigned int out);

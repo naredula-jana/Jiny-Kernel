@@ -19,21 +19,7 @@ typedef struct {
 }ntime_t;
 #define AF_INET         2
 #define SOCK_DGRAM      2
-#define socket SYS_socket
-#define sendto SYS_sendto
-#define gettimeofday SYS_gettimeofday
-#define bind SYS_bind
-#define recvfrom SYS_recvfrom
-#define printf ut_printf
-#define close SYS_fs_close
-static void init_module(unsigned char *arg1, unsigned char *arg2){
-	printf(" Starting the net test module ver=1.0\n");
-	create_thread(start_udp_server);
-
-}
-static void clean_module(){
-	printf(" Stopping the net test module \n");
-}
+#include "libc_highpriority.h"
 #else
 #include<netinet/in.h>
 //#include <sys/types.h>
@@ -44,8 +30,9 @@ typedef struct {
 	unsigned long tv_usec;
 }ntime_t;
 
-
+#endif
 main(int argc, char *argv[]){
+#if 0
     if (argc != 2) {
         printf("./a.out s/c \n");
         return 1;
@@ -55,31 +42,15 @@ main(int argc, char *argv[]){
     }else{
     	start_udp_server();
     }
-
-}
 #endif
+
+  	start_udp_client();
+}
+
 
 
 static unsigned char *tmp_arg[100];
-void create_thread(void (*func)(void *arg)){
-#ifdef _KERNEL
-	int ret;
 
-	tmp_arg[0] = 0;
-	tmp_arg[1] = 0;
-	tmp_arg[2] = 0;
-
-	ret = sc_createKernelThread(func, &tmp_arg, "Test_net_thread");
-#else
-	int i=fork();
-
-	if (i==0){
-		func();
-	}else{
-		return i;
-	}
-#endif
-}
 int dummy_firstvar;
 static ntime_t start_time,end_time;
 int stat_server_recv_pkt=0;
@@ -133,11 +104,7 @@ static void server_recv_func() {
 	return;
 }
 void start_udp_server(){
-#if _KERNEL
-	printf("Starting High priority  udp server\n");
-#else
 	printf("Starting the udp server\n");
-#endif
 	sfd = socket(AF_INET, SOCK_DGRAM, 0);
 	printf(" return of socket :%x \n",sfd);
 	server.sin_family = AF_INET;
@@ -152,22 +119,15 @@ void start_udp_server(){
 
 void start_udp_client(){
 	int i,ret,n;
-#if _KERNEL
-	printf("Starting the High priority udp client...\n");
-#else
+
 	printf("Starting the udp client...\n");
-#endif
 	cfd = socket(AF_INET, SOCK_DGRAM, 0);
 	printf(" return of socket :%x \n",cfd);
 	server.sin_family = AF_INET;
 	server.sin_port = 1300;
-	server.sin_port = 0x0514;
 	server.sin_addr.s_addr = 0xb080d10a; /* 10.209.128.176 */
-	n=2000000;
-//	n=200;
-#ifdef _KERNEL
-	Jcmd_reset_cpu_stat(0,0);
-#endif
+	n=10000000;
+
 	gettimeofday(&start_time,0);
 #if 1
 	for (i=0; i<n; i++){
@@ -179,9 +139,8 @@ void start_udp_client(){
 	}
 #endif
 	gettimeofday(&end_time,0);
-#ifdef _KERNEL
-	Jcmd_lsmod("stat",0);
-#endif
-	printf(" client send pkts: %d starttime:%d  endtime:%d  duration:%d\n",n,start_time.tv_sec,end_time.tv_sec,(end_time.tv_sec-start_time.tv_sec));
+
+	printf("send client send pkts: %d starttime:%d  endtime:%d  duration:%d\n",n,start_time.tv_sec,end_time.tv_sec,(end_time.tv_sec-start_time.tv_sec));
+	return;
 }
 

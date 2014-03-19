@@ -216,7 +216,7 @@ static int sh_create(unsigned char *bin_file, unsigned char *name, unsigned char
 	tmp_arg[2] =(void *) arg;
 	sc_set_fsdevice(DEVICE_SERIAL, DEVICE_SERIAL);  /* all user level thread on serial line */
 	ret = sc_createKernelThread(thread_launch_user, (void **) &tmp_arg,
-			name);
+			name,0);
 
 	return ret;
 }

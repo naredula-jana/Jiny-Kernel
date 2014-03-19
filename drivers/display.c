@@ -184,7 +184,7 @@ int Jcmd_dmesg(unsigned char *arg1){
 	ut_printf("%s\n",g_dmesg);
 	return 0;
 }
-
+static int time_print=1;
 void ut_putchar_ondevice(unsigned char c, int device) {
 	unsigned char *ptr;
 	unsigned long flags;
@@ -210,6 +210,15 @@ void ut_putchar_ondevice(unsigned char c, int device) {
 	//2. VGI output
 	//log_putchar(c);
 	if (g_video_ram == 0) return;
+
+	if (1){
+		char buf[5];
+		buf[0] = (char) c;
+		buf[1] = '\0';
+	time_print=0;
+	ut_log("%s",buf);
+	time_print=1;
+	}
 
 	spin_lock_irqsave(&putchar_lock, flags);
 //	if (g_boot_completed) mutexLock(g_print_lock);
@@ -384,9 +393,11 @@ void ut_log(const char *format, ...){
 	va_start(vl,format);
 
 #if 1
-	writer.type=1;
-	ut_snprintf(buf,35,"%4d:",g_jiffies);  // print timestamp before line
-	format_string(&writer,buf,0);
+	if (time_print == 1){
+		writer.type=1;
+		ut_snprintf(buf,35,"%4d:",g_jiffies);  // print timestamp before line
+		format_string(&writer,buf,0);
+	}
 
 #endif
 

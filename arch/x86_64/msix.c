@@ -57,6 +57,7 @@ int pci_read_msi(pci_addr_t *addr, pci_dev_header_t *pci_hdr,pci_bar_t *bars, ui
 	if (msix->msix_msgnum > 0) {
 		msix->isr_vector = msi_start_vector;
 		msi_start_vector = msi_start_vector + msix->msix_msgnum;
+		ut_log(" msi vector start :%d num:%d \n",msix->isr_vector,msix->msix_msgnum);
 	} else {
 		msix->isr_vector = 0;
 	}

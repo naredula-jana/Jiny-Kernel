@@ -10,11 +10,13 @@
  */
 //#define DEBUG_ENABLE 1
 #if 1
+#include "arch.hh"
 extern "C" {
 #include "common.h"
 #include "descriptor_tables.h"
 
 struct mm_struct *g_kernel_mm = 0;
+static struct fs_struct *fs_kernel;
 task_queue_t g_task_queue;
 spinlock_t g_global_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"global");
 unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles per second  */
@@ -306,9 +308,23 @@ static int free_mm(struct mm_struct *mm) {
 
 	if (mm->count.counter == 0)
 		BUG();
+
+	atomic_dec(&mm->fs->count);
+	if (mm->fs->count.counter == 0){
+		ut_free(mm->fs);
+		mm->fs =0;
+		if (mm == g_kernel_mm){
+			mm->fs = fs_kernel;
+			atomic_inc(&fs_kernel->count);
+		}
+	}
 	atomic_dec(&mm->count);
-	if (mm->count.counter > 0)
+	if (mm->count.counter > 0){
+		if (mm->fs == 0){
+			BUG();
+		}
 		return 0;
+	}
 
 	unsigned long vm_space_size = ~0;
 	vm_munmap(mm, 0, vm_space_size);
@@ -321,16 +337,14 @@ static int free_mm(struct mm_struct *mm) {
 	mm_slab_cache_free(mm_cachep, mm);
 	return 1;
 }
-#define CLONE_VM 0x100
-#define CLONE_KERNEL_THREAD 0x10000
-#define CLONE_VFORK 0x1000
-unsigned long sc_createKernelThread(int(*fn)(void *, void *), void  **args, unsigned char *thread_name) {
+
+unsigned long sc_createKernelThread(int(*fn)(void *, void *), void  **args, unsigned char *thread_name,unsigned  long clone_flags) {
 	unsigned long pid;
 	unsigned long flags;
 	struct list_head *pos;
 	struct task_struct *task;
 
-	pid = SYS_sc_clone(CLONE_VM | CLONE_KERNEL_THREAD,0,0, fn, args);
+	pid = SYS_sc_clone(CLONE_VM | CLONE_KERNEL_THREAD | clone_flags,0,0, fn, args);
 
 	if (thread_name == 0)
 		return pid;
@@ -352,14 +366,14 @@ void **sc_get_thread_argv(){
 }
 void sc_set_fsdevice(unsigned int device_in, unsigned int device_out){
 	auto *mm=g_current_task->mm;
-	if (mm->fs.filep[0] != 0){
-		mm->fs.filep[0]->vinode = get_keyboard_device(device_in,IN_FILE);
+	if (mm->fs->filep[0] != 0){
+		mm->fs->filep[0]->vinode = get_keyboard_device(device_in,IN_FILE);
 	}
-	if (mm->fs.filep[1] != 0){
-		mm->fs.filep[1]->vinode = get_keyboard_device(device_out,OUT_FILE);
+	if (mm->fs->filep[1] != 0){
+		mm->fs->filep[1]->vinode = get_keyboard_device(device_out,OUT_FILE);
 	}
-	if (mm->fs.filep[2] != 0){
-		mm->fs.filep[2]->vinode = get_keyboard_device(device_out,OUT_FILE);
+	if (mm->fs->filep[2] != 0){
+		mm->fs->filep[2]->vinode = get_keyboard_device(device_out,OUT_FILE);
 	}
 }
 static int curr_cpu_assigned=0;
@@ -417,15 +431,19 @@ static int release_resources(struct task_struct *child_task, int attach_to_paren
 
 	/* 1. release files */
 	mm = child_task->mm;
- 	if (mm->count.counter > 1) return 0;
-	for (i = 0; i < mm->fs.total; i++) {
-		DEBUG("FREEing the files :%d \n",i);
-		fs_close(mm->fs.filep[i]);
-	}
-	if (mm->exec_fp != 0)
-		fs_close(mm->exec_fp);
 
-	mm->fs.total = 0;
+	if (mm->fs->count.counter == 1) {
+		for (i = 0; i < mm->fs->total; i++) {
+			DEBUG("FREEing the files :%d \n", i);
+			fs_close(mm->fs->filep[i]);
+		}
+	}
+ 	if (mm->count.counter > 1) return 0;
+	if (mm->exec_fp != 0){
+		fs_close(mm->exec_fp);
+	}
+
+	mm->fs->total = 0;
 	mm->exec_fp=0;
 
 	/* 2. relase locks */
@@ -481,101 +499,41 @@ int sc_task_stick_to_cpu(unsigned long pid, int cpu_id) {
 	spin_unlock_irqrestore(&g_global_lock, flags);
 	return ret;
 }
-#if 0
-static int process_signals(){/* TODO */
-	return 0;
-}
-#endif
 
 /******************* schedule related functions **************************/
 
-static struct task_struct *__switch_to(struct task_struct *prev_p, struct task_struct *next_p) {
-	return prev_p;
-}
-#ifdef ARCH_X86_64
-#define __STR(x) #x
-#define STR(x) __STR(x)
-
-#define __PUSH(x) "pushq %%" __STR(x) "\n\t"
-#define __POP(x)  "popq  %%" __STR(x) "\n\t"
-
-#define SAVE_CONTEXT \
-	__PUSH(rsi) __PUSH(rdi) \
-__PUSH(r12) __PUSH(r13) __PUSH(r14) __PUSH(r15)  \
-__PUSH(rdx) __PUSH(rcx) __PUSH(r8) __PUSH(r9) __PUSH(r10) __PUSH(r11)  \
-__PUSH(rbx) __PUSH(rbp) 
-#define RESTORE_CONTEXT \
-	__POP(rbp) __POP(rbx) \
-__POP(r11) __POP(r10) __POP(r9) __POP(r8) __POP(rcx) __POP(rdx) \
-__POP(r15) __POP(r14) __POP(r13) __POP(r12) \
-__POP(rdi) __POP(rsi)
-#define switch_to(prev, next, last)              \
-	do {                                                                    \
-		/*                                                              \
-		 * Context-switching clobbers all registers, so we clobber      \
-		 * them explicitly, via unused output variables.                \
-		 * (EAX and EBP is not listed because EBP is saved/restored     \
-		 * explicitly for wchan access and EAX is the return value of   \
-		 * __switch_to())                                               \
-		 */                                                             \
-		unsigned long rbx, rcx, rdx, rsi, rdi;                          \
-		\
-		asm volatile("pushfq\n\t"               /* save    flags */     \
-				SAVE_CONTEXT \
-				"pushq %%rbp\n\t"          /* save    EBP   */     \
-				"movq %%rbp,%[prev_rbp]\n\t"        /* save    RBP   */ \
-				"movq %%rsp,%[prev_sp]\n\t"        /* save    ESP   */ \
-				"movq %[next_sp],%%rsp\n\t"        /* restore ESP   */ \
-				"movq $1f,%[prev_ip]\n\t"  /* save    EIP   */     \
-				"pushq %[next_ip]\n\t"     /* restore EIP   */     \
-				"jmp __switch_to\n"        /* regparm call  */     \
-				"1:\t"                                             \
-				"popq %%rbp\n\t"           /* restore EBP   */     \
-				RESTORE_CONTEXT \
-				"popfq\n"                  /* restore flags */     \
-				\
-				/* output parameters */                            \
-				: [prev_sp] "=m" (prev->thread.sp),                \
-				[prev_ip] "=m" (prev->thread.ip),                \
-				[prev_rbp] "=m" (prev->thread.rbp),                \
-				"=a" (last),                                     \
-				\
-				/* clobbered output registers: */                \
-				"=b" (rbx), "=c" (rcx), "=d" (rdx),              \
-				"=S" (rsi), "=D" (rdi)                           \
-		\
-		\
-		/* input parameters: */                          \
-		: [next_sp]  "m" (next->thread.sp),                \
-		[next_ip]  "m" (next->thread.ip),                \
-		\
-		/* regparm parameters for __switch_to(): */      \
-		[prev]     "a" (prev),                           \
-		[next]     "d" (next)                            \
-		\
-		\
-		: /* reloaded segment registers */                 \
-		"memory");                                      \
-	} while (0)                      
-#else
-#endif
 int ipi_interrupt(void *arg){ /* Do nothing, this is just wake up the core when it is executing HLT instruction  */
 	return 0;
 }
 extern int init_ipc();
+static struct mm_struct *create_mm(){
+	struct mm_struct *mm;
+
+	mm = (struct mm_struct *)mm_slab_cache_alloc(mm_cachep, 0);
+	if (mm == 0)
+		BUG();
+	ut_memset((uint8_t *)mm,0,sizeof(struct mm_struct));
+	atomic_set(&mm->count,1);
+	DEBUG(" mm :%x counter:%x \n",mm,mm->count.counter);
+	mm->pgd = 0;
+	mm->mmap = 0;
+	mm->fs = (struct fs_struct *)ut_calloc(sizeof(struct fs_struct));
+	atomic_set(&mm->fs->count,1);
+	return mm;
+}
+
 int init_tasking(unsigned long unused) {
 	int i;
 	unsigned long task_addr;
+	struct fs_struct *fs;
 
 	g_global_lock.recursion_allowed = 0; /* this lock ownership will be transfer while task scheduling */
 	g_current_task->pid = 1 ;/* hardcoded pid to make g_global _lock work */
 	vm_area_cachep = (kmem_cache_t *)kmem_cache_create((const unsigned char *)"vm_area_struct",sizeof(struct vm_area_struct), 0,0, 0, 0);
 	mm_cachep =(kmem_cache_t *) kmem_cache_create((const unsigned char *)"mm_struct",sizeof(struct mm_struct), 0,0,0,0);
 
-	g_kernel_mm = (struct mm_struct *)mm_slab_cache_alloc(mm_cachep, 0);
-	if (g_kernel_mm == 0)
-		return -1;
-
+	g_kernel_mm = create_mm();
+	fs_kernel = g_kernel_mm->fs;
 	init_ipc();
 
 	g_inode_lock = mutexCreate((char *)"mutex_vfs");
@@ -587,19 +545,19 @@ int init_tasking(unsigned long unused) {
 	atomic_set(&g_kernel_mm->count,1);
 	g_kernel_mm->mmap = 0x0;
 	g_kernel_mm->pgd =  g_kernel_page_dir;
-	g_kernel_mm->fs.total = 3;
-	for (i=0; i<g_kernel_mm->fs.total; i++){
-		g_kernel_mm->fs.filep[i]=(struct file *)mm_slab_cache_alloc(g_slab_filep, 0);
+	g_kernel_mm->fs->total = 3;
+	for (i=0; i<g_kernel_mm->fs->total; i++){
+		g_kernel_mm->fs->filep[i]=(struct file *)mm_slab_cache_alloc(g_slab_filep, 0);
 		if (i==0){
-			g_kernel_mm->fs.filep[i]->vinode = get_keyboard_device(DEVICE_SERIAL,IN_FILE);
-			g_kernel_mm->fs.filep[i]->type = IN_FILE;
+			g_kernel_mm->fs->filep[i]->vinode = get_keyboard_device(DEVICE_SERIAL,IN_FILE);
+			g_kernel_mm->fs->filep[i]->type = IN_FILE;
 
 		}else{
-			g_kernel_mm->fs.filep[i]->vinode = get_keyboard_device(DEVICE_SERIAL,OUT_FILE);
-			g_kernel_mm->fs.filep[i]->type = OUT_FILE;
+			g_kernel_mm->fs->filep[i]->vinode = get_keyboard_device(DEVICE_SERIAL,OUT_FILE);
+			g_kernel_mm->fs->filep[i]->type = OUT_FILE;
 		}
 	}
-	ut_strcpy((uint8_t *)g_kernel_mm->fs.cwd,(uint8_t *)"/");
+	ut_strcpy((uint8_t *)g_kernel_mm->fs->cwd,(uint8_t *)"/");
 
 	free_pid_no = 1; /* pid should never be 0 */
     task_addr=(unsigned long )((unsigned long )(&g_idle_stack)+TASK_SIZE) & (~((unsigned long )(TASK_SIZE-1)));
@@ -863,12 +821,6 @@ unsigned long  _schedule(unsigned long flags) {
 	}
 	if (prev->state == TASK_DEAD) {
 		_add_to_deadlist(prev);
-#if 0
-		if (g_cpu_state[cpuid].dead_task != NULL){
-			BUG(); //Hitting, Hitting again
-		}
-		g_cpu_state[cpuid].dead_task = prev;
-#endif
 	}else if (prev!=g_cpu_state[cpuid].idle_task && prev->state==TASK_RUNNING){ /* some other cpu  can pickup this task , running task and idle task should not be in a run equeue even though there state is running */
 		if (prev->run_queue.next != 0){ /* Prev should not be on the runqueue */
 			BUG();
@@ -887,8 +839,8 @@ unsigned long  _schedule(unsigned long flags) {
 	prev->flags = flags;
 	prev->current_cpu=0xffff;
 	/* finally switch the task */
-	switch_to(prev, next, prev);
-
+//	switch_to(prev, next, prev);
+	arch::switch_to(prev, next, prev);
 	/* from the next statement onwards should not use any stack variables, new threads launched will not able see next statements*/
 	return g_current_task->flags;
 }
@@ -1024,7 +976,7 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 			len = len - ut_snprintf(buf+max_len-len,len,"(%2x)", task->pid);
 
 		len = len - ut_snprintf(buf+max_len-len,len,"cpu-%d: %3d %3d %5x  %5x %4d %7s sleeptick(%3d:%d) cpu:%3d :%s: count:%d status:%s stickcpu:%x\n",task->allocated_cpu,task->state, task->cpu_contexts, task->ticks, task->mm, task->mm->count.counter, task->name, task->sleep_ticks,
-				task->stats.ticks_consumed,task->current_cpu,task->mm->fs.cwd,task->count.counter,task->status_info,task->stick_to_cpu);
+				task->stats.ticks_consumed,task->current_cpu,task->mm->fs->cwd,task->count.counter,task->status_info,task->stick_to_cpu);
 		temp_bt.count = 0;
 		//if (task->state != TASK_RUNNING) {
 		if (1) {
@@ -1053,12 +1005,14 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	vfree((unsigned long)buf);
 	return 1;
 }
+
 unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, int(*fn)(void *, void *),  void **args) {
 	struct task_struct *p;
 	struct mm_struct *mm;
 	unsigned long flags;
 	//void *fn=fd_p;
 	unsigned long ret_pid=0;
+	int i;
 
 	SYSCALL_DEBUG("clone ctid:%x child_stack:%x flags:%x args:%x \n",fn,child_stack,clone_flags,args);
 	/* Initialize the stack  */
@@ -1077,24 +1031,26 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, int(*
 			mm = g_current_task->mm;
 		}
 		atomic_inc(&mm->count);
+		if(clone_flags & CLONE_FS){
+			atomic_dec(&mm->fs->count);
+			mm->fs = ut_calloc(sizeof(struct fs_struct));
+			for (i=0; i<g_current_task->mm->fs->total && i<3;i++){
+				mm->fs->filep[i]=fs_dup(g_current_task->mm->fs->filep[i],0);
+			}
+			mm->fs->total=3;
+		}
+		atomic_inc(&mm->fs->count);
 		SYSCALL_DEBUG("clone  CLONE_VM the mm :%x counter:%x \n",mm,mm->count.counter);
 	} else {
-		int i;
-		mm = (struct mm_struct *)mm_slab_cache_alloc(mm_cachep, 0);
-		if (mm == 0)
-			BUG();
-		ut_memset((uint8_t *)mm,0,sizeof(struct mm_struct));
-		atomic_set(&mm->count,1);
-		DEBUG("clone  the mm :%x counter:%x \n",mm,mm->count.counter);
-		mm->pgd = 0;
-		mm->mmap = 0;
-		for (i=0; i<g_current_task->mm->fs.total;i++){
-			mm->fs.filep[i]=fs_dup(g_current_task->mm->fs.filep[i],0);
+		mm = create_mm();
+
+		for (i=0; i<g_current_task->mm->fs->total;i++){
+			mm->fs->filep[i]=fs_dup(g_current_task->mm->fs->filep[i],0);
 		}
-		mm->fs.total = g_current_task->mm->fs.total;
+		mm->fs->total = g_current_task->mm->fs->total;
 		//sc_set_fsdevice(DEVICE_SERIAL, DEVICE_SERIAL);
 
-		ut_strcpy(mm->fs.cwd,g_current_task->mm->fs.cwd);
+		ut_strcpy(mm->fs->cwd,g_current_task->mm->fs->cwd);
 
 		DEBUG("BEFORE duplicating pagetables and vmaps \n");
 		ar_dup_pageTable(g_current_task->mm, mm);
@@ -1169,6 +1125,7 @@ int SYS_sc_exit(int status) {
 	sc_schedule();
 	return 0;
 }
+
 void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **env) {
 	struct mm_struct *mm,*old_mm;
 	int i;
@@ -1185,21 +1142,16 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	}
 
 	/* delete old vm and create a new one */
-	mm = (struct mm_struct *)mm_slab_cache_alloc(mm_cachep, 0);
-	if (mm == 0)
-		BUG();
-	ut_memset((unsigned char *)mm,0,sizeof(struct mm_struct)); /* clear the mm struct */
-	atomic_set(&mm->count,1);
-	mm->pgd = 0;
-	mm->mmap = 0;
+	mm = create_mm();
+
 	/* these are for user level threads */
-	for (i=0; i<g_current_task->mm->fs.total;i++){
-		mm->fs.filep[i]=fs_dup(g_current_task->mm->fs.filep[i],0);
+	for (i=0; i<g_current_task->mm->fs->total;i++){
+		mm->fs->filep[i]=fs_dup(g_current_task->mm->fs->filep[i],0);
 	}
 
 
-	mm->fs.total = g_current_task->mm->fs.total;
-	ut_strcpy(mm->fs.cwd,g_current_task->mm->fs.cwd);
+	mm->fs->total = g_current_task->mm->fs->total;
+	ut_strcpy(mm->fs->cwd,g_current_task->mm->fs->cwd);
 	/* every process page table should have soft links to kernel page table */
 	if (ar_dup_pageTable(g_kernel_mm, mm)!=1){
 		BUG();
@@ -1236,7 +1188,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	/* populate vm with vmaps */
 	if (mm->exec_fp == 0) {
 		vfree(tmp_stack);
-		ut_printf("Error execve : Failed to open the file:%s: \n",file);
+		ut_printf("Error execve : Failed to open the file \n");
 		SYS_sc_exit(701);
 		return;
 	}
@@ -1289,6 +1241,22 @@ int SYS_sc_kill(unsigned long pid, unsigned long signal) {
 	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
 	return ret;
+}
+extern int init_code_readonly(unsigned long arg1);
+void idleTask_func() {
+	int k=0;
+
+	/* wait till initilization completed */
+	while(g_boot_completed==0);
+	init_code_readonly(0);
+
+	ut_log("Idle Thread Started cpuid: %d stack addrss:%x \n",getcpuid(),&k);
+	while (1) {
+		//asm volatile ("sti; hlt" : : : "memory");
+		arch::sti_hlt();
+
+		sc_schedule();
+	}
 }
 }
 #endif

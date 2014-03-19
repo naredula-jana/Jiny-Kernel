@@ -5,7 +5,7 @@
  - Jiny is a Thin/Tiny unix like kernel with interface similar to linux, linux app can directly run on it without recompiling.
  - Designed from ground up: It is designed from the ground up to give superior performance on virtual machine(VM). The performance gain will come from reducing memory and cpu overhead when compare to traditional os like linux,freebsd etc.
  - High priority versus normal priority apps: The apps running on Jiny OS are divided in to high priority and normal priority. 
-     - **High priority App**: Runs single app in ring-0, kernel cooperates with app to give maximum performance by reducing memory and cpu overhead. Any linux app can be converted in to high priority app by recompiling without any modification. Recompilation is required as the syscalls in libc need to be modified. When app is wrapped  by a  thin kernel like Jiny and launched as vm, it can give better performance even when compare to the same app on the metal. The two key reasons for the gain in performance is app will be running in a ring-0  with a co-operative thin kernel in a vcpu and virtulaization hardware will take the job in protecting the system from app malfunctioning.Currently Jiny can accommodate only one high priority app. The performance will be always high when compare to the similar app in the linux/freebsd vm. In apps that have high system call usage the performance will be better even when compare to the same app on the metal. JVM, memcached etc  are well suitable to run as high priority app.  
+     - **High priority App**: Runs single app in ring-0, kernel cooperates with app to give maximum performance by reducing memory and cpu overhead. Any linux app can be converted in to high priority app by recompiling without any modification. Recompilation is required as the syscalls in libc need to be modified. When app is wrapped  by a  thin kernel like Jiny and launched as vm, it can give better performance even when compare to the same app on the metal. The two key reasons for the gain in performance is app will be running in a ring-0  with a co-operative thin kernel in a vcpu and virtulization hardware will take the job in protecting the system from app malfunctioning.Currently Jiny can accommodate only one high priority app. The performance will be always high when compare to the similar app in the linux/freebsd vm. In apps that have high system call usage the performance will be better even when compare to the same app on the metal. JVM, memcached etc  are well suitable to run as high priority app.  
      - **Normal priority app**: can run large in number like any traditional unix system in ring-3 with performance less when compare to high priority app.  
 
 
@@ -22,8 +22,16 @@
       - changes to libc.
 
   **Phase-3:**  Converting most of subsystems from c to c++11(In Progress).
-     
-3. **For What purpose Jiny can be used?**
+  
+3. **How different is Jiny from OS like Linux?**
+   
+ - Thin kernel : Jiny is thin kernel, it is having very small set of drivers based on virtio, since it runs on hypervisor. Currently it supports only on x86_64 architecture. this makes the size of code small when compare to linux.
+ - OS for Cloud: designed from groundup  to run on hypervisor, So it runs faster when compare to linux.
+ - Object oriented: Most of subsystems will be in object oriented language like c++11.
+ - Single app inside the vm: Designed to run single application efficiently when compare to traditional os.
+ - Network packet processing: Most of cycles in packet processing is spent in the app context(i.e at the edge) as against in the bottom half in linux, this will minimizing the locks in the SMP. Detailed description is present in the [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf)
+   
+4. **For What purpose Jiny can be used?**
 
  In the Past, it was used for:
   -  To model the page cache(MRU+LRU) : This is used to speed up the map-reduce applications in hadoop framework, The results was published in [pagecache optimization for hadoop @  opencirrus-2011](../master/doc/PageCache-Open-Cirrus.pdf). 
@@ -33,12 +41,7 @@
    -  Running single apps like  JVM( tomcat or any java server), memcached  etc inside the Jiny vm as high priority app. Single app can be wrapped by a thin os like Jiny to enhance the performance.  Here the app will run much faster when compare to the same app in other vm's like freebsd or linux. Thin OS like JIny along with virtulization hardware can act like a performance enhancer for the apps on the metal.
    -  Running multiple normal priority application like any traditional unix like systems with optimizations for vm. 
 
-3. **How different is Jiny from OS like Linux?**
-   
- - Thin kernel : Jiny is thin kernel, it is having very small set of drivers based on virtio, since it runs on hypervisor. Currently it supports only on x86_64 architecture. this makes the size of code small when compare to linux.
- -  OS for Cloud: designed from groundup  to run on hypervisor, So it runs fater when compare to linux.
- -  Object oriented: written in object oriented language like c++11.
- -  Single app inside the vm: Designed to run single application effeciently when compare to traditional os.
+
  
 
  
