@@ -11,6 +11,7 @@
 #include "common.h"
 #include "isr.h"
 
+#define EINVAL -22
 struct __sysctl_args {
 	int *name; /* integer vector describing variable */
 	int nlen; /* length of this vector */
@@ -70,6 +71,7 @@ unsigned long SYS_getppid();
 unsigned long SYS_getpgrp();
 unsigned long SYS_exit_group();
 unsigned long SYS_wait4(int pid, void *status,  unsigned long  option, void *rusage);
+unsigned long SYS_set_tid_address(unsigned long tid_address);
 
 
 struct timezone {
@@ -108,58 +110,7 @@ typedef struct {
 	void *func;
 } syscalltable_t;
 
-syscalltable_t syscalltable[] = {
-/* 0 */
-{ SYS_fs_read },/* 0 */{ SYS_fs_write }, { SYS_fs_open }, { SYS_fs_close }, { SYS_fs_stat }, { SYS_fs_fstat }, /* 5 */
-{ SYS_fs_stat }, { SYS_poll }, { SYS_fs_lseek }, { SYS_vm_mmap }, { SYS_vm_mprotect },/* 10 */
-{ SYS_vm_munmap }, { SYS_vm_brk }, { SYS_rt_sigaction }, { SYS_rt_sigprocmask }, { snull }, /* 15 */
-{ SYS_ioctl }, { snull }, { snull }, { SYS_fs_readv }, { SYS_fs_writev }, /* 20 */
-{ snull }, { SYS_pipe }, { SYS_select }, { snull }, { snull }, /* 25 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 30 */
-{ snull }, { SYS_fs_dup }, { SYS_fs_dup2 }, { snull }, { SYS_nanosleep }, /* 35 = nanosleep */
-{ snull }, { SYS_alarm }, { snull }, { SYS_getpid }, { snull }, /* 40 */
-{ SYS_socket }, { SYS_connect }, { SYS_accept }, { SYS_sendto }, { SYS_recvfrom }, /* 45 */
-{ snull }, { snull }, { snull }, { SYS_bind }, { SYS_listen }, /* 50 */
-{ SYS_getsockname }, { snull }, { snull }, { SYS_setsockopt }, { snull }, /* 55 */
-{ SYS_sc_clone }, { SYS_sc_fork }, { SYS_sc_vfork }, { SYS_sc_execve }, { SYS_sc_exit }, /* 60 */
-{ SYS_wait4 }, { SYS_sc_kill }, { SYS_uname }, { snull }, { snull }, /* 65 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 70 */
-{ snull }, { SYS_fs_fcntl }, { snull }, { snull }, { SYS_fs_fdatasync }, /* 75 */
-{ snull }, { snull }, { SYS_getdents }, { SYS_getcwd }, { SYS_chdir }, /* 80 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 85 */
-{ snull }, { snull }, { snull }, { SYS_fs_readlink }, { snull }, /* 90 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 95 */
-{ SYS_gettimeofday }, { snull }, { snull }, { snull }, { snull }, /* 100 */
-{ snull }, { SYS_getuid }, { snull }, { SYS_getgid }, { SYS_setuid }, /* 105 */
-{ SYS_setgid }, { SYS_geteuid }, { snull }, { SYS_setpgid }, { SYS_getppid }, /* 110 */
-{ SYS_getpgrp }, { SYS_setsid }, { snull }, { snull }, { snull }, /* 115 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 120 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 125 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 130 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 135 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 140 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 145 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 150 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 155 */
-{ SYS_sysctl }, { snull }, { SYS_arch_prctl }, { snull }, { snull }, /* 160 */
-{ SYS_chroot }, { SYS_sync }, { snull }, { snull }, { snull }, /* 165 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 170 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 175 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 180 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 185 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 190 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 195 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 200 */
-{ SYS_time }, { SYS_futex }, { snull }, { snull }, { snull }, /* 205 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 210 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 215 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 220 */
-{ SYS_fs_fadvise }, { snull }, { snull }, { snull }, { snull }, /* 225 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 230  */
-{ SYS_exit_group }, { snull }, { snull }, { snull }, { snull }, /* 235 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 240 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 245 */
-{ snull }, { snull }, { snull }, { snull }, };
+
 
 
 #define UTSNAME_LENGTH	65 
@@ -319,7 +270,10 @@ unsigned long SYS_ioctl(int d, int request, unsigned long *addr) {//TODO
 	return SYSCALL_SUCCESS;
 }
 
-
+unsigned long SYS_set_tid_address(unsigned long tid_address){
+	g_current_task->child_tid_address = tid_address;
+	return g_current_task->pid;
+}
 unsigned long SYS_futex(unsigned long *a) {//TODO
 	SYSCALL_DEBUG("futex  addr:%x \n", a);
 	*a = 0;
@@ -500,6 +454,119 @@ unsigned long SYS_exit_group() {
 	SYS_sc_exit(103);
 	return SYSCALL_SUCCESS;
 }
+
+
+#define RLIMIT_CPU      0   /* CPU time in sec */
+#define RLIMIT_FSIZE        1   /* Maximum filesize */
+#define RLIMIT_DATA     2   /* max data size */
+#define RLIMIT_STACK        3   /* max stack size */
+#define RLIMIT_CORE     4   /* max core file size */
+#define RLIMIT_RSS     5   /* max resident set size */
+#define RLIMIT_NPROC       6   /* max number of processes */
+#define RLIMIT_NOFILE      7   /* max number of open files */
+#define RLIMIT_MEMLOCK     8   /* max locked-in-memory address space */
+#define RLIMIT_AS      9   /* address space limit */
+#define RLIMIT_LOCKS        10  /* maximum file locks held */
+#define RLIMIT_SIGPENDING   11  /* max number of pending signals */
+#define RLIMIT_MSGQUEUE     12  /* maximum bytes in POSIX mqueues */
+#define RLIMIT_NICE     13  /* max nice prio allowed to raise to
+                       0-39 for nice level 19 .. -20 */
+#define RLIMIT_RTPRIO       14  /* maximum realtime priority */
+#define RLIMIT_RTTIME       15  /* timeout for RT tasks in us */
+#define RLIM_NLIMITS        16
+
+#define RLIM_INFINITY (~0UL)
+
+struct rlimit {
+    unsigned long   rlim_cur;
+    unsigned long   rlim_max;
+};
+#define _STK_LIM    (8*1024*1024)
+#define MLOCK_LIMIT ((PAGE_SIZE > 64*1024) ? PAGE_SIZE : 64*1024)
+#define INR_OPEN_CUR 1024
+#define INR_OPEN_MAX 4096
+#define MQ_BYTES_MAX 819200
+
+struct rlimit rlimits[RLIM_NLIMITS] =                            \
+{                                   \
+    [RLIMIT_CPU]        = {  RLIM_INFINITY,  RLIM_INFINITY },   \
+    [RLIMIT_FSIZE]      = {  RLIM_INFINITY,  RLIM_INFINITY },   \
+    [RLIMIT_DATA]       = {  RLIM_INFINITY,  RLIM_INFINITY },   \
+    [RLIMIT_STACK]      = {       _STK_LIM,   RLIM_INFINITY },   \
+    [RLIMIT_CORE]       = {              0,  RLIM_INFINITY },   \
+    [RLIMIT_RSS]        = {  RLIM_INFINITY,  RLIM_INFINITY },   \
+    [RLIMIT_NPROC]      = {              0,              0 },   \
+    [RLIMIT_NOFILE]     = {   INR_OPEN_CUR,   INR_OPEN_MAX },   \
+    [RLIMIT_MEMLOCK]    = {    MLOCK_LIMIT,    MLOCK_LIMIT },   \
+    [RLIMIT_AS]     = {  RLIM_INFINITY,  RLIM_INFINITY },   \
+    [RLIMIT_LOCKS]      = {  RLIM_INFINITY,  RLIM_INFINITY },   \
+    [RLIMIT_SIGPENDING] = {         0,         0 }, \
+    [RLIMIT_MSGQUEUE]   = {   MQ_BYTES_MAX,   MQ_BYTES_MAX },   \
+    [RLIMIT_NICE]       = { 0, 0 },             \
+    [RLIMIT_RTPRIO]     = { 0, 0 },             \
+    [RLIMIT_RTTIME]     = {  RLIM_INFINITY,  RLIM_INFINITY },   \
+};
+int SYS_getrlimit(int resource, struct rlimit *rlim){
+	if (resource >= RLIM_NLIMITS){
+		return EINVAL;
+	}
+	rlim->rlim_cur = rlimits[resource].rlim_cur;
+	rlim->rlim_max = rlimits[resource].rlim_max;
+	return 0;
+}
+
+syscalltable_t syscalltable[] = {
+/* 0 */
+{ SYS_fs_read },/* 0 */{ SYS_fs_write }, { SYS_fs_open }, { SYS_fs_close }, { SYS_fs_stat }, { SYS_fs_fstat }, /* 5 */
+{ SYS_fs_stat }, { SYS_poll }, { SYS_fs_lseek }, { SYS_vm_mmap }, { SYS_vm_mprotect },/* 10 */
+{ SYS_vm_munmap }, { SYS_vm_brk }, { SYS_rt_sigaction }, { SYS_rt_sigprocmask }, { snull }, /* 15 */
+{ SYS_ioctl }, { snull }, { snull }, { SYS_fs_readv }, { SYS_fs_writev }, /* 20 */
+{ snull }, { SYS_pipe }, { SYS_select }, { snull }, { snull }, /* 25 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 30 */
+{ snull }, { SYS_fs_dup }, { SYS_fs_dup2 }, { snull }, { SYS_nanosleep }, /* 35 = nanosleep */
+{ snull }, { SYS_alarm }, { snull }, { SYS_getpid }, { snull }, /* 40 */
+{ SYS_socket }, { SYS_connect }, { SYS_accept }, { SYS_sendto }, { SYS_recvfrom }, /* 45 */
+{ snull }, { snull }, { snull }, { SYS_bind }, { SYS_listen }, /* 50 */
+{ SYS_getsockname }, { snull }, { snull }, { SYS_setsockopt }, { snull }, /* 55 */
+{ SYS_sc_clone }, { SYS_sc_fork }, { SYS_sc_vfork }, { SYS_sc_execve }, { SYS_sc_exit }, /* 60 */
+{ SYS_wait4 }, { SYS_sc_kill }, { SYS_uname }, { snull }, { snull }, /* 65 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 70 */
+{ snull }, { SYS_fs_fcntl }, { snull }, { snull }, { SYS_fs_fdatasync }, /* 75 */
+{ snull }, { snull }, { SYS_getdents }, { SYS_getcwd }, { SYS_chdir }, /* 80 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 85 */
+{ snull }, { snull }, { snull }, { SYS_fs_readlink }, { snull }, /* 90 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 95 */
+{ SYS_gettimeofday }, { SYS_getrlimit }, { snull }, { snull }, { snull }, /* 100 */
+{ snull }, { SYS_getuid }, { snull }, { SYS_getgid }, { SYS_setuid }, /* 105 */
+{ SYS_setgid }, { SYS_geteuid }, { snull }, { SYS_setpgid }, { SYS_getppid }, /* 110 */
+{ SYS_getpgrp }, { SYS_setsid }, { snull }, { snull }, { snull }, /* 115 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 120 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 125 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 130 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 135 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 140 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 145 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 150 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 155 */
+{ SYS_sysctl }, { snull }, { SYS_arch_prctl }, { snull }, { snull }, /* 160 */
+{ SYS_chroot }, { SYS_sync }, { snull }, { snull }, { snull }, /* 165 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 170 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 175 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 180 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 185 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 190 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 195 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 200 */
+{ SYS_time }, { SYS_futex }, { snull }, { snull }, { snull }, /* 205 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 210 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 215 */
+{ snull }, { snull }, { SYS_set_tid_address }, { snull }, { snull }, /* 220 */
+{ SYS_fs_fadvise }, { snull }, { snull }, { snull }, { snull }, /* 225 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 230  */
+{ SYS_exit_group }, { snull }, { snull }, { snull }, { snull }, /* 235 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 240 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 245 */
+{ snull }, { snull }, { snull }, { snull }, };
 /****************************************** syscall debug *********************************************/
 
 

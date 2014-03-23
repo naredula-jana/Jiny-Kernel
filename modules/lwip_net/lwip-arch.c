@@ -250,7 +250,7 @@ sys_thread_t sys_thread_new(char *name, void (*thread)(void *arg), void *arg,
 		int stacksize, int prio) {
 	unsigned long pid;
 
-	pid = sc_createKernelThread(thread, (unsigned char *)arg, (unsigned char *)name);
+	pid = sc_createKernelThread(thread, (unsigned char *)arg, (unsigned char *)name,0);
 //	sc_task_stick_to_cpu(pid, 0); /* TODO: currently all network related threads are sticked to cpu-o to avoid crash in tcp layer */
 	DEBUG(" Thread created for tcp/ip: %d:\n", pid);
 	return pid;

@@ -96,6 +96,7 @@ struct task_struct {
 	unsigned long pid,ppid;
 	unsigned char name[MAX_TASK_NAME+1];
 	char thread_type;
+	unsigned long child_tid_address; /* used set_tid_address */
 
 	int allocated_cpu;
 	int current_cpu;

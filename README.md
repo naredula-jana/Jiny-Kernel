@@ -8,22 +8,7 @@
      - **High priority App**: Runs single app in ring-0, kernel cooperates with app to give maximum performance by reducing memory and cpu overhead. Any linux app can be converted in to high priority app by recompiling without any modification. Recompilation is required as the syscalls in libc need to be modified. When app is wrapped  by a  thin kernel like Jiny and launched as vm, it can give better performance even when compare to the same app on the metal. The two key reasons for the gain in performance is app will be running in a ring-0  with a co-operative thin kernel in a vcpu and virtulization hardware will take the job in protecting the system from app malfunctioning.Currently Jiny can accommodate only one high priority app. The performance will be always high when compare to the similar app in the linux/freebsd vm. In apps that have high system call usage the performance will be better even when compare to the same app on the metal. JVM, memcached etc  are well suitable to run as high priority app.  
      - **Normal priority app**: can run large in number like any traditional unix system in ring-3 with performance less when compare to high priority app.  
 
-
-2. **What is the development plan and current status?**.
-
-  **Phase-1**: Developing traditional unix like kernel with small foot print(Completed)
- -  bringing kernel up on x86_64 without any user level app.
- -  Implementing most of the linux system calls, so that statically compiled app's on linux can run as it is. Currently app's like busybox can run as it is.
-    
-  **Phase-2:** Changes to support high priority apps(In Progress)
-      - Modifying the  virtual memory layer to make high priority app run in the same space as that of the kernel.
-      - Scheduler changes: To disable/minimize the interrupts on the cpu that is loaded with high priority app. This is to reduce the cpu overhead and locks.
-      - Making lockless or minimizing the contention.
-      - changes to libc.
-
-  **Phase-3:**  Converting most of subsystems from c to c++11(In Progress).
-  
-3. **How different is Jiny from OS like Linux?**
+2. **How different is Jiny from OS like Linux?**
    
  - Thin kernel : Jiny is thin kernel, it is having very small set of drivers based on virtio, since it runs on hypervisor. Currently it supports only on x86_64 architecture. this makes the size of code small when compare to linux.
  - OS for Cloud: designed from groundup  to run on hypervisor, So it runs faster when compare to linux.
@@ -33,16 +18,26 @@
    
 4. **For What purpose Jiny can be used?**
 
- In the Past, it was used for:
-  -  To model the page cache(MRU+LRU) : This is used to speed up the map-reduce applications in hadoop framework, The results was published in [pagecache optimization for hadoop @  opencirrus-2011](../master/doc/PageCache-Open-Cirrus.pdf). 
-  -  To model Host based filesystem(HFS): HFS is filesystem run in guest OS but does file i/o using the shared memory between the guest and host os. HFS does not need any block drivers, it communicated with block devices using the shared memory between guest and host OS.  
- 	
- In the future, it can be used:
    -  Running single apps like  JVM( tomcat or any java server), memcached  etc inside the Jiny vm as high priority app. Single app can be wrapped by a thin os like Jiny to enhance the performance.  Here the app will run much faster when compare to the same app in other vm's like freebsd or linux. Thin OS like JIny along with virtulization hardware can act like a performance enhancer for the apps on the metal.
    -  Running multiple normal priority application like any traditional unix like systems with optimizations for vm. 
 
+3. **What is the development plan and current status?**.
 
- 
+  **Completed**: Developing traditional unix like kernel with small foot print(Completed)
+ -  bringing kernel up on x86_64 without any user level app, cli using kernel shell.
+ -  Implementing most of the linux system calls, so that statically compiled app's on linux can run as it is. Currently app's like busybox can run as it is.
+ - Running high priority app as kernel module.
+    
+  **In progress:** 
+  - Traditional OS changes:  
+     - Converting most of subsystems from c to c++11.
+     - Running jvm's like jamvm,openjdk: this need to implement some missing system call like futext etc.
+   -  HIgh priority app related changes:
+     - Modifying the  virtual memory layer to make high priority app run in the same space as that of the kernel.
+     - Providing additional API's to app's like JVM for improving the Garbage collection.
+      - Scheduler changes: To disable/minimize the interrupts on the cpu that is loaded with high priority app. This is to reduce the cpu overhead and locks.
+      - Making lockless or minimizing the contention.
+      - changes to libc: This will make high prority app run as app instead of loading as a kernel module.
 
  
 ##Benchmark:
