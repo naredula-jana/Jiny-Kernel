@@ -62,7 +62,18 @@ int fs_destroy_filep(int fd) {
 	mm_slab_cache_free(g_slab_filep, fp);
 	return 0;
 }
-
+unsigned long SYS_fs_access(char *filename, int mode) {
+	struct file *filep;
+	int ret=0;;
+	filep  = (struct file *)fs_open((uint8_t *) filename, 0, mode);
+	if (filep == 0) {
+		ret = -1;
+		return ret;
+	}else{
+		fs_close(filep);
+		return 0;
+	}
+}
 unsigned long SYS_fs_open(char *filename, int mode, int flags) {
 	struct file *filep;
 	int ret= SYSCALL_FAIL;
@@ -205,7 +216,7 @@ int SYS_fs_write(unsigned long fd, uint8_t *buff, unsigned long len) {
 	//	return socket_write(file, buff, len);
 	}
 	ret = fs_write(file, buff, len);
-	SYSCALL_DEBUG("write return : fd:%d ret:%d \n",fd,ret);
+	//SYSCALL_DEBUG("write return : fd:%d ret:%d \n",fd,ret);
 	return ret;
 }
 long SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt) {
@@ -213,7 +224,7 @@ long SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt) {
 	long ret, tret;
 	struct file *file;
 
-	SYSCALL_DEBUG("writev: fd:%d iovec:%x count:%d\n", fd, iov, iovcnt);
+	//SYSCALL_DEBUG("writev: fd:%d iovec:%x count:%d\n", fd, iov, iovcnt);
 
 	file = fd_to_file(fd);
 	ret = 0;
@@ -497,6 +508,7 @@ int Jcmd_ls(uint8_t *arg1, uint8_t *arg2) {
 	uint8_t *buf;
 	int total_pages = 0;
 	const uint8_t *type;
+	int active=1;
 
 	ut_printf("usagecount nrpages length  inode_no type/type  name (in/out/err)\n");
 	len = PAGE_SIZE*100;
@@ -506,10 +518,13 @@ int Jcmd_ls(uint8_t *arg1, uint8_t *arg2) {
 		ut_printf(" Unable to get vmalloc memory\n");
 		return 0;
 	}
-
+	if (arg1!=0 && ut_strcmp(arg1,(uint8_t *)"all")==0){
+		active=0;
+	}
 	mutexLock(g_inode_lock);
 	list_for_each(p, &fs_inode_list) {
 		tmp_inode = list_entry(p, struct fs_inode, inode_link);
+		if (active==1 && tmp_inode->count.counter==1) continue;
 		if (tmp_inode->flags & INODE_EXECUTING) type=(uint8_t *)"*";
 		else type=(uint8_t *)" ";
 		if (tmp_inode->file_type == NETWORK_FILE) {

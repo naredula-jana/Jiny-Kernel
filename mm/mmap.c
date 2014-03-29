@@ -210,6 +210,9 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, 
 		ut_log("VMA ERROR:  Already Found :%x \n",addr);
 		return 0;
 	}
+	if ((mm!=g_kernel_mm) && (addr >= KERNEL_ADDR_START) && (addr < KERNEL_ADDR_END)){ /* check if it falls in kernel space */
+		BUG();
+	}
 
 	vma = mm_slab_cache_alloc(vm_area_cachep, 0);
 	if (vma == 0){
@@ -229,9 +232,17 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, 
 		if (file->vinode != 0) {
 			vma->vm_flags = vma->vm_flags | MAP_FIXED;
 			vma->vm_inode = file->vinode;
-			//if (len > (file->inode->file_size)) /*TODO: need to do stat and find the file length*/
-			//vma->vm_end=addr+file->inode->file_size;
-
+#if 1
+			struct fileStat file_stat;
+			fs_stat(file,&file_stat);
+			if (len > (file_stat.st_size)){
+			    vma->vm_end=addr+file_stat.st_size;
+			  //  ut_log(" mmap  len exceeds file length : user len %x  file len:%x\n",len,file_stat.st_size);
+			}
+#endif
+			if (flags & MAP_DENYWRITE){
+				fs_set_flags(file, INODE_EXECUTING) ;
+			}
 		}
 	} else if (flags & MAP_ANONYMOUS) {
 		if (addr == 0 && mm!=g_kernel_mm) {
@@ -243,6 +254,7 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, 
 		}
 
 	}
+
 	ret=vma_link(mm, vma);
 	if (ret < 0){
         ut_log(" mmap : name:%s file:%x addr:%x len:%x pgoff:%x flags:%x  protection:%x\n",name,file,addr,len,pgoff,flags,prot);
@@ -261,8 +273,11 @@ void * SYS_vm_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
 
 	SYSCALL_DEBUG("mmap fd:%x addr:%x len:%x prot:%x flags:%x pgpff:%x \n",fd,addr,len,prot,flags,pgoff);
 	file = fd_to_file(fd);
-	ret = vm_mmap(file, addr, len, prot, flags, pgoff,"from_syscall");
+	ret = vm_mmap(file, addr, len, prot, flags, pgoff,"syscall");
 	SYSCALL_DEBUG("mmap ret :%x \n",ret);
+	if (g_conf_syscall_debug){
+		Jcmd_maps(0,0);
+	}
 	return ret;
 }
 /*
@@ -277,7 +292,7 @@ unsigned long vm_setupBrk(unsigned long addr, unsigned long len) {
 
 	g_current_task->mm->brk_addr = addr;
 	g_current_task->mm->brk_len = len;
-	return vm_mmap(0, addr, len, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0,"anonymous_brk");
+	return vm_mmap(0, addr, len, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0,"anon_brk");
 }
 /************************************************************************************************************/
 
@@ -375,6 +390,7 @@ int Jcmd_maps(char *arg1, char *arg2) {
 	int len = PAGE_SIZE*100;
 	int ret,pid,i,max_len;
 	int found=0;
+	int all=0;
 
 	max_len=len;
 	buf = (unsigned char *) vmalloc(len,0);
@@ -397,6 +413,9 @@ int Jcmd_maps(char *arg1, char *arg2) {
 			}
 		}
 	}
+	if (arg2 != 0 && ut_strcmp(arg2,"all")==0){
+		all=1;
+	}
 	if (task == 0 || found==0) {
 		goto last;
 	}
@@ -406,20 +425,30 @@ int Jcmd_maps(char *arg1, char *arg2) {
 	vma = mm->mmap;
 	ret=0;
 	buf[0]=0;
+	len = len - ut_snprintf(buf + max_len - len, len, "name,[start-end] - data  flags: prot: stats (page_count/faults/write faults) allocs:%d frees:%d\n",mm->stat_page_allocs,mm->stat_page_free);
 	while (vma) {
 		int tret;
 		struct inode *inode;
 
 		inode = vma->vm_inode;
 		if (inode == NULL) {
-			len = len - ut_snprintf(buf+max_len-len,len,"%9s [ %p - %p ] - (+%p) flag:%x prot:%x stats:%d (%d/%d)\n",vma->name, vma->vm_start, vma->vm_end,
-					vma->vm_private_data,vma->vm_flags,vma->vm_prot,vma->stat_page_count,vma->stat_page_faults,vma->stat_page_wrt_faults);
+			len = len
+					- ut_snprintf(buf + max_len - len, len, "%9s [ %p - %p ] - (+%p) flag:%x prot:%x stats:(%d/%d/%d)\n",
+							vma->name, vma->vm_start, vma->vm_end, vma->vm_private_data, vma->vm_flags, vma->vm_prot,
+							vma->stat_page_count, vma->stat_page_faults, vma->stat_page_wrt_faults);
 		} else {
-			len = len - ut_snprintf(buf+max_len-len,len,"%9s [ %p - %p ] - (+%p) flag:%x prot:%x stats:%d (%d/%d)\n",vma->name, vma->vm_start, vma->vm_end,
-					 vma->vm_private_data,vma->vm_flags,vma->vm_prot, vma->stat_page_count,vma->stat_page_faults,vma->stat_page_wrt_faults);
+			len = len
+					- ut_snprintf(buf + max_len - len, len, "%9s [ %p - %p ] - (+%p) flag:%x prot:%x stats:(%d/%d/%d) :%s:\n",
+							vma->name, vma->vm_start, vma->vm_end, vma->vm_private_data, vma->vm_flags, vma->vm_prot,
+							vma->stat_page_count, vma->stat_page_faults, vma->stat_page_wrt_faults, fs_get_filename(inode));
 		}
-		for (i=0; i<10 && i<vma->stat_log_index; i++){
-			len = len - ut_snprintf(buf+max_len-len,len,"	  vad:%x- faulip:%x - rw:%d option:%x \n",vma->stat_log[i].vaddr,vma->stat_log[i].fault_addr,vma->stat_log[i].rw_flag,vma->stat_log[i].optional);
+		if (all == 1) {
+			for (i = 0; i < 10 && i < vma->stat_log_index; i++) {
+				len = len
+						- ut_snprintf(buf + max_len - len, len, "	  vad:%x- faulip:%x - rw:%d option:%x \n",
+								vma->stat_log[i].vaddr, vma->stat_log[i].fault_addr, vma->stat_log[i].rw_flag,
+								vma->stat_log[i].optional);
+			}
 		}
 
 		if (len <0) goto last;

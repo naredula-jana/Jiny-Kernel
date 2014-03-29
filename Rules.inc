@@ -35,8 +35,8 @@ ASM_OBJECTS=$(patsubst %.s,%.o,$(ASM_SOURCES))
 OBJECTS=$(C_OBJECTS) $(ASM_OBJECTS) $(GNUASM_OBJECTS) $(CPP_OBJECTS)
 
 ARCH_DIR=x86_64
-CFLAGS= -m64 -mno-red-zone -nostdlib -D _KERNEL  -nodefaultlibs  -Wall   -I$(INCLUDE) -I$(XEN_INCLUDE)  -DARCH_X86_64
-CFLAGS_ASM= -nostdlib -nostdinc -nodefaultlibs -D__ASM__   -I$(INCLUDE) -DARCH_X86_64
+CFLAGS= -mcmodel=kernel -m64 -mno-red-zone -nostdlib -D _KERNEL  -nodefaultlibs  -Wall   -I$(INCLUDE) -I$(XEN_INCLUDE)  -DARCH_X86_64
+CFLAGS_ASM= -mcmodel=kernel -nostdlib -nostdinc -nodefaultlibs -D__ASM__   -I$(INCLUDE) -DARCH_X86_64
 LINK_FLAG= 
 INCLUDE=. -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURCE_ROOT)/include/$(ARCH_DIR)/ -I $(SOURCE_ROOT)/arch/$(ARCH_DIR) -I $(XEN_INCLUDE)
 

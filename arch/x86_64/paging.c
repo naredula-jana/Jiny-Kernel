@@ -249,8 +249,11 @@ static int check_kernel_ptable_entry(unsigned long phy_addr){
 	}
 	return 0;
 }
-
-static int copy_pagetable(int level,unsigned long src_ptable_addr,unsigned long dest_ptable_addr)
+static inline unsigned long mm_pagealloc(struct mm_struct *mm){
+	mm->stat_page_allocs++;
+	return alloc_page(MEM_CLEAR);
+}
+static int copy_pagetable(struct mm_struct *dest_mm, int level,unsigned long src_ptable_addr,unsigned long dest_ptable_addr)
 {
 	int i;
 	unsigned long *src,*dest,*nv; /* virtual address */
@@ -274,7 +277,7 @@ static int copy_pagetable(int level,unsigned long src_ptable_addr,unsigned long 
 					*dest=*src;
 				}else{/* anonymous pages need to be copied */
 					/* TODO : need to implement Copy On Write instead of Simple Copy */
-					nv = (unsigned long *) alloc_page(0);
+					nv = (unsigned long *) mm_pagealloc(dest_mm);
 					ut_memcpy(nv,__va(phy_addr),PAGE_SIZE);
 					*dest=__pa(nv) | (*src&0xfff);
 					DEBUG("Copying the page src:%x dest:%x \n",*dest,*src);
@@ -285,11 +288,11 @@ static int copy_pagetable(int level,unsigned long src_ptable_addr,unsigned long 
 				{
 					*dest = *src;
 				} else {
-					nv = (unsigned long *) alloc_page(MEM_CLEAR);
+					nv = (unsigned long *) mm_pagealloc(dest_mm);
 					if (nv == 0)
 						BUG();
 					DEBUG(" calling i:%d level:%d src:%x  child src:%x physrc:%x \n", i, level, src_ptable_addr, __va(*src), *src);
-					copy_pagetable(level - 1,(unsigned long) __va((*src)&(~0xfff)),
+					copy_pagetable(dest_mm,level - 1,(unsigned long) __va((*src)&(~0xfff)),
 							(unsigned long) nv);
 					*dest = __pa(nv) | 0x7;
 				}
@@ -335,7 +338,7 @@ static  void pagetable_walk(int level,unsigned long ptable_addr){
 /*
 Return value : 1 - if entire table is cleared and deleted  else return 0
 */
-static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long addr, unsigned long len,unsigned long start_addr)
+static int clear_pagetable(struct mm_struct *mm, int level,unsigned long ptable_addr,unsigned long addr, unsigned long len,unsigned long start_addr)
 { 
 	unsigned long max_entry,table_len;	
 	unsigned long p; /* physical address */
@@ -406,6 +409,7 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 					DEBUG("Freeing ANONYMOUS  from page table level:%d  vaddr:%x paddr:%x  \n",level,page,*v);
 					if (level ==1) /* Freeing the Anonymous page */
 					{
+						mm->stat_page_free++;
 						free_page((unsigned long)__va(page));
 					    *v=0;
 					}else
@@ -417,7 +421,7 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 			else /* Non leaf level entries */
 			{
 				DEBUG("  i=%d Call clear table : addr :%x len:%x start_addr:%x \n",i,addr,len,start_addr);
-				if (clear_pagetable(level-1,((*v)&(~0xfff)),addr,len,start_addr)==1) *v=0;
+				if (clear_pagetable(mm,level-1,((*v)&(~0xfff)),addr,len,start_addr)==1) *v=0;
 			}
 		}
 		start_addr=start_addr+max_entry;
@@ -440,6 +444,7 @@ static int clear_pagetable(int level,unsigned long ptable_addr,unsigned long add
 	{
 		DEBUG("  Release PAGE during clear page tables: level:%d tableaddr: %x \n",level,p);
 		free_page((unsigned long)__va(p));
+		mm->stat_page_free++;
 		return 1;
 	}else
 	{
@@ -460,7 +465,7 @@ int ar_pageTableCleanup(struct mm_struct *mm,unsigned long addr, unsigned long l
 	DEBUG("Pagetable Start Page : %x len:%x\n",mm->pgd,length);
 	//if (length == ~0)
 	//     pagetable_walk(4,mm->pgd);
-	if (clear_pagetable(4,mm->pgd,addr,length,0) == 1)
+	if (clear_pagetable(mm,4,mm->pgd,addr,length,0) == 1)
 	{
 		mm->pgd=0;
 		return 1;
@@ -474,13 +479,14 @@ int ar_dup_pageTable(struct mm_struct *src_mm,struct mm_struct *dest_mm)
 
 	if (src_mm->pgd == 0) return 0;
 	if (dest_mm->pgd != 0) BUG();
-	v=(unsigned char *)alloc_page(MEM_CLEAR);
+	v=(unsigned char *)mm_pagealloc(dest_mm);
 	if (v == 0) BUG();
+	dest_mm->stat_page_allocs++;
 	dest_mm->pgd=__pa(v);
 	if (kernel_level3_entries_count==0 && src_mm==g_kernel_mm){
 		copy_kernel_pagetable_entries();
 	}
-	copy_pagetable(4,(unsigned long)__va(src_mm->pgd),(unsigned long)v);
+	copy_pagetable(dest_mm, 4,(unsigned long)__va(src_mm->pgd),(unsigned long)v);
 #if 0
 	pagetable_walk(4,src_mm->pgd);
 	pagetable_walk(4,g_kernel_mm->pgd);
@@ -525,6 +531,7 @@ int ar_check_valid_address(unsigned long addr, int len) {
 }
 int g_stat_pagefaults_write=0;
 extern unsigned long g_phy_mem_size;
+
 static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_fault, struct fault_ctx *ctx)
 {
 	struct mm_struct *mm;
@@ -576,7 +583,6 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 			Jcmd_lsmod(0,0);
 			BUG();
 			//ut_showTrace(&stack_var);
-
 			SYS_sc_exit(902);
 			return 1;
 		}
@@ -590,7 +596,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 	pl3=(unsigned long *)((*v) & (~0xfff));
 	if (pl3==0)
 	{
-		v=(unsigned long *)alloc_page(MEM_CLEAR); /* get page of 4k size for page table */
+		v=(unsigned long *)mm_pagealloc(mm); /* get page of 4k size for page table */
 		assert(v!=0);
 		ut_memset((unsigned char *)v,0,4096);
 		pl3=(unsigned long *)__pa(v);
@@ -606,7 +612,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 
 	if (pl2==0)
 	{
-		v=(unsigned long *)alloc_page(MEM_CLEAR); /* get page of 4k size for page table */
+		v=(unsigned long *)mm_pagealloc(mm); /* get page of 4k size for page table */
 		if (v ==0) BUG();
 		ut_memset((unsigned char *)v,0,4096);
 		pl2=(unsigned long *)__pa(v);
@@ -622,7 +628,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 
 	if (pl1==0)
 	{
-		v=(unsigned long *)alloc_page(MEM_CLEAR); /* get page of 4k size for page table */
+		v=(unsigned long *)mm_pagealloc(mm); /* get page of 4k size for page table */
 		assert (v !=0);
 		ut_memset((unsigned char *)v,0,4096);
 		pl1=(unsigned long *)__pa(v);
@@ -637,7 +643,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
     int writeFlag = vma->vm_prot&PROT_WRITE;
 	if (vma->vm_flags & MAP_ANONYMOUS)
 	{
-		v=(unsigned long *)alloc_page(MEM_CLEAR); /* get page of 4k size for actual page */
+		v=(unsigned long *)mm_pagealloc(mm); /* get page of 4k size for actual page */
 		if ( v==0 ) { /* No Memory: kill the current process */
 			ut_printf("Killing the current process because of shortage of memory \n");
 			SYS_sc_exit(903);
@@ -654,7 +660,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 			p=(unsigned long *)fs_getVmaPage(vma,vma->vm_private_data+(addr-vma->vm_start));
 			if (write_fault && (writeFlag!= 0)) {
 				addr_t *free_page;
-				free_page=(unsigned long *)alloc_page(MEM_CLEAR);
+				free_page=(unsigned long *)mm_pagealloc(mm);
 #if 1
 				int file_len = (vma->vm_end - vma->vm_start) - ((addr&PAGE_MASK) - (vma->vm_start));
 				if (file_len > PAGE_SIZE) file_len = PAGE_SIZE;

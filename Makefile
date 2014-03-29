@@ -71,7 +71,8 @@ endif
 	make SOURCE_ROOT=$$PWD -C mm/memleak
 	make SOURCE_ROOT=$$PWD -C fs
 	rm drivers.a  fs.a mm.a $(ARCH_DIR).a
-	$(LCPP) -nostdlib -g -I. -feliminate-dwarf2-dups $(LINK_FLAG)  $(OBJECTS) -Wl,-N -Wl,-Ttext -Wl,40100000 -Tdata=40200000 -o bin/kernel_bin
+#$(LCPP) -nostdlib -g -I. -feliminate-dwarf2-dups $(LINK_FLAG)  $(OBJECTS) -Wl,-N -Wl,-Ttext -Wl,40100000 -Tdata=40200000 -o bin/kernel_bin
+	$(LCPP) -nostdlib -g -I. -feliminate-dwarf2-dups $(LINK_FLAG)  $(OBJECTS) -Wl,-N -Wl,-Ttext -Wl,ffffffff40100000 -Tdata=ffffffff40200000 -o bin/kernel_bin
 	objdump -D -l bin/kernel_bin > bin/obj_file
 #	nm -l bin/kernel_bin | sort > util/in
 #	util/gen_symboltbl util/in bin/mod_file > util/out

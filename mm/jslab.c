@@ -566,7 +566,7 @@ void *vmalloc(int size, int flags){
 
 	return 0;
 }
-void vfree(addr_t addr){
+int  vfree(addr_t addr){
 	int i;
 
 	if (vmalloc_initiated ==0) return;
@@ -575,10 +575,11 @@ void vfree(addr_t addr){
 	for (i=0; i<MAX_VBLOCKS && i<total_blocks; i++){
 		if (vblocks[i].vaddr ==(addr_t *)addr){
 			vblocks[i].is_free = 1;
-			return;
+			return JSUCCESS;
 		}
 	}
-	return;
+	ut_log(" ERROR: vfree failed : %x \n",addr);
+	return JFAIL;
 }
 #endif
 /********************************* jcmd's ******************************************************************************/

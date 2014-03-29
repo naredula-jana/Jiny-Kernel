@@ -38,7 +38,9 @@ jslab_create_cache (const uint8_t *name, size_t size, size_t offset,
 typedef struct kmem_cache_s kmem_cache_t;
 #endif
 
+/* kerne virtual address space */
 #define KERNEL_ADDR_START (0x40000000) /* Note This should be multiples 1GB , otherwise page tables copying will break */
+#define KERNEL_ADDR_END  (0x140000000) /* entire kernel space length = 4G */
 
 #define USERANONYMOUS_ADDR 0x20000000
 #define USERSTACK_ADDR     0x30000000
@@ -75,6 +77,7 @@ typedef struct kmem_cache_s kmem_cache_t;
 #define MAP_FIXED       0x10            /* Interpret addr exactly */
 #define MAP_ANONYMOUS   0x20            /* don't use a file */
 #define MAP_32BIT       0x40            /* only give out 32bit addresses */
+#define MAP_DENYWRITE  0x800        /* deny file for writing or deleting */
 /***********************************
   
   page->inode<-vma->mm

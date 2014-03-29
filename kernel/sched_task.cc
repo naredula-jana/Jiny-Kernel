@@ -136,107 +136,6 @@ int sc_sleep(long ticks) /* each tick is 100HZ or 10ms */
 }
 static backtrace_t temp_bt;
 
-
-#define MAX_USERSPACE_STACK_TEMPLEN 409600
-static unsigned long setup_userstack(unsigned char **argv, unsigned char **env, unsigned long *stack_len, unsigned long *t_argc, unsigned long *t_argv, unsigned long *p_aux) {
-	int i, len, total_args = 0;
-	int total_envs =0;
-	unsigned char *p, *stack;
-	unsigned long real_stack, addr;
-	unsigned char **target_argv;
-	unsigned char **target_env;
-	int max_stack_len=MAX_USERSPACE_STACK_TEMPLEN;
-	int max_list_len=(PAGE_SIZE/sizeof(void *))-1;
-
-	if (argv == 0 && env == 0) {
-		ut_printf(" ERROR in setuo_userstack argv:0\n");
-		return 0;
-	}
-
-	target_argv = (unsigned char **) alloc_page(MEM_CLEAR);
-	target_env = (unsigned char **) alloc_page(MEM_CLEAR);
-	stack = (unsigned char *) vmalloc(MAX_USERSPACE_STACK_TEMPLEN,MEM_CLEAR);
-	if (stack ==0){
-		goto error;
-	}
-
-	p = stack + max_stack_len;
-	len = 0;
-	real_stack = USERSTACK_ADDR + USERSTACK_LEN;
-
-	for (i = 0; argv[i] != 0 && i < max_list_len; i++) {
-		total_args++;
-		len = ut_strlen(argv[i]);
-		if ((p - len - 1) > stack) {
-			p = p - len - 1;
-			real_stack = real_stack - len - 1;
-			DEBUG(" argument :%d address:%x \n",i,real_stack);
-			ut_strcpy(p, argv[i]);
-			target_argv[i] = (unsigned char *)real_stack;
-		} else {
-			goto error;
-		}
-	}
-	target_argv[i] = 0;
-
-	for (i = 0; env[i] != 0 && i < max_list_len; i++) {
-		total_envs++;
-		len = ut_strlen(env[i]);
-		if ((p - len - 1) > stack) {
-			p = p - len - 1;
-			real_stack = real_stack - len - 1;
-			DEBUG(" envs :%d address:%x \n",i,real_stack);
-			ut_strcpy(p, env[i]);
-			target_env[i] = (unsigned char *)real_stack;
-		} else {
-			goto error;
-		}
-	}
-	target_env[i] = 0;
-
-	addr = (unsigned long)p;
-	addr = (unsigned long)((addr / 8) * 8);
-	p = (unsigned char *)addr;
-
-	p = p - (MAX_AUX_VEC_ENTRIES * 16);
-
-	real_stack = USERSTACK_ADDR + USERSTACK_LEN + p - (stack + max_stack_len);
-	*p_aux = (unsigned long)p;
-	len = (1+total_args + 1 + total_envs+1) * 8; /* total_args+args+0+envs+0 */
-	if ((p - len - 1) > stack) {
-		unsigned long *t;
-
-		p = p - (total_envs+1)*8;
-		ut_memcpy(p, (unsigned char *)target_env, (total_envs+1)*8);
-
-		p = p - (1+total_args+1)*8;
-		ut_memcpy(p+8, (unsigned char *)target_argv, (total_args+1)*8);
-		t = (unsigned long *)p;
-		*t = total_args; /* store argc at the top of stack */
-
-		DEBUG(" arg0:%x arg1:%x arg2:%x len:%d \n",target_argv[0],target_argv[1],target_argv[2],len);
-		DEBUG(" arg0:%x arg1:%x arg2:%x len:%d \n",target_env[0],target_env[1],target_env[2],len);
-
-		real_stack = real_stack - len;
-	} else {
-		goto error;
-	}
-
-	*stack_len = max_stack_len - (p - stack);
-	*t_argc = total_args;
-	*t_argv = real_stack ;
-	mm_putFreePages((unsigned long)target_argv, 0);
-	mm_putFreePages((unsigned long)target_env, 0);
-	return (unsigned long)stack;
-
-error:
-	ut_log(" Error: user stack creation failed :%s:\n",g_current_task->name);
-	mm_putFreePages((unsigned long)stack, 0);
-	mm_putFreePages((unsigned long)target_argv, 0);
-	mm_putFreePages((unsigned long)target_env, 0);
-	return 0;
-}
-
 #define DEFAULT_RFLAGS_VALUE (0x10202)
 #define GLIBC_PASSING 1
 extern void enter_userspace();
@@ -334,6 +233,7 @@ static int free_mm(struct mm_struct *mm) {
 		ut_printf("ERROR : clear the pagetables :%d: \n",ret);
 	}
 
+	ut_log(" mm_free alloc_pages: %d free_pages:%d \n",mm->stat_page_allocs,mm->stat_page_free);
 	mm_slab_cache_free(mm_cachep, mm);
 	return 1;
 }
@@ -946,6 +846,18 @@ void Jcmd_prio(unsigned char *arg1,unsigned char *arg2){
 	}
 
 }
+int Jcmd_kill(uint8_t *arg1, uint8_t *arg2) {
+	int pid;
+	if (arg1!=0){
+		pid= ut_atoi(arg1);
+	}else{
+		ut_printf(" Error: kill pid is needed\n");
+		return 0;
+	}
+	ut_printf(" Killing the process with pid : %x(%d)\n",pid,pid);
+	SYS_sc_kill(pid,9);
+	return 1;
+}
 int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	unsigned long flags;
 	struct list_head *pos;
@@ -1020,7 +932,6 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, int(*
 	if (p == 0)
 		BUG();
 	ut_memset((unsigned char *) p, MAGIC_CHAR, TASK_SIZE);
-
 
 	/* Initialize mm */
 	if (clone_flags & CLONE_VM) /* parent and child run in the same vm */
@@ -1130,16 +1041,13 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	struct mm_struct *mm,*old_mm;
 	int i;
 	unsigned long main_func;
-	unsigned long t_argc, t_argv, stack_len, tmp_stack, tmp_aux;
+	unsigned long t_argc, t_argv ;
+	unsigned long stack_len,tmp_stack,tmp_stack_top,tmp_aux;
 
 	SYSCALL_DEBUG("execve file:%s argv:%x env:%x \n",file,argv,env);
 	/* create the argc and env in a temporray stack before we destory the old stack */
 	t_argc = 0;
 	t_argv = 0;
-	tmp_stack = setup_userstack(argv, env, &stack_len, &t_argc, &t_argv, &tmp_aux);
-	if (tmp_stack == 0) {
-		return;
-	}
 
 	/* delete old vm and create a new one */
 	mm = create_mm();
@@ -1148,7 +1056,6 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	for (i=0; i<g_current_task->mm->fs->total;i++){
 		mm->fs->filep[i]=fs_dup(g_current_task->mm->fs->filep[i],0);
 	}
-
 
 	mm->fs->total = g_current_task->mm->fs->total;
 	ut_strcpy(mm->fs->cwd,g_current_task->mm->fs->cwd);
@@ -1162,6 +1069,20 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 		fs_set_flags(mm->exec_fp, INODE_EXECUTING) ;
 	ut_strncpy(g_current_task->name, file, MAX_TASK_NAME);
 
+	unsigned char *elf_interp=0;
+	tmp_stack_top = fs_elf_check_prepare(mm->exec_fp, argv,env, &t_argc, &t_argv, &stack_len,&tmp_aux,&elf_interp,&tmp_stack);
+	if (tmp_stack_top == 0) {
+		fs_close(mm->exec_fp);
+		mm->exec_fp=0;
+		free_mm(mm);
+		return;
+	}
+	if (elf_interp != 0){
+		fs_close(mm->exec_fp);
+		mm->exec_fp = (struct file *)fs_open(elf_interp, 0, 0);
+		if (mm->exec_fp != 0 && mm->exec_fp->vinode!= 0)
+			fs_set_flags(mm->exec_fp, INODE_EXECUTING) ;
+	}
 	release_resources(g_current_task, 0);
 
 	old_mm=g_current_task->mm;
@@ -1192,14 +1113,14 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 		SYS_sc_exit(701);
 		return;
 	}
-	main_func = fs_loadElfLibrary(mm->exec_fp, tmp_stack + (MAX_USERSPACE_STACK_TEMPLEN - stack_len), stack_len, tmp_aux);
+
+	main_func = fs_elf_load(mm->exec_fp,tmp_stack_top,stack_len,tmp_aux);
+	vfree(tmp_stack);
 	if (main_func == 0) {
-		vfree(tmp_stack);
 		ut_printf("Error execve : ELF load Failed \n");
 		SYS_sc_exit(703);
 		return ;
 	}
-	vfree(tmp_stack);
 
 	//Jcmd_vmaps_stat(0, 0);
 
@@ -1219,6 +1140,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 
 	push_to_userland();
 }
+
 int SYS_sc_kill(unsigned long pid, unsigned long signal) {
 	unsigned long flags;
 	struct list_head *pos;

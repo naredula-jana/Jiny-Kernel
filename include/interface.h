@@ -58,7 +58,7 @@ int jfree_page(unsigned long p);
 #define memset ut_memset
 #define ut_free mm_free
 #define ut_malloc(x) mm_malloc(x,0)
-void vfree(addr_t addr);
+int vfree(addr_t addr);
 
 
 /* vm */
@@ -102,7 +102,9 @@ int fs_close(struct file *file);
 long fs_read(struct file *fp ,uint8_t *buff ,unsigned long len);
 unsigned long fs_fadvise(void *inode,unsigned long offset, unsigned long len,int advise);
 unsigned long fs_lseek(struct file *fp ,unsigned long offset, int whence);
-unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsigned long stack_len,unsigned long aux_addr);
+//unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsigned long stack_len,unsigned long aux_addr);
+unsigned long fs_elf_load(struct file *file,unsigned long tmp_stack, unsigned long stack_len, unsigned long aux_addr);
+unsigned long fs_elf_check_prepare(struct file *file,unsigned char **argv, unsigned char **env,unsigned long *t_argc, unsigned long *t_argv,unsigned long  *stack_len, unsigned long *aux_addr,unsigned char **elf_interpreter, unsigned long *tmp_stackp);
 int fs_write(struct file *file,uint8_t *buff ,unsigned long len);
 unsigned long fs_fdatasync(struct file *file);
 int fs_stat(struct file *file, struct fileStat *stat);
@@ -113,6 +115,7 @@ int fs_get_type(struct file *fp);
 
 long SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt);
 long SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt);
+unsigned long SYS_fs_access(char *filename, int mode);
 unsigned long SYS_fs_open(char *filename,int mode,int flags);
 unsigned long SYS_fs_lseek(unsigned long fd ,unsigned long offset, int whence);
 int SYS_fs_write(unsigned long fd ,uint8_t *buff ,unsigned long len);

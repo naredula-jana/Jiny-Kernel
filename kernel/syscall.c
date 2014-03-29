@@ -237,6 +237,10 @@ unsigned long SYS_setpgid(unsigned long pid, unsigned long gid) {
 	temp_pgid = gid;
 	return 0;
 }
+unsigned long SYS_getpgid() {
+	SYSCALL_DEBUG("SYS_getpgid(Hardcoded) :\n");
+	return temp_pgid;
+}
 unsigned long  SYS_setsid(){
 	SYSCALL_DEBUG("setsid(Hardcoded) :\n");
 	return g_current_task->pid;
@@ -521,7 +525,7 @@ syscalltable_t syscalltable[] = {
 { SYS_fs_stat }, { SYS_poll }, { SYS_fs_lseek }, { SYS_vm_mmap }, { SYS_vm_mprotect },/* 10 */
 { SYS_vm_munmap }, { SYS_vm_brk }, { SYS_rt_sigaction }, { SYS_rt_sigprocmask }, { snull }, /* 15 */
 { SYS_ioctl }, { snull }, { snull }, { SYS_fs_readv }, { SYS_fs_writev }, /* 20 */
-{ snull }, { SYS_pipe }, { SYS_select }, { snull }, { snull }, /* 25 */
+{ SYS_fs_access }, { SYS_pipe }, { SYS_select }, { snull }, { snull }, /* 25 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 30 */
 { snull }, { SYS_fs_dup }, { SYS_fs_dup2 }, { snull }, { SYS_nanosleep }, /* 35 = nanosleep */
 { snull }, { SYS_alarm }, { snull }, { SYS_getpid }, { snull }, /* 40 */
@@ -538,13 +542,13 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 95 */
 { SYS_gettimeofday }, { SYS_getrlimit }, { snull }, { snull }, { snull }, /* 100 */
 { snull }, { SYS_getuid }, { snull }, { SYS_getgid }, { SYS_setuid }, /* 105 */
-{ SYS_setgid }, { SYS_geteuid }, { snull }, { SYS_setpgid }, { SYS_getppid }, /* 110 */
+{ SYS_setgid }, { SYS_geteuid }, { SYS_getpgid }, { SYS_setpgid }, { SYS_getppid }, /* 110 */
 { SYS_getpgrp }, { SYS_setsid }, { snull }, { snull }, { snull }, /* 115 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 120 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 125 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 130 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 135 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 140 */
+{ snull }, { SYS_fs_stat }, { snull }, { snull }, { snull }, /* 140 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 145 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 150 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 155 */

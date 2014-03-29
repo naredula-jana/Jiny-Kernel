@@ -63,6 +63,8 @@ struct mm_struct {
 	struct file *exec_fp; /* execute file */
 	unsigned long brk_addr, brk_len;
 	unsigned long anonymous_addr;
+
+	unsigned long stat_page_allocs, stat_page_free;
 };
 
 // This structure defines a 'task' - a process.
