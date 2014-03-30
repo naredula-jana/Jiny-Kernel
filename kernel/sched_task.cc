@@ -460,7 +460,8 @@ int init_tasking(unsigned long unused) {
 	ut_strcpy((uint8_t *)g_kernel_mm->fs->cwd,(uint8_t *)"/");
 
 	free_pid_no = 1; /* pid should never be 0 */
-    task_addr=(unsigned long )((unsigned long )(&g_idle_stack)+TASK_SIZE) & (~((unsigned long )(TASK_SIZE-1)));
+#define G_IDLE_TASK  &g_idle_stack
+    task_addr=(unsigned long )((unsigned long )(G_IDLE_TASK)+TASK_SIZE) & (~((unsigned long )(TASK_SIZE-1)));
     ut_log("	Task Addr start :%x  stack:%x current:%x\n",task_addr,&task_addr,g_current_task);
 	for (i = 0; i < MAX_CPUS; i++) {
 		g_cpu_state[i].md_state.cpu_id = i;

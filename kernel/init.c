@@ -73,7 +73,7 @@ static inittable_t inittable[] = {
 		{init_networking,0,       "networking"},
 #endif
 		{init_clock,0,       "clock"},
-		{init_code_readonly,0,       "Making code readonly"},
+//		{init_code_readonly,0,       "Making code readonly"},
 		{init_kernel_vmaps, 0, "Kernel Vmaps"},
 		{init_symbol_table,0,       "symboltable"},
 		{init_jdevices,0,       "devices in c++ "},
@@ -83,8 +83,8 @@ static inittable_t inittable[] = {
 		{0,0,0}
 };
 
-unsigned long g_multiboot_info_ptr;
-unsigned long g_multiboot_magic ;
+unsigned long g_multiboot_info_ptr = 0x10000;
+unsigned long g_multiboot_magic  = 0x2BADB002;
 unsigned long g_multiboot_mod1_addr=0;
 unsigned long g_multiboot_mod1_len=0;
 
@@ -246,6 +246,7 @@ void cmain() {  /* This is the first c function to be executed */
 	/* Clear the screen.  */
 	//ut_cls();
 
+//	while(1);
 	for (i=0; inittable[i].func != 0; i++){
 		ut_log("INITIALIZING :%s  ...\n",inittable[i].comment);
 		ut_printf("..INITIALIZING :%s  ...\n",inittable[i].comment);

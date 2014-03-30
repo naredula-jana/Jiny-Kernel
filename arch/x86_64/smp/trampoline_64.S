@@ -59,7 +59,8 @@ r_base = .
 	inc	%ax		# protected mode (PE) bit
 	lmsw	%ax		# into protected mode
 	# flaush prefetch and jump to startup_32 in arch/x86_64/kernel/head.S
-	ljmpl	$__KERNEL32_CS, $(smp_startup_32-__START_KERNEL_map)
+#	ljmpl	$__KERNEL32_CS, $(smp_startup_32-__START_KERNEL_map)
+	ljmpl	$__KERNEL32_CS, $(0x10c000)  /* TODO:HARDCODED */
 
 	# Careful these need to be in the same 64K segment as the above;
 idt_48:
@@ -68,8 +69,9 @@ idt_48:
 
 gdt_48:
 	.short	__KERNEL32_CS + 7	# gdt limit
-	.long	cpu_gdt_table-__START_KERNEL_map
-
+//	.long	cpu_gdt_table-__START_KERNEL_map
+	.long	0x10cf1c  /* TODO:HARDCODED   with ldt*/
+//	.long	0x20000c  /* TODO:HARDCODED */
 .org 0x504
 stack_addr:
     .long 0

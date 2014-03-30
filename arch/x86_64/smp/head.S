@@ -58,7 +58,8 @@ smp_startup_32:
 
 
 	/* Load new GDT with the 64bit segments using 32bit descriptor */
-	lgdt	pGDT32 - __START_KERNEL_map
+//	lgdt	pGDT32 - __START_KERNEL_map
+	lgdt	0x10cf00  /* TODO:HARDCODED */
 
 	/* If the CPU doesn't support CPUID this will double fault.
 	 * Unfortunately it is hard to check for CPUID without a stack. 
@@ -116,11 +117,12 @@ smp_startup_32:
 	 * EFER.LMA = 1). Now we want to jump in 64bit mode, to do that we use
 	 * the new gdt/idt that has __KERNEL_CS with CS.L = 1.
 	 */
-	ljmp	$__KERNEL_CS, $(smp_startup_64 - __START_KERNEL_map)
+//	ljmp	$__KERNEL_CS, $(smp_startup_64 - __START_KERNEL_map)
+	ljmpl	$__KERNEL_CS, $(0x10c100)   /* TODO:HARDCODED */
 
 	.code64
 	.org 0x100	
-	.globl smp_startup_64
+//	.globl smp_startup_64
 smp_startup_64:
 	/* We come here either from startup_32
 	 * or directly from a 64bit bootloader.
@@ -139,116 +141,7 @@ smp_startup_64:
 	btsq	$7, %rax
 	movq	%rax, %cr4
 
-#if 0
-	/* Setup early boot stage 4 level pagetables. */
-	movq	$(init_level4_pgt - __START_KERNEL_map), %rax
-	movq	%rax, %cr3
 
-	/* Check if nx is implemented */
-	movl	$0x80000001, %eax
-	cpuid
-	movl	%edx,%edi
-
-	/* Setup EFER (Extended Feature Enable Register) */
-	movl	$MSR_EFER, %ecx
-	rdmsr
-
-	/* Enable System Call */
-	btsl	$_EFER_SCE, %eax
-
-	/* No Execute supported? */
-	btl	$20,%edi
-	jnc     1f
-	btsl	$_EFER_NX, %eax
-1:
-	/* Make changes effective */
-	wrmsr
-
-	/* Setup cr0 */
-	xorq	%rax, %rax
-	btsq	$31, %rax			/* Enable paging */
-	btsq	$0, %rax			/* Enable protected mode */
-	btsq	$1, %rax			/* Enable MP */
-	btsq	$4, %rax			/* Enable ET */
-	btsq	$5, %rax			/* Enable NE */
-	btsq	$16, %rax			/* Enable WP */
-	btsq	$18, %rax			/* Enable AM */
-	/* Make changes effective */
-	movq	%rax, %cr0
-
-	/* Setup a boot time stack */
-	movq init_rsp(%rip),%rsp
-
-	/* zero EFLAGS after setting rsp */
-	pushq $0
-	popfq
-
-	/*
-	 * We must switch to a new descriptor in kernel space for the GDT
-	 * because soon the kernel won't have access anymore to the userspace
-	 * addresses where we're currently running on. We have to do that here
-	 * because in 32bit we couldn't load a 64bit linear address.
-	 */
-	lgdt	cpu_gdt_descr
-
-	/* 
-	 * Setup up a dummy PDA. this is just for some early bootup code
-	 * that does in_interrupt() 
-	 */ 
-	movl	$MSR_GS_BASE,%ecx
-	movq	$empty_zero_page,%rax
-	movq    %rax,%rdx
-	shrq	$32,%rdx
-	wrmsr	
-
-	/* set up data segments. actually 0 would do too */
-	movl $__KERNEL_DS,%eax
-	movl %eax,%ds	
-	movl %eax,%ss
-	movl %eax,%es
-			
-	/* esi is pointer to real mode structure with interesting info.
-	   pass it to C */
-	movl	%esi, %edi
-	
-	/* Finally jump to run C code and to be on real kernel address
-	 * Since we are running on identity-mapped space we have to jump
-	 * to the full 64bit address , this is only possible as indirect
-	 * jump
-	 */
-	movq	initial_code(%rip),%rax
-	jmp	*%rax
-
-	/* SMP bootup changes these two */	
-	.globl	initial_code
-initial_code:
-	.quad	x86_64_start_kernel
-	.globl init_rsp
-init_rsp:
-	.quad  init_thread_union+THREAD_SIZE-8
-
-ENTRY(early_idt_handler)
-	cmpl $2,early_recursion_flag(%rip)
-	jz  1f
-	incl early_recursion_flag(%rip)
-	xorl %eax,%eax
-	movq 8(%rsp),%rsi	# get rip
-	movq (%rsp),%rdx
-	movq %cr2,%rcx
-	leaq early_idt_msg(%rip),%rdi
-	call early_printk
-	cmpl $2,early_recursion_flag(%rip)
-	jz  1f
-	call dump_stack
-1:	hlt
-	jmp 1b
-early_recursion_flag:
-	.long 0
-
-early_idt_msg:
-	.asciz "PANIC: early exception rip %lx error %lx cr2 %lx\n"
-
-#endif
 
 .code32
 ENTRY(no_long_mode)
@@ -259,9 +152,11 @@ ENTRY(no_long_mode)
 .org 0xf00
 	.globl pGDT32
 pGDT32:
-	.word	gdt_end-cpu_gdt_table
-	.long	cpu_gdt_table-__START_KERNEL_map
-
+#	.word	gdt_end-cpu_gdt_table
+#	.long	cpu_gdt_table-__START_KERNEL_map
+	.word	0x78 /*  */
+	.long	0x10cf1c   /* TODO:HARDCODED with ld*/
+#	.long	0x20000c   /* TODO:HARDCODED */
 
 	.data
 

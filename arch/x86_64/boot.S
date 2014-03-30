@@ -40,28 +40,31 @@ multiboot_header:
 	.long	0x100004
 	/* load_addr */
 	.long	0x100024
+
+//	.long   0
+//	.long   0
 	/* load_end_addr */
-	.long	_edata-BOOT_SHIFT
+	.long	0x20c1f0
 	/* bss_end_addr */
-	.long	_end-BOOT_SHIFT
+	.long	0x428ff0
 	/* entry_addr */
-	.long	multiboot_entry-BOOT_SHIFT
+	.long	0x100024
 /* #endif  ! __ELF__ */ 
 
 multiboot_entry:
 	
 #	jmp 0x100024
 	/* Initialize the stack pointer.  */
-	movl	$(g_idle_stack + TASK_SIZE-BOOT_SHIFT), %esp
+	movl	$(0x4000+TASK_SIZE), %esp
 #loop1:	jmp loop1
 	/* Reset EFLAGS.  */
 	pushl	$0
 	popf
 
 	/* save multiboot info pointer */
-        movl %ebx, g_multiboot_info_ptr-BOOT_SHIFT
+ #       movl %ebx, g_multiboot_info_ptr-BOOT_SHIFT
         /* and multiboot magic value */
-        movl %eax, g_multiboot_magic-BOOT_SHIFT
+ #       movl %eax, g_multiboot_magic-BOOT_SHIFT
 	/*pushl   $0
 	pushl   %ebx
 	pushl   $0
@@ -109,8 +112,8 @@ t1:
         orl $CR0_PG, %eax
 	orl $CR0_RW, %eax
 	movl %eax, %cr0
-        movl $kernel_jump_addr-BOOT_SHIFT, %edx
-        movl $(cmain), 0(%edx)
+    /*    movl $kernel_jump_addr-BOOT_SHIFT, %edx
+        movl $(cmain), 0(%edx)*/
 	jmpl $KTEXT_SEG, $start64
 	
 /* Now enter the C main function...  */
@@ -120,7 +123,9 @@ start64:
         and $0xffffffffffffc000 ,%rax
         sub $16 ,%rax
         movq %rax, %rsp
-        movq kernel_jump_addr, %rax
+
+        movq $(cmain), %rax
+   //     movq kernel_jump_addr, %rax
         callq *%rax
 
 	/* Halt.  */
@@ -158,12 +163,14 @@ level4_pg_directory:
         .quad   0x0000000000102007              /* -> level3_ident_pgt */
         .fill   511,8,0
 
+
 .org 0x2000
 /* Kernel does not "know" about 4-th level of page tables. */
 level3_pg_table:
         .quad   0x0000000000103007 /* TODO : currently used only while initializing */
         .quad   0x0000000000103007 /* TODO : currently based on harcoded of kernel offset it is located in 2nd location*/
         .fill   510,8,0
+
 
 .org 0x3000
 level2_pg_table:
@@ -193,8 +200,9 @@ level2_pg_table:
 temp_boot_pmds:
         .fill   492,8,0
 
-.org 0x4000  /* stacks for the idle tasks */
-/*g_idle_stack:
-        .fill   TASK_SIZE*MAX_CPUS,1,0*/
+.org 0x4000  /* temp stacks  */
+temp_stack:
+        .fill   TASK_SIZE*(2),1,0
 #stack:
+
 	.comm	g_idle_stack, TASK_SIZE*(MAX_CPUS+1)
