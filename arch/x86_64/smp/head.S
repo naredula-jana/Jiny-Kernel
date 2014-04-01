@@ -155,8 +155,8 @@ pGDT32:
 #	.word	gdt_end-cpu_gdt_table
 #	.long	cpu_gdt_table-__START_KERNEL_map
 	.word	0x78 /*  */
-	.long	0x10cf1c   /* TODO:HARDCODED with ld*/
-#	.long	0x20000c   /* TODO:HARDCODED */
+#	.long	0x10cf1c   /* TODO:HARDCODED with ld*/
+	.long	0x20000c   /* TODO:HARDCODED */
 
 	.data
 

@@ -41,12 +41,12 @@ multiboot_header:
 	/* load_addr */
 	.long	0x100024
 
-//	.long   0
-//	.long   0
+	.long   0
+	.long   0
 	/* load_end_addr */
-	.long	0x20c1f0
+//	.long	0x20d730
 	/* bss_end_addr */
-	.long	0x428ff0
+//	.long	0x42fe68
 	/* entry_addr */
 	.long	0x100024
 /* #endif  ! __ELF__ */ 
@@ -119,7 +119,7 @@ t1:
 /* Now enter the C main function...  */
 .code64
 start64:
-        movq $(g_idle_stack + TASK_SIZE*2 -16), %rax
+        movq $(g_idle_stack) + TASK_SIZE*2 -16, %rax
         and $0xffffffffffffc000 ,%rax
         sub $16 ,%rax
         movq %rax, %rsp
@@ -205,4 +205,4 @@ temp_stack:
         .fill   TASK_SIZE*(2),1,0
 #stack:
 
-	.comm	g_idle_stack, TASK_SIZE*(MAX_CPUS+1)
+#	.comm	g_idle_stack, TASK_SIZE*(MAX_CPUS+1)

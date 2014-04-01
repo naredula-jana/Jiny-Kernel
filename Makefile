@@ -97,11 +97,13 @@ endif
 	make SOURCE_ROOT=$$PWD -C fs
 	rm drivers.a  fs.a mm.a $(ARCH_DIR).a
 	
-	ld --warn-common -N -T kernel/kernel.ldp $(OBJ_32CODE) $(OBJECTS) -o bin/kernel_bin
+#	ld --warn-common -N -T kernel/kernel.ldp $(OBJ_32CODE) $(OBJECTS) -o bin/kernel_bin
+	$(LCPP) -nostdlib -g -I. -feliminate-dwarf2-dups $(LINK_FLAG)  $(OBJ_32CODE)  $(OBJECTS) -Wl,-N -T kernel/kernel.ldp -o bin/kernel_bin
 
 #	$(LCPP) -nostdlib -g -I. -feliminate-dwarf2-dups $(LINK_FLAG)  $(OBJ_32CODE)  $(OBJECTS) -Wl,-N -Wl,-Ttext -Wl,40100000 -Tdata=40200000 -o bin/kernel_bin
-#$(LCPP) -nostdlib -g -I. -feliminate-dwarf2-dups $(LINK_FLAG)  $(OBJECTS) -Wl,-N -Wl,-Ttext -Wl,ffffffff40100000 -Tdata=ffffffff40200000 -o bin/kernel_bin
+
 	objdump -D -l bin/kernel_bin > bin/obj_file
+	objcopy -O binary bin/kernel_bin bin/jiny_bin
 #	util/gen_symboltbl util/in bin/mod_file > util/out
 	util/dwarf_reader bin/kernel_bin > util/dwarf_temp_output
 	chmod 777 ./dwarf_datatypes
@@ -122,6 +124,7 @@ clean:
 	make SOURCE_ROOT=$$PWD -C mm clean
 	make SOURCE_ROOT=$$PWD -C mm/memleak clean
 	make SOURCE_ROOT=$$PWD -C modules/udp_stack clean
+	\rm bin/jiny_bin
 ifdef LWIP_ENABLE
 	\rm $(LWIP_OBJ)
 endif

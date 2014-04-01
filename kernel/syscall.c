@@ -316,6 +316,16 @@ unsigned long SYS_sysctl(struct __sysctl_args *args) {
 			ut_printf("Cmd variables:\n");
 			ut_symbol_show(SYMBOL_CMD);
 		} else {
+			if (ut_strcmp(carg[0],"shutdown")==0){
+				Jcmd_shutdown(carg[1], carg[2]);
+				return;
+			}else if (ut_strcmp(carg[0],"dmesg")==0){
+				Jcmd_dmesg(carg[1], carg[2]);
+				return;
+			}else if(ut_strcmp(carg[0],"ls")==0){
+				Jcmd_ls(carg[1], carg[2]);
+				return;
+			}
 			ut_symbol_execute(SYMBOL_CMD, carg[0], carg[1], carg[2]);
 		}
 	}

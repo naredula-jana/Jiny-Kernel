@@ -4,50 +4,54 @@ ENTRY(start)
 SECTIONS
 {
  . = 0x40100000;
- .text.head : {
+ .text.head : AT(ADDR(.text.head) - 0x40000000  ){
        arch/x86_64/boot.o(.text)
        arch/x86_64/smp/head.o(.text)
        arch/x86_64/smp/trampoline_64.o(.text)
  }
- .data.head : {
-       arch/x86_64/boot.o(.data)
-       arch/x86_64/smp/head.o(.data)
-       arch/x86_64/smp/trampoline_64.o(.data)
- }
- .bss.head (NOLOAD) : {
+
+/* .bss.head (NOLOAD) : { */
+  .bss.head : AT(ADDR(.bss.head) - 0x40000000  ) {
        arch/x86_64/boot.o(.bss)
        arch/x86_64/smp/head.o(.bss)
        arch/x86_64/smp/trampoline_64.o(.bss)
  }
-/*  . += 0xffffffff80000000;
-  .text : AT(ADDR(.text) - 0xffffffff80000000) { */
+/* . = . + 0x40000000; */
  
- /* . = 0x40100000; */ 
- .text : AT(ADDR(.text)  ) {
-        __text_start = .;
+ . = ALIGN(4096 ); 
+ 
+ 
+ .text : AT(ADDR(.text) - 0x40000000 ) {
+        __text_start = . ;
         *(EXCLUDE_FILE (*arch/x86_64/boot.o *arch/x86_64/smp/head.o *arch/x86_64/smp/trampoline_64.o)
           .text)
         __text_end = .;
  }
+
  
- /*. = 0xffffffff80200000;
- */
  . = 0x40200000; 
- .data : {
+  
+  .data.head :AT(ADDR(.data.head) - 0x40000000 ) {
+       arch/x86_64/boot.o(.data)
+       arch/x86_64/smp/head.o(.data)
+       arch/x86_64/smp/trampoline_64.o(.data)
+  }
+ .data : AT(ADDR(.data) - 0x40000000 ){
         __data_start = .;
         *(EXCLUDE_FILE (*arch/x86_64/boot.o *arch/x86_64/smp/head.o *arch/x86_64/smp/trampoline_64.o)
           .data)
         *(.rodata)
         __data_end = .;
         }
+   
  _edata=.;
- .bss : {
-  __bss_start = .;
+ __bss_start = .;
+  
+ .bss : AT(ADDR(.bss) - 0x40000000 ){
         *(EXCLUDE_FILE (*arch/x86_64/boot.o *arch/x86_64/smp/head.o *arch/x86_64/smp/trampoline_64.o)
           .bss)
         *(EXCLUDE_FILE (*arch/x86_64/boot.o *arch/x86_64/smp/head.o *arch/x86_64/smp/trampoline_64.o)
           COMMON)
-  __bss_end = .;
  }
  _end = .;
  end = .;

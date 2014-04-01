@@ -77,7 +77,7 @@ static inittable_t inittable[] = {
 		{init_kernel_vmaps, 0, "Kernel Vmaps"},
 		{init_symbol_table,0,       "symboltable"},
 		{init_jdevices,0,       "devices in c++ "},
-		{init_acpi,0,       "ACPI initalzed "},
+		{init_acpi,0,       "ACPI initialzed "},
 //		{init_modules,0,       "modules"},
 //		{init_log_file,0, "log file "},
 		{0,0,0}
@@ -94,15 +94,19 @@ unsigned long g_multiboot_mod2_len=0;
 unsigned long g_phy_mem_size=0;
 /* Check if the bit BIT in FLAGS is set.  */
 #define CHECK_FLAG(flags,bit)	((flags) & (1 << (bit)))
+
 int init_physical_memory(unsigned long unused){
 	multiboot_info_t *mbi;
 	unsigned long max_addr;
+
+	g_multiboot_magic =0; /* TODO:HARDCODED */
 	/* Am I booted by a Multiboot-compliant boot loader?  */
 	if (g_multiboot_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
 		ut_log("INVALID  magic:%x addr :%x   \n", g_multiboot_magic, g_multiboot_info_ptr);
-		while (1)
-			;
-		return -1;
+		g_phy_mem_size = 0x3fffe000;
+		return 1;
+	}else{
+
 	}
 
 	/* Set MBI to the address of the Multiboot information structure.  */
@@ -246,7 +250,7 @@ void cmain() {  /* This is the first c function to be executed */
 	/* Clear the screen.  */
 	//ut_cls();
 
-//	while(1);
+	//while(1);
 	for (i=0; inittable[i].func != 0; i++){
 		ut_log("INITIALIZING :%s  ...\n",inittable[i].comment);
 		ut_printf("..INITIALIZING :%s  ...\n",inittable[i].comment);

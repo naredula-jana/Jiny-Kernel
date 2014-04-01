@@ -41,6 +41,10 @@ int init_symbol_table(unsigned long unused) {
 	int stats = 0;
 	int cmds = 0;
 
+	if (g_multiboot_mod1_addr==0) {
+		ut_log("ERROR: Symbols are not Loaded\n");
+		return 0;
+	}
 	g_symbol_table = module_load_kernel_symbols(__va(g_multiboot_mod1_addr),g_multiboot_mod1_len);
 	if (g_symbol_table == 0){
 		BUG();

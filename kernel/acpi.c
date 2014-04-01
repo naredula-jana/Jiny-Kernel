@@ -13,16 +13,16 @@
 #include "mach_dep.h"
 
 
-uint32_t *SMI_CMD;
-uint8_t ACPI_ENABLE;
-uint8_t ACPI_DISABLE;
-uint32_t *PM1a_CNT;
-uint32_t *PM1b_CNT;
-uint16_t SLP_TYPa;
-uint16_t SLP_TYPb;
-uint16_t SLP_EN;
-uint16_t SCI_EN;
-uint8_t PM1_CNT_LEN;
+static uint32_t *SMI_CMD;
+static uint8_t ACPI_ENABLE;
+static uint8_t ACPI_DISABLE;
+static uint32_t *PM1a_CNT;
+static uint32_t *PM1b_CNT;
+static uint16_t SLP_TYPa;
+static uint16_t SLP_TYPb;
+static uint16_t SLP_EN;
+static uint16_t SCI_EN;
+static uint8_t PM1_CNT_LEN;
 
 struct RSDPtr
 {
@@ -54,7 +54,7 @@ struct FACP
 
 
 // check if the given address has a valid header
-unsigned int *acpiCheckRSDPtr(unsigned int *ptr)
+static unsigned int *acpiCheckRSDPtr(unsigned int *ptr)
 {
    char *sig = "RSD PTR ";
    struct RSDPtr *rsdp = (struct RSDPtr *) ptr;
@@ -91,7 +91,7 @@ unsigned int *acpiCheckRSDPtr(unsigned int *ptr)
 
 
 // finds the acpi header and returns the address of the rsdt
-unsigned int *acpiGetRSDPtr(void)
+static  unsigned int *acpiGetRSDPtr(void)
 {
    unsigned int *addr;
    unsigned int *rsdp;
@@ -123,7 +123,7 @@ unsigned int *acpiGetRSDPtr(void)
 
 
 // checks for a given header and validates checksum
-int acpiCheckHeader(unsigned int *ptr, char *sig)
+static  int acpiCheckHeader(unsigned int *ptr, char *sig)
 {
 	unsigned char *p=ptr;
 	if (p <KERNEL_ADDR_START){
@@ -148,7 +148,7 @@ int acpiCheckHeader(unsigned int *ptr, char *sig)
 
 
 
-int acpiEnable(void)
+static  int acpiEnable(void)
 {
    // check if acpi is enabled
    if ( (inw((unsigned int) PM1a_CNT) &SCI_EN) == 0 )
@@ -210,6 +210,7 @@ int acpiEnable(void)
 //
 int init_acpi(unsigned long unused_arg1)
 {
+	//return -1;
    unsigned int *ptr = acpiGetRSDPtr();
 
    unsigned char *p=__va(ptr);

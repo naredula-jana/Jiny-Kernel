@@ -201,6 +201,7 @@ unsigned long vm_dup_vmaps(struct mm_struct *src_mm,struct mm_struct *dest_mm){ 
 }
 unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long pgoff, const char *name) {
 	struct mm_struct *mm = g_current_task->mm;
+	struct task_struct *task = g_current_task;
 	struct vm_area_struct *vma;
 	int ret;
 

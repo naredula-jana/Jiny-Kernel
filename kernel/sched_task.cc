@@ -26,7 +26,7 @@ unsigned long g_jiffie_errors=0;
 unsigned long g_jiffie_tick=0;
 static int g_conf_cpu_stats=1;
 
-extern long *g_idle_stack;
+unsigned char g_idle_stack[MAX_CPUS+2][TASK_SIZE] __attribute__ ((aligned (4096))) ;;
 extern kmem_cache_t *g_slab_filep;
 extern int ipi_pagetable_interrupt(void *arg);
 extern void *g_print_lock;
@@ -39,7 +39,13 @@ static void schedule_userSecondHalf();
 static int release_resources(struct task_struct *task, int attach_to_parent);
 
 static struct task_struct *alloc_task_struct(void) {
-	return (struct task_struct *) mm_getFreePages(0, 2); /*WARNING: do not change the size it is related TASK_SIZE, 4*4k=16k page size */
+	task_struct  *p;
+	p= (struct task_struct *) mm_getFreePages(0, 2); /*WARNING: do not change the size it is related TASK_SIZE, 4*4k=16k page size */
+	if (p==0){
+		BUG();
+	}
+	ut_memset((unsigned char *) p, MAGIC_CHAR, TASK_SIZE);
+	return p;
 }
 
 static void free_task_struct(struct task_struct *p) {
@@ -460,8 +466,9 @@ int init_tasking(unsigned long unused) {
 	ut_strcpy((uint8_t *)g_kernel_mm->fs->cwd,(uint8_t *)"/");
 
 	free_pid_no = 1; /* pid should never be 0 */
-#define G_IDLE_TASK  &g_idle_stack
-    task_addr=(unsigned long )((unsigned long )(G_IDLE_TASK)+TASK_SIZE) & (~((unsigned long )(TASK_SIZE-1)));
+#define G_IDLE_TASK  &g_idle_stack[0][0]
+   // task_addr=(unsigned long )((unsigned char *)G_IDLE_TASK+TASK_SIZE);
+    task_addr = g_current_task;
     ut_log("	Task Addr start :%x  stack:%x current:%x\n",task_addr,&task_addr,g_current_task);
 	for (i = 0; i < MAX_CPUS; i++) {
 		g_cpu_state[i].md_state.cpu_id = i;
@@ -932,7 +939,7 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, int(*
 	p = alloc_task_struct();
 	if (p == 0)
 		BUG();
-	ut_memset((unsigned char *) p, MAGIC_CHAR, TASK_SIZE);
+
 
 	/* Initialize mm */
 	if (clone_flags & CLONE_VM) /* parent and child run in the same vm */
@@ -997,6 +1004,7 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, int(*
 	}
 	p->thread.sp = (void *)((addr_t) p + (addr_t) TASK_SIZE - (addr_t)160); /* 160 bytes are left at the bottom of the stack */
 	p->state = TASK_RUNNING;
+	p->allocated_cpu = g_current_task->allocated_cpu;
 	ut_strncpy(p->name, g_current_task->name, MAX_TASK_NAME);
 
 	ret_pid=p->pid;
