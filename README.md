@@ -9,7 +9,6 @@
      - **Normal priority app**: can run large in number like any traditional unix system in ring-3 with performance less when compare to high priority app.  
 
 2. **How different is Jiny from OS like Linux?**
-   
  - Thin kernel : Jiny is thin kernel, it is having very small set of drivers based on virtio, since it runs on hypervisor. Currently it supports only on x86_64 architecture. this makes the size of code small when compare to linux.
  - OS for Cloud: designed from groundup  to run on hypervisor, So it runs faster when compare to linux.
  - Object oriented: Most of subsystems will be in object oriented language like c++11.
@@ -17,15 +16,13 @@
  - Network packet processing: Most of cycles in packet processing is spent in the app context(i.e at the edge) as against in the bottom half in linux, this will minimizing the locks in the SMP. Detailed description is present in the [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf)
    
 3. **For What purpose Jiny can be used?**
-
- -  Running single apps like  JVM( tomcat or any java server), memcached  etc inside the Jiny vm as high priority app. Single app can be wrapped by a thin os like Jiny to enhance the performance.  Here the app will run much faster when compare to the same app in other vm's like freebsd or linux. Thin OS like JIny along with virtulization hardware can act like a performance enhancer for the apps on the metal.
- -  Running multiple normal priority application like any traditional unix like systems with optimizations for vm. 
+ - Running single apps like  JVM( tomcat or any java server), memcached  etc inside the Jiny vm as high priority app. Single app can be wrapped by a thin os like Jiny to enhance the performance.  Here the app will run much faster when compare to the same app in other vm's like freebsd or linux. Thin OS like JIny along with virtulization hardware can act like a performance enhancer for the apps on the metal.
+ - Running multiple normal priority application like any traditional unix like systems with optimizations for vm. 
 
 4. **What is the development plan and current status?**.
-
   **Completed**: Developing traditional unix like kernel with small foot print(Completed)
- -  bringing kernel up on x86_64 without any user level app, cli using kernel shell.
- -  Implementing most of the linux system calls, so that statically compiled app's on linux can run as it is. Currently app's like busybox can run as it is.
+ - bringing kernel up on x86_64 without any user level app, cli using kernel shell.
+ - Implementing most of the linux system calls, so that statically compiled app's on linux can run as it is. Currently app's like busybox can run as it is.
  - Running high priority app as kernel module.
     
   **In progress:** 
