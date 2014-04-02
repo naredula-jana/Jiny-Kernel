@@ -161,7 +161,9 @@ boot_gdt_end:
 level4_pg_directory:
         /* default: 512 entries */
         .quad   0x0000000000102007              /* -> level3_ident_pgt */
-        .fill   511,8,0
+        .fill   510,8,0
+        .quad   0x0000000000102007              /* -> level3_ident_pgt */
+
 
 
 .org 0x2000
@@ -169,7 +171,10 @@ level4_pg_directory:
 level3_pg_table:
         .quad   0x0000000000103007 /* TODO : currently used only while initializing */
         .quad   0x0000000000103007 /* TODO : currently based on harcoded of kernel offset it is located in 2nd location*/
-        .fill   510,8,0
+        .fill   508,8,0
+        .quad   0x0000000000103007 /* TODO : currently used only while initializing */
+        .quad   0x0000000000103007 /* TODO : currently based on harcoded of kernel offset it is located in 2nd location*/
+
 
 
 .org 0x3000

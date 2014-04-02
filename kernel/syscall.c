@@ -325,6 +325,12 @@ unsigned long SYS_sysctl(struct __sysctl_args *args) {
 			}else if(ut_strcmp(carg[0],"ls")==0){
 				Jcmd_ls(carg[1], carg[2]);
 				return;
+			}else if(ut_strcmp(carg[0],"maps")==0){
+				Jcmd_maps(carg[1], carg[2]);
+				return;
+			}else if(ut_strcmp(carg[0],"ps")==0){
+				Jcmd_ps(carg[1], carg[2]);
+				return;
 			}
 			ut_symbol_execute(SYMBOL_CMD, carg[0], carg[1], carg[2]);
 		}

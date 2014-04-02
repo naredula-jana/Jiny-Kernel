@@ -11,7 +11,7 @@ INCLUDE=. -DNETWORKING -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURC
 
 NEW_GCC=/data/opt/gcc-4.8.2/bin/
 
-CC=$(NEW_GCC)gcc -g -gdwarf-2 -Wimplicit -w
+CC=$(NEW_GCC)gcc -g -gdwarf-2 -Wimplicit -w  
 #CPP=$(NEW_GCC)g++ -g -std=gnu++0x -fno-rtti -lsupc++ -fno-exceptions -gdwarf-2 -fpermissive 
 CPP=$(NEW_GCC)g++ -g -std=c++11 -fno-rtti -lsupc++ -fno-exceptions -gdwarf-2 -fpermissive  -w
 LCPP=$(NEW_GCC)g++
@@ -34,7 +34,7 @@ ASM_OBJECTS=$(patsubst %.s,%.o,$(ASM_SOURCES))
 OBJECTS=$(C_OBJECTS) $(ASM_OBJECTS) $(GNUASM_OBJECTS) $(CPP_OBJECTS)
 
 ARCH_DIR=x86_64
-CFLAGS= -mcmodel=kernel -m64 -mno-red-zone -nostdlib -D _KERNEL  -nodefaultlibs  -Wall   -I$(INCLUDE) -I$(XEN_INCLUDE)  -DARCH_X86_64
+CFLAGS= -mcmodel=kernel  -m64 -mno-red-zone -nostdlib -D _KERNEL  -nodefaultlibs  -Wall   -I$(INCLUDE) -I$(XEN_INCLUDE)  -DARCH_X86_64
 CFLAGS_ASM= -mcmodel=kernel -nostdlib -nostdinc -nodefaultlibs -D__ASM__   -I$(INCLUDE) -DARCH_X86_64
 LINK_FLAG= 
 INCLUDE=. -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURCE_ROOT)/include/$(ARCH_DIR)/ -I $(SOURCE_ROOT)/arch/$(ARCH_DIR) -I $(XEN_INCLUDE)

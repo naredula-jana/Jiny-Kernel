@@ -18,8 +18,8 @@
    
 3. **For What purpose Jiny can be used?**
 
-   -  Running single apps like  JVM( tomcat or any java server), memcached  etc inside the Jiny vm as high priority app. Single app can be wrapped by a thin os like Jiny to enhance the performance.  Here the app will run much faster when compare to the same app in other vm's like freebsd or linux. Thin OS like JIny along with virtulization hardware can act like a performance enhancer for the apps on the metal.
-   -  Running multiple normal priority application like any traditional unix like systems with optimizations for vm. 
+ -  Running single apps like  JVM( tomcat or any java server), memcached  etc inside the Jiny vm as high priority app. Single app can be wrapped by a thin os like Jiny to enhance the performance.  Here the app will run much faster when compare to the same app in other vm's like freebsd or linux. Thin OS like JIny along with virtulization hardware can act like a performance enhancer for the apps on the metal.
+ -  Running multiple normal priority application like any traditional unix like systems with optimizations for vm. 
 
 4. **What is the development plan and current status?**.
 

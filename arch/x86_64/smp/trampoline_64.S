@@ -30,7 +30,6 @@
   name:
 
 
-#define __START_KERNEL_map 0x40000000
 #define __KERNEL_CS 0x8
 #define __KERNEL_DS 0x10
 
@@ -70,8 +69,9 @@ idt_48:
 gdt_48:
 	.short	__KERNEL32_CS + 7	# gdt limit
 //	.long	cpu_gdt_table-__START_KERNEL_map
-//	.long	0x10cf1c  /* TODO:HARDCODED   with ldt*/
-	.long	0x20000c  /* TODO:HARDCODED */
+	.long	0x10cf1c  /* TODO:HARDCODED   with ldt*/
+//	.long	0x20000c  /* TODO:HARDCODED */
+
 .org 0x504
 stack_addr:
     .long 0

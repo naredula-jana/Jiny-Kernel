@@ -180,7 +180,7 @@ static int boot_cpu(imps_processor *proc) {
 	int cpuid;
 	unsigned bootaddr, accept_status;
 	unsigned long stack;
-	unsigned bios_reset_vector = (unsigned )PHYS_TO_VIRTUAL(BIOS_RESET_VECTOR);
+	unsigned long bios_reset_vector = (unsigned long)PHYS_TO_VIRTUAL(BIOS_RESET_VECTOR);
 
 	/*
 	 * Copy boot code for secondary CPUs here.  Find it in between
@@ -205,7 +205,7 @@ static int boot_cpu(imps_processor *proc) {
 
 	/* set BIOS reset vector */
 	CMOS_WRITE_BYTE(CMOS_RESET_CODE,CMOS_RESET_JUMP);
-	*((volatile unsigned *) bios_reset_vector) = (unsigned)((bootaddr & 0xFF000) << 12);
+	 *((volatile unsigned long*) bios_reset_vector) = (unsigned long )((bootaddr & 0xFF000) << 12);
 
 	/* clear the APIC error register */
 	IMPS_LAPIC_WRITE(LAPIC_ESR, 0);

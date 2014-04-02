@@ -39,8 +39,11 @@ typedef struct kmem_cache_s kmem_cache_t;
 #endif
 
 /* kerne virtual address space */
-#define KERNEL_ADDR_START (0x40000000) /* Note This should be multiples 1GB , otherwise page tables copying will break */
-#define KERNEL_ADDR_END  (0x140000000) /* entire kernel space length = 4G */
+//#define KERNEL_ADDR_START (0x40000000) /* Note This should be multiples 1GB , otherwise page tables copying will break */
+//#define KERNEL_ADDR_END  (0x140000000) /* entire kernel space length = 4G */
+/* kerne virtual address space */
+#define KERNEL_ADDR_START (0xffffffff80000000) /* Note This should be multiples 1GB , otherwise page tables copying will break */
+#define KERNEL_ADDR_END   (0xffffffffc0000000) /* entire kernel space length = 4G */
 
 #define USERANONYMOUS_ADDR 0x20000000
 #define USERSTACK_ADDR     0x30000000
