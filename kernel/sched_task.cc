@@ -1130,7 +1130,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 		SYS_sc_exit(703);
 		return ;
 	}
-
+	//ut_log(" before pushing to userspace \n");
 	//Jcmd_vmaps_stat(0, 0);
 
 	g_current_task->thread.userland.ip = main_func;
@@ -1179,7 +1179,7 @@ void idleTask_func() {
 
 	/* wait till initilization completed */
 	while(g_boot_completed==0);
-	init_code_readonly(0);
+	//init_code_readonly(0); /* TODO:HARDCODED */
 
 	ut_log("Idle Thread Started cpuid: %d stack addrss:%x \n",getcpuid(),&k);
 	while (1) {

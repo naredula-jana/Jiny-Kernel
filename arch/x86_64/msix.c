@@ -65,15 +65,19 @@ int pci_read_msi(pci_addr_t *addr, pci_dev_header_t *pci_hdr,pci_bar_t *bars, ui
 	msix->msix_table_bar = PCIR_BAR(bar_offset & PCIM_MSIX_BIR_MASK);
 	if (bar_offset >= bars_total) return 0;
 	msix->msix_table_res = bars[bar_offset].addr;
-	msix->msix_table = __va(msix->msix_table_res);
+//	msix->msix_table = __dev_va(msix->msix_table_res);
 
-	if ((ret = vm_mmap(0, (unsigned long)__va(msix->msix_table_res), 0x1000, PROT_WRITE,
+
+	msix->msix_table  = vm_create_kmap("msix",0x1000,PROT_WRITE,MAP_FIXED,msix->msix_table_res);
+	ut_log(" msix table :%x\n",msix->msix_table);
+#if 0
+	if ((ret = vm_mmap(0, (unsigned long)__dev_va(msix->msix_table_res), 0x1000, PROT_WRITE,
 			MAP_FIXED, msix->msix_table_res,"msix")) == 0) /* TODO: need clear solution, this is for SMP */
 	{
 		ut_log("ERROR : PCI mmap fails for \n");
 		return 0;
 	}
-
+#endif
 	ret = pci_read(addr, pos + PCIR_MSIX_PBA, 4, &val);
 	msix->msix_pba_bar = PCIR_BAR(val & PCIM_MSIX_BIR_MASK);
 	return msix->isr_vector;

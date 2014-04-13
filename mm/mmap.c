@@ -199,6 +199,30 @@ unsigned long vm_dup_vmaps(struct mm_struct *src_mm,struct mm_struct *dest_mm){ 
 
     return 1;
 }
+extern unsigned long g_phy_mem_size;
+unsigned long vm_create_kmap(unsigned char *name, unsigned long map_size, unsigned long prot, unsigned long flags, unsigned long pgoff){
+	static unsigned long   ksize=0;
+	unsigned long   hole_size=0x100000;
+	unsigned long vaddr;
+	unsigned long ret;
+
+	if (ksize == 0){
+		//ksize=g_phy_mem_size+hole_size;
+	}
+//	vaddr = KADDRSPACE_START+ksize;
+	vaddr = 0xffffffffc0000000 +ksize;
+	ret = vm_mmap(0, (unsigned long)vaddr , map_size , prot, flags, pgoff,name);
+	if (ret == 0) {
+		ut_log("	ERROR: create kernel vmap Fails vaddr :%x(%d)\n",vaddr, ret);
+		vaddr=0;
+	}else{
+		ut_log("	create Kernel vmap: %s   :%x-%x size:%dM\n",name,vaddr,vaddr+map_size,map_size/1000000);
+	}
+	ksize= ksize+hole_size+map_size;
+
+	return vaddr;
+}
+
 unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long pgoff, const char *name) {
 	struct mm_struct *mm = g_current_task->mm;
 	struct task_struct *task = g_current_task;
@@ -211,7 +235,7 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, 
 		ut_log("VMA ERROR:  Already Found :%x \n",addr);
 		return 0;
 	}
-	if ((mm!=g_kernel_mm) && (addr >= KERNEL_ADDR_START) && (addr < KERNEL_ADDR_END)){ /* check if it falls in kernel space */
+	if ((mm!=g_kernel_mm) && (addr >= KERNEL_CODE_START) && (addr < KADDRSPACE_END)){ /* check if it falls in kernel space */
 		BUG();
 	}
 
@@ -264,6 +288,7 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, 
 		mm_slab_cache_free(vm_area_cachep, vma);
 		return 0;
 	}else{
+		//ut_log(" mmap ret :%x \n",ret);
 		return vma->vm_start;
 	}
 }
@@ -365,7 +390,7 @@ void vm_vma_stat(struct vm_area_struct *vma, unsigned long vaddr,
 		unsigned long faulting_ip, int write_fault,unsigned long optional) {
 	if (vma == 0)
 		return;
-	int index = vma->stat_log_index % 10;
+	int index = vma->stat_log_index % MAX_MMAP_LOG_SIZE;
 	vma->stat_log[index].vaddr = vaddr;
 	vma->stat_log[index].fault_addr = faulting_ip;
 	vma->stat_log[index].rw_flag = write_fault;
@@ -392,6 +417,7 @@ int Jcmd_maps(char *arg1, char *arg2) {
 	int ret,pid,i,max_len;
 	int found=0;
 	int all=0;
+	unsigned char *error=0;
 
 	max_len=len;
 	buf = (unsigned char *) vmalloc(len,0);
@@ -413,16 +439,23 @@ int Jcmd_maps(char *arg1, char *arg2) {
 				break;
 			}
 		}
+		if (found == 0){
+			error = "ERROR pid  Not found\n";
+			goto last;
+		}
 	}
 	if (arg2 != 0 && ut_strcmp(arg2,"all")==0){
 		all=1;
 	}
 	if (task == 0 || found==0) {
+		error = "ERROR task empty\n";
 		goto last;
 	}
 	mm = task->mm;
-	if (mm == 0)
+	if (mm == 0){
+		error = "ERROR mm empty\n";
 		goto last;
+	}
 	vma = mm->mmap;
 	ret=0;
 	buf[0]=0;
@@ -438,13 +471,15 @@ int Jcmd_maps(char *arg1, char *arg2) {
 							vma->name, vma->vm_start, vma->vm_end, vma->vm_private_data, vma->vm_flags, vma->vm_prot,
 							vma->stat_page_count, vma->stat_page_faults, vma->stat_page_wrt_faults);
 		} else {
+			unsigned char filename[100];
+			ut_strncpy(filename,fs_get_filename(inode),99);
 			len = len
 					- ut_snprintf(buf + max_len - len, len, "%9s [ %p - %p ] - (+%p) flag:%x prot:%x stats:(%d/%d/%d) :%s:\n",
 							vma->name, vma->vm_start, vma->vm_end, vma->vm_private_data, vma->vm_flags, vma->vm_prot,
-							vma->stat_page_count, vma->stat_page_faults, vma->stat_page_wrt_faults, fs_get_filename(inode));
-		}
+							vma->stat_page_count, vma->stat_page_faults, vma->stat_page_wrt_faults, filename);
+			}
 		if (all == 1) {
-			for (i = 0; i < 10 && i < vma->stat_log_index; i++) {
+			for (i = 0; i < MAX_MMAP_LOG_SIZE && i < vma->stat_log_index; i++) {
 				len = len
 						- ut_snprintf(buf + max_len - len, len, "	  vad:%x- faulip:%x - rw:%d option:%x \n",
 								vma->stat_log[i].vaddr, vma->stat_log[i].fault_addr, vma->stat_log[i].rw_flag,
@@ -452,11 +487,14 @@ int Jcmd_maps(char *arg1, char *arg2) {
 			}
 		}
 
-		if (len <0) goto last;
+		if (len <200) goto last;
 		vma = vma->vm_next;
 	}
 last:
 	spin_unlock_irqrestore(&g_global_lock, flags);
+	if (error){
+		ut_printf(" %s\n",error);
+	}
     ut_printf(buf);
 	vfree(buf);
 	return 1;

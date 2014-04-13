@@ -72,9 +72,94 @@ static void mk_pde(pde_t *pde, addr_t fr,int large_page,int global,int user)
 	pde->frame = fr;
 }
 
+unsigned long g_kernel_address_space_starts=0;
 
-addr_t initialise_paging(addr_t end_addr, unsigned long current_mem_end)
-{
+unsigned long __va(unsigned long addr){
+	if (g_kernel_address_space_starts==0){
+		return ((void *)((unsigned long)(addr)+KERNEL_CODE_START));
+	}else{
+		return ((void *)((unsigned long)(addr)+g_kernel_address_space_starts));
+	}
+}
+unsigned long __pa(unsigned long addr){
+	if (g_kernel_address_space_starts==0){
+		return ((unsigned long)(addr)-KERNEL_CODE_START);
+	}else{
+		if (addr > KERNEL_CODE_START)
+			return ((unsigned long)(addr)-KERNEL_CODE_START);
+		else
+			return ((unsigned long)(addr)-g_kernel_address_space_starts);
+	}
+}
+/* stich the page tables for entire kernel address space */
+addr_t initialise_paging_new(addr_t physical_mem_size, unsigned long virt_image_end, unsigned long *virt_addr_start, unsigned long *virt_addr_end) {
+	unsigned long virt_addr;
+	unsigned long curr_virt_end_addr; /* page tables are stored at the end of images */
+	addr_t i, j, fr, max_fr,level4_index,level3_index,level2_index,level2_table,level3_table;
+
+	curr_virt_end_addr = (virt_image_end + PAGE_SIZE) & (~0xfff);
+
+	//virt_addr = vm_create_kmap("phyram", physical_mem_size, PROT_WRITE, MAP_FIXED, 0);
+	virt_addr = KADDRSPACE_START;
+	g_kernel_page_dir=0x00101000;
+
+	level4_index = L4_INDEX(virt_addr);
+	ut_log("paging init :addr:%x -> %x Lindex ( %x : %x : %x :%x )\n",virt_addr,L4_INDEX(virt_addr)*8,L4_INDEX(virt_addr),L3_INDEX(virt_addr),L2_INDEX(virt_addr),L1_INDEX(virt_addr));
+	*virt_addr_start = virt_addr;
+	*virt_addr_end = virt_addr + physical_mem_size - (8*1024);
+	fr = 0;
+	max_fr = physical_mem_size/(PAGE_SIZE); /* max pages */
+	ut_log(" max_fr :%x (%d) \n",max_fr,max_fr);
+
+	level3_table = curr_virt_end_addr;
+	curr_virt_end_addr = curr_virt_end_addr + PAGE_SIZE;
+	mk_pde(__va(0x101000+level4_index*8), (__pa(level3_table)) >> PAGE_SHIFT, 0, 1, 0);
+	level3_index = 0;
+	while (level3_index < 512) {/* each increment represents 1G */
+		/* TODO: need to check the maximum physical memory and need to initilize accordingly, currently 1G is initilised */
+		if (fr > max_fr) {
+			break;
+		}
+		level2_index = 0; /* each increment represents 2M */
+		level2_table = curr_virt_end_addr;
+		mk_pde((level3_table), (__pa(level2_table)) >> PAGE_SHIFT, 0, 1, 0);
+
+		curr_virt_end_addr = curr_virt_end_addr + PAGE_SIZE;
+		while (level2_index <512) {/* covers 2M for each iteration */
+			if (0) {/* use 2M size of pages */
+				mk_pde((level2_table), fr, 1, 1, 0);
+			} else { /* use 4k  size pages */
+				mk_pde((level2_table), (__pa(curr_virt_end_addr)) >> PAGE_SHIFT, 0, 1, 0);
+				for (j = 0; j < 512; j++) {
+					if ((fr+j) <= (max_fr+1)){
+						mk_pte(curr_virt_end_addr + j * 8, fr + j, 1, 0, 1);
+					}else{
+						goto last;
+					}
+				}
+				curr_virt_end_addr = curr_virt_end_addr + PAGE_SIZE; /* this is physical space used for the page table */
+			}
+			level2_table = level2_table +8;
+			level2_index++;
+			fr = fr + 512; /* 2M = 512*4K frames */
+		}/* end of while */
+
+		level3_table = level3_table +8;
+		level3_index++;
+	}
+last:
+ut_log("paging init end :addr:%x ->  Lindex ( %x : %x : %x :%x )\n",curr_virt_end_addr,L4_INDEX(curr_virt_end_addr),L3_INDEX(curr_virt_end_addr),L2_INDEX(curr_virt_end_addr),L1_INDEX(curr_virt_end_addr));
+
+	curr_virt_end_addr = curr_virt_end_addr + PAGE_SIZE;
+	flush_tlb(0x101000);
+	ut_log("END address :%x fr:%x j:%x level3:%x(%d) level2:%x(%d)\n",curr_virt_end_addr,fr,j,level2_index,level2_index,level3_index,level3_index);
+
+	g_kernel_address_space_starts = *virt_addr_start;
+	virt_addr = virt_addr + (curr_virt_end_addr-KERNEL_CODE_START);
+	return (addr_t)virt_addr;
+}
+
+addr_t initialise_paging(addr_t end_addr, unsigned long current_mem_end){
 	// The size of physical memory. For the moment we 
 	// assume it is 16MB big.
 	addr_t end_mem = end_addr;
@@ -174,6 +259,9 @@ void ar_pageFault(struct fault_ctx *ctx) {
 //	int id = ctx->errcode & 0x10; // Caused by an instruction fetch?
 //	struct gpregs *gp = ctx->gprs;
 
+	DEBUG(" fault_addr :%x  errorcode:%x ip:%x ",faulting_address,ctx->errcode,ctx->istack_frame->rip);
+	DEBUG("addr:%x ->  Lindex ( %x : %x : %x :%x )\n",faulting_address,L4_INDEX(faulting_address),L3_INDEX(faulting_address),L2_INDEX(faulting_address),L1_INDEX(faulting_address));
+
 	// Output an error message.
 #if 0
 	DEBUG("new PAGE FAULT  ip:%x  addr: %x \n",ctx->istack_frame->rip,faulting_address);
@@ -202,9 +290,12 @@ void ar_pageFault(struct fault_ctx *ctx) {
 	}
 	if (g_current_task->mm != g_kernel_mm) /* user level thread */
 	{
+		BUG();
 		SYS_sc_exit(901);
 		return;
 	}
+	ut_log(" errorcode; %x resrved: %x rw:%x present:%x addr:%x  ip:%x\n",ctx->errcode,reserved,rw,present,faulting_address,ctx->istack_frame->rip);
+
 	BUG();
 }
 
@@ -213,9 +304,10 @@ static int kernel_pages_level=3;
 static unsigned long kernel_level3_entries[MAX_KERNEL_ENTRIES]; /* 1 entry represents 1G Memory */
 static int kernel_level3_entries_count=0;
 static void copy_kernel_pagetable_entries(){
-	int i,j,k;
+	int i,j,k,m;
 	unsigned long p4,p3,phy_entry; /* physical address */
 	unsigned long *v4,*v3; /* virtual address */
+	int found;
 
 	k=0;
 	p4 = g_kernel_mm->pgd;
@@ -224,13 +316,24 @@ static void copy_kernel_pagetable_entries(){
 		v4=__va(p4+i*8);
 		p3=(*v4 & (~0xfff));
 		if (p3==0) continue;
-		for (j=0; j<512; j++){
-			v3=__va(p3+j*8);
-			kernel_level3_entries[k] = (*v3 & (~0xfff));
-			if (kernel_level3_entries[k]!=0) k++;
-			else continue;
-			if (k>=MAX_KERNEL_ENTRIES){
-				BUG();
+		for (j = 0; j < 512; j++) {
+			found = 0;
+			v3 = __va(p3+j*8);
+			for (m = 0; m < k; m++) {
+				if (kernel_level3_entries[m] == (*v3 & (~0xfff))) {
+					found = 1;
+					break;
+				}
+			}
+			if (found == 0) {
+				kernel_level3_entries[k] = (*v3 & (~0xfff));
+				if (kernel_level3_entries[k] != 0)
+					k++;
+				else
+					continue;
+				if (k >= MAX_KERNEL_ENTRIES) {
+					BUG();
+				}
 			}
 		}
 	}
@@ -250,8 +353,12 @@ static int check_kernel_ptable_entry(unsigned long phy_addr){
 	return 0;
 }
 static inline unsigned long mm_pagealloc(struct mm_struct *mm){
+	unsigned long ret;
+
 	mm->stat_page_allocs++;
-	return alloc_page(MEM_CLEAR);
+	ret = alloc_page(MEM_CLEAR);
+	DEBUG(" pagetable alloc :%x  pa:%x allocs:%x \n",ret,__pa(ret),mm->stat_page_allocs);
+	return ret;
 }
 static int copy_pagetable(struct mm_struct *dest_mm, int level,unsigned long src_ptable_addr,unsigned long dest_ptable_addr)
 {
@@ -305,10 +412,12 @@ static int copy_pagetable(struct mm_struct *dest_mm, int level,unsigned long src
 	DEBUG("E level: %d src:%x  dest:%x \n",level,src,dest);	
 	return 1;
 }
-static  void pagetable_walk(int level,unsigned long ptable_addr){
+int pagetable_walk(int level,unsigned long ptable_addr, int print){
 	unsigned long p,phy_entry; /* physical address */
 	unsigned long *v; /* virtual address */
 	unsigned int i,max_i,j;
+	int count=0;
+	int arg_print=print;
 
 	p=ptable_addr;
 	if (p == 0) return 0;
@@ -321,18 +430,38 @@ static  void pagetable_walk(int level,unsigned long ptable_addr){
 		v=__va(p+i*8);
 		phy_entry=(*v & (~0xfff));
 		if (phy_entry == 0) continue;
-		for (j=level; j<5; j++)
-			ut_printf("   ");
-
+		count++;
 
 		if ((level == kernel_pages_level) && check_kernel_ptable_entry(phy_entry)){
+			for (j=level; j<5; j++)
+				if (print) ut_printf("   ");
 			ut_printf(" %d (%d):%x  **** \n",level,i,phy_entry);
-			continue;
+#if 0
+			if (phy_entry== 0x103000){
+				//ut_printf(" SKIP \n");
+				continue;
+			}
+#endif
+			//continue;
+		}else{
+			if (level >2 && print){
+				for (j=level; j<5; j++)
+					if (print) ut_printf("   ");
+				ut_printf(" %d (%d):%x\n",level,i,phy_entry);
+			}
 		}
-		ut_printf(" %d (%d):%x\n",level,i,phy_entry);
-		if (level > 3) pagetable_walk(level-1,phy_entry);
+
+		if (level > 2) {
+			pagetable_walk(level-1,phy_entry,arg_print);
+		}
 	}
-	return;
+
+	if (print){
+		for (j=level; j<5; j++)
+			if (print) ut_printf("   ");
+		ut_printf(" count:%d \n",count);
+	}
+	return count;
 }
 
 /*
@@ -488,8 +617,8 @@ int ar_dup_pageTable(struct mm_struct *src_mm,struct mm_struct *dest_mm)
 	}
 	copy_pagetable(dest_mm, 4,(unsigned long)__va(src_mm->pgd),(unsigned long)v);
 #if 0
-	pagetable_walk(4,src_mm->pgd);
-	pagetable_walk(4,g_kernel_mm->pgd);
+	pagetable_walk(4,src_mm->pgd,1);
+	pagetable_walk(4,g_kernel_mm->pgd,1);
 #endif
 	return 1;
 }
@@ -502,6 +631,7 @@ int ar_check_valid_address(unsigned long addr, int len) {
 	if (g_boot_completed == 0)
 		return 1; /* ignore checking while booting */
 
+	return 1; /* TODO:HARDCODED */
 	struct mm_struct *mm = g_current_task->mm;
 
 	/* 1. check if it is  user level space */
@@ -529,8 +659,22 @@ int ar_check_valid_address(unsigned long addr, int len) {
 	BUG();
 	return JFAIL;
 }
+int g_stat_pagefault=0;
 int g_stat_pagefaults_write=0;
 extern unsigned long g_phy_mem_size;
+
+int check_kernel_address(unsigned long addr){
+	if (addr >=KADDRSPACE_START && addr <(KADDRSPACE_START + g_phy_mem_size*4)){
+		return 1;
+	}else{
+		return 0;
+	}
+}
+#define MAX_STAT_FAULTS 200
+struct stat_fault{
+	unsigned long  addr,fault_ip;
+} stat_fault;
+struct stat_fault stat_faults[MAX_STAT_FAULTS+1];
 
 static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_fault, struct fault_ctx *ctx)
 {
@@ -541,8 +685,10 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 	unsigned char user=0;
 
 	mm=g_kernel_mm;
-
-	if ((addr > KERNEL_ADDR_START) && ( addr<(KERNEL_ADDR_START+g_phy_mem_size)) && (write_fault == 1)) { /* look for the kernel slab data pages */
+	g_stat_pagefault++;
+	stat_faults[g_stat_pagefault % MAX_STAT_FAULTS].addr = addr;
+	stat_faults[g_stat_pagefault % MAX_STAT_FAULTS].fault_ip = faulting_ip;
+	if ((check_kernel_address(addr)) && (write_fault == 1)) { /* look for the kernel slab data pages */
 		vma=vm_findVma(g_kernel_mm,(addr & PAGE_MASK),8);
 		assert(vma!=0);
 		vma->stat_page_wrt_faults++;
@@ -565,7 +711,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 		vma = vm_findVma(mm, (addr & PAGE_MASK), 8); /* length changed to just 8 bytes at maximum , instead of entire page*/
 	}
 
-	if (addr>=KERNEL_ADDR_START && addr<=(KERNEL_ADDR_START+0x200000)){
+	if (addr>=KERNEL_CODE_START && addr<=(KERNEL_CODE_START+0x200000)){
 		while(1);
 	}
 	if (mm==0 || mm->pgd == 0){
@@ -577,11 +723,12 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 		if ( user == 1)
 		{
 			int stack_var;
+			BUG();
 		//	ut_printf("ERROR: user program Segmentaion Fault addr:%x  ip:%x :%s\n",addr,faulting_ip,g_current_task->name);
 			Jcmd_maps(0,0);
 			ut_log("ERROR: Segmentation fault page fault addr:%x ip:%x  \n",addr,faulting_ip);
 			Jcmd_lsmod(0,0);
-			BUG();
+
 			//ut_showTrace(&stack_var);
 			SYS_sc_exit(902);
 			return 1;
@@ -602,7 +749,10 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 		pl3=(unsigned long *)__pa(v);
 		p=(pl4+(L4_INDEX(addr))); /* insert into l4 */
 		v=(unsigned long *)__va(p);
-		*v=((addr_t) pl3 |((addr_t) 0x7));
+		if (user)
+			*v=((addr_t) pl3 |((addr_t) 0x7));
+		else
+			*v=((addr_t) pl3 |((addr_t) 0x7));
 		DEBUG(" Inserted into L4 :%x  p13:%x  pl4:%x addr:%x index:%x \n",p,pl3,pl4,addr,L4_INDEX(addr));
 	}
 	p=(pl3+(L3_INDEX(addr)));
@@ -618,7 +768,10 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 		pl2=(unsigned long *)__pa(v);
 		p=(pl3+(L3_INDEX(addr)));
 		v=__va(p);
-		*v=((addr_t) pl2 |((addr_t) 0x7));
+		if (user)
+			*v=((addr_t) pl2 |((addr_t) 0x7));
+		else
+			*v=((addr_t) pl2 |((addr_t) 0x7));
 		DEBUG(" INSERTED into L3 :%x  p12:%x  pl3:%x \n",p,pl2,pl3);
 	}
 	p=(pl2+(L2_INDEX(addr)));
@@ -634,7 +787,10 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 		pl1=(unsigned long *)__pa(v);
 		p=(unsigned long *)(pl2+(L2_INDEX(addr)));
 		v=__va(p);
-		*v=((addr_t) pl1 |((addr_t) 0x7));
+		if (user)
+			*v=((addr_t) pl1 |((addr_t) 0x7));
+		else
+			*v=((addr_t) pl1 |((addr_t) 0x7));
 		DEBUG(" Inserted into L2 :%x :%x \n",p,pl1);
 	}
 
@@ -682,8 +838,18 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 		}else
 		{
 			p=(unsigned long *)(vma->vm_private_data + (addr-vma->vm_start)) ;
-			if (user == 0)
+			if (user == 0){
+				static int count=0;
+#if 1
+				count++;
 				ut_log("Kernel Adding to LEAF: private page paddr: %x vaddr: %x \n",p,addr);
+				ut_log("addr:%x ->  Lindex ( %x : %x : %x :%x )\n",addr,L4_INDEX(addr),L3_INDEX(addr),L2_INDEX(addr),L1_INDEX(addr));
+				ut_log("%d: addr:%x ->  Lindexloc ( %x : %x : %x :%x )\n",count,addr,L4_INDEX(addr)*8,L3_INDEX(addr)*8,L2_INDEX(addr)*8,L1_INDEX(addr)*8);
+				if (count > 2){
+				 // BRK;
+				}
+#endif
+			}
 			DEBUG(" page fault of anonymous page p:%x  private_data:%x vm_start::x \n",p,vma->vm_private_data,vma->vm_start);
 		}
 	}else
@@ -693,10 +859,12 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 	}
 	assert(p!=0);
 	pl1=(pl1+(L1_INDEX(addr)));
-	if (addr > KERNEL_ADDR_START && user==0) /* then it is kernel address */
+	if (addr > KADDRSPACE_START && user==0){ /* then it is kernel address */
 		mk_pte(__va(pl1),((addr_t)p>>12),1,0,1);/* global=on, user=off rw=on*/
-	else	
+		flush_tlb(0x101000);
+	}else{
 		mk_pte(__va(pl1),((addr_t)p>>12), 0, 1, writeFlag); /* global=off, user=on rw=flag from vma*/
+	}
 
 	ar_flushTlbGlobal();
 	flush_tlb_entry(addr);

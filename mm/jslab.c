@@ -393,9 +393,9 @@ int g_conf_zeropage_cache = 1;
 #define MAX_ZEROLIST_SIZE 40000  /* 4k*40000 =160 Mb */
 typedef struct {
 	int cache_size; /* total number of pages */
-	int dirty_page[MAX_ZEROLIST_SIZE]; /* */
+	unsigned long dirtypages_list[MAX_ZEROLIST_SIZE]; /* */
 	int max_dirtypage_index;
-	int cleanpages_list[MAX_ZEROLIST_SIZE];  /*  this should be LIFO, so that the pages at the bottom of the stack will be picked by KSM */
+	unsigned long cleanpages_list[MAX_ZEROLIST_SIZE];  /*  this should be LIFO, so that the pages at the bottom of the stack will be picked by KSM */
 	int max_cleanpage_index;
 	spinlock_t		spinlock;
 }zeropage_cache_t;
@@ -410,6 +410,7 @@ static void init_zeropage_cache(){
 static unsigned long get_from_zeropagecache(int clear_flag){
 	unsigned long intr_flags;
 	unsigned long ret=0;
+	int clear_page=0;
 	if (init_zeropage_cache_done==0) return ret;
 
 	spin_lock_irqsave(&(zeropage_cache.spinlock), intr_flags);
@@ -424,17 +425,27 @@ static unsigned long get_from_zeropagecache(int clear_flag){
 	}
 	if (zeropage_cache.max_dirtypage_index > 0){
 		int i = zeropage_cache.max_dirtypage_index -1;
-		ret = zeropage_cache.dirty_page[i];
-		zeropage_cache.dirty_page[i] = 0;
+		ret = zeropage_cache.dirtypages_list[i];
+		zeropage_cache.dirtypages_list[i] = 0;
 		zeropage_cache.max_dirtypage_index = i;
+		if (clear_flag & MEM_CLEAR){
+			clear_page = 1;
+		}
+#if 0
 		if (clear_flag & MEM_CLEAR){
 			ut_memset(ret,0,PAGE_SIZE);
 		}
+#endif
 		goto last;
 	}
 
 last:
     spin_unlock_irqrestore(&(zeropage_cache.spinlock), intr_flags);
+
+    if ((ret!= 0) &&  (clear_page == 1)){
+    	//ut_log(" mmealloc :%x \n",ret);
+		ut_memset(ret,0,PAGE_SIZE);
+    }
 	return ret;
 }
 static int insert_into_zeropagecache(unsigned long page, int flag){
@@ -450,7 +461,7 @@ static int insert_into_zeropagecache(unsigned long page, int flag){
 		goto last;
 	}
 	if ( zeropage_cache.max_dirtypage_index < MAX_ZEROLIST_SIZE){
-		zeropage_cache.dirty_page[zeropage_cache.max_dirtypage_index] = page;
+		zeropage_cache.dirtypages_list[zeropage_cache.max_dirtypage_index] = page;
 		zeropage_cache.max_dirtypage_index++;
 		ret = JSUCCESS;
 		goto last;
@@ -496,6 +507,7 @@ unsigned long jalloc_page(int flags){
 }
 int jfree_page(unsigned long p){
 	stat_page_frees++;
+	//ut_log(" jfree_page:%x \n",p);
 	if (g_conf_zeropage_cache==1){
 		if (insert_into_zeropagecache(p,0) == JSUCCESS)
 			return 0;

@@ -110,15 +110,16 @@ int Jcmd_clock() {
 	ut_printf(" jiifies :%d  clock:%d errors:%d \n",g_jiffie_tick,get_kvm_clock(),g_jiffie_errors);
 	return 1;
 }
-int g_conf_kvmclock_enable =0 ;
+int g_conf_kvmclock_enable =1 ;
 int init_clock() {
 
 	vpcu_time.system_time=0;
 	if (kvm_para_available() == JFAIL){
+		ut_log("ERROR:  Kvm clock is diabled by Jiny config\n");
 		return 0;
 	}
 	if (g_conf_kvmclock_enable == 0) {
-		ut_log(" Kvm clock is diabled by Jiny config\n");
+		ut_log(" ERROR : Kvm clock is diabled by Jiny config\n");
 		return 0;
 	}
 	kvm_clock_available = 1;

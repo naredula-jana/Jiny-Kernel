@@ -41,6 +41,8 @@ int init_symbol_table(unsigned long unused) {
 	int stats = 0;
 	int cmds = 0;
 
+	return 0;
+#if 0
 	if (g_multiboot_mod1_addr==0) {
 		ut_log("ERROR: Symbols are not Loaded\n");
 		return 0;
@@ -49,6 +51,7 @@ int init_symbol_table(unsigned long unused) {
 	if (g_symbol_table == 0){
 		BUG();
 	}
+#endif
 	for (i = 0;  g_symbol_table[i].name != 0; i++) {
 		unsigned char sym[100], dst[100];
 
@@ -103,9 +106,71 @@ int ut_symbol_show(int type){
 	return count;
 }
 
+static unsigned char buf[26024];
+static int Jcmd_cat(unsigned char *arg1, unsigned char *arg2) {
+	struct file *fp;
+	int i, ret;
+
+	if (arg1 == 0)
+		return 0;
+	fp = fs_open(arg1, 0, 0);
+	ut_printf("filename :%s: \n", arg1);
+	if (fp == 0) {
+		ut_printf(" Error opening file :%s: \n", arg1);
+		return 0;
+	}
+	buf[1000] = 0;
+	ret = 1;
+	i = 1;
+
+	while (ret > 0) {
+		ret = fs_read(fp, buf, 20000);
+		buf[20001] = '\0';
+		if (ret > 0) {
+			buf[20] = '\0';
+			ut_printf("lne: %d: DATA Read  ::%s:: \n", ret,buf);
+		} else {
+			ut_printf(" Return value of read :%i: \n", ret);
+		}
+		i++;
+	}
+	return 0;
+}
+struct Jcmd_struct{
+	unsigned char *name;
+	void (*jcmd)(uint8_t *arg1,uint8_t *arg2);
+}jcmd_struct;
+extern void Jcmd_ps(uint8_t *arg1,uint8_t *arg2);
+extern void Jcmd_cpu(uint8_t *arg1,uint8_t *arg2);
+extern void Jcmd_dmesg(uint8_t *arg1,uint8_t *arg2);
+extern void Jcmd_shutdown(uint8_t *arg1,uint8_t *arg2);
+extern void Jcmd_maps(uint8_t *arg1,uint8_t *arg2);
+extern void Jcmd_locks(uint8_t *arg1,uint8_t *arg2);
+extern void Jcmd_pt(unsigned char *arg1,unsigned char *arg2);
+extern void Jcmd_sys(unsigned char *arg1,unsigned char *arg2);
+static struct Jcmd_struct jcmds[]={
+		{"shutdown",&Jcmd_shutdown},
+		{"ls",&Jcmd_ls},
+		{"cpu",&Jcmd_cpu},
+		{"ps",&Jcmd_ps},
+		{"maps", &Jcmd_maps},
+		{"dmesg",&Jcmd_dmesg},
+		{"sys",&Jcmd_sys},
+		{"pt",&Jcmd_pt},
+		{"locks",&Jcmd_locks},
+		{"cat",&Jcmd_cat},
+		{0,0}
+};
 int ut_symbol_execute(int type, char *name, uint8_t *argv1,uint8_t *argv2){
-    int i,*conf;
+    int i,k,*conf;
 	int (*func)(char *argv1,char *argv2);
+	for (k=0; k<jcmds[k].name!=0; k++){
+		if (ut_strcmp(name,jcmds[k].name)==0){
+			jcmds[k].jcmd(argv1,argv2);
+			return JSUCCESS;
+		}
+	}
+	return JFAIL;
 
 	for (i = 0; i < g_total_symbols; i++) {
 		if (g_symbol_table[i].type != type) continue;

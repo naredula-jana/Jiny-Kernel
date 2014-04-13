@@ -83,35 +83,26 @@ static inittable_t inittable[] = {
 		{0,0,0}
 };
 
-unsigned long g_multiboot_info_ptr = 0x10000;
-unsigned long g_multiboot_magic  = 0x2BADB002;
-unsigned long g_multiboot_mod1_addr=0;
-unsigned long g_multiboot_mod1_len=0;
-
-unsigned long g_multiboot_mod2_addr=0;
-unsigned long g_multiboot_mod2_len=0;
-
+unsigned char cmdline[9024]={"dummy"};
 unsigned long g_phy_mem_size=0;
 /* Check if the bit BIT in FLAGS is set.  */
 #define CHECK_FLAG(flags,bit)	((flags) & (1 << (bit)))
 
 int init_physical_memory(unsigned long unused){
 	multiboot_info_t *mbi;
+	unsigned long *mbi_ptr,*magic_ptr;
 	unsigned long max_addr;
 
-	g_multiboot_magic =0; /* TODO:HARDCODED */
-	/* Am I booted by a Multiboot-compliant boot loader?  */
-	if (g_multiboot_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
-		ut_log("INVALID  magic:%x addr :%x   \n", g_multiboot_magic, g_multiboot_info_ptr);
-		g_phy_mem_size = 0x3fffe000;
-		return 1;
-	}else{
+	mbi_ptr =__va(0x4000);
+	magic_ptr = __va(0x4010);
+	mbi=__va(*mbi_ptr);
 
+//while(1);
+	if (*magic_ptr != MULTIBOOT_BOOTLOADER_MAGIC){
+		BUG();
 	}
 
 	/* Set MBI to the address of the Multiboot information structure.  */
-	mbi = (multiboot_info_t *) g_multiboot_info_ptr;
-	mbi = __va(mbi);
 	ut_log("	mbi: %x mem_lower = %x(%d)KB , mem_upper=%x(%d)KB mod count:%d addr:%x mmaplen:%d mmpaddr:%x Flags:%x\n", mbi, mbi->mem_lower, mbi->mem_lower, mbi->mem_upper, mbi->mem_upper,
 			mbi->mods_count, mbi->mods_addr, mbi->mmap_length, mbi->mmap_addr, mbi->flags);
 	ut_log("		mbi: syms[0]:%x syms[1]:%x  syms[2]:%x syms[3]:%x cmdline:%x\n",mbi->syms[0],mbi->syms[1],mbi->syms[2],mbi->syms[3],mbi->cmdline);
@@ -131,7 +122,7 @@ int init_physical_memory(unsigned long unused){
 		}
 	}
 
-
+#if 0
 	if (mbi->mods_count > 0) {
 		multiboot_mod_t *mod;
 
@@ -145,7 +136,10 @@ int init_physical_memory(unsigned long unused){
 			ut_log("	mod2 addr : %x len:%d\n",g_multiboot_mod2_addr,g_multiboot_mod2_len);
 		}
 	}
+#endif
 	g_phy_mem_size = max_addr;
+	ut_log("  Physical memory size :%x (%d)  magic_ptr :%x cmdline: %x :%s\n",g_phy_mem_size,g_phy_mem_size,magic_ptr,mbi->cmdline,__va(mbi->cmdline+0x20));
+
 	return 0;
 }
 /* Forward declarations.  */
@@ -177,7 +171,7 @@ int  init_code_readonly(unsigned long arg1){
 	cpu=getcpuid();
 
 	flush_tlb(0x101000);
-	flush_tlb_entry(KERNEL_ADDR_START);
+	flush_tlb_entry(KERNEL_CODE_START);
 	ar_flushTlbGlobal();
 	ut_log(" TLB flushed by cpu :%d \n",cpu);
 	spin_unlock_irqrestore(&g_global_lock, intr_flags);
@@ -204,43 +198,27 @@ extern volatile unsigned char *g_video_ram;
 unsigned long g_vmalloc_start=0;
 unsigned long g_vmalloc_size=0;
 extern int shell_main(void *arg);
+
 int init_kernel_vmaps(unsigned long arg1){
 	unsigned long ret;
 	int map_size;
 	unsigned long vaddr;
 
-	if ((ret = vm_mmap(0, (unsigned long) KERNEL_ADDR_START, g_phy_mem_size,
-			PROT_WRITE, MAP_FIXED, KERNEL_ADDR_START,"phy_mem")) == 0) {
+	if ((ret = vm_mmap(0, (unsigned long) KERNEL_CODE_START, g_phy_mem_size,
+			PROT_WRITE, MAP_FIXED, KERNEL_CODE_START,"phy_mem")) == 0) {
 		ut_log("	ERROR: kernel address map Fails \n");
 	}else{
-		ut_log("	Kernel vmap: physical ram: %x-%x size:%dM\n",KERNEL_ADDR_START,KERNEL_ADDR_START+g_phy_mem_size,g_phy_mem_size/1000000);
+		ut_log("	Kernel vmap: physical ram: %x-%x size:%dM\n",KERNEL_CODE_START,KERNEL_CODE_START+g_phy_mem_size,g_phy_mem_size/1000000);
 	}
 
-	/* Vitual memory for video */
-	map_size=0x8000000;
-	//vaddr = KERNEL_ADDR_START+g_phy_mem_size;
-	vaddr = __va(0xe0000000);
-	if ((ret = vm_mmap(0, (unsigned long)vaddr , map_size ,
-			PROT_WRITE, MAP_FIXED, VIDEO,"videoram")) == 0) {
-		ut_log("	ERROR: kernel video ram address map Fails \n");
-	}else{
-		g_video_ram = vaddr;
-		ut_log("	Kernel vmap: video ram   :%x-%x size:%dM\n",g_video_ram,g_video_ram+map_size,map_size/1000000);
-	}
-#if 1
-	/* Vitual memory for vmalloc */
-	map_size=0x8000000;
-	vaddr = __va(0xe9000000);
-	if ((ret = vm_mmap(0, (unsigned long)vaddr , map_size ,
-			PROT_WRITE, MAP_ANONYMOUS, 0,"vmalloc")) <= 0) {
-		ut_log("	ERROR: ..kernel vmalloc address address map Fails :%x :%p\n",ret,ret);
-	}else{
-		g_vmalloc_start = vaddr;
-		g_vmalloc_size = map_size;
+	g_video_ram = vm_create_kmap("videoram",0x8000000,PROT_WRITE,MAP_FIXED,VIDEO);
+	g_vmalloc_size=0x8000000;
+
+	g_vmalloc_start = vm_create_kmap("vmalloc",g_vmalloc_size,PROT_WRITE,MAP_ANONYMOUS,0);
+	if (g_vmalloc_start != 0){
 		init_jslab_vmalloc();
-		ut_log("	Kernel vmap: vmalloc ram   :%x-%x size:%dM\n",g_vmalloc_start,g_vmalloc_start+g_vmalloc_size,g_vmalloc_size/1000000);
 	}
-#endif
+
 	return 0;
 }
 void cmain() {  /* This is the first c function to be executed */

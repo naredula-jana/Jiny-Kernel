@@ -17,7 +17,7 @@
   .align 4,0x90 ; \
   name:
 
-#define __START_KERNEL_map 0x40000000
+//#define __START_KERNEL_map 0x40000000
 /* we are not able to switch in one step to the final KERNEL ADRESS SPACE
  * because we need identity-mapped pages on setup so define __START_KERNEL to
  * 0x100000 for this stage

@@ -50,6 +50,8 @@ void *mm_malloc (size_t size, int flags);
 void *ut_calloc(size_t size);
 void mm_free (const void *objp);
 extern void *vmalloc(int size, int flags);
+void jslab_pagefault(unsigned long addr, unsigned long faulting_ip, struct fault_ctx *ctx);
+void memleakHook_alloc(unsigned char *ptr, int size, int type, void *cachep);
 
 unsigned long jalloc_page(int flags);
 int jfree_page(unsigned long p);
@@ -59,7 +61,8 @@ int jfree_page(unsigned long p);
 #define ut_free mm_free
 #define ut_malloc(x) mm_malloc(x,0)
 int vfree(addr_t addr);
-
+unsigned long __va(unsigned long addr);
+unsigned long __pa(unsigned long addr);
 
 /* vm */
 int Jcmd_vmaps_stat(char *arg1,char *arg2);
@@ -73,6 +76,9 @@ unsigned long vm_mmap(struct file *fp, unsigned long addr, unsigned long len,uns
 int vm_munmap(struct mm_struct *mm, unsigned long addr, unsigned long len);
 unsigned long vm_setupBrk(unsigned long addr, unsigned long len);
 unsigned long vm_dup_vmaps(struct mm_struct *src_mm,struct mm_struct *dest_mm);
+unsigned long vm_create_kmap(unsigned char *name, unsigned long map_size, unsigned long prot, unsigned long flags, unsigned long pgoff);
+void vm_vma_stat(struct vm_area_struct *vma, unsigned long vaddr,unsigned long faulting_ip, int write_fault,unsigned long optional);
+
 
 /* page cache */
 int pc_init(uint8_t *start_addr,unsigned long len);
@@ -112,6 +118,17 @@ unsigned long fs_readdir(struct file *file, struct dirEntry *dir_ent, int len, i
 struct file *fs_dup(struct file *old_filep, struct file *new_filep);
 int fs_set_flags(struct file *fp, int flags);
 int fs_get_type(struct file *fp);
+void *fs_get_stat(void *inodep, int type);
+unsigned char *fs_get_filename(void *inodep);
+void *fs_get_inode_vma_list(void *inodep);
+uint64_t fs_get_size(void *inodep);
+int fs_set_size(void *inodep, unsigned long size);
+void fs_set_private(void *inodep, int fid);
+int fs_get_private(void *inodep);
+int fs_get_inode_type(void *inodep);
+int fs_set_offset(void *inodep, unsigned long offset);
+void fs_set_inode_used(void *inodep);
+int fs_get_inode_flags(void *inodep);
 
 long SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt);
 long SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt);
@@ -236,6 +253,7 @@ int ut_symbol_show(int type);
 int strace_wait(void);
 int ut_get_wallclock(unsigned long *sec, unsigned long *usec);
 void ut_putchar(uint8_t c);
+void udelay(int loops);
 
 /* scheduling */
 unsigned long sc_createKernelThread(int (*fn)(void *, void *),void **argv,uint8_t *name, unsigned long flags);
@@ -245,5 +263,7 @@ void sc_set_fsdevice(unsigned int in, unsigned int out);
 
 
 uint8_t dr_kbGetchar(int device_id);
+
+int pagetable_walk(int level,unsigned long ptable_addr, int print);
 #endif
 

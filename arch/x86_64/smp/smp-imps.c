@@ -174,7 +174,8 @@ void smp_main() {
 	idleTask_func();
 	return;
 }
-
+//#define __old_va(x)                 ((void *)((unsigned long)(x)+0x40000000))
+#define __old_va(x)                 ((void *)((unsigned long)(x)+0))
 static int boot_cpu(imps_processor *proc) {
 	int apicid = proc->apic_id, success = 1, to;
 	int cpuid;
@@ -196,9 +197,13 @@ static int boot_cpu(imps_processor *proc) {
 	memcpy((unsigned char *) __va(bootaddr),(unsigned char *) &trampoline_data, 0x512);
 
 	stack = (unsigned long)g_cpu_state[cpuid].idle_task;/* TODO : currently stack is hardcoded for second cpu , need to make configurable */
+	stack= __pa(stack) + 0x40000000;
+	//stack= __pa(stack) + 0;
 	stack = (stack + TASK_SIZE - 0x64);
-	p = (int *)((char *) __va(bootaddr) + 0x504);
+	p = (int *)((char *) __old_va(bootaddr) + 0x504);
 	*p = (int) stack;
+	KERNEL_PRINT(" SMP cpuid:%x stack:%x bootaddr:%x p:%x\n",cpuid,stack,bootaddr,p);
+	//while(1);
 	/*
 	 *  Generic CPU startup sequence starts here.
 	 */
@@ -240,7 +245,7 @@ static int boot_cpu(imps_processor *proc) {
 	p = __va(bootaddr);
 	while (*p != 0xA5A5A5A5 && to++ < 100)
 		UDELAY(10000);
-	KERNEL_PRINT("SMP: boot addr: %x  cpuid:%d \n", *p,cpuid);
+	KERNEL_PRINT("SMP: boot addr: %x  cpuid:%d accept_status \n", *p,cpuid,accept_status);
 	if (to >= 100) {
 		KERNEL_PRINT("SMP: CPU Not Responding, DISABLED");
 		success = 0;
@@ -271,9 +276,9 @@ static int boot_cpu(imps_processor *proc) {
 static void add_processor(imps_processor *proc) {
 	int apicid = proc->apic_id;
 
-	KERNEL_PRINT("SMP: Processor [APIC id %d ver %d]:  ", apicid, proc->apic_ver);
+	KERNEL_PRINT("	SMP: Processor [APIC id %d ver %d]:  ", apicid, proc->apic_ver);
 	if (!(proc->flags & IMPS_FLAG_ENABLED)) {
-		KERNEL_PRINT(("DISABLED\n"));
+		KERNEL_PRINT(("ERROR: DISABLED\n"));
 		return ;
 	}
 	if (proc->flags & (IMPS_CPUFLAG_BOOT)) {
@@ -297,16 +302,11 @@ int init_smp_force(unsigned long ncpus) {
 	int apicid, i,ret;
 	imps_processor p;
 
-	KERNEL_PRINT(("SMP: Intel MultiProcessor \"Force\" Support\n"));
-	/* 0xfee00000 - 0xfef00000 for lapic */
-	if ((ret=vm_mmap(0,(unsigned long)__va(0xFee00000) ,0x100000,PROT_WRITE,MAP_FIXED,0xFee00000,"smp_apic")) == 0) /* this is for SMP */
-	{
-		ut_printf("SMP: ERROR : mmap fails for \n");
-		return 0;
-	}
+	KERNEL_PRINT(("	SMP: Intel MultiProcessor \"Force\" Support\n"));
 
-	imps_lapic_addr = (READ_MSR_LO(0x1b) & 0xFFFFF000);
-	imps_lapic_addr = (unsigned long)PHYS_TO_VIRTUAL(imps_lapic_addr);
+	imps_lapic_addr  = vm_create_kmap("smp_apic",0x100000,PROT_WRITE,MAP_FIXED,0xFee00000);
+
+	ut_log(" APIC  virt addr :%x phy addr:%x \n",imps_lapic_addr,__pa(imps_lapic_addr));
 	/*
 	 *  Setup primary CPU.
 	 */
@@ -326,6 +326,9 @@ int init_smp_force(unsigned long ncpus) {
 	if (ncpus > MAX_CPUS)
 		ncpus = MAX_CPUS;
 
+	ut_log("imps_smp:  stack vert addr:%x  phy:%x \n",g_cpu_state[0].idle_task,__pa(g_cpu_state[0].idle_task));
+	//return 0;
+
 	for (i = 0; i < ncpus; i++) {
 		if (apicid == i) {
 			p.flags = IMPS_FLAG_ENABLED | IMPS_CPUFLAG_BOOT;
@@ -337,10 +340,23 @@ int init_smp_force(unsigned long ncpus) {
 	}
 
 	local_bsp_apic_init(); /* TODO : Need to call this twice to get APIC enabled */
-
+#if 1
 	unsigned long *page_table;
-	page_table = __va(0x00102000); /* Refer the paging.c code this is work around for SMP, this entry used for temporary page table where kernel s[pace is from 0 onwards wheras in permanent it is from 1g  */
+	page_table = __va(0x00102000); /* To clear first 1G clear, so it can used for userspace , Refer the paging.c code this is work around for SMP, this entry used for temporary page table where kernel s[pace is from 0 onwards wheras in permanent it is from 1g  */
 	*page_table = 0;
+
+	if (KADDRSPACE_START >= 0xffffc90000000000){
+		page_table = __va(0x0010000) ;
+		*page_table = 0;
+	//	page_table = __va(0x00102008) ;
+	//	*page_table = 0;
+	}else{
+	//	page_table = __va(0x00102000+(511*8)) ;
+	//	*page_table = 0;
+	}
+
+
+#endif
 
 #if 0  /* TO make first 2M or code pages in to Readonly */
 	//unsigned long *page_table;
@@ -351,8 +367,8 @@ int init_smp_force(unsigned long ncpus) {
 
 	wait_non_bootcpus = 0; /* from this point onwards  all non-boot cpus starts */
 
-	KERNEL_PRINT("NEW SMP: completed, ret:%d maxcpus: %d \n",imps_num_cpus,getmaxcpus());
-	KERNEL_PRINT("SECOND SMP: completed, ret:%d maxcpus: %d \n",imps_num_cpus,getmaxcpus());
+	KERNEL_PRINT("	NEW SMP: completed, ret:%d maxcpus: %d \n",imps_num_cpus,getmaxcpus());
+	KERNEL_PRINT("	SECOND SMP: completed, ret:%d maxcpus: %d \n",imps_num_cpus,getmaxcpus());
 	cli();
 	return imps_num_cpus;
 }

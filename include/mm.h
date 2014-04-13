@@ -38,20 +38,26 @@ jslab_create_cache (const uint8_t *name, size_t size, size_t offset,
 typedef struct kmem_cache_s kmem_cache_t;
 #endif
 
+#if 0
 /* kerne virtual address space */
-//#define KERNEL_ADDR_START (0x40000000) /* Note This should be multiples 1GB , otherwise page tables copying will break */
-//#define KERNEL_ADDR_END  (0x140000000) /* entire kernel space length = 4G */
+#define KADDRSPACE_START (0x40000000)
+#define KERNEL_CODE_START (0x40000000) /* Note This should be multiples 1GB , otherwise page tables copying will break */
+#define KADDRSPACE_END  (0x140000000) /* */
+#else
 /* kerne virtual address space */
-#define KERNEL_ADDR_START (0xffffffff80000000) /* Note This should be multiples 1GB , otherwise page tables copying will break */
-#define KERNEL_ADDR_END   (0xffffffffc0000000) /* entire kernel space length = 4G */
+#define KADDRSPACE_START (0xffffc90000000000)
+#define KERNEL_CODE_START (0xffffffff80000000) /* Note This should be multiples 1GB , otherwise page tables copying will break */
+#define KADDRSPACE_END   (0xffffffffc0000000) /*  */
+#endif
+
+
 
 #define USERANONYMOUS_ADDR 0x20000000
 #define USERSTACK_ADDR     0x30000000
 #define USER_SYSCALL_PAGE 0xffffffffff600000
 #define USERSTACK_LEN  0x100000
 
-#define __pa(x)                 ((unsigned long)(x)-KERNEL_ADDR_START)
-#define __va(x)                 ((void *)((unsigned long)(x)+KERNEL_ADDR_START))
+
 #define MAP_NR(addr)            (__pa(addr) >> PAGE_SHIFT)
 
 #define virt_to_page(kaddr)	(g_mem_map + (__pa(kaddr) >> PAGE_SHIFT))
@@ -96,6 +102,7 @@ typedef struct kmem_cache_s kmem_cache_t;
  
 
 ************************************/
+#define MAX_MMAP_LOG_SIZE 10
 struct vm_area_struct {
 	struct mm_struct *vm_mm; /* The address space we belong to. */
 	unsigned long vm_start; /* Our start address within vm_mm. */
@@ -123,7 +130,7 @@ struct vm_area_struct {
 		unsigned long fault_addr;
 		unsigned long optional;
 		unsigned char rw_flag;
-	}stat_log[10];
+	}stat_log[MAX_MMAP_LOG_SIZE+1];
 };
 #define MEMORY_DEBUG 1
 #define MAX_BACKTRACE_LENGTH 20

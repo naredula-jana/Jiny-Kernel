@@ -107,7 +107,8 @@ struct vring_virtqueue
 
 #ifdef DEBUG
 	/* They're supposed to lock for us. */
-	unsigned int in_use;
+	//unsigned int in_use;
+	unsigned long in_use;
 #endif
 	unsigned int stat_alloc,stat_free; /* Jana added */
 	/* Tokens for callbacks. */

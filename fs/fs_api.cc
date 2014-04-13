@@ -293,7 +293,7 @@ unsigned long SYS_fs_close(unsigned long fd) {
 
 	return fs_close(file);
 }
-extern int fs_get_inode_type(struct fs_inode *inodep);
+
 unsigned long SYS_fs_readlink(uint8_t *path, uint8_t *buf, int bufsiz) {
 	struct file *fp;
 	int ret = -2; /* no such file exists */
@@ -600,40 +600,51 @@ int fs_set_flags(struct file *fp, int flags){
 void* fs_get_stat_locked_pages(struct fs_inode *inodep){
 	return &inodep->stat_locked_pages;
 }
-void fs_set_inode_used(struct fs_inode *inodep){
+void fs_set_inode_used(void *inode_arg){
+	struct fs_inode *inodep = (struct fs_inode *)inode_arg;
 	atomic_inc(&inodep->count);
 }
-int fs_get_inode_flags(struct fs_inode *inodep){
+int fs_get_inode_flags(void *inode_arg){
+	struct fs_inode *inodep = (struct fs_inode *)inode_arg;
 	return inodep->flags;
 }
-void *fs_get_inode_vma_list(struct fs_inode *inodep){
+void *fs_get_inode_vma_list(void *inode_arg){
+	struct fs_inode *inodep = (struct fs_inode *)inode_arg;
 	return &(inodep->vma_list);
 }
-void *fs_get_stat(struct fs_inode *inodep, int type){
+void *fs_get_stat(void *inode_arg, int type){
+	struct fs_inode *inodep = (struct fs_inode *)inode_arg;
 	inodep->file_type = type;
 	inodep->fileStat_insync = 1;
 	return &(inodep->fileStat);
 }
-int fs_get_inode_type(struct fs_inode *inodep){
+int fs_get_inode_type(void *inode_arg){
+	struct fs_inode *inodep = (struct fs_inode *)inode_arg;
 	return inodep->file_type;
 }
-unsigned char *fs_get_filename(struct fs_inode *inodep){
-	return inodep->filename;
+unsigned char *fs_get_filename(void *inode){
+	struct fs_inode *inodep = (struct fs_inode *)inode;
+	return &(inodep->filename[0]);
 }
-void fs_set_private(struct fs_inode *inodep, int fid){
+void fs_set_private(void *inode_arg, int fid){
+	struct fs_inode *inodep = (struct fs_inode *)inode_arg;
 	inodep->fs_private = fid;
 }
-int fs_get_private(struct fs_inode *inodep){
+int fs_get_private(void *inode_arg){
+	struct fs_inode *inodep = (struct fs_inode *)inode_arg;
 	return inodep->fs_private;
 }
-uint64_t fs_get_size(struct fs_inode *inodep){
+uint64_t fs_get_size(void *inode_arg){
+	struct fs_inode *inodep = (struct fs_inode *)inode_arg;
 	return inodep->fileStat.st_size ;
 }
-int fs_set_size(struct fs_inode *inodep, unsigned long size){
+int fs_set_size(void *inode_arg, unsigned long size){
+	struct fs_inode *inodep = (struct fs_inode *)inode_arg;
 	inodep->fileStat.st_size = size;
 	return JSUCCESS;
 }
-int fs_set_offset(struct fs_inode *inodep, unsigned long offset){
+int fs_set_offset(void *inode_arg, unsigned long offset){
+	struct fs_inode *inodep = (struct fs_inode *)inode_arg;
 	inodep->stat_last_offset = offset;
 	return JSUCCESS;
 }

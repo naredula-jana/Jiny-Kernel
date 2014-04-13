@@ -61,6 +61,8 @@ multiboot_entry:
 	pushl	$0
 	popf
 
+	movl %ebx, (0x4000)
+	movl %eax, (0x4010)
 	/* save multiboot info pointer */
  #       movl %ebx, g_multiboot_info_ptr-BOOT_SHIFT
         /* and multiboot magic value */
@@ -173,7 +175,7 @@ level3_pg_table:
         .quad   0x0000000000103007 /* TODO : currently based on harcoded of kernel offset it is located in 2nd location*/
         .fill   508,8,0
         .quad   0x0000000000103007 /* TODO : currently used only while initializing */
-        .quad   0x0000000000103007 /* TODO : currently based on harcoded of kernel offset it is located in 2nd location*/
+        .quad   0 /* TODO : currently based on harcoded of kernel offset it is located in 2nd location*/
 
 
 

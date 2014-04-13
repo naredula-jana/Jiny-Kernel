@@ -73,7 +73,7 @@ test_file:
 	cp modules/test_file/test_file.o test/root/
 	gcc modules/test_file/test_file.c -static -o test/root/test_file
 	
-all: lwip.a
+all: 
 	make SOURCE_ROOT=$$PWD -C kernel
 	make SOURCE_ROOT=$$PWD -C drivers
 #	make SOURCE_ROOT=$$PWD -C drivers/xen
@@ -95,19 +95,16 @@ endif
 	make SOURCE_ROOT=$$PWD -C mm
 	make SOURCE_ROOT=$$PWD -C mm/memleak
 	make SOURCE_ROOT=$$PWD -C fs
-	rm drivers.a  fs.a mm.a $(ARCH_DIR).a
-	
-#	ld --warn-common -N -T kernel/kernel.ldp $(OBJ_32CODE) $(OBJECTS) -o bin/kernel_bin
-	$(LCPP) -nostdlib -g -I. -feliminate-dwarf2-dups $(LINK_FLAG)  $(OBJ_32CODE)  $(OBJECTS) -Wl,-N -T kernel/kernel.ldp -o bin/kernel_bin
+	$(LCPP)  -nostdlib -g -I.  -feliminate-dwarf2-dups $(LINK_FLAG)  $(OBJ_32CODE)  $(OBJECTS) -Wl,-N -T kernel/kernel.ldp -o bin/jiny_kernel.elf
 
 #	$(LCPP) -nostdlib -g -I. -feliminate-dwarf2-dups $(LINK_FLAG)  $(OBJ_32CODE)  $(OBJECTS) -Wl,-N -Wl,-Ttext -Wl,40100000 -Tdata=40200000 -o bin/kernel_bin
 
-	objdump -D -l bin/kernel_bin > bin/obj_file
-	objcopy -O binary bin/kernel_bin bin/jiny_bin
+	objdump -D -l bin/jiny_kernel.elf > bin/obj_file
+	objcopy -O binary bin/jiny_kernel.elf bin/jiny_kernel.bin
 #	util/gen_symboltbl util/in bin/mod_file > util/out
-	util/dwarf_reader bin/kernel_bin > util/dwarf_temp_output
-	chmod 777 ./dwarf_datatypes
-	mv ./dwarf_datatypes test/root/
+#	util/dwarf_reader bin/kernel_bin > util/dwarf_temp_output
+#	chmod 777 ./dwarf_datatypes
+#	mv ./dwarf_datatypes test/root/
 	
 clean:
 	make SOURCE_ROOT=$$PWD -C kernel clean

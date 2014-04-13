@@ -11,10 +11,20 @@ INCLUDE=. -DNETWORKING -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURC
 
 NEW_GCC=/data/opt/gcc-4.8.2/bin/
 
-CC=$(NEW_GCC)gcc -g -gdwarf-2 -Wimplicit -w  
+#CC=$(NEW_GCC)gcc -g -gdwarf-2 -Wimplicit  -w
+CC=$(NEW_GCC)gcc -g -gdwarf-2 -Wimplicit  -w -Wall -Wmissing-declarations -Wimplicit-function-declaration
 #CPP=$(NEW_GCC)g++ -g -std=gnu++0x -fno-rtti -lsupc++ -fno-exceptions -gdwarf-2 -fpermissive 
 CPP=$(NEW_GCC)g++ -g -std=c++11 -fno-rtti -lsupc++ -fno-exceptions -gdwarf-2 -fpermissive  -w
 LCPP=$(NEW_GCC)g++
+
+VERBOSE=0
+ifeq ($(VERBOSE), 0)
+    E = @echo
+    Q = @
+else
+    E = @\#
+    Q =
+endif
 
 
 AT=
@@ -60,21 +70,21 @@ endif
 
 
 %.o: %.cc
-	@echo "$<"
-	$(AT)$(CPP) -c $(CFLAGS) $< -o $@
+	$(E) "  g++       " $@
+	$(Q) $(CPP) -c $(CFLAGS) $< -o $@
 	objcopy --localize-symbol=dwarf_entry $@ $@
 %.o: %.c
-	@echo "$<"
-	$(AT)$(CC) -c $(CFLAGS) $< -o $@
+	$(E) "  gcc       " $@
+	$(Q) $(CC) -c $(CFLAGS) $< -o $@
 %.o: %.k
-	@echo "$<"
-	$(AT)$(CC) -m32 -c $(CFLAGS_ASM) $< -o $@
+	$(E) "  gcc    -m32   " $@
+	$(Q) $(CC) -m32 -c $(CFLAGS_ASM) $< -o $@
 %.o: %.S
-	@echo "$<"
-	$(AT)$(CC) -c $(CFLAGS_ASM) $< -o $@
+	$(E) "  gcc asm       " $@
+	$(Q) $(CC) -c $(CFLAGS_ASM) $< -o $@
 %o:%s
-	@echo "$<"
-	$(AT)nasm -f elf  $< -o $@
+	$(E) "  asm       " $@
+	$(Q) nasm -f elf  $< -o $@
 
 dummy: all
 	
@@ -85,7 +95,7 @@ clean_sub_dirs:
 	$(AT)for file in $(SUB_DIRS); do make SOURCE_ROOT=$(SOURCE_ROOT) -C $$file clean; done
 
 library: $(OBJECTS)
-	$(AT)ar -rc $(SOURCE_ROOT)/`basename $$PWD`.a $(OBJECTS)
+#	$(AT)ar -rc $(SOURCE_ROOT)/`basename $$PWD`.a $(OBJECTS)
 
 LIBRARIES=$(patsubst %,%.a,$(SUB_DIRS))
 

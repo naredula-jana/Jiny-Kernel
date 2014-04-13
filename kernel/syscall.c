@@ -42,8 +42,6 @@ unsigned long SYS_uname(unsigned long *args);
 unsigned long SYS_futex(unsigned long *a);
 unsigned long SYS_arch_prctl(unsigned long code,unsigned long addr);
 
-
-
 typedef long int __time_t;
 long int SYS_time(__time_t *time);
 
@@ -283,12 +281,79 @@ unsigned long SYS_futex(unsigned long *a) {//TODO
 	*a = 0;
 	return -1;
 }
+void Jcmd_sys(unsigned char *arg1,unsigned char *arg2){
+	if (g_conf_syscall_debug ==1)
+		g_conf_syscall_debug=0;
+	else
+		g_conf_syscall_debug=1;
+	ut_printf(" syscall_debud :%d \n",g_conf_syscall_debug);
+	return;
+}
+extern task_queue_t g_task_queue;
+void Jcmd_pt(unsigned char *arg1,unsigned char *arg2){
+	unsigned long pt=0x101000;
+	struct task_struct *task;
+	unsigned char *error=0;
+	int ret,pid,i,max_len;
+	struct list_head *pos;
+	int found=0;
+	unsigned long flags;
 
+	spin_lock_irqsave(&g_global_lock, flags);
+	if (arg1 == 0) {
+		found=1;
+		task = g_current_task;
+	} else {
+		pid=ut_atoi(arg1);
+		list_for_each(pos, &g_task_queue.head) {
+			task = list_entry(pos, struct task_struct, task_queue);
+			if (task->pid == pid) {
+				found =1;
+				pt = task->mm->pgd;
+				break;
+			}
+		}
+		if (found == 0){
+			error = "ERROR pid  Not found\n";
+		}
+	}
+	spin_unlock_irqrestore(&g_global_lock, flags);
+	if (error){
+		ut_printf("%s\n",error);
+		return;
+	}
+	pagetable_walk(4,pt,1);
+	return;
+}
+#if 0
+struct Jcmd_struct{
+	unsigned char *name;
+	void (*jcmd)(uint8_t *arg1,uint8_t *arg2);
+}jcmd_struct;
+extern void Jcmd_ps(uint8_t *arg1,uint8_t *arg2);
+extern void Jcmd_cpu(uint8_t *arg1,uint8_t *arg2);
+extern void Jcmd_dmesg(uint8_t *arg1,uint8_t *arg2);
+extern void Jcmd_shutdown(uint8_t *arg1,uint8_t *arg2);
+extern void Jcmd_maps(uint8_t *arg1,uint8_t *arg2);
+extern void Jcmd_locks(uint8_t *arg1,uint8_t *arg2);
+static struct Jcmd_struct jcmds[]={
+		{"shutdown",&Jcmd_shutdown},
+		{"ls",&Jcmd_ls},
+		{"cpu",&Jcmd_cpu},
+		{"ps",&Jcmd_ps},
+		{"maps", &Jcmd_maps},
+		{"dmesg",&Jcmd_dmesg},
+		{"sys",&Jcmd_sys},
+		{"pt",&Jcmd_pt},
+		{"locks",&Jcmd_locks},
+		{0,0}
+};
+#endif
 unsigned long SYS_sysctl(struct __sysctl_args *args) {
 	SYSCALL_DEBUG("sysctl  args:%x: \n", args);
 	int *name;
 	uint8_t *carg[10];
-	int i;
+	int i,k;
 
 	if (args == 0)
 		return -1; /* -1 is error */
@@ -316,23 +381,16 @@ unsigned long SYS_sysctl(struct __sysctl_args *args) {
 			ut_printf("Cmd variables:\n");
 			ut_symbol_show(SYMBOL_CMD);
 		} else {
-			if (ut_strcmp(carg[0],"shutdown")==0){
-				Jcmd_shutdown(carg[1], carg[2]);
-				return;
-			}else if (ut_strcmp(carg[0],"dmesg")==0){
-				Jcmd_dmesg(carg[1], carg[2]);
-				return;
-			}else if(ut_strcmp(carg[0],"ls")==0){
-				Jcmd_ls(carg[1], carg[2]);
-				return;
-			}else if(ut_strcmp(carg[0],"maps")==0){
-				Jcmd_maps(carg[1], carg[2]);
-				return;
-			}else if(ut_strcmp(carg[0],"ps")==0){
-				Jcmd_ps(carg[1], carg[2]);
-				return;
+			ut_symbol_execute(SYMBOL_CMD, carg[0],carg[1], carg[2]);
+#if 0
+			for (k=0; k<jcmds[k].name!=0; k++){
+				if (ut_strcmp(carg[0],jcmds[k].name)==0){
+					jcmds[k].jcmd(carg[1],carg[2]);
+					return;
+				}
 			}
-			ut_symbol_execute(SYMBOL_CMD, carg[0], carg[1], carg[2]);
+#endif
+
 		}
 	}
 

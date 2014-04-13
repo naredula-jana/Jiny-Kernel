@@ -126,7 +126,7 @@ static  unsigned int *acpiGetRSDPtr(void)
 static  int acpiCheckHeader(unsigned int *ptr, char *sig)
 {
 	unsigned char *p=ptr;
-	if (p <KERNEL_ADDR_START){
+	if (p <KADDRSPACE_START){
 		p=__va(p);
 		ptr=p;
 	}

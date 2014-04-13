@@ -344,7 +344,7 @@ unsigned long fs_elf_load(struct file *file,unsigned long tmp_stack, unsigned lo
 	//	len = ELF_PAGESTART(eppnt->p_filesz + eppnt->p_vaddr + ELF_MIN_ALIGN - 1);
 		bss_start = eppnt->p_filesz + eppnt->p_vaddr;
 		bss = eppnt->p_memsz + eppnt->p_vaddr;
-		//ut_log(" bss start :%x end:%x memsz:%x elf_bss:%x \n",bss_start, bss,eppnt->p_memsz,elf_bss);
+		ut_log(" bss start :%x end:%x memsz:%x elf_bss:%x \n",bss_start, bss,eppnt->p_memsz,elf_bss);
 		if (bss > bss_start) {
 			vm_setupBrk(bss_start, bss - bss_start);
 		}
@@ -393,12 +393,16 @@ unsigned long fs_elf_load(struct file *file,unsigned long tmp_stack, unsigned lo
 
 				//  AUX_ENT(AT_EXECFN, bprm->exec);
 			}
+			//ut_log(" before copy :%x :%x len:%x\n",USERSTACK_ADDR + USERSTACK_LEN - stack_len,tmp_stack,stack_len);
 			ut_memcpy((unsigned char *)USERSTACK_ADDR + USERSTACK_LEN - stack_len, (unsigned char *)tmp_stack, stack_len);
 
 
 			vm_mmap(0, USER_SYSCALL_PAGE, 0x1000, PROT_READ | PROT_EXEC |PROT_WRITE, MAP_ANONYMOUS, 0,"fst_syscal");
 			//ut_memset((unsigned char *)SYSCALL_PAGE,(unsigned char )0xcc,0x1000);
 			ut_memcpy((unsigned char *)USER_SYSCALL_PAGE,(unsigned char *)&__vsyscall_page,0x1000);
+			if (g_conf_syscall_debug==1){
+				pagetable_walk(4,g_current_task->mm->pgd,1);
+			}
 		}
 	}
 	DEBUG(" Program start address(autod) : %x \n",elf_ex.e_entry);

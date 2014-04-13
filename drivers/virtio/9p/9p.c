@@ -203,6 +203,7 @@ static int stat_request=0;
 #include "../virtio_pci.h"
 void *p9_dev = 0;
 wait_queue_t p9_waitq;
+void *virtio_jdriver_getvq(void *driver, int index);
 unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The call will be blocked till the reply is receivied */
 	p9_fcall_t pdu;
 	int ret, i;

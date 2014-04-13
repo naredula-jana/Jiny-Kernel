@@ -10,6 +10,9 @@
  */
 #include "interface.h"
 static int ipc_init_done=0;
+int _sc_task_assign_to_cpu(struct task_struct *task);
+unsigned long _schedule(unsigned long flags);
+void sc_remove_dead_tasks();
 void *ipc_mutex_create(char *name) {
 	struct semaphore *sem = mm_malloc(sizeof(struct semaphore), 0);
 	assert (ipc_init_done !=0);
@@ -433,7 +436,7 @@ void ipc_check_waitqueues() {
 			struct task_struct *task;
 			task =list_entry(wait_queues[i]->head.next, struct task_struct, wait_queue);
 			assert(task!=0);
-			if (task >  0xfffffffff ){
+			if ((task <  KADDRSPACE_START) || (task >KADDRSPACE_END)){
 				BUG();
 			}
 

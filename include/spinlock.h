@@ -87,7 +87,7 @@ static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 		g_spinlock_count++;
 	}
 
-#if 0
+#if 1
 	if (lock->log_length >= MAX_SPIN_LOG) lock->log_length=0;
 	lock->log[lock->log_length].line = line;
 	lock->log[lock->log_length].pid = g_current_task->pid;
@@ -95,6 +95,7 @@ static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 	lock->log[lock->log_length].name = g_current_task->name;
 	lock->log[lock->log_length].spins = 1 + (lock->stat_count/10);
 #endif
+	//lock->log[lock->log_length].line = line;
 
 	lock->log_length++;
 	lock->pid = g_current_task->pid;
@@ -132,7 +133,7 @@ static inline void arch_spinlock_unlock(spinlock_t *lock, int line) {
 #endif
 	if (1){
 		lock->stat_unlocks++;
-#if 0
+#if 1
 		if (lock->log_length >= MAX_SPIN_LOG) lock->log_length=0;
 		lock->log[lock->log_length].line = line;
 		lock->log[lock->log_length].pid = g_current_task->pid;
