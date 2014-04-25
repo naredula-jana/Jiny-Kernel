@@ -148,6 +148,9 @@ extern void Jcmd_maps(uint8_t *arg1,uint8_t *arg2);
 extern void Jcmd_locks(uint8_t *arg1,uint8_t *arg2);
 extern void Jcmd_pt(unsigned char *arg1,unsigned char *arg2);
 extern void Jcmd_sys(unsigned char *arg1,unsigned char *arg2);
+extern void Jcmd_mem(unsigned char *arg1,unsigned char *arg2);
+extern void Jcmd_network(unsigned char *arg1,unsigned char *arg2);
+extern void Jcmd_jdevices(unsigned char *arg1,unsigned char *arg2);
 static struct Jcmd_struct jcmds[]={
 		{"shutdown",&Jcmd_shutdown},
 		{"ls",&Jcmd_ls},
@@ -158,7 +161,10 @@ static struct Jcmd_struct jcmds[]={
 		{"sys",&Jcmd_sys},
 		{"pt",&Jcmd_pt},
 		{"locks",&Jcmd_locks},
+		{"mem",&Jcmd_mem},
+		{"network",&Jcmd_network},
 		{"cat",&Jcmd_cat},
+		{"jdevices",&Jcmd_jdevices},
 		{0,0}
 };
 int ut_symbol_execute(int type, char *name, uint8_t *argv1,uint8_t *argv2){

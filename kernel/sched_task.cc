@@ -758,21 +758,26 @@ void do_softirq() {
 		sc_schedule();
 	}
 }
-
+unsigned long stat_jif=0;
+//unsigned long kvm_ticks=0;
 void timer_callback(void *unused_args) {
 	int jiff_incremented=0;
 
 	/* 1. increment timestamp */
 	if (getcpuid()==0){
+//	if (1) {
 		unsigned long kvm_ticks=get_kvm_clock();
 		if ((kvm_ticks!=0) && (g_jiffie_tick>(kvm_ticks+10)) ){
 			g_jiffie_errors++;
+			g_jiffies++;
 		}else{
 			g_jiffie_tick++;
 			g_jiffies++;
 			jiff_incremented=1;
+			stat_jif++;
 		}
 	}
+
 	g_current_task->counter--;
 	g_current_task->stats.ticks_consumed++;
 

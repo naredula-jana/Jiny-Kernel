@@ -204,13 +204,14 @@ int init_kernel_vmaps(unsigned long arg1){
 	int map_size;
 	unsigned long vaddr;
 
-	if ((ret = vm_mmap(0, (unsigned long) KERNEL_CODE_START, g_phy_mem_size,
-			PROT_WRITE, MAP_FIXED, KERNEL_CODE_START,"phy_mem")) == 0) {
+#if 1
+	if ((ret = vm_mmap(0, (unsigned long) KADDRSPACE_START, g_phy_mem_size,
+			PROT_WRITE, MAP_FIXED, KADDRSPACE_START,"phy_mem")) == 0) {
 		ut_log("	ERROR: kernel address map Fails \n");
 	}else{
-		ut_log("	Kernel vmap: physical ram: %x-%x size:%dM\n",KERNEL_CODE_START,KERNEL_CODE_START+g_phy_mem_size,g_phy_mem_size/1000000);
+		ut_log("	Kernel vmap: physical ram: %x-%x size:%dM\n",KADDRSPACE_START,KADDRSPACE_START+g_phy_mem_size,g_phy_mem_size/1000000);
 	}
-
+#endif
 	g_video_ram = vm_create_kmap("videoram",0x8000000,PROT_WRITE,MAP_FIXED,VIDEO);
 	g_vmalloc_size=0x8000000;
 

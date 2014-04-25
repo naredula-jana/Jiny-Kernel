@@ -250,7 +250,7 @@ static int p9_get_dir_entries(p9_client_t *client, struct dirEntry *dir_ent, int
 		if (dir_p->inode_no==0 || (type2!=4 && type2!=10 && type2!=8)){ /* check for soft link, dir,regular file */
 			break;
 		}
-		if ( i< *offset) continue;
+		if ( offset && i< *offset) continue;
 		dir_p->d_reclen = (len / 8) * 8;
 		if ((dir_p->d_reclen) < len)
 			dir_p->d_reclen = dir_p->d_reclen + 8;
@@ -639,7 +639,7 @@ int p9_initFs(void *p9driver) {
 	p9_fs.setattr = p9Setattr; //TODO
 	p9_fs.unmount = p9_unmount;
 
-	fs_registerFileSystem(&p9_fs);
+	fs_registerFileSystem(&p9_fs,"/");
 	p9_dev = p9driver;
 
 	return 1;

@@ -162,7 +162,7 @@ int init_HostFs() {
 	Hfs_fs.fdatasync = HfsFdatasync; //TODO
 	Hfs_fs.lseek = HfsLseek; //TODO
 
-	fs_registerFileSystem(&Hfs_fs);
+	fs_registerFileSystem(&Hfs_fs,"/hostfs");
 	cq=shm_client_init();
 	return 1;
 }

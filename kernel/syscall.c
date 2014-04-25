@@ -592,7 +592,10 @@ int SYS_getrlimit(int resource, struct rlimit *rlim){
 	rlim->rlim_max = rlimits[resource].rlim_max;
 	return 0;
 }
-
+int SYS_tgkill(int tid, int sig){
+	ut_printf(" TODO: tg kill not yet supported \n");
+	return -1;
+}
 syscalltable_t syscalltable[] = {
 /* 0 */
 { SYS_fs_read },/* 0 */{ SYS_fs_write }, { SYS_fs_open }, { SYS_fs_close }, { SYS_fs_stat }, { SYS_fs_fstat }, /* 5 */
@@ -641,7 +644,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { SYS_set_tid_address }, { snull }, { snull }, /* 220 */
 { SYS_fs_fadvise }, { snull }, { snull }, { snull }, { snull }, /* 225 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 230  */
-{ SYS_exit_group }, { snull }, { snull }, { snull }, { snull }, /* 235 */
+{ SYS_exit_group }, { snull }, { snull }, { SYS_tgkill }, { snull }, /* 235 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 240 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 245 */
 { snull }, { snull }, { snull }, { snull }, };

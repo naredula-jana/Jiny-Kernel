@@ -30,6 +30,24 @@ unsigned long ut_atol(uint8_t *p)
 	}
 	return a;
 }
+unsigned int ut_atod(uint8_t *p)
+{
+	unsigned int a;
+	int i,m,k;
+
+	a=0;
+	m=0;
+	for (i=0; p[i]!='\0'; i++)
+	{
+		if (p[i] == '0' && m==0) continue;
+		m++;
+		if (p[i]<='9' && p[i]>='0') k=p[i]-'0';
+		else return 0;
+		if (m>1) a=a*10;
+		a=a+k;
+	}
+	return a;
+}
 unsigned int ut_atoi(uint8_t *p)
 {         
 	unsigned int a;

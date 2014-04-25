@@ -226,6 +226,7 @@ int virtio_net_jdriver::probe_device(class jdevice *jdev) {
 	}
 	return JFAIL;
 }
+static int net_devices=0;
 int virtio_net_jdriver::net_attach_device(class jdevice *jdev) {
 	unsigned long addr;
 	unsigned long features=0;
@@ -233,6 +234,11 @@ int virtio_net_jdriver::net_attach_device(class jdevice *jdev) {
 	pci_dev_header_t *pci_hdr = &jdev->pci_device.pci_header;
 	unsigned long pci_ioaddr = jdev->pci_device.pci_ioaddr;
 	uint32_t msi_vector;
+	unsigned char name[MAX_DEVICE_NAME];
+
+	ut_snprintf(name,MAX_DEVICE_NAME,"net%d",net_devices);
+	ut_strcpy(jdev->name,name);
+	net_devices++;
 
 	this->device = jdev;
 	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_ACKNOWLEDGE);
@@ -284,10 +290,15 @@ int virtio_net_jdriver::net_attach_device(class jdevice *jdev) {
 
 	if (msi_vector > 0) {
 		for (i = 0; i < 3; i++){
-			if (i==0)
-				ar_registerInterrupt(msi_vector + i, virtio_net_recv_interrupt, "virt_net_recv_msi", (void *) this);
-			if (i!=0)
-				ar_registerInterrupt(msi_vector + i, virtio_net_send_interrupt, "virt_net_send_msi", (void *) this);
+			char irq_name[MAX_DEVICE_NAME];
+			if (i==0){
+				ut_snprintf(irq_name,MAX_DEVICE_NAME,"%s_recv_msi",jdev->name);
+				ar_registerInterrupt(msi_vector + i, virtio_net_recv_interrupt, irq_name, (void *) this);
+			}
+			if (i!=0){
+				ut_snprintf(irq_name,MAX_DEVICE_NAME,"%s_send_msi",jdev->name);
+				ar_registerInterrupt(msi_vector + i, virtio_net_send_interrupt, irq_name, (void *) this);
+			}
 		}
 	}
 

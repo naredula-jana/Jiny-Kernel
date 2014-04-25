@@ -7,11 +7,11 @@ extern "C" {
 }
 #include "file.hh"
 class jdriver;
-
+#define MAX_DEVICE_NAME 100
 class jdevice: public vinode {
 
 public:
-	unsigned char *name;
+	unsigned char name[MAX_DEVICE_NAME];
 	jdriver* driver;
 
 	jdevice();
@@ -33,7 +33,7 @@ public:
 	unsigned char *name;
 	jdevice *device;
 
-	int stat_sends,stat_recvs,stat_recv_interrupts,stat_send_interrupts;
+	unsigned long stat_sends,stat_recvs,stat_recv_interrupts,stat_send_interrupts;
 	/* TODO : Do not change the order of virtual functions, c++ linking is implemented in handcoded */
 	virtual int probe_device(jdevice *dev)=0;
 	virtual jdriver *attach_device(jdevice *dev)=0; /* attach the driver by creating a new driver if it is sucessfull*/
@@ -46,14 +46,14 @@ public:
 
 class virtio_jdriver: public jdriver {
 public:
-	int stat_send_kicks;
-	int stat_recv_kicks;
+	unsigned long stat_send_kicks;
+	unsigned long stat_recv_kicks;
 
 	int virtio_create_queue(uint16_t index, int qType);
 	int print_stats();
 
 	struct virtqueue *vq[5];
-	int stat_allocs,stat_frees,stat_err_nospace;
+	unsigned long stat_allocs,stat_frees,stat_err_nospace;
 };
 
 #define COPY_OBJ(CLASS_NAME,OBJECT_NAME, NEW_OBJ, jdev) jdriver *NEW_OBJ; NEW_OBJ=(jdriver *)ut_calloc(sizeof(CLASS_NAME)); \

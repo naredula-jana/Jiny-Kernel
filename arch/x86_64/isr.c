@@ -42,9 +42,10 @@ uint32_t faults_with_errcode =
   (POW2(FLT_DF) | POW2(FLT_TS) | POW2(FLT_NP) |
    POW2(FLT_SS) | POW2(FLT_GP) | POW2(FLT_PF) |
    POW2(FLT_AC));
+#define MAX_NAME 100
 struct irq_handler_t {
 	isr_t action;
-	unsigned char *name;
+	unsigned char name[MAX_NAME];
 	struct {
 		long num_irqs;
 		long num_error;
@@ -92,7 +93,7 @@ void init_handlers()
 	for (i=0; i<MAX_IRQS;i++)
 	{
 		g_interrupt_handlers[i].action=0;
-		g_interrupt_handlers[i].name=0;
+		g_interrupt_handlers[i].name[0]=0;
 		for (j = 0; j < MAX_CPUS; j++) {
 			g_interrupt_handlers[i].stat[j].num_irqs = 0;
 			g_interrupt_handlers[i].stat[j].num_error = 0;
@@ -153,7 +154,7 @@ void ar_registerInterrupt(uint8_t n, isr_t handler,char *name, void *data)
 	int j;
 
 	g_interrupt_handlers[n].action = handler;
-	g_interrupt_handlers[n].name=(unsigned char *)name;
+	ut_snprintf(g_interrupt_handlers[n].name,MAX_NAME,"%s",(unsigned char *)name);;
 	g_interrupt_handlers[n].private_data = data;
 	for (j = 0; j < MAX_CPUS; j++) {
 		g_interrupt_handlers[n].stat[j].num_irqs = 0;

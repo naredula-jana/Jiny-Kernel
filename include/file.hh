@@ -132,7 +132,7 @@ public:
 	char fileStat_insync;
 	hard_link_t *hard_links;
 
-	int init(uint8_t *filename, unsigned long mode);
+	int init(uint8_t *filename, unsigned long mode, struct filesystem *vfs);
 
 	int read(unsigned long offset, unsigned char *data, int len);
 	int write(unsigned long offset, unsigned char *data, int len);

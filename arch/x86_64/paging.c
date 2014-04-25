@@ -96,10 +96,10 @@ addr_t initialise_paging_new(addr_t physical_mem_size, unsigned long virt_image_
 	unsigned long virt_addr;
 	unsigned long curr_virt_end_addr; /* page tables are stored at the end of images */
 	addr_t i, j, fr, max_fr,level4_index,level3_index,level2_index,level2_table,level3_table;
+	unsigned long image_size;
 
 	curr_virt_end_addr = (virt_image_end + PAGE_SIZE) & (~0xfff);
 
-	//virt_addr = vm_create_kmap("phyram", physical_mem_size, PROT_WRITE, MAP_FIXED, 0);
 	virt_addr = KADDRSPACE_START;
 	g_kernel_page_dir=0x00101000;
 
@@ -109,7 +109,8 @@ addr_t initialise_paging_new(addr_t physical_mem_size, unsigned long virt_image_
 	*virt_addr_end = virt_addr + physical_mem_size - (8*1024);
 	fr = 0;
 	max_fr = physical_mem_size/(PAGE_SIZE); /* max pages */
-	ut_log(" max_fr :%x (%d) \n",max_fr,max_fr);
+
+	ut_log(" max_fr :%x (%d) image_end :%x(%d)\n",max_fr,max_fr,virt_image_end,virt_image_end-KERNEL_CODE_START);
 
 	level3_table = curr_virt_end_addr;
 	curr_virt_end_addr = curr_virt_end_addr + PAGE_SIZE;
@@ -156,9 +157,24 @@ ut_log("paging init end :addr:%x ->  Lindex ( %x : %x : %x :%x )\n",curr_virt_en
 
 	g_kernel_address_space_starts = *virt_addr_start;
 	virt_addr = virt_addr + (curr_virt_end_addr-KERNEL_CODE_START);
+
+/* remove unnecessary hardcoded pagetable created at boot up time */
+	image_size = virt_image_end-KERNEL_CODE_START;
+	j= image_size /(512*4*1024); /* 2M pages */
+	j = j+1;
+	level2_table = __va(0x103000) +(j*8);
+	for (i=j; i<21; i++){
+		unsigned long *p;
+		p=level2_table;
+		ut_log("%d: clearing the l2 entry :%x \n",i,p);
+		*p=0;
+		level2_table = level2_table + 8;
+	}
+
+	flush_tlb(0x101000);
 	return (addr_t)virt_addr;
 }
-
+#if 0
 addr_t initialise_paging(addr_t end_addr, unsigned long current_mem_end){
 	// The size of physical memory. For the moment we 
 	// assume it is 16MB big.
@@ -211,6 +227,7 @@ addr_t initialise_paging(addr_t end_addr, unsigned long current_mem_end){
 
 	return (addr_t)curr_virt_end_addr;
 }
+#endif
  void flush_tlb_entry(unsigned long  vaddr)
 {
   __asm__ volatile("invlpg (%0)"

@@ -21,7 +21,8 @@ int pc_insertPage(struct fs_inode *inode, struct page *page);
 #define OFFSET_ALIGN(x) ((x/PC_PAGESIZE)*PC_PAGESIZE) /* the following 2 need to be removed */
 
 /**************************************** global variables ***********************************/
-static struct filesystem *vfs_fs = 0;
+static struct filesystem *gvfs_fs = 0;
+static struct filesystem *procfs_fs = 0;
 LIST_HEAD(fs_inode_list);
 void *g_inode_lock = 0; /* protects inode_list */
 kmem_cache_t *g_slab_filep;
@@ -46,7 +47,7 @@ static void *vptr_vinode[7] = {
 		(void *) &fs_inode::read, (void *) &fs_inode::write,
 		(void *) &fs_inode::close, (void *) &fs_inode::ioctl, 0 };
 
-int fs_inode::init(uint8_t *filename, unsigned long mode) {
+int fs_inode::init(uint8_t *filename, unsigned long mode, struct filesystem *vfs) {
 	int i;
 	void **p = (void **) this;
 	*p = &vptr_vinode[0];
@@ -61,7 +62,7 @@ int fs_inode::init(uint8_t *filename, unsigned long mode) {
 	this->fileStat.inode_no = 0;
 	this->fileStat_insync = 0;
 	this->open_mode = mode;
-	this->vfs = vfs_fs;
+	this->vfs = vfs;
 	ut_strcpy(this->filename, (uint8_t *) filename);
 	for (i = 0; i < PAGELIST_HASH_SIZE; i++)
 		INIT_LIST_HEAD(&(this->page_list[i]));
@@ -141,6 +142,7 @@ int fs_inode::read(unsigned long offset, unsigned char *data, int len) {
 		DEBUG(" memcpy :%x %x  %d \n", buff, pcPageToPtr(page), ret);
 	}
 	pc_put_page(page);
+
 	return ret;
 }
 int fs_inode::write(unsigned long offset, unsigned char *data, int len) {
@@ -233,6 +235,7 @@ static void inode_sync(struct fs_inode *inode, unsigned long truncate) {
 	struct page *page;
 	int ret;
 	unsigned long offset;
+	struct filesystem *vfs_fs = inode->vfs;
 
 	if (truncate) {
 		ret = vfs_fs->setattr(inode, 0);
@@ -264,9 +267,9 @@ static void inode_sync(struct fs_inode *inode, unsigned long truncate) {
 		pc_put_page(page);
 	}
 }
-static void transform_filename(uint8_t *arg_filename, uint8_t *filename) {
+static struct filesystem *transform_filename(uint8_t *arg_filename, uint8_t *filename) {
 	int i, len;
-
+	struct filesystem *vfs=0;
 	filename[0] = 0;
 	if (arg_filename[0] != '/') {
 		ut_strcpy((uint8_t *) filename,
@@ -284,6 +287,13 @@ static void transform_filename(uint8_t *arg_filename, uint8_t *filename) {
 	}
 	ut_strcat((uint8_t *) filename, &arg_filename[i]); //TODO use strncat
 
+	if (ut_strstr(filename,(unsigned char *)"/proc/")==0){
+		vfs=gvfs_fs;
+	}else{
+		vfs=procfs_fs;
+	}
+
+
 	len = ut_strlen((const uint8_t *) filename);
 
 	/* remove "/" as last character */
@@ -292,6 +302,7 @@ static void transform_filename(uint8_t *arg_filename, uint8_t *filename) {
 	}
 
 	DEBUG(" opening in :%s:  transformfile :%s: \n", arg_filename, filename);
+	return vfs;
 }
 unsigned long fs_vinode_close(void *arg) {
 	struct fs_inode *inode = (struct fs_inode *) arg;
@@ -347,9 +358,10 @@ static struct fs_inode *fs_getInode(uint8_t *arg_filename, int flags,
 	struct list_head *p;
 	int ret;
 	uint8_t filename[MAX_FILENAME];
+	struct filesystem *vfs=0;
 
 	ret_inode = 0;
-	transform_filename(arg_filename, filename);
+	vfs=transform_filename(arg_filename, filename);
 
 	mutexLock(g_inode_lock);
 	list_for_each(p, &fs_inode_list) {
@@ -366,10 +378,12 @@ static struct fs_inode *fs_getInode(uint8_t *arg_filename, int flags,
 	mutexUnLock(g_inode_lock);
 #if 1
 	ret_inode = (fs_inode *) mm_slab_cache_alloc(fs_inode::slab_objects, 0);
+
 	if (ret_inode != 0) {
 		struct fileStat stat;
 
-		ret_inode->init(filename, mode & 0x3);
+		ret_inode->init(filename, mode & 0x3, vfs);
+		struct filesystem *vfs_fs = ret_inode->vfs;
 		ret = vfs_fs->open(ret_inode, flags, mode & 0x3);
 		if (ret == JFAIL) {
 			ret_inode->count.counter = 0;
@@ -401,7 +415,8 @@ static struct fs_inode *fs_getInode(uint8_t *arg_filename, int flags,
 			mutexUnLock(g_inode_lock);
 			ret_inode = remove_duplicate_inodes(ret_inode);
 		} else {
-			ut_printf("ERROR: cannot able to get STAT\n");
+			if (vfs_fs != procfs_fs)
+				ut_printf("ERROR: cannot able to get STAT\n");
 		}
 
 		atomic_inc(&ret_inode->count);
@@ -410,6 +425,7 @@ static struct fs_inode *fs_getInode(uint8_t *arg_filename, int flags,
 
 last:
 	if (ret_inode != 0 && ret_inode->fs_private == 0) {
+		struct filesystem *vfs_fs = ret_inode->vfs;
 		vfs_fs->open(ret_inode, flags, mode & 0x3);
 	}
 	return ret_inode;
@@ -418,7 +434,7 @@ struct file *fs_open(uint8_t *filename, int flags, int mode) {
 	struct file *filep;
 	struct fs_inode *inodep;
 
-	if (vfs_fs == 0 || filename == 0)
+	if ( filename == 0)
 		return 0;
 
 	filep = (struct file *) mm_slab_cache_alloc(g_slab_filep, 0);
@@ -472,7 +488,7 @@ long fs_read(struct file *filep, uint8_t *buff, unsigned long len) {
 	int ret;
 
 	ret = 0;
-	if ((vfs_fs == 0) || (vfs_fs->read == 0) || (filep == 0))
+	if (filep == 0)
 		return 0;
 
 	if (ar_check_valid_address((addr_t) buff, len) == JFAIL) {
@@ -501,7 +517,7 @@ int fs_write(struct file *filep, uint8_t *buff, unsigned long len) {
 	int i, ret;
 
 	ret = 0;
-	if (vfs_fs == 0 || (vfs_fs->write == 0) || (filep == 0))
+	if (filep == 0)
 		return 0;
 
 	if (ar_check_valid_address((unsigned long) buff, len) == JFAIL) {
@@ -562,7 +578,7 @@ struct file *fs_dup(struct file *old_filep, struct file *new_filep) {
 }
 
 int fs_close(struct file *filep) {
-	if (filep == 0 || vfs_fs == 0)
+	if (filep == 0 )
 		return 0;
 	if (filep->type == REGULAR_FILE || filep->type == OUT_PIPE_FILE || filep->type == IN_PIPE_FILE || filep->type == NETWORK_FILE) {
 		if (filep->vinode != 0) {
@@ -580,11 +596,15 @@ int fs_close(struct file *filep) {
 	return SYSCALL_SUCCESS;
 }
 /*********************************************************************************************/
-unsigned long fs_registerFileSystem(struct filesystem *fs) {
-	vfs_fs = fs; // TODO : currently only one lowelevel filsystem is hardwired to vfs.
+unsigned long fs_registerFileSystem(struct filesystem *fs,unsigned char *mount_pnt) {
+	if (ut_strcmp("/",mount_pnt)==0){
+		gvfs_fs = fs; // TODO : currently only one lowelevel filsystem is hardwired to vfs.
+	}else{
+		procfs_fs=fs;
+	}
 	return 1;
 }
-
+extern int init_procfs();
 int init_vfs() {
 	int i;
 	g_slab_filep = kmem_cache_create((const unsigned char *) "file_struct",
@@ -596,18 +616,15 @@ int init_vfs() {
 	for (i = 0; i < MAX_SOCKETS; i++) {
 		socket::list[i] = 0;
 	}
-
+	init_procfs();
 	return 0;
 }
 /************************************************************************************/
 int Jcmd_unmount(uint8_t *arg1, uint8_t *arg2) {
 	struct fs_inode *tmp_inode;
 	struct list_head *p;
+	struct filesystem *vfs_fs = gvfs_fs;
 
-	if (vfs_fs == 0) {
-		ut_printf(" Fail to unmount: filessystem not registered\n");
-		return JFAIL;
-	}
 	vfs_fs->unmount();
 	mutexLock(g_inode_lock);
 	list_for_each(p, &fs_inode_list) {
@@ -632,6 +649,7 @@ int fs_sync() {
 	mutexLock(g_inode_lock);
 	list_for_each(p, &fs_inode_list) {
 		tmp_inode = list_entry(p, struct fs_inode, inode_link);
+		struct filesystem *vfs_fs = tmp_inode->vfs;
 		if (vfs_fs->stat(tmp_inode, &stat) != JSUCCESS) {
 			if (tmp_inode->close()==JSUCCESS) {
 				mutexUnLock(g_inode_lock);
@@ -679,16 +697,15 @@ unsigned long fs_fadvise(void *inode_arg, unsigned long offset,
 	return count;
 }
 unsigned long fs_lseek(struct file *file, unsigned long offset, int whence) {
-	if (vfs_fs == 0)
-		return 0;
+
 	if (file == 0)
 		return 0;
-	return vfs_fs->lseek(file, offset, whence);
+	return gvfs_fs->lseek(file, offset, whence);
 }
 unsigned long fs_fdatasync(struct file *filep) {
 	struct fs_inode *inode;
 
-	if (vfs_fs == 0 || filep == 0)
+	if ( filep == 0)
 		return 0;
 
 	inode = (struct fs_inode *) filep->vinode;
@@ -699,7 +716,8 @@ unsigned long fs_fdatasync(struct file *filep) {
 int fs_stat(struct file *filep, struct fileStat *stat) {
 	int ret;
 	struct fs_inode *inode = (struct fs_inode *) filep->vinode;
-	if (vfs_fs == 0 || filep == 0)
+
+	if ( filep == 0)
 		return 0;
 	if (inode && inode->fileStat_insync == 1) {
 		DEBUG(" stat filename :%s: \n", filep->filename);
@@ -708,6 +726,9 @@ int fs_stat(struct file *filep, struct fileStat *stat) {
 				sizeof(struct fileStat));
 	} else {
 		//BRK;
+		struct filesystem *vfs_fs = gvfs_fs;
+		if (filep->vinode!=0 && inode->vfs!=0)
+			vfs_fs = inode->vfs;
 		ret = vfs_fs->stat(filep->vinode, stat);
 		if (ret == JSUCCESS) {
 			stat->st_size = inode->fileStat.st_size;
@@ -718,8 +739,7 @@ int fs_stat(struct file *filep, struct fileStat *stat) {
 }
 unsigned long fs_readdir(struct file *file, struct dirEntry *dir_ent, int len,
 		int *offset) {
-	if (vfs_fs == 0)
-		return 0;
+
 	if (file == 0)
 		return 0;
 	struct fs_inode *inode = (struct fs_inode *) file->vinode;
@@ -728,6 +748,10 @@ unsigned long fs_readdir(struct file *file, struct dirEntry *dir_ent, int len,
 		return -1;
 		//BUG();
 	}
+	if (inode==0){
+		return  -1;
+	}
+	struct filesystem *vfs_fs = inode->vfs;
 	return vfs_fs->readDir(file->vinode, dir_ent, len, offset);
 }
 int fs_data_sync(int num_pages) {
@@ -741,6 +765,7 @@ int fs_data_sync(int num_pages) {
 			goto last;
 		}
 		struct fs_inode *inode = (struct fs_inode *) page->fs_inode;
+		struct filesystem *vfs_fs = inode->vfs;
 		uint64_t len = inode->fileStat.st_size;
 		if (len < (page->offset + PC_PAGESIZE)) {
 			len = len - page->offset;

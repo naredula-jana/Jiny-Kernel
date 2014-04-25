@@ -312,7 +312,7 @@ static void format_string(struct writer_struct *writer, const char *format, va_l
 					val = va_arg(vl,unsigned int);
 					c = 'x';
 				} else
-					val = va_arg(vl,long);
+					val = va_arg(vl,unsigned long);
 
 				itoa(buf, 39, c, val);
 

@@ -28,19 +28,15 @@ int jdevice::init_pci(uint8_t bus, uint8_t device, uint8_t function) {
 	int ret,len;
 	driver = 0;
 
-	ret = pci_generic_read(
-			&this->pci_device.pci_addr, 0,
-			sizeof(pci_dev_header_t),
-			&this->pci_device.pci_header);
-	if (ret != 0  || this->pci_device.pci_header.vendor_id
-					== 0xffff)
+	ret = pci_generic_read(&this->pci_device.pci_addr, 0, sizeof(pci_dev_header_t), &this->pci_device.pci_header);
+	if (ret != 0 || this->pci_device.pci_header.vendor_id == 0xffff)
 		return JFAIL;
-	ut_log("	scan devices %d:%d:%d  %x:%x\n", bus, device, function,
-			this->pci_device.pci_header.vendor_id,
+	ut_log("	scan devices %d:%d:%d  %x:%x\n", bus, device, function, this->pci_device.pci_header.vendor_id,
 			this->pci_device.pci_header.device_id);
 
-	ut_log(" reading pci info : bus:dev:fuc : %x:%x:%x \n",pci_device.pci_addr.bus,pci_device.pci_addr.device,pci_device.pci_addr.function);
-	if (read_pci_info_new(&pci_device) != JSUCCESS){
+	ut_log(" reading pci info : bus:dev:fuc : %x:%x:%x \n", pci_device.pci_addr.bus, pci_device.pci_addr.device,
+			pci_device.pci_addr.function);
+	if (read_pci_info_new(&pci_device) != JSUCCESS) {
 		ut_log("ERROR: reading pci device failed\n");
 		return JFAIL;
 	}
@@ -108,7 +104,8 @@ int jdevice::init(unsigned char *dev_name) {
 	int i;
 	void **p = (void **) this;
 	*p = &vptr_jdevice[0];
-	name = dev_name;
+	ut_snprintf(name,MAX_DEVICE_NAME,"%s",dev_name);
+	return JSUCCESS;
 }
 void register_jdriver(class jdriver *driver) {
 

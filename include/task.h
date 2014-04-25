@@ -61,9 +61,11 @@ struct mm_struct {
 	atomic_t count; /* How many references to "struct mm_struct" (users count as 1) */
 	struct fs_struct *fs;
 	struct file *exec_fp; /* execute file */
+
+	unsigned long start_code,end_code ; /* used onlt for stats */
 	unsigned long brk_addr, brk_len;
 	unsigned long anonymous_addr;
-
+	unsigned long stack_bottom; /* currenty user for stat pupose */
 	unsigned long stat_page_allocs, stat_page_free;
 };
 

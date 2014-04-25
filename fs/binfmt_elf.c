@@ -265,6 +265,7 @@ unsigned long fs_elf_load(struct file *file,unsigned long tmp_stack, unsigned lo
 	struct elfhdr elf_ex;
 	Elf64_Addr p_entry;
 	unsigned long *aux_vec, aux_index, load_addr;
+	struct task_struct *task=g_current_task;
 
 	error = 0;
 	fs_lseek(file, 0, 0);
@@ -317,6 +318,8 @@ unsigned long fs_elf_load(struct file *file,unsigned long tmp_stack, unsigned lo
 	}
 	load_addr = ELF_PAGESTART(eppnt->p_vaddr);
 	p_entry = elf_ex.e_entry;
+	task->mm->start_code = 0;
+	task->mm->end_code =0;
 	for (i = 0; i < elf_ex.e_phnum; i++, eppnt++) /* mmap all loadable program headers */
 	{
 		if (eppnt->p_type != PT_LOAD)
@@ -326,10 +329,14 @@ unsigned long fs_elf_load(struct file *file,unsigned long tmp_stack, unsigned lo
 		error = 1;
 		if (eppnt->p_filesz > 0) {
 			unsigned long addr;
-			addr = vm_mmap(file, ELF_PAGESTART(eppnt->p_vaddr), eppnt->p_filesz + ELF_PAGEOFFSET(eppnt->p_vaddr), eppnt->p_flags, 0, (eppnt->p_offset
+			unsigned long start_addr = ELF_PAGESTART(eppnt->p_vaddr);
+			unsigned long end_addr= eppnt->p_filesz + ELF_PAGEOFFSET(eppnt->p_vaddr);
+			addr = vm_mmap(file, start_addr, end_addr, eppnt->p_flags, 0, (eppnt->p_offset
 					- ELF_PAGEOFFSET(eppnt->p_vaddr)),"text");
 			if (addr == 0)
 				error = 0;
+			if (task->mm->start_code ==0  || task->mm->start_code > start_addr ) task->mm->start_code = start_addr;
+			if (task->mm->end_code < end_addr ) task->mm->end_code = end_addr;
 		}
 		//if (error != ELF_PAGESTART(eppnt->p_vaddr))
 		if (error != 1) {
@@ -358,6 +365,7 @@ unsigned long fs_elf_load(struct file *file,unsigned long tmp_stack, unsigned lo
 	if (error != 0) {
 		ut_log(" ERROR in elf loader filename :%s :%d\n",file->filename,-error);
 	} else {
+		task->mm->stack_bottom = USERSTACK_ADDR+USERSTACK_LEN;
 		vm_mmap(0, USERSTACK_ADDR, USERSTACK_LEN, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0,"userstack");
 		if (stack_len > 0) {
 			aux_vec = (unsigned long *)aux_addr;

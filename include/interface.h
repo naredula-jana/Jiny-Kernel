@@ -18,13 +18,14 @@ struct iovec {
  *
  */
 /* scheduling */
+extern task_queue_t g_task_queue;
 extern int ipc_register_waitqueue(wait_queue_t *waitqueue, char *name, unsigned long flags);
 extern int ipc_unregister_waitqueue(wait_queue_t *waitqueue);
 int ipc_wakeup_waitqueue(wait_queue_t *waitqueue);
 int ipc_waiton_waitqueue(wait_queue_t *waitqueue, unsigned long ticks);
 int sc_sleep( long ticks); /* each tick is 100HZ or 10ms */
-unsigned long SYS_sc_vfork();
 unsigned long SYS_sc_fork();
+unsigned long SYS_sc_vfork();
 unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid,  int(*fn)(void *, void *),  void **args) ;
 int SYS_sc_exit(int status);
 void sc_delete_task(struct task_struct *task);
@@ -99,8 +100,8 @@ uint8_t *pc_page_to_ptr(struct page *p);
 int pc_housekeep(void);
 
 /*vfs */
-unsigned long fs_registerFileSystem(struct filesystem *fs);
-//struct inode *fs_getInode(char *filename);
+unsigned long fs_registerFileSystem(struct filesystem *fs, unsigned char *mnt_pnt);
+
 unsigned long fs_putInode(void *fs_inode);
 int Jcmd_ls(uint8_t *arg1,uint8_t *arg2);
 struct file *fs_open(uint8_t *filename,int mode,int flags);
@@ -243,6 +244,7 @@ uint8_t *ut_strcat(uint8_t *dest, const uint8_t *src);
 uint8_t *ut_strstr(uint8_t *s1,uint8_t *s2);
 int ut_strlen(const uint8_t * s);
 unsigned long ut_atol(uint8_t *p);
+unsigned int ut_atod(uint8_t *p);
 unsigned int ut_atoi(uint8_t *p);
 int ut_sprintf(uint8_t * buf, const uint8_t *fmt, ...);
 int ut_snprintf(uint8_t * buf, size_t size, const char *fmt, ...);
