@@ -41,5 +41,5 @@ int init_syscall(unsigned long cpuid)
 	msr_write(MSR_LSTAR, (uint64_t)syscall_entry);
 	msr_write(MSR_SF_MASK, 0x200);
 	init_fs_and_gs((int )cpuid);
-	return 0;
+	return JSUCCESS;
 }

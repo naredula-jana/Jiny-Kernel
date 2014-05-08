@@ -72,17 +72,16 @@ static void mk_pde(pde_t *pde, addr_t fr,int large_page,int global,int user)
 	pde->frame = fr;
 }
 
-unsigned long g_kernel_address_space_starts=0;
-
+static unsigned long g_kernel_address_space_starts=1;
 unsigned long __va(unsigned long addr){
-	if (g_kernel_address_space_starts==0){
+	if (g_kernel_address_space_starts==1){
 		return ((void *)((unsigned long)(addr)+KERNEL_CODE_START));
 	}else{
 		return ((void *)((unsigned long)(addr)+g_kernel_address_space_starts));
 	}
 }
 unsigned long __pa(unsigned long addr){
-	if (g_kernel_address_space_starts==0){
+	if (g_kernel_address_space_starts==1){
 		return ((unsigned long)(addr)-KERNEL_CODE_START);
 	}else{
 		if (addr > KERNEL_CODE_START)
@@ -104,13 +103,13 @@ addr_t initialise_paging_new(addr_t physical_mem_size, unsigned long virt_image_
 	g_kernel_page_dir=0x00101000;
 
 	level4_index = L4_INDEX(virt_addr);
-	ut_log("paging init :addr:%x -> %x Lindex ( %x : %x : %x :%x )\n",virt_addr,L4_INDEX(virt_addr)*8,L4_INDEX(virt_addr),L3_INDEX(virt_addr),L2_INDEX(virt_addr),L1_INDEX(virt_addr));
+	ut_log("	paging init :addr:%x -> %x Lindex ( %x : %x : %x :%x )\n",virt_addr,L4_INDEX(virt_addr)*8,L4_INDEX(virt_addr),L3_INDEX(virt_addr),L2_INDEX(virt_addr),L1_INDEX(virt_addr));
 	*virt_addr_start = virt_addr;
 	*virt_addr_end = virt_addr + physical_mem_size - (8*1024);
 	fr = 0;
 	max_fr = physical_mem_size/(PAGE_SIZE); /* max pages */
 
-	ut_log(" max_fr :%x (%d) image_end :%x(%d)\n",max_fr,max_fr,virt_image_end,virt_image_end-KERNEL_CODE_START);
+	ut_log("	max_fr :%x (%d) image_end :%x(%d)\n",max_fr,max_fr,virt_image_end,virt_image_end-KERNEL_CODE_START);
 
 	level3_table = curr_virt_end_addr;
 	curr_virt_end_addr = curr_virt_end_addr + PAGE_SIZE;
@@ -149,11 +148,11 @@ addr_t initialise_paging_new(addr_t physical_mem_size, unsigned long virt_image_
 		level3_index++;
 	}
 last:
-ut_log("paging init end :addr:%x ->  Lindex ( %x : %x : %x :%x )\n",curr_virt_end_addr,L4_INDEX(curr_virt_end_addr),L3_INDEX(curr_virt_end_addr),L2_INDEX(curr_virt_end_addr),L1_INDEX(curr_virt_end_addr));
+	ut_log("	paging init end :addr:%x ->  Lindex ( %x : %x : %x :%x )\n",curr_virt_end_addr,L4_INDEX(curr_virt_end_addr),L3_INDEX(curr_virt_end_addr),L2_INDEX(curr_virt_end_addr),L1_INDEX(curr_virt_end_addr));
 
 	curr_virt_end_addr = curr_virt_end_addr + PAGE_SIZE;
 	flush_tlb(0x101000);
-	ut_log("END address :%x fr:%x j:%x level3:%x(%d) level2:%x(%d)\n",curr_virt_end_addr,fr,j,level2_index,level2_index,level3_index,level3_index);
+	ut_log("	END address :%x fr:%x j:%x level3:%x(%d) level2:%x(%d)\n",curr_virt_end_addr,fr,j,level2_index,level2_index,level3_index,level3_index);
 
 	g_kernel_address_space_starts = *virt_addr_start;
 	virt_addr = virt_addr + (curr_virt_end_addr-KERNEL_CODE_START);
@@ -166,7 +165,7 @@ ut_log("paging init end :addr:%x ->  Lindex ( %x : %x : %x :%x )\n",curr_virt_en
 	for (i=j; i<21; i++){
 		unsigned long *p;
 		p=level2_table;
-		ut_log("%d: clearing the l2 entry :%x \n",i,p);
+		ut_log("	%d: clearing the l2 entry :%x \n",i,p);
 		*p=0;
 		level2_table = level2_table + 8;
 	}
@@ -174,60 +173,7 @@ ut_log("paging init end :addr:%x ->  Lindex ( %x : %x : %x :%x )\n",curr_virt_en
 	flush_tlb(0x101000);
 	return (addr_t)virt_addr;
 }
-#if 0
-addr_t initialise_paging(addr_t end_addr, unsigned long current_mem_end){
-	// The size of physical memory. For the moment we 
-	// assume it is 16MB big.
-	addr_t end_mem = end_addr;
-	addr_t i,j,fr,nframes;
-	addr_t *level2_table;
-	unsigned long curr_virt_end_addr;
-	unsigned long *p;
-	
-	curr_virt_end_addr =(unsigned long) current_mem_end; /* till this point currently memory is in use, the rest can used for pagecache , heap etc. */
-	end_mem &= PAGE_MASK;
-	nframes  = (end_mem)>> PAGE_SHIFT;
-	g_kernel_page_dir=0x00101000;
-	curr_virt_end_addr= (curr_virt_end_addr+PAGE_SIZE)&(~0xfff);
-//	ut_printf("Initializing Paging  %x: physical high addr:%x  \n",placement_address,end_addr);
-	level2_table=(addr_t *)0x00103000+20; /* 20 entries(40M) already initialized */
-	fr=0+20*512; /*  2M= 512 4Kpages already initialized */
-	for (i=20; i<512; i++) /* 20(40M) entries is already initialized, this loop covers for 1G */
-	{
-		/* TODO: need to check the maximum physical memory and need to initilize accordingly, currently 1G is initilised */
-		if (fr > nframes) {
-			break;
-		}
-		if (0) {/* use 2M size of pages */
-			mk_pde(__va(level2_table), fr, 1, 1, 0);
-		} else { /* use 4k  size pages */
-			mk_pde(__va(level2_table), (__pa(curr_virt_end_addr))>>PAGE_SHIFT, 0, 1, 0);
-			for (j = 0; j < 512; j++) {
-				mk_pte(curr_virt_end_addr+j*8, fr + j, 1, 0, 1);
-			}
-			curr_virt_end_addr=curr_virt_end_addr+PAGE_SIZE; /* this is physical space used for the page table */
-		}
-		level2_table++;
-		fr=fr+512; /* 2M = 512*4K frames */	
-	}
 
-//	ut_printf("Initializing PAGING  nframes:%x  FR:%x l2:%x i=%d \n",nframes,fr,level2_table,i);
-	p=(unsigned long *)0x00102000; /* TODO: the following two lines need to remove later */
-	/* reset the L3 table first entry need only when the paging is enabled */
-	/* since first entry used for temporary page table where adress space is from 0 onwards  , second entry is permanent kernel space from 2g to.. i.e 0x40000000 */
-
-#ifdef SMP
-	/* for SMP it is reset to zero after all the cpus are up */
-#else
-	*p=0;
-#endif
-//	VIDEO=(unsigned long)__va(VIDEO);
-	flush_tlb(0x101000);
-	ut_printf("END address :%x\n",&end);
-
-	return (addr_t)curr_virt_end_addr;
-}
-#endif
  void flush_tlb_entry(unsigned long  vaddr)
 {
   __asm__ volatile("invlpg (%0)"
@@ -375,6 +321,10 @@ static inline unsigned long mm_pagealloc(struct mm_struct *mm){
 	mm->stat_page_allocs++;
 	ret = alloc_page(MEM_CLEAR);
 	DEBUG(" pagetable alloc :%x  pa:%x allocs:%x \n",ret,__pa(ret),mm->stat_page_allocs);
+	if (ret == 0){
+		ut_printf("pagetable alloc :%x  pa:%x allocs:%x \n",ret,__pa(ret),mm->stat_page_allocs);
+		Jcmd_mem(0,0);
+	}
 	return ret;
 }
 static int copy_pagetable(struct mm_struct *dest_mm, int level,unsigned long src_ptable_addr,unsigned long dest_ptable_addr)
@@ -408,6 +358,13 @@ static int copy_pagetable(struct mm_struct *dest_mm, int level,unsigned long src
 				}
 			}else
 			{
+#if 1  /* To clear first 1G , so it can used for userspace ,  first 1G in user space and kernel space are different ,
+   first 1G is need in the kernel space only for gdb, otherwise it can be cleared.
+ */
+				if ((level == kernel_pages_level) && i==0 && (*src & (~0xfff))==0x103000){
+					*dest =0;
+				}else
+#endif
 				if ((level == kernel_pages_level) && check_kernel_ptable_entry((*src & (~0xfff)))) /* for kernel pages , directly link the page table itself instead of copy recursively */
 				{
 					*dest = *src;
@@ -681,7 +638,7 @@ int g_stat_pagefaults_write=0;
 extern unsigned long g_phy_mem_size;
 
 int check_kernel_address(unsigned long addr){
-	if (addr >=KADDRSPACE_START && addr <(KADDRSPACE_START + g_phy_mem_size*4)){
+	if (addr >=KADDRSPACE_START && addr <(KADDRSPACE_START + g_phy_mem_size)){
 		return 1;
 	}else{
 		return 0;
@@ -831,6 +788,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 		{
 			asm volatile("sti");
 			p=(unsigned long *)fs_getVmaPage(vma,vma->vm_private_data+(addr-vma->vm_start));
+			assert(p!=0);
 			if (write_fault && (writeFlag!= 0)) {
 				addr_t *free_page;
 				free_page=(unsigned long *)mm_pagealloc(mm);

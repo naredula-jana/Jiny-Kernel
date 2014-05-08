@@ -158,6 +158,7 @@ struct cpu_state {
 
 	unsigned long stat_total_contexts;
 	unsigned long stat_nonidle_contexts;
+	unsigned long stat_idleticks; /* in idle function when the timer arrives */
 	unsigned long stat_rip;
 } __attribute__ ((aligned (64))) ;
 

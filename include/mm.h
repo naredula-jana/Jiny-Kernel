@@ -52,10 +52,13 @@ typedef struct kmem_cache_s kmem_cache_t;
 
 
 
-#define USERANONYMOUS_ADDR 0x20000000
-#define USERSTACK_ADDR     0x30000000
-#define USER_SYSCALL_PAGE 0xffffffffff600000
+//#define USERANONYMOUS_ADDR 0x20000000
+//#define USERSTACK_ADDR     0x30000000
+#define USERANONYMOUS_ADDR 0x7fff00000000
+#define USERSTACK_ADDR     0x7fffdbaac000
 #define USERSTACK_LEN  0x100000
+#define USER_SYSCALL_PAGE 0xffffffffff600000
+
 
 
 #define MAP_NR(addr)            (__pa(addr) >> PAGE_SHIFT)

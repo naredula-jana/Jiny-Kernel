@@ -159,7 +159,7 @@ extern void init_keyboard_jdriver();
 extern void init_serial_jdriver();
 struct jdevice keyboard_device,serial_in_device;
 struct jdevice vga_device,serial_out_device;
-void init_jdevices(unsigned long unused_arg1) {
+int init_jdevices(unsigned long unused_arg1) {
 	device_count = 0;
 	int d,k;
 
@@ -197,6 +197,7 @@ void init_jdevices(unsigned long unused_arg1) {
 	}
 
 	scan_pci_devices();
+	return JSUCCESS;
 }
 void *get_keyboard_device(int device_type,int file_type){
 	if (device_type == DEVICE_KEYBOARD){

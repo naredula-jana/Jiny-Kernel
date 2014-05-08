@@ -81,7 +81,7 @@ typedef struct {
 
 #define unlikely(x)     (x) /* TODO */
 #define BUG() do {  \
-	cli(); ut_log(" BUG at :\n"); ut_getBackTrace(0,0,0);while(1) ; } while(0)
+	cli(); while(1) ; ut_log(" BUG at :\n"); ut_getBackTrace(0,0,0);while(1) ; } while(0)
 #define BUG_ON(condition) do { if (unlikely((condition)!=0)) BUG(); } while(0)
 
 

@@ -67,7 +67,7 @@ static int gpFault(struct fault_ctx *ctx) {
 	fault_error_g = ctx->errcode;
 	fault_num_g = ctx->fault_num;
 
-	BRK;
+	while(1);
 	ut_printf(
 			" ERROR: cpuid:%d Gp Fault fault ip:%x error code:%x sp:%x fault number:%x taskname:%s:\n",
 			getcpuid(), fault_ip_g, fault_error_g, ctx->istack_frame->rsp,
@@ -106,8 +106,7 @@ void init_handlers()
 	ar_registerInterrupt(13, gpFault,"gpfault", NULL);
 }
 extern int stat_ipi_send_count;
-int Jcmd_cpu(char *arg1,char *arg2)
-{
+int Jcmd_cpu(char *arg1,char *arg2){
 	int i, j;
 
 	ut_printf("         ");
@@ -134,14 +133,16 @@ int Jcmd_cpu(char *arg1,char *arg2)
 	ut_printf("       ");
 	for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
 		if (g_cpu_state[j].stat_total_contexts > 10000)
-			ut_printf("[%3dk/%3dk] ",g_cpu_state[j].stat_nonidle_contexts/1000,g_cpu_state[j].stat_total_contexts/1000);
+			ut_printf("[%3dk/%3dk/%3d] ",g_cpu_state[j].stat_nonidle_contexts/1000,g_cpu_state[j].stat_total_contexts/1000,g_cpu_state[j].stat_idleticks);
 		else
-			ut_printf("[%3d/%3d] ",g_cpu_state[j].stat_nonidle_contexts,g_cpu_state[j].stat_total_contexts);
+			ut_printf("[%3d/%3d/%3d] ",g_cpu_state[j].stat_nonidle_contexts,g_cpu_state[j].stat_total_contexts,g_cpu_state[j].stat_idleticks);
 	}
-	ut_printf(":context switches \n");
+	ut_printf(":context switches(nonidle/total:idleticks) \n");
+
+
 	ut_printf("       ");
 	for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
-		ut_printf("[prio= %3d] ",g_cpu_state[j].cpu_priority);
+		ut_printf("[prio= %3d] runqueue :%d ",g_cpu_state[j].cpu_priority,g_cpu_state[j].run_queue_length);
 	}
 	ut_printf(":priority \n");
 	ut_printf(" ipi send: %d\n",stat_ipi_send_count);
@@ -193,7 +194,7 @@ static void fill_fault_context(struct fault_ctx *fctx, void *rsp,
 	fctx->old_rsp = p;
 	cpu_ctx.gprs=fctx->gprs;
 	cpu_ctx.istack_frame=fctx->istack_frame ;
-	g_cpu_state[0].stat_rip = fctx->istack_frame->rip;
+	g_cpu_state[0].stat_rip = fctx->istack_frame->rip;  // TODO: done only for cpu=0
 }
 static int stack_depth=0;
 // This gets called from our ASM interrupt handler stub.

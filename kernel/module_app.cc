@@ -367,6 +367,8 @@ static int launch_hp_task(module_t *modulep) {
 
 	return JSUCCESS;
 }
+
+#if 0
 symb_table_t *module_load_kernel_symbols(unsigned char *start_addr, unsigned long mod_len) { /* load kernel symbols from kernel file loaded as a module */
 	struct elfhdr *elf_ex;
 	const char *error = 0;
@@ -523,7 +525,7 @@ symb_table_t *module_load_kernel_symbols(unsigned char *start_addr, unsigned lon
 	modulep->free_module();
 	return NULL;
 }
-
+#endif
 void Jcmd_insmod(unsigned char *filename, unsigned char *arg);
 void Jcmd_insmod(unsigned char *filename, unsigned char *arg) {
 	struct file *file = 0;
@@ -780,6 +782,8 @@ static int func_hits_count=0;
 struct func_debug func_hits[MAX_FUNC_HITS];
 static int stat_cpu_rip_unknown_hit = 0;
 int g_conf_func_debug=982;
+static unsigned long stat_unknown_ip=0;
+
 void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
 	module_t *modulep = 0;
 	int i, j;
@@ -808,7 +812,7 @@ void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
 				if ((option == 2) && (modulep->symbol_table[j].stats.hits == 0))
 					continue;
 
-				ut_snprintf(buf, bsize, "	%3d:t:%2d s_idx:%2d hits:%4d (rip=%x) %s -> %x \n", j, modulep->symbol_table[j].type,
+				ut_snprintf(buf, bsize, "	%3d:t:%2d s_idx:%2d hits:%4d (rip=%p) %s -> %p \n", j, modulep->symbol_table[j].type,
 						modulep->symbol_table[j].sec_index, modulep->symbol_table[j].stats.hits,
 						modulep->symbol_table[j].stats.rip, modulep->symbol_table[j].name, modulep->symbol_table[j].address);
 				SYS_fs_write(1, buf, ut_strlen(buf));
@@ -818,11 +822,11 @@ void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
 		modulep->use_count--;
 	}
 	for (j=0; j<func_hits_count; j++){
-		ut_snprintf(buf, bsize, " addr: %x  hits:%d\n",func_hits[j].addr,func_hits[j].hits);
+		ut_snprintf(buf, bsize, " addr: %p  hits:%d\n",func_hits[j].addr,func_hits[j].hits);
 		SYS_fs_write(1, buf, ut_strlen(buf));
 	}
-	ut_snprintf(buf, bsize, " Total modules: %d total Hits:%d  unknownhits:%d\n", total_modules, total_hits,
-			stat_cpu_rip_unknown_hit);
+	ut_snprintf(buf, bsize, " Total modules: %d total Hits:%d  unknownhits:%d unown ip:%p \n", total_modules, total_hits,
+			stat_cpu_rip_unknown_hit,stat_unknown_ip);
 	SYS_fs_write(1, buf, ut_strlen(buf));
 
 	mm_free(buf);
@@ -906,20 +910,24 @@ int ut_mod_symbol_execute(int type, char *name, char *argv1, char *argv2) {
 	}
  return ret;
 }
-
+extern void idleTask_func();
 int perf_stat_rip_hit(unsigned long rip) {
 	module_t *modulep = 0;
 	int addr_found=0;
 	int j;
+	int curr=0;
+	unsigned long cur_max=0;
 	for (j = 0; j < total_modules; j++) {
 		int min = 0;
 		int max;
-		int curr;
+
+
 		modulep = g_modules[j];
-		max = modulep->symb_table_length - 1;
+		max = modulep->symb_table_length - 3;
 		if (max < 0)
 			max = 0;
 		curr = max / 2;
+		cur_max = modulep->symbol_table[max].address;
 		if (rip < modulep->symbol_table[min].address || rip > modulep->symbol_table[max].address)
 			continue;
 		while (min < (max - 1)) { /* binary search */
@@ -931,9 +939,13 @@ int perf_stat_rip_hit(unsigned long rip) {
 			curr = (max + min) / 2;
 		}
 		curr = min;
+
 		if ((rip >= modulep->symbol_table[curr].address) && (rip <= modulep->symbol_table[curr + 1].address)) {
 			modulep->symbol_table[curr].stats.hits++;
 			modulep->symbol_table[curr].stats.rip = rip;
+			if (modulep->symbol_table[curr].address == &idleTask_func){
+				g_cpu_state[getcpuid()].stat_idleticks++;
+			}
 			if (g_conf_func_debug == curr){
 				int f;
 				for (f=0; f<func_hits_count; f++){
@@ -953,6 +965,17 @@ int perf_stat_rip_hit(unsigned long rip) {
 		return JSUCCESS;
 	}
 	stat_cpu_rip_unknown_hit++;
+	stat_unknown_ip=rip;
 	return JFAIL;
+}
+static module_t kernel_module;
+int init_kernel_module(symb_table_t *symbol_table, int total_symbols){
+	ut_memset((unsigned char *)&kernel_module, 0, sizeof(kernel_module));
+	total_modules=1;
+	g_modules[0]=&kernel_module;
+	ut_strcpy((unsigned char *)&kernel_module.name[0],(unsigned char *)"kernel");
+	kernel_module.symbol_table = symbol_table;
+	kernel_module.symb_table_length = total_symbols;
+	return JSUCCESS;
 }
 }

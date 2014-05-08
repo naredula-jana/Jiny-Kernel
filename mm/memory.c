@@ -143,8 +143,8 @@ static unsigned long init_free_area(unsigned long start_mem, unsigned long end_m
 	unsigned long mask = PAGE_MASK;
 	unsigned long i;
 	unsigned long start_addrspace = KADDRSPACE_START;
+	int size;
 //	unsigned long start_addrspace = KERNEL_CODE_START;
-
 
 	/*
 	 * Select nr of pages we try to keep free for important stuff
@@ -153,7 +153,7 @@ static unsigned long init_free_area(unsigned long start_mem, unsigned long end_m
 	 * This is fairly arbitrary, but based on some behaviour
 	 * analysis.
 	 */
-	ut_printf("init_free_area start_mem: %x endmem:%x   \n",start_mem,end_mem);
+	ut_log("	init_free_area start_mem: %x endmem:%x   \n",start_mem,end_mem);
 	i = (end_mem - start_addrspace) >> (PAGE_SHIFT+7);
 	if (i < 10)
 		i = 10;
@@ -166,7 +166,8 @@ static unsigned long init_free_area(unsigned long start_mem, unsigned long end_m
 	ut_log("	g_mem_map :%x  size:%x  \n",g_mem_map,MAP_NR(end_mem));
 	p = g_mem_map + MAP_NR(end_mem);
 	start_mem = LONG_ALIGN((unsigned long) p);
-	ut_log(" freearemap setup map: %x diff:%x   \n",g_mem_map,(start_mem -(unsigned long) g_mem_map));
+	size=(start_mem -(unsigned long) g_mem_map);
+	ut_log(" freearemap setup map: %x diff:%x(%dM)   \n",g_mem_map,(start_mem -(unsigned long) g_mem_map),size/(1024*1024));
 	//while(1);
 	ut_memset((unsigned char *)g_mem_map, 0, start_mem -(unsigned long) g_mem_map);
 	do {
@@ -186,12 +187,14 @@ static unsigned long init_free_area(unsigned long start_mem, unsigned long end_m
 		free_mem_area[i].map = (unsigned int *) start_mem;
 		ut_memset((void *) start_mem, 0, bitmap_size);
 		start_mem += bitmap_size;
-		ut_printf(" %d : bitmapsize:%x end_mem:%x \n",i,bitmap_size,end_mem);
+		ut_log(" %d : bitmapsize:%x end_mem:%x \n",i,bitmap_size,end_mem);
 	}
 	return start_mem;
 }
 static int init_done=0;
 static unsigned long stat_mem_size=0;
+static unsigned long stat_allocs=0;
+static unsigned long stat_frees=0;
 static void init_mem(unsigned long start_mem, unsigned long end_mem, unsigned long virt_start_addr){
 	int reservedpages = 0;
 	unsigned long tmp;
@@ -199,6 +202,7 @@ static void init_mem(unsigned long start_mem, unsigned long end_mem, unsigned lo
 	end_mem &= PAGE_MASK;
 	g_max_mapnr  = MAP_NR(end_mem);
 
+	ut_log("  first page : %x :%x :%x\n",MAP_NR(start_mem),MAP_NR(start_mem+PAGE_SIZE),MAP_NR(virt_start_addr));
 	start_mem = PAGE_ALIGN(start_mem);
 	stat_mem_size = end_mem -start_mem;
 	while (start_mem < end_mem) {
@@ -215,8 +219,10 @@ static void init_mem(unsigned long start_mem, unsigned long end_mem, unsigned lo
 		atomic_set(&g_mem_map[MAP_NR(tmp)].count, 1);
 		PageSetReferenced(g_mem_map+MAP_NR(tmp));
 		mm_putFreePages(tmp,0);
-
 	}
+	stat_allocs=0;
+	stat_frees =0;
+	ut_log("	Reserved pages : %x(%d) \n",reservedpages,reservedpages);
 	init_done=1;
 	ut_printf(" Release to FREEMEM : %x \n",(end_mem - 0x2000));
 	return;
@@ -229,6 +235,7 @@ int mm_putFreePages(unsigned long addr, unsigned long order) {
 	int page_order = order;
 	unsigned long flags;
 
+	stat_frees++;
 #ifdef MEMLEAK_TOOL
 	memleakHook_free(addr,0);
 #endif
@@ -280,11 +287,13 @@ last:
 	spin_unlock_irqrestore(&free_area_lock, flags);
 	return ret;
 }
+
 unsigned long mm_getFreePages(int gfp_mask, unsigned long order) {
 	unsigned long flags;
 	unsigned long ret_address;
 	unsigned long page_order ;
 
+	stat_allocs++;
 	ret_address = 0;
 	page_order = order;
 	if (order >= NR_MEM_LISTS)
@@ -338,12 +347,14 @@ last:
 			page++;
 		}
 	}
-
 	spin_unlock_irqrestore(&free_area_lock, flags);
-	if (ret_address >= (KADDRSPACE_START+g_phy_mem_size)){
+
+	if (ret_address ==0) return ret_address;
+	if ((ret_address >= (KADDRSPACE_START+g_phy_mem_size)) || (ret_address < KADDRSPACE_START)){
 		ut_log(" ERROR:  frames execeeding the max frames :%x\n",ret_address);
 		BUG();
 	}
+
 	return ret_address;
 }
 
@@ -351,6 +362,7 @@ last:
 extern unsigned long _start,_end;
 extern addr_t end; // end of code and data region
 unsigned long 	g_pagecache_size = 0x10000000 ;
+extern unsigned long symbols_end;
 addr_t initialise_paging_new(addr_t physical_mem_size, unsigned long virt_image_end, unsigned long *virt_addr_start, unsigned long *virt_addr_end) ;
 int init_memory(unsigned long arg1){
 	unsigned long virt_real_start_addr,virt_start_addr,virt_end_addr;
@@ -358,7 +370,10 @@ int init_memory(unsigned long arg1){
 	unsigned long current_end_memused=&end; /* till this point memory is used*/
 
 	unsigned long phy_end_addr = g_phy_mem_size;
-	ut_log("	Initializing memory phy_endaddr : %x  current end:%x \n",phy_end_addr,current_end_memused);
+	ut_log("	Initializing memory phy_endaddr : %x  current end:%x symbols_end:%x\n",phy_end_addr,current_end_memused,symbols_end);
+	if (symbols_end != 0){
+		current_end_memused = symbols_end;
+	}
 
 #if 0
 	virt_start_addr=initialise_paging(phy_end_addr, current_end_memused);
@@ -368,7 +383,7 @@ int init_memory(unsigned long arg1){
 	virt_start_addr=initialise_paging_new(phy_end_addr, current_end_memused,&virt_real_start_addr,&virt_end_addr);
 #endif
 
-	ut_log("	After Paging initialized Virtual start_addr: %x virtual endaddr: %x  current end:%x\n",virt_start_addr,virt_end_addr,current_end_memused);
+	ut_log("	After Paging initialized Virtual start_addr: %x virtual endaddr: %x  current end:%x virtualreal_start:%x\n",virt_start_addr,virt_end_addr,current_end_memused,virt_real_start_addr);
 	ut_log("	code+data  : %x  -%x size:%dK\n",&_start,&_end);
 	ut_log("	free area  : %x - %x size:%dM\n",virt_start_addr,virt_end_addr,(virt_end_addr-virt_start_addr)/1000000);
 	virt_start_addr=init_free_area( virt_start_addr, virt_end_addr);
@@ -380,7 +395,7 @@ int init_memory(unsigned long arg1){
 	virt_start_addr=virt_start_addr+pc_size;
 	init_mem(virt_start_addr, virt_end_addr, virt_real_start_addr);
 	ut_log("	buddy pages: %x - %x size:%dM\n",virt_start_addr, virt_end_addr,(virt_end_addr-virt_start_addr)/1000000);
-	return 0;
+	return JSUCCESS;
 }
 /*
  * Show free area list (used inside shift_scroll-lock stuff)
@@ -400,8 +415,8 @@ int Jcmd_mem(char *arg1, char *arg2) {
 			nr++;
 		}
 		total += nr << order;
-		ut_printf("%d: count:%d  static count:%d total:%d\n", order, nr,
-				free_mem_area[order].stat_count, (nr << order));
+		ut_printf("%d(%d): count:%d  static count:%d total:%d (%dM)\n", order,1<<order, nr,
+				free_mem_area[order].stat_count, (nr << order), ((nr << order)*PAGE_SIZE)/(1024*1024));
 	}
 	spin_unlock_irqrestore(&free_area_lock, flags);
 	ut_printf("total Free pages = %d (%dM) Actual pages: %d (%dM) pagecachesize: %dM \n", total, (total * 4) / 1024,stat_mem_size/PAGE_SIZE,stat_mem_size/(1024*1024),g_pagecache_size/(1024*1024));
@@ -422,7 +437,21 @@ int Jcmd_mem(char *arg1, char *arg2) {
 		if (PageReferenced(p))referenced++;
 		if (PageSlab(p)) slab++;
 	} while (p > g_mem_map);
-	ut_printf(" reserved :%d referenced:%d dma:%d slab:%d \n\n",reserved,referenced,dma,slab);
-	Jcmd_jslab(0,0);
+	ut_printf(" reserved :%d(%dM) referenced:%d dma:%d slab:%d  stat_allocs:%d stat_frees: %d\n\n",reserved,(reserved*PAGE_SIZE)/(1024*1024),referenced,dma,slab,stat_allocs,stat_frees);
+	if ((arg1 != 0) && (ut_strcmp(arg1,"all")==0))
+		Jcmd_jslab(0,0);
+	return 1;
+}
+int Jcmd_testmem(char *arg1, char *arg2){
+	int i;
+	int size=40000;
+	if (arg1){
+		size=ut_atod(arg1);
+	}
+	for (i=0; i<size; i++){
+		mm_getFreePages(0, 0);
+	}
+	ut_printf(" Test created (size=%d): %dM \n",size,size*PAGE_SIZE/(1024*1024));
+	Jcmd_mem(0,0);
 	return 1;
 }

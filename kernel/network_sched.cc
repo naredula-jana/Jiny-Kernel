@@ -289,7 +289,7 @@ int init_networking() {
 	init_udpstack();
 #endif
 
-	return 0;
+	return JSUCCESS;
 }
 
 int netif_rx(unsigned char *data, unsigned int len, unsigned char **replace_buf) {

@@ -398,6 +398,7 @@ struct page *pc_getInodePage(struct fs_inode *inode, unsigned long offset) {
 
 last:
 	mutexUnLock(g_inode_lock);
+	//ut_log(" list index : %x offset: %x\n",list_index,offset);
 	return page;
 
 }
@@ -428,6 +429,7 @@ int pc_insertPage(struct fs_inode *inode, struct page *page) {
 		DEBUG("%d :insert page addr: %x stack addr:%x task:%x  \n", i, tmp_page, &ret, g_current_task);
 		if (page->offset == tmp_page->offset) {
 			mutexUnLock(g_inode_lock);
+			//ut_log("ERROR: pc fail : %x offset:%x list_index:%x\n",tmp_page,page->offset,list_index);
 			return JFAIL;
 		}
 		if (page->offset < tmp_page->offset) {

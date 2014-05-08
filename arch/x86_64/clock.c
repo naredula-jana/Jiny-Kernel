@@ -116,12 +116,12 @@ int init_clock() {
 	vpcu_time.system_time=0;
 	if (kvm_para_available() == JFAIL){
 		ut_log("ERROR:  Kvm clock is diabled by Jiny config\n");
-		return 0;
+		return JFAIL;
 	}
 	if (g_conf_kvmclock_enable == 0) {
 		ut_log(" ERROR : Kvm clock is diabled by Jiny config\n");
-		return 0;
+		return JFAIL;
 	}
 	kvm_clock_available = 1;
-	return 0;
+	return JSUCCESS;
 }

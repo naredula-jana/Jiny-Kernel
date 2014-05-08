@@ -183,7 +183,7 @@ int init_descriptor_tables();
 int init_driver_keyboard();
 int init_tasking(unsigned long unused);
 int init_serial(unsigned long unused);
-int init_symbol_table();
+
 int init_vfs();
 int init_smp_force(unsigned long ncpus);
 int init_syscall(unsigned long cpuid);

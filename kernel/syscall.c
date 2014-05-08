@@ -13,7 +13,7 @@
 
 #define EINVAL -22
 struct __sysctl_args {
-	int *name; /* integer vector describing variable */
+	unsigned long *name; /* integer vector describing variable  TODO: using long instead of integer to store the strings */
 	int nlen; /* length of this vector */
 	void *oldval; /* 0 or address where to store old value */
 	size_t *oldlenp; /* available room for old value,
@@ -351,7 +351,7 @@ static struct Jcmd_struct jcmds[]={
 #endif
 unsigned long SYS_sysctl(struct __sysctl_args *args) {
 	SYSCALL_DEBUG("sysctl  args:%x: \n", args);
-	int *name;
+	unsigned long *name;
 	uint8_t *carg[10];
 	int i,k;
 
@@ -365,6 +365,7 @@ unsigned long SYS_sysctl(struct __sysctl_args *args) {
 	for (i = 0; i < 10; i++) {
 		carg[i] = 0;
 	}
+	//BRK;
 	for (i = 0; i < 3; i++) {
 		carg[i] = 0;
 		if (name[i] != 0) {

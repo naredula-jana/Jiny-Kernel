@@ -85,6 +85,7 @@ struct page *fs_inode::fs_genericRead(unsigned long offset) {
 	retry_again: /* the purpose to retry is to get again from the page cache with page count incr */
 	page = pc_getInodePage(this, offset);
 	if (page == NULL) {
+		//ut_log(" Trying to insert file: %x offset :%x pid:%x\n",this,offset,g_current_task->pid);
 		page = pc_getFreePage();
 		if (page == NULL) {
 			err = -3;
@@ -99,6 +100,10 @@ struct page *fs_inode::fs_genericRead(unsigned long offset) {
 			if (pc_insertPage(this, page) == JFAIL) {
 				pc_putFreePage(page);
 				err = -5;
+				page = pc_getInodePage(this, offset);
+				if (page != NULL){ /* some other thread got this page */
+					err=0;
+				}
 				goto error;
 			}
 			if ((tret + offset) > this->fileStat.st_size)
@@ -112,8 +117,9 @@ struct page *fs_inode::fs_genericRead(unsigned long offset) {
 	}
 
 	error: if (err < 0) {
-		DEBUG(" Error in reading the file :%i \n", -err);
+		ut_log(" Error in reading the file :%i :%x\n", -err,page);
 		page = 0;
+		BUG();
 	}
 	return page;
 }
@@ -617,7 +623,7 @@ int init_vfs() {
 		socket::list[i] = 0;
 	}
 	init_procfs();
-	return 0;
+	return JSUCCESS;
 }
 /************************************************************************************/
 int Jcmd_unmount(uint8_t *arg1, uint8_t *arg2) {

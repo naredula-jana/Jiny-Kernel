@@ -34,25 +34,87 @@ unsigned long g_total_symbols = 0;
  *            lwip
  *
  */
+static int add_symbol_types(unsigned long unused);
+extern int init_kernel_module(symb_table_t *symbol_table, int total_symbols);
+unsigned char *symbols_end=0;
 static char *subsystems[]={"SYS_","sc_","ut_","fs_","p9_","ipc_","pc_","ar_","mm_","vm_","Jcmd_","virtio_",0};
-int init_symbol_table(unsigned long unused) {
+unsigned long  init_symbol_table(unsigned long bss_start,unsigned long bss_end) {
+	int i=0;
+	int k;
+	unsigned char *p;
+	symb_table_t *sym_table;
+	unsigned char *addr,*name;
+	unsigned char *start_p=0;
+	unsigned char *end_p;
+	int len;
+	unsigned long ret=0;
+
+	symbols_end=0;
+	g_symbol_table =0;
+	p= bss_start;
+	sym_table= bss_end+0x20;
+	g_symbol_table = sym_table;
+	while (*p!='\0'){
+		if (p[0]=='_' && p[1]=='S' && p[2]=='E' && p[3]=='G' && p[4]==0xa){
+			start_p = p - 23;
+			p=p+5;
+			break;
+		}
+		p++;
+	}
+	if (start_p==0) return 0;
+	i=0;
+	while (p[0]!=0) {
+		addr = p;
+		k=0;
+		while (p[0] != 0xa) {
+			if (p[0] == ' ') {
+				p[0] = 0;
+				k++;
+				if (k==1){
+					sym_table->type=p[1];
+				}
+				name = p + 1;
+			}
+			p++;
+		}
+		p[0] = 0;
+		sym_table->address  =ut_atol(addr);
+		sym_table->name = name;
+		sym_table++;
+//while(1);
+		p++;
+		i++;
+	}
+	end_p =p;
+	sym_table++;
+	g_total_symbols=i+1;
+
+	p=sym_table;
+	for (i=0; i<g_total_symbols-1; i++){
+		ut_strcpy(p,g_symbol_table[i].name);
+		g_symbol_table[i].name = p;
+		p=p+ut_strlen(g_symbol_table[i].name)+1;
+	}
+	g_symbol_table[i].name=0;
+	ret=p;
+
+	len= end_p-start_p;
+	ut_memset(start_p,0,len);
+	symbols_end=ret;
+	add_symbol_types(0);
+	init_kernel_module(g_symbol_table, g_total_symbols);
+	return ret;
+}
+#if 1
+static int add_symbol_types(unsigned long unused) {
 	int i,j;
 	int confs = 0;
 	int stats = 0;
 	int cmds = 0;
 
-	return 0;
-#if 0
-	if (g_multiboot_mod1_addr==0) {
-		ut_log("ERROR: Symbols are not Loaded\n");
-		return 0;
-	}
-	g_symbol_table = module_load_kernel_symbols(__va(g_multiboot_mod1_addr),g_multiboot_mod1_len);
-	if (g_symbol_table == 0){
-		BUG();
-	}
-#endif
-	for (i = 0;  g_symbol_table[i].name != 0; i++) {
+
+	for (i = 0;  i<g_total_symbols && g_symbol_table[i].name != 0 ; i++) {
 		unsigned char sym[100], dst[100];
 
 		g_symbol_table[i].subsystem_type = 0;
@@ -83,13 +145,13 @@ int init_symbol_table(unsigned long unused) {
 			continue;
 		}
 	}
-	g_total_symbols = i;
+
 	ut_log("	confs:%d  cmds:%d  totalsymbols:%d \n",
 			confs, cmds, g_total_symbols);
 //	init_breakpoints();
-	return 0;
+	return JSUCCESS;
 }
-
+#endif
 int ut_symbol_show(int type){
 	int i,count=0;
     int *conf;
@@ -136,6 +198,7 @@ static int Jcmd_cat(unsigned char *arg1, unsigned char *arg2) {
 	}
 	return 0;
 }
+#if 0
 struct Jcmd_struct{
 	unsigned char *name;
 	void (*jcmd)(uint8_t *arg1,uint8_t *arg2);
@@ -167,9 +230,11 @@ static struct Jcmd_struct jcmds[]={
 		{"jdevices",&Jcmd_jdevices},
 		{0,0}
 };
+#endif
 int ut_symbol_execute(int type, char *name, uint8_t *argv1,uint8_t *argv2){
     int i,k,*conf;
 	int (*func)(char *argv1,char *argv2);
+#if 0
 	for (k=0; k<jcmds[k].name!=0; k++){
 		if (ut_strcmp(name,jcmds[k].name)==0){
 			jcmds[k].jcmd(argv1,argv2);
@@ -177,10 +242,9 @@ int ut_symbol_execute(int type, char *name, uint8_t *argv1,uint8_t *argv2){
 		}
 	}
 	return JFAIL;
-
+#endif
 	for (i = 0; i < g_total_symbols; i++) {
 		if (g_symbol_table[i].type != type) continue;
-
 		if (type==SYMBOL_CONF){
 			if (ut_strcmp((unsigned char *)g_symbol_table[i].name,(unsigned char *) name) != 0) continue;
 		    conf=(int *)g_symbol_table[i].address;
@@ -189,6 +253,7 @@ int ut_symbol_execute(int type, char *name, uint8_t *argv1,uint8_t *argv2){
 		    return 1;
 		}else {/*this is Jcmd_  leave 5 characters and match */
 			if (ut_strcmp((unsigned char *)&g_symbol_table[i].name[5], (unsigned char *)name) != 0) continue;
+
 			func=(void *)g_symbol_table[i].address;
 			func(argv1,argv2);
 			return 1;

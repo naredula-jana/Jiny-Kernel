@@ -183,7 +183,7 @@ int init_driver_keyboard() {
 	}
 
 	ar_registerInterrupt(33, keyboard_handler, "keyboard", (void *)0);
-	return 0;
+	return JSUCCESS;
 }
 }
 #include "jdevice.h"

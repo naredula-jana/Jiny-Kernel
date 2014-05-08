@@ -483,6 +483,7 @@ int init_tasking(unsigned long unused) {
 		g_cpu_state[i].current_task = g_cpu_state[i].idle_task;
 		g_cpu_state[i].stat_total_contexts = 0;
 		g_cpu_state[i].stat_nonidle_contexts = 0;
+		g_cpu_state[i].stat_idleticks = 0;
 		g_cpu_state[i].active = 1; /* by default when the system starts all the cpu are in active state */
 		g_cpu_state[i].intr_disabled = 0; /* interrupts are active */
 		g_cpu_state[i].cpu_priority = 0;
@@ -498,7 +499,7 @@ int init_tasking(unsigned long unused) {
 //	init_timer(); //currently apic timer is in use
 	ar_registerInterrupt(IPI_INTERRUPT, &ipi_interrupt, (char *)"IPI_GENERIC", NULL);
 	ar_registerInterrupt(IPI_CLEARPAGETABLE, &ipi_pagetable_interrupt, (char *)"IPI_PTABLE", NULL);
-	return 0;
+	return JSUCCESS;
 }
 /* This function should not block, if it block then the idle thread may block */
 void sc_delete_task(struct task_struct *task) {
@@ -692,10 +693,16 @@ unsigned long  _schedule(unsigned long flags) {
 		next = g_cpu_state[cpuid].idle_task;
 	}
 
-	if (next == 0 ) /* by this point , we will always have some next */
+	if (next == 0 ){ /* by this point , we will always have some next */
 		next = prev;
-
-	g_cpu_state[cpuid].current_task = next;
+	}else{
+		g_cpu_state[cpuid].current_task = next;
+	}
+#if 1
+	if (next == g_cpu_state[cpuid].idle_task && g_cpu_state[cpuid].run_queue_length>0){
+		while(1);
+	}
+#endif
 #ifdef SMP   // SAFE Check
 	if (g_cpu_state[0].idle_task==g_cpu_state[1].current_task || g_cpu_state[0].current_task==g_cpu_state[1].idle_task){
 		ut_printf("ERROR  cpuid :%d  %d\n",cpuid,getcpuid());
@@ -930,7 +937,22 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	vfree((unsigned long)buf);
 	return 1;
 }
+static int get_free_cpu(){
+	static int i=0;
+	int k;
+	i++;
+	k=i%getmaxcpus();
+	if (k >= getmaxcpus()){
+		k=0;
+	}
+#if 0
+	if (g_cpu_state[k].active == 1){
+		return k;
+	}
+#endif
+	return 0;
 
+}
 unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, int(*fn)(void *, void *),  void **args) {
 	struct task_struct *p;
 	struct mm_struct *mm;
@@ -1009,7 +1031,8 @@ unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid, int(*
 	}
 	p->thread.sp = (void *)((addr_t) p + (addr_t) TASK_SIZE - (addr_t)160); /* 160 bytes are left at the bottom of the stack */
 	p->state = TASK_RUNNING;
-	p->allocated_cpu = g_current_task->allocated_cpu;
+//	p->allocated_cpu = g_current_task->allocated_cpu;
+	p->allocated_cpu = get_free_cpu();
 	ut_strncpy(p->name, g_current_task->name, MAX_TASK_NAME);
 
 	ret_pid=p->pid;

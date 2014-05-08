@@ -176,6 +176,7 @@ struct vm_area_struct *vm_findVma(struct mm_struct *mm, unsigned long addr, unsi
 }
 
 
+
 unsigned long vm_dup_vmaps(struct mm_struct *src_mm,struct mm_struct *dest_mm){ /* duplicate vmaps to the new thread */
 	struct vm_area_struct *vma,*new_vma;
 
@@ -222,7 +223,28 @@ unsigned long vm_create_kmap(unsigned char *name, unsigned long map_size, unsign
 
 	return vaddr;
 }
+static struct vm_area_struct *vm_find_vma_ovrlap(struct mm_struct *mm, struct vm_area_struct *new_vma) {
+	struct vm_area_struct *vma;
+	if (mm == 0)
+		return 0;
+	vma = mm->mmap;
 
+	if (vma == 0)
+		return 0;
+	while (vma) {
+		DEBUG(" [ %x - %x ] - %x - %x\n", vma->vm_start, vma->vm_end, addr, (addr+len));
+		if (new_vma != vma) {
+			if ((vma->vm_start < new_vma->vm_start) && (vma->vm_end > new_vma->vm_start)) {
+				return vma;
+			}
+			if ((new_vma->vm_start < vma->vm_start) && (new_vma->vm_end > vma->vm_start)) {
+				return vma;
+			}
+		}
+		vma = vma->vm_next;
+	}
+	return 0;
+}
 unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long pgoff, const char *name) {
 	struct mm_struct *mm = g_current_task->mm;
 	struct task_struct *task = g_current_task;
@@ -271,13 +293,26 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, 
 		}
 	} else if (flags & MAP_ANONYMOUS) {
 		if (addr == 0 && mm!=g_kernel_mm) {
-			if (mm->anonymous_addr == 0)
+			if (mm->anonymous_addr == 0){
 				mm->anonymous_addr = USERANONYMOUS_ADDR;
+			}else{
+				struct vm_area_struct *anon_vma;
+				anon_vma = vm_findVma(mm, mm->anonymous_addr-100, 10);
+				if (anon_vma != 0) {
+					anon_vma->vm_end = anon_vma->vm_end + len;
+					if (vm_find_vma_ovrlap(mm, anon_vma) == 0) {
+						mm_slab_cache_free(vm_area_cachep, vma);
+						return anon_vma->vm_end - len;
+					} else {
+						anon_vma->vm_end = anon_vma->vm_end - len;
+					}
+				}
+			}
+			vma->name = "anonymous" ;
 			vma->vm_start = mm->anonymous_addr;
 			vma->vm_end = vma->vm_start + len;
 			mm->anonymous_addr = mm->anonymous_addr + len;
 		}
-
 	}
 
 	ret=vma_link(mm, vma);
@@ -312,13 +347,16 @@ void * SYS_vm_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
  *  brk-specific accounting here.
  */
 unsigned long vm_setupBrk(unsigned long addr, unsigned long len) {
+	unsigned long ret;
 	len = PAGE_ALIGN(len);
 	if (!len)
 		return addr;
 
-	g_current_task->mm->brk_addr = addr;
+	g_current_task->mm->brk_addr = (addr + PAGE_SIZE) & PAGE_MASK;
 	g_current_task->mm->brk_len = len;
-	return vm_mmap(0, addr, len, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0,"anon_brk");
+	ret = vm_mmap(0, g_current_task->mm->brk_addr, len, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0,"anon_brk");
+
+	return ret;
 }
 /************************************************************************************************************/
 
@@ -327,6 +365,7 @@ int SYS_vm_mprotect(const void *addr, int len, int prot) { /* TODO */
 	SYSCALL_DEBUG("protect TODO :%x \n",addr);
 	return 1;
 }
+
 unsigned long SYS_vm_brk(unsigned long addr) {
 	struct vm_area_struct *vma;
 
@@ -341,9 +380,26 @@ unsigned long SYS_vm_brk(unsigned long addr) {
 		Jcmd_maps(0, 0);
 		BUG();
 	}
+	if (addr > 0x40000000){
+		return 0;
+	}
 	if (addr > vma->vm_end) {
 		/* TODO: check for collision for the next vm, less chance since the heap and stack are far apart */
+		struct vm_area_struct *next_vma;
+		unsigned long org_vm_end;
+		org_vm_end = vma->vm_end;
 		vma->vm_end = addr;
+		next_vma = vm_find_vma_ovrlap(g_current_task->mm, vma);
+		if (next_vma!=0){
+			vma->vm_end = org_vm_end;
+			if (g_conf_syscall_debug){
+				Jcmd_maps(0,0);
+			}
+			SYSCALL_DEBUG("brk  Fails because of collision :%x \n",addr);
+			ut_log("ERROR process: %s: brk  Fails because of collision :%x \n",g_current_task->name,addr);
+			return -1;
+		}
+
 		g_current_task->mm->brk_len = addr - g_current_task->mm->brk_addr;
 	}
 

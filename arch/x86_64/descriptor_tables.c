@@ -26,7 +26,7 @@ int init_descriptor_tables() {
 	init_gdt(0);
 	// Initialise the interrupt descriptor table.
 	init_idt();
-	return 0;
+	return JSUCCESS;
 }
 static inline void seg_descr_set_base(gdt_entry_t *descr, uint32_t base) {
 	descr->base_address_low = base & 0xffffff;
@@ -169,8 +169,12 @@ int ar_updateCpuState(struct task_struct *next, struct task_struct *prev) {
 	seg_descr_setup(&gdt_entries[cpuid][FS_UDATA_DESCR], SEG_TYPE_DATA,
 			SEG_DPL_USER, g_cpu_state[cpuid].md_state.user_fs_base, 0xfffff,
 			SEG_FLG_PRESENT | SEG_FLG_64BIT | SEG_FLG_GRAN);
+
 	gdtr_load(&gdt_ptr[cpuid]);
 	asm volatile("mov %0, %%fs":: "r"(g_cpu_state[cpuid].md_state.user_fs));
+#if 1 /* fs update using MSR instead of gdt table, in gdt table the value can have only 32 bit whereas in msr it is 64 bit */
+	msr_write(MSR_FS_BASE, g_cpu_state[cpuid].md_state.user_fs_base);
+#endif
 	return 1;
 }
 

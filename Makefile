@@ -101,6 +101,8 @@ endif
 
 	objdump -D -l bin/jiny_kernel.elf > bin/obj_file
 	objcopy -O binary bin/jiny_kernel.elf bin/jiny_kernel.bin
+	nm bin/jiny_kernel.elf | sort > bin/jiny_symbols
+	cat bin/jiny_kernel.bin bin/jiny_symbols > bin/jiny_image.bin
 #	util/gen_symboltbl util/in bin/mod_file > util/out
 #	util/dwarf_reader bin/kernel_bin > util/dwarf_temp_output
 #	chmod 777 ./dwarf_datatypes

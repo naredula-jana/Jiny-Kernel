@@ -158,6 +158,8 @@ extern void idleTask_func();
 extern void __enable_apic(void);
 void smp_main() {
     int cpuid;
+    unsigned long rsp,rbp;
+
 	while (wait_non_bootcpus == 1)
 		; /* wait till boot cpu trigger */
 	cli();
@@ -170,7 +172,35 @@ void smp_main() {
 	interrupts_enable();
 
 	local_ap_apic_init(); /* TODO : Need to call this second time to get APIC enabled */
-    ut_printf("SMP cpu id:%d \n",cpuid);
+    ut_log("	SMP From the New processor cpu id:%d stack:%x\n",cpuid,&cpuid);
+
+#if 1
+    /* adjust the stack pointer */
+    asm volatile("movq %%rbp,%[prev_rbp]\n\t" \
+    		"movq %%rsp,%[prev_rsp]\n\t"  \
+    		/* output parameters */                            \
+    		: [prev_rsp] "=m" (rsp),                \
+    		  [prev_rbp] "=m" (rbp)                \
+    	   /* input parameters: */                          \
+    		:                 \
+    		: /* reloaded segment registers */                 \
+    		          		"memory");
+   ut_log("   SMP  rsp:%x rbp:%x \n",rsp,rbp);
+   rsp = __va(rsp-0x40000000);
+   rbp = __va(rbp-0x40000000);
+
+   asm volatile("movq %[new_rbp],%%rbp\n\t" \
+   		"movq %[new_rsp],%%rsp\n\t"  \
+   		/* output parameters */
+   		:                 \
+   		           	   /* input parameters: */                  \
+   		: [new_rsp] "m" (rsp),                \
+   		  [new_rbp] "m" (rbp)                \
+                         \
+   		: /* reloaded segment registers */                 \
+   		          		"memory");
+#endif
+
 	idleTask_func();
 	return;
 }
@@ -198,7 +228,8 @@ static int boot_cpu(imps_processor *proc) {
 
 	stack = (unsigned long)g_cpu_state[cpuid].idle_task;/* TODO : currently stack is hardcoded for second cpu , need to make configurable */
 	stack= __pa(stack) + 0x40000000;
-	//stack= __pa(stack) + 0;
+
+
 	stack = (stack + TASK_SIZE - 0x64);
 	p = (int *)((char *) __old_va(bootaddr) + 0x504);
 	*p = (int) stack;
@@ -237,7 +268,7 @@ static int boot_cpu(imps_processor *proc) {
 			UDELAY(1000);
 		}
 	}
-
+//	UDELAY(1000000);  // This is to avoid proper printing by the new processor
 	/*
 	 *  Check to see if other processor has started.
 	 */
@@ -245,7 +276,7 @@ static int boot_cpu(imps_processor *proc) {
 	p = __va(bootaddr);
 	while (*p != 0xA5A5A5A5 && to++ < 100)
 		UDELAY(10000);
-	KERNEL_PRINT("SMP: boot addr: %x  cpuid:%d accept_status \n", *p,cpuid,accept_status);
+	KERNEL_PRINT("SMP: boot addr: %x  cpuid:%d accept_status current_task:%x\n", *p,cpuid,accept_status,g_cpu_state[cpuid].current_task);
 	if (to >= 100) {
 		KERNEL_PRINT("SMP: CPU Not Responding, DISABLED");
 		success = 0;
@@ -338,39 +369,14 @@ int init_smp_force(unsigned long ncpus) {
 		p.apic_id = i;
 		add_processor(&p);
 	}
-
 	local_bsp_apic_init(); /* TODO : Need to call this twice to get APIC enabled */
-#if 1
-	unsigned long *page_table;
-	page_table = __va(0x00102000); /* To clear first 1G clear, so it can used for userspace , Refer the paging.c code this is work around for SMP, this entry used for temporary page table where kernel s[pace is from 0 onwards wheras in permanent it is from 1g  */
-	*page_table = 0;
-
-	if (KADDRSPACE_START >= 0xffffc90000000000){
-		page_table = __va(0x0010000) ;
-		*page_table = 0;
-	//	page_table = __va(0x00102008) ;
-	//	*page_table = 0;
-	}else{
-	//	page_table = __va(0x00102000+(511*8)) ;
-	//	*page_table = 0;
-	}
-
-
-#endif
-
-#if 0  /* TO make first 2M or code pages in to Readonly */
-	//unsigned long *page_table;
-	page_table = __va(0x00103000); /* to make first 2M(text) read only */
-	*page_table = 0x281 ;
-	flush_tlb(0x101000);
-#endif
 
 	wait_non_bootcpus = 0; /* from this point onwards  all non-boot cpus starts */
 
 	KERNEL_PRINT("	NEW SMP: completed, ret:%d maxcpus: %d \n",imps_num_cpus,getmaxcpus());
 	KERNEL_PRINT("	SECOND SMP: completed, ret:%d maxcpus: %d \n",imps_num_cpus,getmaxcpus());
 	cli();
-	return imps_num_cpus;
+	return JSUCCESS;
 }
 
 

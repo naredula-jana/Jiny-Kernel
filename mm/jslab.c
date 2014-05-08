@@ -61,6 +61,7 @@ static void init_zeropage_cache();
 	assert(slabp->magic_number[1] == JSLAB_MAGIC); \
 	if (slabp->magic_number[0] != JSLAB_MAGIC){  \
 		ut_log(" ERROR in jslab line:%d cachep:%s addr:%x slabp:%x bitmap:%x total_alloc:%d total_frees:%d\n",__LINE__,cachep->name,addr,slabp,slabp->bitmap,stat_mallocs,stat_frees); \
+		while(1); \
 	}\
  } while (0)
 
@@ -281,7 +282,7 @@ int init_jslab(unsigned long arg1) {
 	static int init_done = 0;
 
 	if (init_done == 1)
-		return 0;
+		return JFAIL;
 	INIT_LIST_HEAD(&cache_list);
 	for (i = 0; i < MAX_PREDEFINED_CACHES; i++) {
 		predefined_caches[i].obj_size = 0;
@@ -289,7 +290,7 @@ int init_jslab(unsigned long arg1) {
 	for (i = 0; cache_sizes[i] != 0 && i < MAX_PREDEFINED_CACHES; i++) {
 		ret = create_jcache(&predefined_caches[i], "predefined", cache_sizes[i],0);
 		if (ret == JFAIL ){
-			ut_log("	ERROR: jslab cacahe create fails:  size:%d \n",cache_sizes[i]);
+			ut_log("	ERROR: jslab cache create fails:  size:%d \n",cache_sizes[i]);
 		}
 	}
 #ifdef JSLAB_DEBUG
@@ -297,7 +298,7 @@ int init_jslab(unsigned long arg1) {
 #endif
 	init_zeropage_cache();
 	init_done = 1;
-	return 0;
+	return JSUCCESS;
 }
 /************************************** API *************************************************************************************/
 void *  jslab_alloc_from_cache(jcache_t *cachep, int flags){
@@ -552,7 +553,7 @@ int init_jslab_vmalloc(){
 	*p='1';
 
 	vmalloc_initiated = 1;
-	return 0;
+	return JSUCCESS;
 }
 void *vmalloc(int size, int flags){
 	int i,j;
