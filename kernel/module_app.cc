@@ -910,7 +910,7 @@ int ut_mod_symbol_execute(int type, char *name, char *argv1, char *argv2) {
 	}
  return ret;
 }
-extern void idleTask_func();
+
 int perf_stat_rip_hit(unsigned long rip) {
 	module_t *modulep = 0;
 	int addr_found=0;
@@ -920,7 +920,6 @@ int perf_stat_rip_hit(unsigned long rip) {
 	for (j = 0; j < total_modules; j++) {
 		int min = 0;
 		int max;
-
 
 		modulep = g_modules[j];
 		max = modulep->symb_table_length - 3;
@@ -943,9 +942,7 @@ int perf_stat_rip_hit(unsigned long rip) {
 		if ((rip >= modulep->symbol_table[curr].address) && (rip <= modulep->symbol_table[curr + 1].address)) {
 			modulep->symbol_table[curr].stats.hits++;
 			modulep->symbol_table[curr].stats.rip = rip;
-			if (modulep->symbol_table[curr].address == &idleTask_func){
-				g_cpu_state[getcpuid()].stat_idleticks++;
-			}
+
 			if (g_conf_func_debug == curr){
 				int f;
 				for (f=0; f<func_hits_count; f++){

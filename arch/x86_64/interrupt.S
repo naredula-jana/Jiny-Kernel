@@ -218,5 +218,5 @@ ar_faultsTable:
 
 .align 16
 ar_irqsTable:
-         GEN_INTRS_TABLE 32, 255, irq_entry_point
+         GEN_INTRS_TABLE 32, 256, irq_entry_point
 

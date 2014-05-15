@@ -119,7 +119,7 @@ struct page *fs_inode::fs_genericRead(unsigned long offset) {
 	error: if (err < 0) {
 		ut_log(" Error in reading the file :%i :%x\n", -err,page);
 		page = 0;
-		BUG();
+		//BUG();
 	}
 	return page;
 }
@@ -160,8 +160,10 @@ int fs_inode::write(unsigned long offset, unsigned char *data, int len) {
 	if (file_type == DIRECTORY_FILE) { //TODO : check for testing
 		BUG();
 	}
+#if 0
 	if ( offset > (fileStat.st_size))
 		return -1;
+#endif
 	ret = 0;
 	tmp_len = 0;
 	while (tmp_len < len) {
@@ -545,6 +547,7 @@ int fs_write(struct file *filep, uint8_t *buff, unsigned long len) {
 		ut_log(" fs_write fails error:%x pid:%d \n", ret, g_current_task->pid);
 		return 0;
 	}
+	filep->offset = filep->offset+ret;
 	return ret;
 }
 struct file *fs_dup(struct file *old_filep, struct file *new_filep) {

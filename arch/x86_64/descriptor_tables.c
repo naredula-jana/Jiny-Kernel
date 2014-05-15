@@ -216,7 +216,7 @@ static void init_idt() {
 	for (i = 0; i < 32; i++) {
 		SET_FAULT_GATE(i);
 	}
-	for (i = 0; i < (255 - 32); i++) {
+	for (i = 0; i < (256 - 32); i++) {
 		SET_IRQ_GATE(i);
 	}
 

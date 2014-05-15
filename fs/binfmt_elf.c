@@ -351,7 +351,7 @@ unsigned long fs_elf_load(struct file *file,unsigned long tmp_stack, unsigned lo
 	//	len = ELF_PAGESTART(eppnt->p_filesz + eppnt->p_vaddr + ELF_MIN_ALIGN - 1);
 		bss_start = eppnt->p_filesz + eppnt->p_vaddr;
 		bss = eppnt->p_memsz + eppnt->p_vaddr;
-		ut_log(" bss start :%x end:%x memsz:%x elf_bss:%x \n",bss_start, bss,eppnt->p_memsz,elf_bss);
+		//ut_log(" bss start :%x end:%x memsz:%x elf_bss:%x \n",bss_start, bss,eppnt->p_memsz,elf_bss);
 		if (bss > bss_start) {
 			vm_setupBrk(bss_start, bss - bss_start);
 		}

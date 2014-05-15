@@ -26,7 +26,7 @@
 #define __ARCH_APIC_H__
 
 
-
+#if 0
 typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 typedef unsigned int uint32_t;
@@ -34,22 +34,16 @@ typedef unsigned long uint64_t;
 typedef int int32_t;
 typedef unsigned long ulong_t;
 typedef unsigned long uintptr_t;
+#endif
+#include "types.h"
+typedef unsigned long ulong_t;
+
 #define kprintf ut_printf
 //#define kprintf dummy
 #define true 1
 #define false 0
 #define HZ  1000 /* Timer frequency. */
-#define IRQ_BASE 32 /* First vector in IDT for IRQ #0. */
-#define RESERVED_IRQS 8 /* Reserved IRQ for SMP use. */
-/* Maximum number of hardware IRQs in the system. */
-#define NUM_IRQS  256 - IRQ_BASE - RESERVED_IRQS
-#define CPU_SMP_BASE_IRQ (256 - RESERVED_IRQS)
-#define LOCAL_TIMER_CPU_IRQ_VEC CPU_SMP_BASE_IRQ
-#define SCHEDULER_IPI_IRQ_VEC (CPU_SMP_BASE_IRQ+1)
-
-
-
-
+#include "isr.h"
 
 #define DEFAULT_APIC_BASE    0xfee00000
 #define APIC_INT_EOI  0x0

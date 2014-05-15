@@ -251,7 +251,7 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, 
 	struct vm_area_struct *vma;
 	int ret;
 
-	//ut_log(" mmap : name:%s -- %s file:%x addr:%x len:%x pgoff:%x flags:%x  protection:%x\n",name,file->filename,file,addr,len,pgoff,flags,prot);
+	//ut_printf(" mmap : name:%s -- %s file:%x addr:%x len:%x pgoff:%x flags:%x  protection:%x,state:%x\n",name,file->filename,file,addr,len,pgoff,flags,prot,g_current_task->state);
 	vma = vm_findVma(mm, addr, len);
 	if (vma){
 		ut_log("VMA ERROR:  Already Found :%x \n",addr);
@@ -367,13 +367,18 @@ int SYS_vm_mprotect(const void *addr, int len, int prot) { /* TODO */
 }
 
 unsigned long SYS_vm_brk(unsigned long addr) {
+	unsigned long ret = addr;
 	struct vm_area_struct *vma;
 
 	SYSCALL_DEBUG("brk:%x \n",addr);
-	if (addr == 0)
-		return g_current_task->mm->brk_addr + g_current_task->mm->brk_len;
-	if (g_current_task->mm->brk_addr > (addr - g_current_task->mm->brk_len))
-		return 0;
+	if (addr == 0){
+		ret = g_current_task->mm->brk_addr + g_current_task->mm->brk_len;
+		goto last;
+	}
+	if (g_current_task->mm->brk_addr > (addr - g_current_task->mm->brk_len)){
+		ret = 0;
+		goto last;
+	}
 	vma = vm_findVma(g_current_task->mm, g_current_task->mm->brk_addr, g_current_task->mm->brk_len - 1);
 	if (vma == 0){
 		ut_printf(" BUG:  SYS_vm_brk addr:%x\n",addr);
@@ -381,7 +386,8 @@ unsigned long SYS_vm_brk(unsigned long addr) {
 		BUG();
 	}
 	if (addr > 0x40000000){
-		return 0;
+		ret = 0;
+		goto last;
 	}
 	if (addr > vma->vm_end) {
 		/* TODO: check for collision for the next vm, less chance since the heap and stack are far apart */
@@ -397,13 +403,14 @@ unsigned long SYS_vm_brk(unsigned long addr) {
 			}
 			SYSCALL_DEBUG("brk  Fails because of collision :%x \n",addr);
 			ut_log("ERROR process: %s: brk  Fails because of collision :%x \n",g_current_task->name,addr);
-			return -1;
+			ret = -1;
+			goto last;
 		}
-
 		g_current_task->mm->brk_len = addr - g_current_task->mm->brk_addr;
 	}
-
-	return addr;
+last:
+	SYSCALL_DEBUG(" brk ret :%x state:%x\n",ret,g_current_task->state);
+	return ret;
 }
 
 /**********************************************************************************************/

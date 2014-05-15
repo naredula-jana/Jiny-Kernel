@@ -10,7 +10,7 @@
  */
 #include "interface.h"
 static int ipc_init_done=0;
-int _sc_task_assign_to_cpu(struct task_struct *task);
+extern int _sc_task_assign_to_cpu(struct task_struct *task);
 unsigned long _schedule(unsigned long flags);
 void sc_remove_dead_tasks();
 void *ipc_mutex_create(char *name) {
@@ -328,7 +328,6 @@ int ipc_wakeup_waitqueue(wait_queue_t *waitqueue ) {
 	while (waitqueue->head.next != &waitqueue->head) {
 		task = list_entry(waitqueue->head.next, struct task_struct, wait_queue);
 		if (_del_from_waitqueue(waitqueue, task) == JSUCCESS) {
-			task->state = TASK_RUNNING;
 			assigned_to_running_cpu = 0;
 			if (task->run_queue.next == 0 ){
 				assigned_to_running_cpu = _sc_task_assign_to_cpu(task);
@@ -408,7 +407,6 @@ void ipc_del_from_waitqueues(struct task_struct *task) {
 		if (_del_from_waitqueue(wait_queues[i], task)==JFAIL){
 			continue;
 		}
-		task->state = TASK_RUNNING;
 		assigned_to_running_cpu = 0;
 		if (task->run_queue.next == 0)
 			assigned_to_running_cpu = _sc_task_assign_to_cpu(task);
@@ -443,7 +441,6 @@ void ipc_check_waitqueues() {
 			task->sleep_ticks--;
 			if (task->sleep_ticks <= 0) {
 				_del_from_waitqueue(wait_queues[i], task);
-				task->state = TASK_RUNNING;
 				assigned_to_running_cpu = 0;
 				if (task->run_queue.next == 0)
 					assigned_to_running_cpu = _sc_task_assign_to_cpu(task);

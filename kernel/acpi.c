@@ -74,13 +74,13 @@ static unsigned int *acpiCheckRSDPtr(unsigned int *ptr)
 
       // found valid rsdpd
       if (check == 0) {
-         /*
-          if (desc->Revision == 0)
-            ut_printf("acpi 1");
+#if 1
+          if (rsdp->Revision == 0)
+            ut_printf("		acpi 1\n");
          else
-            ut_printf("acpi 2");
-         */
-    	  ut_printf(" JANA: found the acpi address: %x\n",rsdp);
+            ut_printf("		acpi 2\n");
+#endif
+    	  ut_printf("	found the acpi address: %x\n",rsdp);
          return (unsigned int *) rsdp->RsdtAddress;
       }
    }
@@ -213,9 +213,12 @@ int init_acpi(unsigned long unused_arg1)
 	//return -1;
    unsigned int *ptr = acpiGetRSDPtr();
 
+   ut_printf(" first : phy %x \n",ptr);
    unsigned char *p=__va(ptr);
    ptr=p;
- //  ut_printf(" first :%x \n",ptr);
+#ifdef DEBUG
+   ut_printf(" first :virt  %x \n",ptr);
+#endif
    // check if address is correct  ( if acpi is available on this pc )
    if (ptr != NULL && acpiCheckHeader(ptr, "RSDT") == 0)
    {
@@ -231,25 +234,37 @@ int init_acpi(unsigned long unused_arg1)
          if (acpiCheckHeader((unsigned int *) *ptr, "FACP") == 0)
          {
             entrys = -2;
+            ut_printf("   Found FACP: %x\n",ptr);
             struct FACP *facp = (struct FACP *) __va(*ptr);
             if (acpiCheckHeader((unsigned int *) __va(facp->DSDT), "DSDT") == 0)
             {
                // search the \_S5 package in the DSDT
                char *S5Addr = (char *)( facp->DSDT +36); // skip header
+               ut_printf("   s5addr: %x\n",S5Addr);
                S5Addr=__va(S5Addr);
               // int dsdtLength = *(facp->DSDT+1) -36;
                int *p = __va(facp->DSDT+1);
                int dsdtLength = *(p)-36;
-               while (0 < dsdtLength--)
+               int loop;
+               ut_printf("   lenght: %x  addr:%x\n",dsdtLength,p);
+               //while (0 < dsdtLength--)
+               loop=0;
+            	   while(loop<0x1400)
                {
-                  if ( ut_memcmp(S5Addr, "_S5_", 4) == 0)
+                  if ( ut_memcmp(S5Addr, "_S5_", 4) == 0){
+                	  ut_printf("	 found S5 in memcmp\n");
                      break;
+                  }
                   S5Addr++;
+                  loop++;
                }
+               ut_printf("  	 after lenght: %x s5addr:%x\n",dsdtLength,S5Addr);
                // check if \_S5 was found
-               if (dsdtLength > 0)
+             //  if (dsdtLength > 0)
+               if (1)
                {
                   // check for valid AML structure
+            	   ut_printf("	  check  s5addr: %x\n",S5Addr);
                   if ( ( *(S5Addr-1) == 0x08 || ( *(S5Addr-2) == 0x08 && *(S5Addr-1) == '\\') ) && *(S5Addr+4) == 0x12 )
                   {
                      S5Addr += 5;
@@ -276,8 +291,8 @@ int init_acpi(unsigned long unused_arg1)
 
                      SLP_EN = 1<<13;
                      SCI_EN = 1;
-                     ut_log("ACPI sucessfully Initialized\n");
-                     return 0;
+                     ut_log("	ACPI sucessfully Initialized\n");
+                     return JSUCCESS;
                   } else {
                      ut_printf("\\_S5 parse error.\n");
                   }
@@ -295,7 +310,7 @@ int init_acpi(unsigned long unused_arg1)
       ut_printf("no acpi.\n");
    }
 
-   return -1;
+   return JFAIL;
 }
 
 

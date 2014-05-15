@@ -155,6 +155,7 @@ struct cpu_state {
 	int intr_disabled; /* interrupts disabled except apic timer */
 
 	int intr_nested_level;
+	unsigned long last_total_contexts; /* used for house keeping */
 
 	unsigned long stat_total_contexts;
 	unsigned long stat_nonidle_contexts;

@@ -33,7 +33,7 @@ extern int init_kmem_cache(unsigned long arg1);
 extern int init_vfs(unsigned long arg1);
 extern int init_networking(unsigned long arg1);
 extern int init_clock(unsigned long arg1);
-extern int init_symbol_table(unsigned long arg1);
+extern int init_symbol_table(unsigned long arg1,unsigned long arg2);
 extern int init_devClasses(unsigned long arg1);
 extern int init_modules(unsigned long arg1);
 extern int  init_log_file(unsigned long arg1);
@@ -75,7 +75,6 @@ static inittable_t inittable[] = {
 		{init_clock,0,       "clock"},
 //		{init_code_readonly,0,       "Making code readonly"},
 		{init_kernel_vmaps, 0, "Kernel Vmaps"},
-		{init_symbol_table,0,       "symboltable"},
 		{init_jdevices,0,       "devices in c++ "},
 		{init_acpi,0,       "ACPI initialzed "},
 //		{init_modules,0,       "modules"},
@@ -87,7 +86,8 @@ unsigned char cmdline[9024]={"dummy"};
 unsigned long g_phy_mem_size=0;
 /* Check if the bit BIT in FLAGS is set.  */
 #define CHECK_FLAG(flags,bit)	((flags) & (1 << (bit)))
-
+extern int _edata; // data and bsss start
+extern addr_t end; // end of code and data region
 int init_physical_memory(unsigned long unused){
 	multiboot_info_t *mbi;
 	unsigned long *mbi_ptr,*magic_ptr;
@@ -97,7 +97,6 @@ int init_physical_memory(unsigned long unused){
 	magic_ptr = __va(0x4010);
 	mbi=__va(*mbi_ptr);
 
-//while(1);
 	if (*magic_ptr != MULTIBOOT_BOOTLOADER_MAGIC){
 		BUG();
 	}
@@ -122,25 +121,11 @@ int init_physical_memory(unsigned long unused){
 		}
 	}
 
-#if 0
-	if (mbi->mods_count > 0) {
-		multiboot_mod_t *mod;
-
-		mod =(multiboot_mod_t *) mbi->mods_addr;
-		g_multiboot_mod1_addr = mod->mod_start;
-		g_multiboot_mod1_len = mod->mod_end - mod->mod_start;
-		mod++;
-		if (mbi->mods_count>1){
-			g_multiboot_mod2_addr = mod->mod_start;
-			g_multiboot_mod2_len = mod->mod_end - mod->mod_start;
-			ut_log("	mod2 addr : %x len:%d\n",g_multiboot_mod2_addr,g_multiboot_mod2_len);
-		}
-	}
-#endif
 	g_phy_mem_size = max_addr;
 	ut_log("  Physical memory size :%x (%d)  magic_ptr :%x cmdline: %x :%s\n",g_phy_mem_size,g_phy_mem_size,magic_ptr,mbi->cmdline,__va(mbi->cmdline+0x20));
-
-	return 0;
+	ut_log("  end of data :%x  image end:%x\n",&_edata, &end);
+	init_symbol_table(&_edata, &end);
+	return JSUCCESS;
 }
 /* Forward declarations.  */
 void cmain ();
@@ -220,21 +205,19 @@ int init_kernel_vmaps(unsigned long arg1){
 		init_jslab_vmalloc();
 	}
 
-	return 0;
+	return JSUCCESS;
 }
 void cmain() {  /* This is the first c function to be executed */
 	int i,ret;
 
 	g_cpu_state[0].current_task = g_current_task;
-	/* Clear the screen.  */
-	//ut_cls();
 
-	//while(1);
+//	while(1);
 	for (i=0; inittable[i].func != 0; i++){
 		ut_log("INITIALIZING :%s  ...\n",inittable[i].comment);
-		ut_printf("..INITIALIZING :%s  ...\n",inittable[i].comment);
+		//ut_printf("..INITIALIZING :%s  ...\n",inittable[i].comment);
 		ret = inittable[i].func(inittable[i].arg1);
-		if (ret==0){
+		if (ret==JSUCCESS){
 			//ut_log(" ... Success\n");
 		}else{
 			ut_log("	%s : ....Failed error:%d\n",inittable[i].comment,ret);

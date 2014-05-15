@@ -397,7 +397,7 @@ int pagetable_walk(int level,unsigned long ptable_addr, int print){
 	if (p == 0) return 0;
 
 	if (level == 4){
-		ut_printf("Page Table Walk : %x \n",ptable_addr);
+		ut_printf("Page Table Walk : %x state:%x\n",ptable_addr,g_current_task->state);
 	}
 	max_i=512;
 	for (i=0; i<max_i; i++){
@@ -697,11 +697,11 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 		if ( user == 1)
 		{
 			int stack_var;
-			BUG();
-		//	ut_printf("ERROR: user program Segmentaion Fault addr:%x  ip:%x :%s\n",addr,faulting_ip,g_current_task->name);
+		//	BUG();
+			ut_printf("ERROR: user program Segmentaion Fault addr:%x  ip:%x :%s\n",addr,faulting_ip,g_current_task->name);
 			Jcmd_maps(0,0);
 			ut_log("ERROR: Segmentation fault page fault addr:%x ip:%x  \n",addr,faulting_ip);
-			Jcmd_lsmod(0,0);
+			//Jcmd_lsmod(0,0);
 
 			//ut_showTrace(&stack_var);
 			SYS_sc_exit(902);

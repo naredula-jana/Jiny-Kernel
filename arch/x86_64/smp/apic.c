@@ -25,7 +25,7 @@
  */
 
 #include "apic.h"
-
+#define TICKS_PER_SECOND 100   /* 100 is default value */
 void dummy(const char *format, ...){
 
 }
@@ -437,21 +437,17 @@ void local_apic_timer_calibrate(uint32_t hz)
   kprintf("APIC: delay loop: %d \n",delay_loop);
 
   /*ok, let's write a difference to icr*/
-  local_apic->timer_icr.count=delay_loop; /* <-- this will tell us how much ticks we're really need */
+  /* recevies 100 timer interrupts per sec */
+  local_apic_timer_ap_calibrate(TICKS_PER_SECOND); /* <-- this will tell us how much ticks we're really need */
 }
 
-void local_apic_timer_ap_calibrate(void)
+void local_apic_timer_ap_calibrate(int intr_per_sec)
 {
-  local_apic->timer_icr.count=delay_loop;   
+  local_apic->timer_icr.count=(delay_loop *(100))/intr_per_sec;
 }
 
 
 extern void i8254_suspend(void);
-
-void apic_timer_hack(void)
-{
-  local_apic->timer_icr.count=delay_loop;
-}
 
 #define I8254_BASE  0x40
 void i8254_suspend(void)
@@ -490,7 +486,7 @@ void local_apic_timer_ap_init(uint8_t vector)
   /* calibrate timer delimeter */
    __local_apic_timer_calibrate(16);
   /*calibrate to hz*/
-  local_apic_timer_ap_calibrate();
+  local_apic_timer_ap_calibrate(TICKS_PER_SECOND);
   /* setup timer vector  */
   lvt_timer.vector=vector; 
   /* set periodic mode (set bit to 1) */
@@ -602,7 +598,7 @@ void apic_disable_partially(){// TODO sometimes cpu stop recving the timer inter
 
 	/* 2. set the timer so that interrupts happens with very less frequency */
 	  local_apic_timer_disable();
-	  local_apic->timer_icr.count=delay_loop*100;  // recevies timer interrupt 1 per second instead of 100 per second
+	  local_apic_timer_ap_calibrate(1);  // recevies timer interrupt 1 per second instead of 100 per second
 	  local_apic_timer_enable();
 }
 void apic_reenable(){// TODO : sometimes cpu stop recving the interrupt interrupt
@@ -617,7 +613,7 @@ void apic_reenable(){// TODO : sometimes cpu stop recving the interrupt interrup
 
 	/* 2. set the timer to the defualt frequency frequency */
 	  local_apic_timer_disable();
-	  local_apic->timer_icr.count=delay_loop;
+	  local_apic_timer_ap_calibrate(TICKS_PER_SECOND); /* recevies 100 timer interrupts per sec */
 	  local_apic_timer_enable();
 }
 

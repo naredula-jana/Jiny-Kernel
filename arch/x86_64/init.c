@@ -12,13 +12,13 @@ static void init_fs_and_gs(int cpuid)
 	msr_write(MSR_FS_BASE, 0);
 	__asm__ volatile ("swapgs");
 }
-
-void Jcmd_test(unsigned char *arg1,unsigned char *arg2){
+#if 0
+void Jcmd_getcpuid(unsigned char *arg1,unsigned char *arg2){
 	unsigned long p;
 	asm volatile("movq %%gs:0x48,%0" : "=r" (p));
 	ut_printf("  getcpuid :%x  p:%x \n",getcpuid(),p);
 }
-
+#endif
 static inline void bit_set(void *bitmap, int bit)
 {
 	*(unsigned long *)bitmap |= (1 << bit);

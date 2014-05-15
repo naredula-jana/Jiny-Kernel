@@ -247,6 +247,7 @@ int kshell::main(void *arg) {
 	sc_sleep(500); /* this sleep is to make sure the user level thread come up, other wise we force it to use the keyboard */
 	sc_set_fsdevice(DEVICE_KEYBOARD, DEVICE_KEYBOARD); /* kshell on vga console */
 	curr_line[0] = '\0';
+	ut_printf(" JINY OS .. Started ..\n");
 	while (1) {
 		ut_printf(CMD_PROMPT);
 		cmd_type = get_cmd(curr_line);
@@ -257,6 +258,12 @@ int kshell::main(void *arg) {
 extern "C" {
 void shell_main(){
     ksh.main(0);
+}
+void Jcmd_test(){  /* generating GP */
+	unsigned long *p=0x100,*r;
+	unsigned long(*q)();
+	q=__va(0x101000);
+	q();
 }
 }
 

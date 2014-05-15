@@ -186,8 +186,8 @@ void smp_main() {
     		: /* reloaded segment registers */                 \
     		          		"memory");
    ut_log("   SMP  rsp:%x rbp:%x \n",rsp,rbp);
-   rsp = __va(rsp-0x40000000);
-   rbp = __va(rbp-0x40000000);
+   rsp = KERNEL_CODE_START + rsp -0x40000000;
+   rbp = KERNEL_CODE_START + rbp -0x40000000;
 
    asm volatile("movq %[new_rbp],%%rbp\n\t" \
    		"movq %[new_rsp],%%rsp\n\t"  \
@@ -251,12 +251,12 @@ static int boot_cpu(imps_processor *proc) {
 	send_ipi(apicid,
 			LAPIC_ICR_TM_LEVEL | LAPIC_ICR_LEVELASSERT | LAPIC_ICR_DM_INIT);
 
-	UDELAY(10000);
+	UDELAY(1000);
 
 	/* de-assert INIT IPI */
 	send_ipi(apicid, LAPIC_ICR_TM_LEVEL | LAPIC_ICR_DM_INIT);
 
-	UDELAY(10000);
+	UDELAY(1000);
 
 	/*
 	 *  Send Startup IPIs if not an old pre-integrated APIC.
@@ -275,7 +275,7 @@ static int boot_cpu(imps_processor *proc) {
 	to = 0;
 	p = __va(bootaddr);
 	while (*p != 0xA5A5A5A5 && to++ < 100)
-		UDELAY(10000);
+		UDELAY(1000);
 	KERNEL_PRINT("SMP: boot addr: %x  cpuid:%d accept_status current_task:%x\n", *p,cpuid,accept_status,g_cpu_state[cpuid].current_task);
 	if (to >= 100) {
 		KERNEL_PRINT("SMP: CPU Not Responding, DISABLED");
