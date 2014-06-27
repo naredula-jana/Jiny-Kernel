@@ -370,6 +370,9 @@ static struct fs_inode *fs_getInode(uint8_t *arg_filename, int flags,
 
 	ret_inode = 0;
 	vfs=transform_filename(arg_filename, filename);
+	if (vfs == 0){
+		return 0;
+	}
 
 	mutexLock(g_inode_lock);
 	list_for_each(p, &fs_inode_list) {
@@ -392,6 +395,10 @@ static struct fs_inode *fs_getInode(uint8_t *arg_filename, int flags,
 
 		ret_inode->init(filename, mode & 0x3, vfs);
 		struct filesystem *vfs_fs = ret_inode->vfs;
+		if (vfs_fs ==0){
+			ret_inode = 0;
+			goto last;
+		}
 		ret = vfs_fs->open(ret_inode, flags, mode & 0x3);
 		if (ret == JFAIL) {
 			ret_inode->count.counter = 0;

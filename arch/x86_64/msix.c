@@ -28,11 +28,14 @@ static void update_msix_table(struct pcicfg_msix *msix, int mask) {
 
 	for (i = 0; i < msix->msix_msgnum; i++) {
 		address = LAPIC_BASE;
-	//address = address | 0x100b; /* apic-id=1 as destination, to send to the second cpu, */
+
+	address = address | 0x1008; /* Working apic-id=1 as destination, to send to the second cpu, */
+//		address = address | 0xf00c; /* using logic mode for apic id's Working apic-id=1 as destination, to send to the second cpu, */
 		msix->msix_table[i].upper_add = address >> 32;
 		msix->msix_table[i].lower_addr = address & 0xffffffff;
-		msix->msix_table[i].data =( msix->isr_vector + i) ;
+		msix->msix_table[i].data =( msix->isr_vector + i) | 0x100 ;  /* lowest priority mode=0x100 */
 		msix->msix_table[i].control = mask;
+		ut_log(" %d: MSIX  data :%x address:%x \n",i,msix->msix_table[i].data,address);
 	}
 	return;
 

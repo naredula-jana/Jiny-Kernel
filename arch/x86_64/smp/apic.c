@@ -118,9 +118,14 @@ void apic_shootout(void)
 
 void apic_set_task_priority(uint8_t prio)
 {
-	local_apic->tpr.reg = prio; 
+	local_apic->tpr.reg = prio;
+	//local_apic->tpr.priority = prio;
 }
-
+uint8_t apic_get_task_priority()
+{
+	ut_printf("  prio: %x register :%x cpuid:%d \n,",local_apic->tpr.reg ,local_apic->tpr.priority,getcpuid());
+	return local_apic->tpr.priority ;
+}
 
 
 static void __local_apic_clear(void)

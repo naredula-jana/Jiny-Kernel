@@ -60,6 +60,7 @@
 extern int local_ap_apic_init(void);
 extern int local_bsp_apic_init(void);
 extern void local_apic_bsp_switch(void);
+void init_ioapic();
 
 static int lapic_dummy = 0;
 
@@ -71,6 +72,7 @@ volatile int imps_release_cpus = 0;
 int imps_enabled = 0;
 int imps_num_cpus = 1;
 unsigned long imps_lapic_addr = ((unsigned long) (&lapic_dummy)) - LAPIC_ID;
+unsigned long imps_ioapic_addr = 0;
 unsigned char imps_cpu_apic_map[IMPS_MAX_CPUS];
 unsigned char imps_apic_cpu_map[IMPS_MAX_CPUS];
 
@@ -336,7 +338,7 @@ int init_smp_force(unsigned long ncpus) {
 	KERNEL_PRINT(("	SMP: Intel MultiProcessor \"Force\" Support\n"));
 
 	imps_lapic_addr  = vm_create_kmap("smp_apic",0x100000,PROT_WRITE,MAP_FIXED,0xFee00000);
-
+	imps_ioapic_addr  = vm_create_kmap("io_apic",4096,PROT_WRITE,MAP_FIXED,0xFec00000);
 	ut_log(" APIC  virt addr :%x phy addr:%x \n",imps_lapic_addr,__pa(imps_lapic_addr));
 	/*
 	 *  Setup primary CPU.
@@ -360,6 +362,7 @@ int init_smp_force(unsigned long ncpus) {
 	ut_log("imps_smp:  stack vert addr:%x  phy:%x \n",g_cpu_state[0].idle_task,__pa(g_cpu_state[0].idle_task));
 	//return 0;
 
+	init_ioapic();
 	for (i = 0; i < ncpus; i++) {
 		if (apicid == i) {
 			p.flags = IMPS_FLAG_ENABLED | IMPS_CPUFLAG_BOOT;
@@ -377,6 +380,88 @@ int init_smp_force(unsigned long ncpus) {
 	KERNEL_PRINT("	SECOND SMP: completed, ret:%d maxcpus: %d \n",imps_num_cpus,getmaxcpus());
 	cli();
 	return JSUCCESS;
+}
+/******************************   IO APIC code ********************/
+static void write_ioapic_register( unsigned long apic_base, const uint8_t offset, const uint32_t val) {
+	/* tell IOREGSEL where we want to write to */
+	*(uint32_t*) (apic_base) = offset;
+	/* write the value to IOWIN */
+	*(uint32_t*) (apic_base + 0x10) = val;
+}
+
+static uint32_t read_ioapic_register( unsigned long apic_base, const uint8_t offset) {
+	/* tell IOREGSEL where we want to read from */
+	*(uint32_t*) (apic_base) = offset;
+	/* return the data from IOWIN */
+	return *(uint32_t*) (apic_base + 0x10);
+}
+#define IOAPIC_ID   0x00
+typedef union  {
+    uint32_t value;
+    struct {
+        uint32_t reserved0:24, id:8;
+    }  __attribute__ ((packed));;
+}ioapic_id_t;
+
+typedef union  {
+    uint32_t value;
+    struct {
+        uint32_t version:8, reserved0:8,
+            max_irq:8, reserved1:8;
+    } __attribute__ ((packed));;
+}ioapic_ver_t;
+/*
+static struct ioapic_pin ioapic_get_8259A_pin(void)
+{
+    union ioapic_irqentry entry;
+    struct ioapic_pin pic = { .apic = -1, .pin = -1 };
+    int max_irq;
+
+    for (int apic = 0; apic < nr_ioapics; apic++) {
+        max_irq = ioapic_descs[apic].max_irq;
+        for (int irq = 0; irq <= max_irq; irq++) {
+            entry = ioapic_read_irqentry(apic, irq);
+
+            if (entry.delivery_mode != IOAPIC_DELMOD_EXTINT)
+                continue;
+
+            if (entry.mask != IOAPIC_UNMASK)
+                continue;
+
+            pic.apic = apic;
+            pic.pin = irq;
+            return pic;
+        }
+    }
+
+    return pic;
+}
+*/
+void init_ioapic(){
+	int i;
+
+	ioapic_ver_t version = { .value = 0 };
+	ioapic_id_t id = { .value = 0 };
+	id.value = read_ioapic_register(imps_ioapic_addr, IOAPIC_ID);
+	ut_log("IOAPIC  id :%d \n",id.value);
+	if (id.value != 0){
+
+	}
+}
+void Jcmd_ioapic() {
+	int i;
+	ioapic_ver_t version = { .value = 0 };
+	ioapic_id_t id = { .value = 0 };
+	id.value = read_ioapic_register(imps_ioapic_addr, IOAPIC_ID);
+	ut_printf(" apic :%x \n",id.id);
+
+
+	 version.value = read_ioapic_register(imps_ioapic_addr, 1);
+	 ut_printf(" version = %d  max_irq:%d \n",version.version,version.max_irq);
+
+	for (i = 16; i < 30; i++) {
+		ut_printf(" ioapic :%d -> %x \n", i, read_ioapic_register(imps_ioapic_addr, i));
+	}
 }
 
 

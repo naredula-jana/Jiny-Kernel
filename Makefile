@@ -37,7 +37,7 @@ OBJ_KERNEL = kernel/debug.o kernel/jdevices.o kernel/init.o  kernel/acpi.o kerne
 	
 OBJ_MEM= mm/memory.o mm/jslab.o mm/mmap.o mm/pagecache.o 
 OBJ_FS=	fs/binfmt_elf.o fs/pipe.o fs/file.o fs/fs_api.o fs/socket.o fs/vfs.o fs/proc_fs.o
-OBJ_SMP = arch/$(ARCH_DIR)/smp/smp-imps.o  arch/$(ARCH_DIR)/smp/apic.o
+OBJ_SMP = arch/$(ARCH_DIR)/smp/smp-imps.o  arch/$(ARCH_DIR)/smp/apic.o arch/$(ARCH_DIR)/smp/mptables.o
 
 
 OBJECTS =  $(OBJ_ARCH) $(OBJ_SMP) $(OBJ_KERNEL) $(OBJ_MEM) $(OBJ_FS) $(OBJ_MEMLEAK) $(OBJ_VIRTIO) $(OBJ_DRIVER)
@@ -67,6 +67,9 @@ udpip_stack:
 test_net:
 	make SOURCE_ROOT=$$PWD -C modules/test_net
 	cp modules/test_net/test_net.o test/root/
+
+uip:
+	make SOURCE_ROOT=$$PWD -C  modules/uip-uip-1-0/uip
 
 test_file:
 	make SOURCE_ROOT=$$PWD -C modules/test_file

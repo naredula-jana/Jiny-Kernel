@@ -14,7 +14,7 @@ extern "C" {
 }
 
 #define MAX_LINE_LENGTH 200
-#define CMD_PROMPT "->>>"
+#define CMD_PROMPT "-->"
 #define MAX_CMD_HISTORY 50
 #define MAX_COMMANDS 500
 
@@ -30,9 +30,12 @@ class kshell {
 	int cmd_func(unsigned char *arg1, unsigned char *arg2);
 
 public:
+	int input_device;
+	void kshell_process();
 	int main(void *arg);
 };
-kshell ksh;
+kshell ksh; /* kernel shellon console */
+kshell serial_ksh; /* kernel shell on serial line , incase file system not present  */
 
 enum {
 	CMD_GETVAR = 1, CMD_FILLVAR, CMD_UPARROW, CMD_DOWNARROW, CMD_LEFTARROW
@@ -134,13 +137,14 @@ int kshell::get_cmd(unsigned char *line) {
 	i = 0;
 	cmd = CMD_FILLVAR;
 	for (i = 0; line[i] != '\0' && i < MAX_LINE_LENGTH; i++) {
-		putchar((int) line[i]);
+//		putchar((int) line[i]);
 	}
 	while (i < MAX_LINE_LENGTH) {
 		int c;
 
-		while ((line[i] = dr_kbGetchar(DEVICE_KEYBOARD)) == 0)
-			;
+		//SYS_fs_read(0,&line[i],1);
+		while ((line[i] = dr_kbGetchar(input_device)) == 0);
+
 
 		c = line[i];
 		if (line[i] == 1) /* upArrow */
@@ -185,6 +189,9 @@ unsigned char *envs[] = { (unsigned char *) "HOSTNAME=jana",
 		(unsigned char *) "PWD=/", 0 };
 static int thread_launch_user(void *arg1, void *arg2) {
 	void **argv = sc_get_thread_argv();
+
+	serial_ksh.input_device = DEVICE_SERIAL;
+//	serial_ksh.kshell_process();
 	if (argv == 0) {
 		unsigned char *arg[5];
 		arg[0] = (unsigned char *) arg1;
@@ -205,6 +212,7 @@ static int thread_launch_user(void *arg1, void *arg2) {
 		SYS_sc_execve((unsigned char *)argv[0], (unsigned char **)arg, envs);
 	}
 	ut_printf(" ERROR: COntrol Never Reaches\n");
+	serial_ksh.kshell_process();
 	return 1;
 }
 void *tmp_arg[5];
@@ -219,6 +227,19 @@ static int sh_create(unsigned char *bin_file, unsigned char *name, unsigned char
 			name,0);
 
 	return ret;
+}
+void kshell::kshell_process(){
+	int  cmd_type;
+	curr_line[0] = '\0';
+	ut_printf(" JINY OS .. Started ..\n");
+
+	while (1) {
+		ut_printf(CMD_PROMPT);
+		sc_set_fsdevice(input_device, input_device);
+		cmd_type = get_cmd(curr_line);
+		ut_printf("executing the cmd :%s: \n",curr_line);
+		process_command(cmd_type, curr_line);
+	}
 }
 #define USERLEVEL_SHELL "./busybox"
 int kshell::main(void *arg) {
@@ -244,20 +265,22 @@ int kshell::main(void *arg) {
 	for (i = 0; i < MAX_CMD_HISTORY; i++)
 		cmd_history[i][0] = '\0';
 
-	sc_sleep(500); /* this sleep is to make sure the user level thread come up, other wise we force it to use the keyboard */
+	sc_sleep(50000000000); /* this sleep is to make sure the user level thread come up, other wise we force it to use the keyboard */
 	sc_set_fsdevice(DEVICE_KEYBOARD, DEVICE_KEYBOARD); /* kshell on vga console */
-	curr_line[0] = '\0';
-	ut_printf(" JINY OS .. Started ..\n");
-	while (1) {
-		ut_printf(CMD_PROMPT);
-		cmd_type = get_cmd(curr_line);
-		process_command(cmd_type, curr_line);
-	}
+	input_device = DEVICE_SERIAL;
+	kshell_process();
+
 	return 1;
 }
 extern "C" {
 void shell_main(){
     ksh.main(0);
+}
+void Jcmd_help(){
+	ut_printf("Conf variables:\n");
+	ut_symbol_show(SYMBOL_CONF);
+	ut_printf("Cmd variables:\n");
+	ut_symbol_show(SYMBOL_CMD);
 }
 void Jcmd_test(){  /* generating GP */
 	unsigned long *p=0x100,*r;

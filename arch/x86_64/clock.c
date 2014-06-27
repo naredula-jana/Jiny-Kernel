@@ -39,8 +39,7 @@ static struct pvclock_vcpu_time_info vcpu_time[MAX_CPUS];
 static int kvm_clock_available = 0;
 static uint64_t start_time, curr_system_time = 0; /* updated by the boot cpu */
 static int test_count = 0;
-unsigned long get_kvm_clock() /* return 10ms units */
-{
+unsigned long get_kvm_time_fromboot(){ /* return 10ms units */
 	long diff;
 
 	if (kvm_clock_available == 0)
@@ -49,7 +48,6 @@ unsigned long get_kvm_clock() /* return 10ms units */
 		BUG();
 	}
 	test_count++;
-	//curr_system_time = vpcu_time.system_time;
 	diff = vcpu_time[0].system_time - start_time;
 	if (diff < 0) {
 		curr_system_time = -diff;
@@ -88,7 +86,7 @@ static inline int kvm_para_available(void) {
 	init_vpcutime();
 
 	start_time = vcpu_time[getcpuid()].system_time;
-	g_jiffie_tick = get_kvm_clock();
+	g_jiffie_tick = get_kvm_time_fromboot();
 
 	ut_log("	Succeded: KVM Clock Signature :%s: cpuid: %x \n", signature, cpuid_ret[0]);
 	return JSUCCESS;
@@ -130,7 +128,7 @@ int Jcmd_clock() {
 
 	ut_printf("system time  ts :%x system time :%x:%d  jiffies :%d sec version:%x errors:%d \n", vcpu_time[getcpuid()].tsc_timestamp,
 			vcpu_time[getcpuid()].system_time, vcpu_time[getcpuid()].system_time / 1000000000, g_jiffies / 100, vcpu_time[getcpuid()].version);
-	ut_printf(" jiifies :%d  clock:%d errors:%d \n", g_jiffie_tick, get_kvm_clock(), g_jiffie_errors);
+	ut_printf(" jiifies :%d  clock:%d errors:%d \n", g_jiffie_tick, get_kvm_time_fromboot(), g_jiffie_errors);
 	return 1;
 }
 int g_conf_kvmclock_enable = 1;

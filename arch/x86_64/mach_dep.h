@@ -97,9 +97,9 @@ static inline uint64_t msr_read(uint32_t msr)
   return (((uint64_t)edx << 32) | eax);
 }
 
-static inline void msr_write(uint32_t msr, uint64_t val)
+static void __attribute__((always_inline,used))  msr_write(uint32_t msr, uint64_t val)
 {
-	__asm__ volatile ("wrmsr\n"
+	asm volatile ("wrmsr\n"
 			:: "c" (msr), "a" (val & 0xffffffff),
 			"d" (val >> 32));
 }

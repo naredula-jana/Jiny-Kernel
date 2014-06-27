@@ -821,7 +821,7 @@ void timer_callback(void *unused_args) {
 
 	/* 1. increment timestamp */
 	if (getcpuid() == 0) {
-		unsigned long kvm_ticks = get_kvm_clock();
+		unsigned long kvm_ticks = get_kvm_time_fromboot();
 		if ((kvm_ticks != 0) && (g_jiffie_tick > (kvm_ticks + 10))) {
 			g_jiffie_errors++;
 			g_jiffies++;
@@ -885,6 +885,7 @@ void Jcmd_taskcpu(unsigned char *arg_pid, unsigned char *arg_cpuid) {
 	}
 	return;
 }
+uint8_t apic_get_task_priority();
 void Jcmd_prio(unsigned char *arg1, unsigned char *arg2) {
 	int cpu, priority;
 
@@ -895,6 +896,7 @@ void Jcmd_prio(unsigned char *arg1, unsigned char *arg2) {
 	cpu = ut_atoi(arg1);
 	priority = ut_atoi(arg2);
 	if (cpu < MAX_CPUS && priority < 255) {
+		ut_printf(" current priority : %d newpriority: %d \n",apic_get_task_priority(),priority);
 		g_cpu_state[cpu].cpu_priority = priority;
 	} else {
 		ut_log("Error : Ivalid cpu :%d or priority:%d \n", cpu, priority);
@@ -1078,7 +1080,7 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	p->allocated_cpu = get_free_cpu();
 	ut_strncpy(p->name, g_current_task->name, MAX_TASK_NAME);
 
-	ut_log(" New thread is created:%d %s on %d\n",p->pid,p->name,p->allocated_cpu);
+//	ut_log(" New thread is created:%d %s on %d\n",p->pid,p->name,p->allocated_cpu);
 	ret_pid = p->pid;
 	spin_lock_irqsave(&g_global_lock, flags);
 	list_add_tail(&p->task_queue, &g_task_queue.head);
@@ -1202,9 +1204,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 		SYS_sc_exit(703);
 		return;
 	}
-	//ut_log(" before pushing to userspace \n");
-	//Jcmd_vmaps_stat(0, 0);
-
+ut_log(" execve : %s  pid :%d \n",g_current_task->name,g_current_task->pid);
 	g_current_task->thread.userland.ip = main_func;
 	g_current_task->thread.userland.sp = t_argv;
 	g_current_task->thread.userland.argc = t_argc;

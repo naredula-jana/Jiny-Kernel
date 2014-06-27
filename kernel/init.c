@@ -61,6 +61,7 @@ static inittable_t inittable[] = {
 		{init_syscall,0,       "syscalls"},
 		{init_vfs,0,       "vfs"},
 		{init_tasking,0,       "tasking"},
+		{init_clock,0,       "clock"},
 		{init_driver_keyboard,0,       "keyboard"},
 		{init_serial,0,       "serial"},
 #ifdef MEMLEAK_TOOL
@@ -72,7 +73,7 @@ static inittable_t inittable[] = {
 #ifdef NETWORKING
 		{init_networking,0,       "networking"},
 #endif
-		{init_clock,0,       "clock"},
+	//	{init_clock,0,       "clock"},
 //		{init_code_readonly,0,       "Making code readonly"},
 		{init_kernel_vmaps, 0, "Kernel Vmaps"},
 		{init_jdevices,0,       "devices in c++ "},
@@ -136,7 +137,7 @@ void idleTask_func();
 void __stack_chk_fail(){
 }
 int  init_code_readonly(unsigned long arg1){
-  /* TO make first 2M or code pages in to Readonly */
+  /* To make first 2M or code pages in to Readonly */
 	unsigned long *page_table;
 	static int init_readonly=0;
 	unsigned long intr_flags;
@@ -236,7 +237,7 @@ void cmain() {  /* This is the first c function to be executed */
 	sc_createKernelThread(shell_main, 0, (unsigned char *)"shell_main",0);
 	sc_createKernelThread(housekeeper_thread, 0, (unsigned char *)"house_keeper",0);
 #endif
-	ut_log("	Initalization COMPLETED\n");
+	ut_log("	Initalization COMPLETED  time since boot:%d  ten_msecs\n",get_kvm_time_fromboot());
 
 	idleTask_func();
 	return;

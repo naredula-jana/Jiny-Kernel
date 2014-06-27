@@ -79,7 +79,7 @@ unsigned long  init_symbol_table(unsigned long bss_start,unsigned long bss_end) 
 			p++;
 		}
 		p[0] = 0;
-		sym_table->address  =ut_atol(addr);
+		sym_table->address = ut_atol(addr);
 		sym_table->name = name;
 		sym_table++;
 //while(1);
