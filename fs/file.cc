@@ -281,7 +281,7 @@ static struct filesystem *transform_filename(uint8_t *arg_filename, uint8_t *fil
 	filename[0] = 0;
 	if (arg_filename[0] != '/') {
 		ut_strcpy((uint8_t *) filename,
-				(const uint8_t *) g_current_task->mm->fs->cwd);
+				(const uint8_t *) g_current_task->fs->cwd);
 	}
 	i = 0;
 
@@ -542,7 +542,7 @@ int fs_write(struct file *filep, uint8_t *buff, unsigned long len) {
 		return len;
 	}
 	struct vinode *inode = (struct vinode *) filep->vinode;
-	if (inode ==0 || inode->file_type != filep->type ){
+	if (inode ==0 || !(inode->file_type&filep->type) ){
 		BUG();
 	}
 

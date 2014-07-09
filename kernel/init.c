@@ -43,7 +43,7 @@ int init_kernel_vmaps(unsigned long arg1);
 int  init_code_readonly(unsigned long arg1);
 int init_kmemleak(unsigned long arg1);
 int init_acpi(unsigned long arg1);
-
+int init_network_stack(unsigned long arg1);
 typedef struct {
 	int (*func)(unsigned long arg);
 	unsigned long arg1;
@@ -71,13 +71,16 @@ static inittable_t inittable[] = {
 		{init_smp_force,4,       "smp_init"},
 #endif
 #ifdef NETWORKING
-		{init_networking,0,       "networking"},
+		{init_networking,0,       "network_sched"},
 #endif
 	//	{init_clock,0,       "clock"},
 //		{init_code_readonly,0,       "Making code readonly"},
 		{init_kernel_vmaps, 0, "Kernel Vmaps"},
 		{init_jdevices,0,       "devices in c++ "},
 		{init_acpi,0,       "ACPI initialzed "},
+#ifdef NETWORKING
+		{init_network_stack,0,       "network stacks"},
+#endif
 //		{init_modules,0,       "modules"},
 //		{init_log_file,0, "log file "},
 		{0,0,0}
@@ -125,7 +128,9 @@ int init_physical_memory(unsigned long unused){
 	g_phy_mem_size = max_addr;
 	ut_log("  Physical memory size :%x (%d)  magic_ptr :%x cmdline: %x :%s\n",g_phy_mem_size,g_phy_mem_size,magic_ptr,mbi->cmdline,__va(mbi->cmdline+0x20));
 	ut_log("  end of data :%x  image end:%x\n",&_edata, &end);
+
 	init_symbol_table(&_edata, &end);
+	//while(1);
 	return JSUCCESS;
 }
 /* Forward declarations.  */
@@ -208,6 +213,7 @@ int init_kernel_vmaps(unsigned long arg1){
 
 	return JSUCCESS;
 }
+extern void send_thread();
 void cmain() {  /* This is the first c function to be executed */
 	int i,ret;
 
@@ -215,7 +221,7 @@ void cmain() {  /* This is the first c function to be executed */
 
 //	while(1);
 	for (i=0; inittable[i].func != 0; i++){
-		ut_log("INITIALIZING :%s  ...\n",inittable[i].comment);
+		ut_log("%d : INITIALIZING :%s  ...\n",i, inittable[i].comment);
 		//ut_printf("..INITIALIZING :%s  ...\n",inittable[i].comment);
 		ret = inittable[i].func(inittable[i].arg1);
 		if (ret==JSUCCESS){
@@ -224,7 +230,7 @@ void cmain() {  /* This is the first c function to be executed */
 			ut_log("	%s : ....Failed error:%d\n",inittable[i].comment,ret);
 		}
 	}
-
+//while(1);
 	uint32_t val[5];
 	do_cpuid(1,val);
 	ut_log("	cpuid result %x : %x :%x :%x \n",val[0],val[1],val[2],val[3]);
@@ -234,6 +240,7 @@ void cmain() {  /* This is the first c function to be executed */
 	sti(); /* start the interrupts finally */
 
 #if 1
+	//sc_createKernelThread(send_thread, 0, (unsigned char *)"test_send",0);
 	sc_createKernelThread(shell_main, 0, (unsigned char *)"shell_main",0);
 	sc_createKernelThread(housekeeper_thread, 0, (unsigned char *)"house_keeper",0);
 #endif

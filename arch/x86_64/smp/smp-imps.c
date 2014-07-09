@@ -353,7 +353,7 @@ int init_smp_force(unsigned long ncpus) {
 	p.type = 0;
 	p.apic_ver = 0x10;
 	p.signature = p.features = 0;
-
+ut_log(" imps:smp : before the bsp_witch\n");  // TODO : uncommeting this line  looks like stuck with the interrupt-32
 	local_apic_bsp_switch();
 	local_bsp_apic_init();
 	if (ncpus > MAX_CPUS)

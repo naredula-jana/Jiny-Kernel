@@ -12,9 +12,9 @@ OBJ_XEN=drivers/xen/xen_init.o drivers/xen/xenbus.o drivers/xen/evntchn.o driver
 
 OBJ_VIRTIO= drivers/virtio/virtio_ring.o \
 	drivers/virtio/virtio_memballoon.o \
-	drivers/virtio/net/test_udpserver.o  \
 	drivers/virtio/9p/9p.o \
 	drivers/virtio/9p/p9_fs.o drivers/virtio/driver_virtio_pci.o
+	#	drivers/virtio/net/test_udpserver.o  \
 
 OBJ_MEMLEAK=mm/memleak/memleak.o mm/memleak/os_dep.o mm/memleak/prio_tree.o  mm/memleak/memleak_hook.o
 
@@ -50,7 +50,11 @@ endif
 ifdef JINY_UDPSTACK
 OBJECTS += modules/udp_stack/udp_stack.o
 endif
-
+ifdef UIP_NETWORKING_MODULE
+OBJECTS += kernel/uip_netmod.o
+OBJECTS +=  modules/uip-uip-1-0/uip/uip_arp.o modules/uip-uip-1-0/uip/uip.o  
+//OBJECTS += modules/uip-uip-1-0/uip/uip.o 
+endif
 
  
 user: 
@@ -69,7 +73,7 @@ test_net:
 	cp modules/test_net/test_net.o test/root/
 
 uip:
-	make SOURCE_ROOT=$$PWD -C  modules/uip-uip-1-0/uip
+	make SOURCE_ROOT=$$PWD -C   modules/uip-uip-1-0/uip
 
 test_file:
 	make SOURCE_ROOT=$$PWD -C modules/test_file
@@ -99,17 +103,11 @@ endif
 	make SOURCE_ROOT=$$PWD -C mm/memleak
 	make SOURCE_ROOT=$$PWD -C fs
 	$(LCPP)  -nostdlib -g -I.  -feliminate-dwarf2-dups $(LINK_FLAG)  $(OBJ_32CODE)  $(OBJECTS) -Wl,-N -T kernel/kernel.ldp -o bin/jiny_kernel.elf
-
-#	$(LCPP) -nostdlib -g -I. -feliminate-dwarf2-dups $(LINK_FLAG)  $(OBJ_32CODE)  $(OBJECTS) -Wl,-N -Wl,-Ttext -Wl,40100000 -Tdata=40200000 -o bin/kernel_bin
-
 	objdump -D -l bin/jiny_kernel.elf > bin/obj_file
 	objcopy -O binary bin/jiny_kernel.elf bin/jiny_kernel.bin
-	nm bin/jiny_kernel.elf | sort > bin/jiny_symbols
+	nm bin/jiny_kernel.elf | sort  > bin/jiny_symbols
 	cat bin/jiny_kernel.bin bin/jiny_symbols > bin/jiny_image.bin
-#	util/gen_symboltbl util/in bin/mod_file > util/out
-#	util/dwarf_reader bin/kernel_bin > util/dwarf_temp_output
-#	chmod 777 ./dwarf_datatypes
-#	mv ./dwarf_datatypes test/root/
+
 	
 clean:
 	make SOURCE_ROOT=$$PWD -C kernel clean

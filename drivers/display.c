@@ -185,12 +185,13 @@ int Jcmd_dmesg(unsigned char *arg1){
 	return 0;
 }
 static int time_print=1;
-void ut_putchar_ondevice(unsigned char c, int device) {
+void ut_putchar_vga(unsigned char c, int device) {
 	unsigned char *ptr;
 	unsigned long flags;
 
+#if 0
 	//1. Serial output
-	if (device == DEVICE_SERIAL){
+	if (device == DEVICE_SERIAL1){
 		char buf[5];
 		if (c == '\n') {
 			buf[0] = '\r';
@@ -206,7 +207,7 @@ void ut_putchar_ondevice(unsigned char c, int device) {
 		}
 		return;
 	}
-
+#endif
 	//2. VGI output
 	//log_putchar(c);
 	if (g_video_ram == 0) return;
@@ -256,7 +257,7 @@ static void putchar(unsigned char c) {
 	unsigned char buf[2];
 
 	buf[0]=c;
-	if (!g_boot_completed) return ut_putchar_ondevice(c,DEVICE_DISPLAY_VGI);
+	if (!g_boot_completed) return ut_putchar_vga(c,DEVICE_DISPLAY_VGI);
 	return SYS_fs_write(1,buf,1);
 }
 

@@ -235,7 +235,7 @@ static void init_idt() {
 	init_handlers();
 
 	idtr_load(&idt_ptr);
-	asm volatile("sti");
+	//asm volatile("sti");
 }
 #ifdef SMP
 void init_smp_gdt(int current_cpu) {

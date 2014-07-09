@@ -368,7 +368,7 @@ int virtio_net_jdriver::write(unsigned char *data, int len) {
 	ut_memset((unsigned char *) addr, 0, 10);
 	ut_memcpy((unsigned char *) addr + 10, data, len);
 	ret = -ERROR_VIRTIO_ENOSPC;
-
+//ut_printf(" VIRTIO addr----------------------------------------- :%x \n",addr);
 	spin_lock_irqsave(&virtionet_lock, flags);
 
 #if 1
@@ -415,7 +415,7 @@ int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 	if (arg_mac == 0)
 		return JFAIL;
 	else {
-		ut_memcpy(arg_mac, mac, 7);
+		ut_memcpy(arg_mac, mac, 6);
 		return JSUCCESS;
 	}
 }

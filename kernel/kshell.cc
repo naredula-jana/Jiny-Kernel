@@ -34,7 +34,7 @@ public:
 	void kshell_process();
 	int main(void *arg);
 };
-kshell ksh; /* kernel shellon console */
+kshell console_ksh; /* kernel shellon console */
 kshell serial_ksh; /* kernel shell on serial line , incase file system not present  */
 
 enum {
@@ -142,9 +142,7 @@ int kshell::get_cmd(unsigned char *line) {
 	while (i < MAX_LINE_LENGTH) {
 		int c;
 
-		//SYS_fs_read(0,&line[i],1);
-		while ((line[i] = dr_kbGetchar(input_device)) == 0);
-
+		SYS_fs_read(0,&line[i],1);
 
 		c = line[i];
 		if (line[i] == 1) /* upArrow */
@@ -178,7 +176,6 @@ int kshell::get_cmd(unsigned char *line) {
 			line[i] = '\0';
 			break;
 		}
-		putchar(line[i]);
 		i++;
 	}
 	line[i] = '\0';
@@ -187,11 +184,11 @@ int kshell::get_cmd(unsigned char *line) {
 unsigned char *envs[] = { (unsigned char *) "HOSTNAME=jana",
 		(unsigned char *) "USER=jana", (unsigned char *) "HOME=/",
 		(unsigned char *) "PWD=/", 0 };
-static int thread_launch_user(void *arg1, void *arg2) {
+/* this is for serial line, if file system is present then it loads busybox otherwise kshell */
+static int thread_launch_serial(void *arg1, void *arg2) {
 	void **argv = sc_get_thread_argv();
 
-	serial_ksh.input_device = DEVICE_SERIAL;
-//	serial_ksh.kshell_process();
+	serial_ksh.input_device = DEVICE_SERIAL1;
 	if (argv == 0) {
 		unsigned char *arg[5];
 		arg[0] = (unsigned char *) arg1;
@@ -208,10 +205,9 @@ static int thread_launch_user(void *arg1, void *arg2) {
 		arg[1] = argv[1];
 		arg[2] = argv[2];
 		arg[3] = 0;
-		//	BRK;
 		SYS_sc_execve((unsigned char *)argv[0], (unsigned char **)arg, envs);
 	}
-	ut_printf(" ERROR: COntrol Never Reaches\n");
+	ut_printf(" Error: User Space shell(%s) not found, fallback to kernel shell\n",arg1);
 	serial_ksh.kshell_process();
 	return 1;
 }
@@ -222,8 +218,8 @@ static int sh_create(unsigned char *bin_file, unsigned char *name, unsigned char
 	tmp_arg[0] =(void *) bin_file;
 	tmp_arg[1] =(void *) name;
 	tmp_arg[2] =(void *) arg;
-	sc_set_fsdevice(DEVICE_SERIAL, DEVICE_SERIAL);  /* all user level thread on serial line */
-	ret = sc_createKernelThread(thread_launch_user, (void **) &tmp_arg,
+	sc_set_fsdevice(DEVICE_SERIAL1, DEVICE_SERIAL1);  /* all user level thread on serial line */
+	ret = sc_createKernelThread(thread_launch_serial, (void **) &tmp_arg,
 			name,0);
 
 	return ret;
@@ -235,9 +231,8 @@ void kshell::kshell_process(){
 
 	while (1) {
 		ut_printf(CMD_PROMPT);
-		sc_set_fsdevice(input_device, input_device);
 		cmd_type = get_cmd(curr_line);
-		ut_printf("executing the cmd :%s: \n",curr_line);
+	//	ut_printf("executing the cmd :%s: \n",curr_line);
 		process_command(cmd_type, curr_line);
 	}
 }
@@ -255,9 +250,6 @@ int kshell::main(void *arg) {
 		ret = sh_create((unsigned char *) USERLEVEL_SHELL,
 				(unsigned char *) "sh", 0); // start the user level shell
 #endif
-	} else {
-		/* attach kernel shell to serial line since user level shell fails */
-//		sc_set_fsdevice(DEVICE_KEYBOARD, DEVICE_KEYBOARD);
 	}
 
 	ut_log(" user shell thread creation ret :%x\n", ret);
@@ -265,16 +257,15 @@ int kshell::main(void *arg) {
 	for (i = 0; i < MAX_CMD_HISTORY; i++)
 		cmd_history[i][0] = '\0';
 
-	sc_sleep(50000000000); /* this sleep is to make sure the user level thread come up, other wise we force it to use the keyboard */
 	sc_set_fsdevice(DEVICE_KEYBOARD, DEVICE_KEYBOARD); /* kshell on vga console */
-	input_device = DEVICE_SERIAL;
+	input_device = DEVICE_KEYBOARD;
 	kshell_process();
 
 	return 1;
 }
 extern "C" {
 void shell_main(){
-    ksh.main(0);
+	console_ksh.main(0);
 }
 void Jcmd_help(){
 	ut_printf("Conf variables:\n");

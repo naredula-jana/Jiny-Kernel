@@ -59,7 +59,7 @@ struct mm_struct {
 	struct vm_area_struct *mmap; /* list of VMAs */
 	unsigned long pgd;
 	atomic_t count; /* How many references to "struct mm_struct" (users count as 1) */
-	struct fs_struct *fs;
+
 	struct file *exec_fp; /* execute file */
 
 	unsigned long start_code,end_code ; /* used onlt for stats */
@@ -110,8 +110,11 @@ struct task_struct {
 	long sleep_ticks;
 	unsigned long cpu_contexts; /* every cpu context , it will be incremented */
 	unsigned long ticks;	
+
 	struct thread_struct thread;
 	struct mm_struct *mm;
+	struct fs_struct *fs;
+
 	int locks_sleepable;
 	int locks_nonsleepable;
 	int wait_for_child_exit;

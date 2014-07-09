@@ -24,7 +24,7 @@ unsigned long g_jiffie_errors = 0;
 unsigned long g_jiffie_tick = 0;
 
 static int curr_cpu_assigned = 0;
-static struct fs_struct *fs_kernel;
+//static struct fs_struct *fs_kernel;
 static unsigned long free_pid_no = 1; // TODO need to make unique when  wrap around
 static wait_queue_t timer_queue;
 static int g_conf_cpu_stats = 1;
@@ -204,6 +204,17 @@ static unsigned long clone_push_to_userland() {
 	enter_userspace();
 	return 0;
 }
+static int free_fs(struct fs_struct *fs){
+	if (fs->count.counter == 0)
+		BUG();
+	atomic_dec(&fs->count);
+	if (fs->count.counter == 0) {
+		ut_free(fs);
+		return 0;
+	}
+	atomic_dec(&fs->count);
+	return 1;
+}
 static int free_mm(struct mm_struct *mm) {
 	int ret;
 	DEBUG("freeing the mm :%x counter:%x \n", mm, mm->count.counter);
@@ -211,20 +222,8 @@ static int free_mm(struct mm_struct *mm) {
 	if (mm->count.counter == 0)
 		BUG();
 
-	atomic_dec(&mm->fs->count);
-	if (mm->fs->count.counter == 0) {
-		ut_free(mm->fs);
-		mm->fs = 0;
-		if (mm == g_kernel_mm) {
-			mm->fs = fs_kernel;
-			atomic_inc(&fs_kernel->count);
-		}
-	}
 	atomic_dec(&mm->count);
 	if (mm->count.counter > 0) {
-		if (mm->fs == 0) {
-			BUG();
-		}
 		return 0;
 	}
 
@@ -269,21 +268,22 @@ void **sc_get_thread_argv() {
 	return g_current_task->thread.argv;
 }
 void sc_set_fsdevice(unsigned int device_in, unsigned int device_out) {
-	auto *mm = g_current_task->mm;
-	if (mm->fs->filep[0] != 0) {
-		mm->fs->filep[0]->vinode = get_keyboard_device(device_in, IN_FILE);
+	auto *fs = g_current_task->fs;
+	if (fs->filep[0] != 0) {
+		fs->filep[0]->vinode = get_keyboard_device(device_in, IN_FILE);
 	}
-	if (mm->fs->filep[1] != 0) {
-		mm->fs->filep[1]->vinode = get_keyboard_device(device_out, OUT_FILE);
+	if (fs->filep[1] != 0) {
+		fs->filep[1]->vinode = get_keyboard_device(device_out, OUT_FILE);
 	}
-	if (mm->fs->filep[2] != 0) {
-		mm->fs->filep[2]->vinode = get_keyboard_device(device_out, OUT_FILE);
+	if (fs->filep[2] != 0) {
+		fs->filep[2]->vinode = get_keyboard_device(device_out, OUT_FILE);
 	}
 }
 
-static void init_task_struct(struct task_struct *p, struct mm_struct *mm) {
+static void init_task_struct(struct task_struct *p, struct mm_struct *mm, struct fs_struct *fs) {
 	atomic_set(&p->count, 1);
 	p->mm = mm; /* TODO increase the corresponding count */
+	p->fs = fs;
 	p->locks_sleepable = 0;
 	p->locks_nonsleepable = 0;
 	p->trace_on = 0;
@@ -336,19 +336,20 @@ static int release_resources(struct task_struct *child_task, int attach_to_paren
 	/* 1. release files */
 	mm = child_task->mm;
 
-	if (mm->fs->count.counter == 1) {
-		for (i = 0; i < mm->fs->total; i++) {
+	if (child_task->fs->count.counter == 1) {
+		for (i = 0; i < child_task->fs->total; i++) {
 			DEBUG("FREEing the files :%d \n", i);
-			fs_close(mm->fs->filep[i]);
+			fs_close(child_task->fs->filep[i]);
 		}
+		child_task->fs->total = 0;
 	}
-	if (mm->count.counter > 1)
+	if (mm->count.counter > 1){
 		return 0;
+	}
 	if (mm->exec_fp != 0) {
 		fs_close(mm->exec_fp);
 	}
 
-	mm->fs->total = 0;
 	mm->exec_fp = 0;
 
 	/* 2. relase locks */
@@ -413,6 +414,13 @@ int ipi_interrupt(void *arg) { /* Do nothing, this is just wake up the core when
 	return 0;
 }
 extern int init_ipc();
+
+static struct fs_struct *create_fs() {
+	struct fs_struct *fs = (struct fs_struct *) ut_calloc(sizeof(struct fs_struct));
+	atomic_set(&fs->count, 1);
+
+	return fs;
+}
 static struct mm_struct *create_mm() {
 	struct mm_struct *mm;
 
@@ -424,8 +432,7 @@ static struct mm_struct *create_mm() {
 	DEBUG(" mm :%x counter:%x \n", mm, mm->count.counter);
 	mm->pgd = 0;
 	mm->mmap = 0;
-	mm->fs = (struct fs_struct *) ut_calloc(sizeof(struct fs_struct));
-	atomic_set(&mm->fs->count, 1);
+
 	return mm;
 }
 
@@ -441,7 +448,7 @@ int init_tasking(unsigned long unused) {
 	mm_cachep = (kmem_cache_t *) kmem_cache_create((const unsigned char *) "mm_struct", sizeof(struct mm_struct), 0, 0, 0, 0);
 
 	g_kernel_mm = create_mm();
-	fs_kernel = g_kernel_mm->fs;
+	fs = create_fs();
 	init_ipc();
 
 	g_inode_lock = mutexCreate((char *) "mutex_vfs");
@@ -453,19 +460,19 @@ int init_tasking(unsigned long unused) {
 	atomic_set(&g_kernel_mm->count, 1);
 	g_kernel_mm->mmap = 0x0;
 	g_kernel_mm->pgd = g_kernel_page_dir;
-	g_kernel_mm->fs->total = 3;
-	for (i = 0; i < g_kernel_mm->fs->total; i++) {
-		g_kernel_mm->fs->filep[i] = (struct file *) mm_slab_cache_alloc(g_slab_filep, 0);
+	fs->total = 3;
+	for (i = 0; i < fs->total; i++) {
+		fs->filep[i] = (struct file *) mm_slab_cache_alloc(g_slab_filep, 0);
 		if (i == 0) {
-			g_kernel_mm->fs->filep[i]->vinode = get_keyboard_device(DEVICE_SERIAL, IN_FILE);
-			g_kernel_mm->fs->filep[i]->type = IN_FILE;
+			fs->filep[i]->vinode = get_keyboard_device(DEVICE_SERIAL1, IN_FILE);
+			fs->filep[i]->type = IN_FILE;
 
 		} else {
-			g_kernel_mm->fs->filep[i]->vinode = get_keyboard_device(DEVICE_SERIAL, OUT_FILE);
-			g_kernel_mm->fs->filep[i]->type = OUT_FILE;
+			fs->filep[i]->vinode = get_keyboard_device(DEVICE_SERIAL1, OUT_FILE);
+			fs->filep[i]->type = OUT_FILE;
 		}
 	}
-	ut_strcpy((uint8_t *) g_kernel_mm->fs->cwd, (uint8_t *) "/");
+	ut_strcpy((uint8_t *) fs->cwd, (uint8_t *) "/");
 
 	free_pid_no = 1; /* pid should never be 0 */
 #define G_IDLE_TASK  &g_idle_stack[0][0]
@@ -476,7 +483,7 @@ int init_tasking(unsigned long unused) {
 		g_cpu_state[i].md_state.cpu_id = i;
 		g_cpu_state[i].idle_task = (struct task_struct *) ((unsigned char *) (task_addr) + i * TASK_SIZE);
 		ut_memset((unsigned char *) g_cpu_state[i].idle_task, MAGIC_CHAR, TASK_SIZE - PAGE_SIZE / 2);
-		init_task_struct(g_cpu_state[i].idle_task, g_kernel_mm);
+		init_task_struct(g_cpu_state[i].idle_task, g_kernel_mm, fs);
 		INIT_LIST_HEAD(&(g_cpu_state[i].run_queue.head));
 
 		g_cpu_state[i].idle_task->allocated_cpu = i;
@@ -947,7 +954,7 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 				- ut_snprintf(buf + max_len - len, len,
 						"cpu-%d: %3d %3d %5x  %5x %4d %7s sleeptick(%3d:%d) cpu:%3d :%s: count:%d status:%s stickcpu:%x\n",
 						task->allocated_cpu, task->state, task->cpu_contexts, task->ticks, task->mm, task->mm->count.counter,
-						task->name, task->sleep_ticks, task->stats.ticks_consumed, task->current_cpu, task->mm->fs->cwd,
+						task->name, task->sleep_ticks, task->stats.ticks_consumed, task->current_cpu, task->fs->cwd,
 						task->count.counter, task->status_info, task->stick_to_cpu);
 		temp_bt.count = 0;
 		//if (task->state != TASK_RUNNING) {
@@ -1000,6 +1007,7 @@ static int get_free_cpu() {
 unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*fn)(void *, void *), void **args) {
 	struct task_struct *p;
 	struct mm_struct *mm;
+	struct fs_struct *fs;
 	unsigned long flags;
 	//void *fn=fd_p;
 	unsigned long ret_pid = 0;
@@ -1012,47 +1020,41 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	if (p == 0)
 		BUG();
 
+	/* Initalize fs */
+	if (clone_flags & CLONE_FS) {
+		fs = g_current_task->fs;
+		atomic_inc(&fs->count);
+	} else {
+		fs = create_fs();
+		for (i = 0; i < g_current_task->fs->total && i < 3; i++) {
+			fs->filep[i] = fs_dup(g_current_task->fs->filep[i], 0);
+		}
+		fs->total = g_current_task->fs->total;
+		ut_strcpy(fs->cwd, g_current_task->fs->cwd);
+	}
+
 	/* Initialize mm */
-	if (clone_flags & CLONE_VM) /* parent and child run in the same vm */
-	{
+	if (clone_flags & CLONE_VM){ /* parent and child run in the same vm */
 		if (clone_flags & CLONE_KERNEL_THREAD) {
 			mm = g_kernel_mm;
 		} else {
 			mm = g_current_task->mm;
 		}
 		atomic_inc(&mm->count);
-		if (clone_flags & CLONE_FS) {
-			atomic_dec(&mm->fs->count);
-			mm->fs = ut_calloc(sizeof(struct fs_struct));
-			for (i = 0; i < g_current_task->mm->fs->total && i < 3; i++) {
-				mm->fs->filep[i] = fs_dup(g_current_task->mm->fs->filep[i], 0);
-			}
-			mm->fs->total = 3;
-		}
-		atomic_inc(&mm->fs->count);
 		SYSCALL_DEBUG("clone  CLONE_VM the mm :%x counter:%x \n", mm, mm->count.counter);
 	} else {
 		mm = create_mm();
-
-		for (i = 0; i < g_current_task->mm->fs->total; i++) {
-			mm->fs->filep[i] = fs_dup(g_current_task->mm->fs->filep[i], 0);
-		}
-		mm->fs->total = g_current_task->mm->fs->total;
-		//sc_set_fsdevice(DEVICE_SERIAL, DEVICE_SERIAL);
-
-		ut_strcpy(mm->fs->cwd, g_current_task->mm->fs->cwd);
-
 		DEBUG("BEFORE duplicating pagetables and vmaps \n");
 		ar_dup_pageTable(g_current_task->mm, mm);
 		vm_dup_vmaps(g_current_task->mm, mm);
 		mm->brk_addr = g_current_task->mm->brk_addr;
 		mm->brk_len = g_current_task->mm->brk_len;
 		DEBUG("AFTER duplicating pagetables and vmaps\n");
-
 		mm->exec_fp = 0; // TODO : need to be cloned
 	}
+
 	/* initialize task struct */
-	init_task_struct(p, mm);
+	init_task_struct(p, mm, fs);
 	if (mm != g_kernel_mm) { /* user level thread */
 		ut_memcpy((uint8_t *) &(p->thread.userland), (uint8_t *) &(g_current_task->thread.userland), sizeof(struct user_thread));
 		ut_memcpy((uint8_t *) &(p->thread.user_regs),
@@ -1122,6 +1124,7 @@ int SYS_sc_exit(int status) {
 
 void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **env) {
 	struct mm_struct *mm, *old_mm;
+	struct fs_struct *fs;
 	int i;
 	unsigned long main_func;
 	unsigned long t_argc, t_argv;
@@ -1134,14 +1137,15 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 
 	/* delete old vm and create a new one */
 	mm = create_mm();
+	fs = create_fs();
 
 	/* these are for user level threads */
-	for (i = 0; i < g_current_task->mm->fs->total; i++) {
-		mm->fs->filep[i] = fs_dup(g_current_task->mm->fs->filep[i], 0);
+	for (i = 0; i < g_current_task->fs->total; i++) {
+		fs->filep[i] = fs_dup(g_current_task->fs->filep[i], 0);
 	}
 
-	mm->fs->total = g_current_task->mm->fs->total;
-	ut_strcpy(mm->fs->cwd, g_current_task->mm->fs->cwd);
+	fs->total = g_current_task->fs->total;
+	ut_strcpy(fs->cwd, g_current_task->fs->cwd);
 	/* every process page table should have soft links to kernel page table */
 	if (ar_dup_pageTable(g_kernel_mm, mm) != 1) {
 		BUG();
@@ -1158,6 +1162,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 		fs_close(mm->exec_fp);
 		mm->exec_fp = 0;
 		free_mm(mm);
+		free_fs(fs);
 		return;
 	}
 	if (elf_interp != 0) {
@@ -1170,7 +1175,8 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 
 	old_mm = g_current_task->mm;
 	g_current_task->mm = mm;
-//	sc_set_fsdevice(DEVICE_SERIAL, DEVICE_SERIAL);
+	g_current_task->fs = fs;
+//	sc_set_fsdevice(DEVICE_SERIAL1, DEVICE_SERIAL1);
 
 	/* from this point onwards new address space comes into picture, no memory belonging to previous address space like file etc should  be used */
 	flush_tlb(mm->pgd);

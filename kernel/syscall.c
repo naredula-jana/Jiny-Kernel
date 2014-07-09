@@ -325,30 +325,7 @@ void Jcmd_pt(unsigned char *arg1,unsigned char *arg2){
 	pagetable_walk(4,pt,1);
 	return;
 }
-#if 0
-struct Jcmd_struct{
-	unsigned char *name;
-	void (*jcmd)(uint8_t *arg1,uint8_t *arg2);
-}jcmd_struct;
-extern void Jcmd_ps(uint8_t *arg1,uint8_t *arg2);
-extern void Jcmd_cpu(uint8_t *arg1,uint8_t *arg2);
-extern void Jcmd_dmesg(uint8_t *arg1,uint8_t *arg2);
-extern void Jcmd_shutdown(uint8_t *arg1,uint8_t *arg2);
-extern void Jcmd_maps(uint8_t *arg1,uint8_t *arg2);
-extern void Jcmd_locks(uint8_t *arg1,uint8_t *arg2);
-static struct Jcmd_struct jcmds[]={
-		{"shutdown",&Jcmd_shutdown},
-		{"ls",&Jcmd_ls},
-		{"cpu",&Jcmd_cpu},
-		{"ps",&Jcmd_ps},
-		{"maps", &Jcmd_maps},
-		{"dmesg",&Jcmd_dmesg},
-		{"sys",&Jcmd_sys},
-		{"pt",&Jcmd_pt},
-		{"locks",&Jcmd_locks},
-		{0,0}
-};
-#endif
+
 unsigned long SYS_sysctl(struct __sysctl_args *args) {
 	SYSCALL_DEBUG("sysctl  args:%x: \n", args);
 	unsigned long *name;
@@ -454,8 +431,8 @@ unsigned long SYS_chdir(uint8_t *filename) {
 	} else {
 		fs_close(fp);
 	}
-	ut_strncpy(g_current_task->mm->fs->cwd, filename, MAX_FILENAME);
-	ret = ut_strlen(g_current_task->mm->fs->cwd);
+	ut_strncpy(g_current_task->fs->cwd, filename, MAX_FILENAME);
+	ret = ut_strlen(g_current_task->fs->cwd);
 
 	return SYSCALL_SUCCESS;
 }
@@ -466,7 +443,7 @@ unsigned long SYS_getcwd(uint8_t *buf, int len) {
 	SYSCALL_DEBUG("getcwd  buf:%x len:%d  \n", buf, len);
 	if (buf == 0)
 		return ret;
-	ut_strncpy(buf, g_current_task->mm->fs->cwd, len);
+	ut_strncpy(buf, g_current_task->fs->cwd, len);
 	ret = ut_strlen(buf);
 
 	return ret;
@@ -512,6 +489,16 @@ unsigned long SYS_poll(struct pollfd *fds, int nfds, int timeout) {
 		file = fd_to_file(fd);
 		if (file==0) continue;
 		if (file->type == NETWORK_FILE){
+#if 1
+			if (nfds ==1){/* TODO :need to extend for multiple fds */
+				if ( wait_for_sock_data(file->vinode, timeout) >0){
+					fds[i].revents = POLLIN ;
+					SYSCALL_DEBUG("poll success Data on one socket\n");
+					return 1;
+				}else
+					return 0;
+			}
+#endif
 			fds[i].revents = POLLIN ;
 		}
 	}

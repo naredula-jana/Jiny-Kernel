@@ -74,7 +74,7 @@ static int en_scan_to_ascii(unsigned char *buf, uint8_t scancode, uint8_t comb_f
 }
 
 #define MAX_BUF 100
-#define MAX_INPUT_DEVICES 2
+#define MAX_INPUT_DEVICES 3
 static struct {
 	int device_id;
 	unsigned char kb_buffer[MAX_BUF+1];
@@ -170,11 +170,11 @@ int init_driver_keyboard() {
 	for (i = 0; i < MAX_INPUT_DEVICES; i++) {
 		input_devices[i].current_pos = 0;
 		input_devices[i].read_pos = 0;
-		if (i > 1)
+		if (i > 2)
 			BUG(); //TODO: currently only two input devices
 
 		if (i == 0) {
-			input_devices[i].device_id = DEVICE_SERIAL;
+			input_devices[i].device_id = DEVICE_SERIAL1;
 			ipc_register_waitqueue(&input_devices[i].kb_waitq, "kb-serial",0);
 		} else {
 			input_devices[i].device_id = DEVICE_KEYBOARD;
@@ -241,7 +241,7 @@ int keyboard_jdriver::write(unsigned char *buff, int len){
 	int i;
 	int ret=0;
 	for (i = 0; i < len; i++) {
-		ut_putchar_ondevice(buff[i], DEVICE_DISPLAY_VGI);
+		ut_putchar_vga(buff[i], DEVICE_DISPLAY_VGI);
 		ret++;
 	}
 	stat_sends = stat_sends+ret;

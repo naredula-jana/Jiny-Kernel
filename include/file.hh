@@ -27,7 +27,7 @@ extern kmem_cache_t *g_slab_filep;
 extern int fs_dup_pipe(struct file *fp);
 struct file *fs_create_filep(int *fd, struct file *in_fp);
 int fs_destroy_filep(int fd);
-extern void ut_putchar_ondevice(unsigned char c, int device);
+extern void ut_putchar_vga(unsigned char c, int device);
 }
 
 #define PIPE_IMPL 1
@@ -73,10 +73,15 @@ public:
 	uint8_t 	protocol; /* ip_protocol , tcp or udp */
 
 	jdevice *net_dev;
-	void *proto_connection;
+	void *proto_connection;  /* protocol connection */
+
 };
 #define MAX_NETWORK_STACKS 5
-
+enum {
+	SOCK_IOCTL_BIND=1,
+	SOCK_IOCTL_CONNECT=2,
+	SOCK_IOCTL_WAITFORDATA=3
+};
 class socket: public vinode {
 public:
 	class network_connection network_conn;
@@ -100,6 +105,7 @@ public:
 	static network_stack *net_stack_list[MAX_NETWORK_STACKS];
 	static jdevice *net_dev;
 	static int stat_raw_drop;
+	static int stat_raw_attached;
 	static void print_stats();
 };
 typedef struct hard_link hard_link_t;
@@ -156,7 +162,7 @@ public:
 
 
 
-#define fd_to_file(fd) (fd >= 0 && g_current_task->mm->fs->total > fd) ? (g_current_task->mm->fs->filep[fd]) : ((struct file *)0)
+#define fd_to_file(fd) (fd >= 0 && g_current_task->fs->total > fd) ? (g_current_task->fs->filep[fd]) : ((struct file *)0)
 
 #endif
 

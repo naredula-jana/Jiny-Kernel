@@ -163,12 +163,17 @@ int network_scheduler::netRx_BH(void *arg,void *arg2) {
 		while ( qret == 1) {
 			int ret = 0;
 			stat_netrx_bh_recvs++;
+
 			if (socket::attach_rawpkt(data,len,&replace_buf)==JSUCCESS){
 
 			}else{
 				replace_buf = data;
 			}
 			qret = remove_from_queue(&data, &len, replace_buf);
+			if (qret == 0 && replace_buf!=0){
+				jfree_page(replace_buf);
+			}
+			replace_buf = 0;
 		}
 	}
 	return 1;
@@ -267,6 +272,7 @@ int network_scheduler::init() {
 	return JSUCCESS;
 }
 int register_netdevice(jdevice *device){
+
 	net_sched.device = device;
 	socket::net_dev = device;
 	device->ioctl(0,(unsigned long)&g_mac);
@@ -277,16 +283,23 @@ int register_netdevice(jdevice *device){
 }
 extern "C" {
 extern int init_udpstack();
+extern int init_netmod_uipstack();
 int netif_thread(void *arg1,void *arg2){
 	return net_sched.netRx_BH(arg1,arg2);
 }
+
 int init_networking() {
 	int pid;
-
 	net_sched.init();
 	pid = sc_createKernelThread(netif_thread, 0, (unsigned char *) "netRx_BH_1",0);
+	return JSUCCESS;
+}
+int init_network_stack() {
 #ifdef JINY_UDPSTACK
-	init_udpstack();
+	socket::net_stack_list[0] = init_udpstack();
+#endif
+#ifdef UIP_NETWORKING_MODULE
+	socket::net_stack_list[0] = init_netmod_uipstack();
 #endif
 
 	return JSUCCESS;
@@ -298,7 +311,19 @@ int netif_rx(unsigned char *data, unsigned int len, unsigned char **replace_buf)
 int netif_rx_enable_polling(void *private_data, int (*poll_func)(void *private_data, int enable_interrupt, int total_pkts)) {
 	return net_sched.netif_rx_enable_polling(private_data,poll_func);
 }
+int net_send_eth_frame(unsigned char *buf,int len){
+	if (socket::net_dev != 0){
+		return socket::net_dev->write(0,buf,len);
+	}else{
+		return 0;
+	}
+}
 extern struct Socket_API *socket_api;
+void net_get_mac(unsigned char *mac){
+	if (net_sched.device){
+		net_sched.device->ioctl(0,(unsigned long)mac);
+	}
+}
 
 void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
 	if (net_sched.device){

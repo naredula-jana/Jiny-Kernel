@@ -157,8 +157,8 @@ extern void init_p9_jdriver();
 extern void init_net_jdriver();
 extern void init_keyboard_jdriver();
 extern void init_serial_jdriver();
-struct jdevice keyboard_device,serial_in_device;
-struct jdevice vga_device,serial_out_device;
+struct jdevice keyboard_device,serial1_device,serial2_device;
+struct jdevice vga_device;
 int init_jdevices(unsigned long unused_arg1) {
 	device_count = 0;
 	int d,k;
@@ -169,20 +169,22 @@ int init_jdevices(unsigned long unused_arg1) {
 	init_serial_jdriver();
 	ut_memset((unsigned char *)&keyboard_device,0,sizeof(class jdevice));
 	ut_memset((unsigned char *)&vga_device,0,sizeof(class jdevice));
-	ut_memset((unsigned char *)&serial_in_device,0,sizeof(class jdevice));
-	ut_memset((unsigned char *)&serial_out_device,0,sizeof(class jdevice));
+	ut_memset((unsigned char *)&serial1_device,0,sizeof(class jdevice));
+	ut_memset((unsigned char *)&serial2_device,0,sizeof(class jdevice));
 	jdevice_list[0] = &keyboard_device;
 	jdevice_list[1] = &vga_device;
-	jdevice_list[2] = &serial_in_device;
-	jdevice_list[3] = &serial_out_device;
+	jdevice_list[2] = &serial1_device;
+	jdevice_list[3] = &serial2_device;
 	jdevice_list[0]->init((unsigned char *)"/dev/keyboard");
 	jdevice_list[1]->init((unsigned char *)"/dev/vga");
-	jdevice_list[2]->init((unsigned char *)"/dev/serial_in");
-	jdevice_list[3]->init((unsigned char *)"/dev/serial_out");
+	jdevice_list[2]->init((unsigned char *)"/dev/serial1");
+	jdevice_list[3]->init((unsigned char *)"/dev/serial2");
+
 	keyboard_device.file_type = IN_FILE;
 	vga_device.file_type = OUT_FILE;
-	serial_in_device.file_type = IN_FILE;
-	serial_out_device.file_type = OUT_FILE;
+	serial1_device.file_type = IN_FILE | OUT_FILE;
+	serial2_device.file_type = IN_FILE | OUT_FILE;
+
 	device_count=4;
 
 	/* attach the device to the know driver */
@@ -206,10 +208,8 @@ void *get_keyboard_device(int device_type,int file_type){
 		else
 			return (void *)&vga_device;
 	}else{
-		if (file_type == IN_FILE)
-			return (void *)&serial_in_device;
-		else
-			return (void *)&serial_out_device;
+		if (file_type == IN_FILE || file_type == OUT_FILE)
+			return (void *)&serial1_device;
 	}
 }
 void Jcmd_jdevices() {

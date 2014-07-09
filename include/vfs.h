@@ -15,9 +15,10 @@
 #include "task.h"
 
 enum {
-	DEVICE_SERIAL=1,
+	DEVICE_SERIAL1=1,
 	DEVICE_KEYBOARD=2,
-	DEVICE_DISPLAY_VGI=3
+	DEVICE_DISPLAY_VGI=3,
+	DEVICE_SERIAL2=4,
 };
 
 #define MAX_FILENAME 200
@@ -154,7 +155,7 @@ struct filesystem {
 	int (*unmount)();
 };
 #endif
-#define fd_to_file(fd) (fd >= 0 && g_current_task->mm->fs->total > fd) ? (g_current_task->mm->fs->filep[fd]) : ((struct file *)0)
+#define fd_to_file(fd) (fd >= 0 && g_current_task->fs->total > fd) ? (g_current_task->fs->filep[fd]) : ((struct file *)0)
 int fs_data_sync(int num_pages);
 
 #endif

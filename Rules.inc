@@ -1,12 +1,13 @@
 SOURCE_ROOT=/opt_src/Jiny-Kernel/
 #LWIP_NONMODULE=1
-JINY_UDPSTACK=1
+#JINY_UDPSTACK=1
 NETWORKING =1 
+UIP_NETWORKING_MODULE=1
 JINY_SLAB = 1
 #JSLAB_DEBUG = 1
 SMP=1
 #MEMLEAK_TOOL=1
-INCLUDE=. -DNETWORKING -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURCE_ROOT)/modules/lwip_net/ -I $(SOURCE_ROOT)/arch/x86_64/
+INCLUDE=. -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm  -I $(SOURCE_ROOT)/arch/x86_64/
 
 
 NEW_GCC=/data/opt/gcc-4.8.2/bin/
@@ -17,7 +18,7 @@ CC=$(NEW_GCC)gcc -g -gdwarf-2 -Wimplicit  -w -Wall -Wmissing-declarations -Wimpl
 CPP=$(NEW_GCC)g++ -g -std=c++11 -fno-rtti -lsupc++ -fno-exceptions -gdwarf-2 -fpermissive  -w
 LCPP=$(NEW_GCC)g++
 
-VERBOSE=0
+VERBOSE=1
 ifeq ($(VERBOSE), 0)
     E = @echo
     Q = @
@@ -35,7 +36,7 @@ CPP_SOURCES=$(wildcard *.cc)
 ASM_SOURCES=$(wildcard *.s)
 GNUASM_SOURCES=$(wildcard *.S)
 SOURCES=$(C_SOURCES) $(ASM_SOURCES)
-XEN_INCLUDE=/opt_src/xen/xen-4.1.1/dist/install/usr/include -I/opt_src/lwip/src/include -I/opt_src/lwip/src/include/ipv4 -I$(SOURCE_ROOT)/drivers/xen/ -I$(SOURCE_ROOT)/modules/lwip_net/ -I$(SOURCE_ROOT)/drivers/xen/arch/
+# XEN_INCLUDE=/opt_src/xen/xen-4.1.1/dist/install/usr/include -I/opt_src/lwip/src/include -I/opt_src/lwip/src/include/ipv4 -I$(SOURCE_ROOT)/drivers/xen/ -I$(SOURCE_ROOT)/modules/lwip_net/ -I$(SOURCE_ROOT)/drivers/xen/arch/
 
 CPP_OBJECTS=$(patsubst %.cc,%.o,$(CPP_SOURCES))
 C_OBJECTS=$(patsubst %.c,%.o,$(C_SOURCES))
@@ -47,7 +48,7 @@ ARCH_DIR=x86_64
 CFLAGS= -mcmodel=kernel  -m64 -mno-red-zone -nostdlib -D _KERNEL  -nodefaultlibs  -Wall   -I$(INCLUDE) -I$(XEN_INCLUDE)  -DARCH_X86_64
 CFLAGS_ASM= -mcmodel=kernel -nostdlib -nostdinc -nodefaultlibs -D__ASM__   -I$(INCLUDE) -DARCH_X86_64
 LINK_FLAG= 
-INCLUDE=. -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURCE_ROOT)/include/$(ARCH_DIR)/ -I $(SOURCE_ROOT)/arch/$(ARCH_DIR) -I $(XEN_INCLUDE)
+INCLUDE=. -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm -I $(SOURCE_ROOT)/include/$(ARCH_DIR)/ -I $(SOURCE_ROOT)/arch/$(ARCH_DIR) 
 
 ifdef NETWORKING
 INCLUDE += -DNETWORKING 
@@ -66,6 +67,10 @@ INCLUDE += -DMEMLEAK_TOOL
 endif
 ifdef JINY_UDPSTACK
 INCLUDE += -DJINY_UDPSTACK
+endif
+ifdef UIP_NETWORKING_MODULE
+INCLUDE += -DUIP_NETWORKING_MODULE
+INCLUDE += -I $(SOURCE_ROOT)/modules/uip-uip-1-0/uip -I $(SOURCE_ROOT)/modules/uip-uip-1-0/unix/ -I $(SOURCE_ROOT)/modules/uip-uip-1-0/apps/webserver/
 endif
 
 

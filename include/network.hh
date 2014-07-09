@@ -54,19 +54,6 @@ struct ether_pkt{
 (((uint32_t)(A) & 0x000000ff) << 24))
 
 
+#include "network_stack.hh"
 
-class network_stack{
-	char temp_buff[8192];
-
-public:
-	unsigned char *name;
-
-	unsigned char source_mac[6];
-	unsigned char dest_mac[6];
-
-	int open(network_connection *conn);
-    int write(network_connection *conn, uint8_t *app_data, int app_len);
-    int read(network_connection *conn, uint8_t *raw_data, int raw_len, uint8_t *app_data, int app_maxlen);
-	int close(network_connection *conn);
-};
 #endif
