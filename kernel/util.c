@@ -13,10 +13,15 @@
 #include "common.h"
 #include "interface.h"
 
-unsigned long ut_atol(uint8_t *p)
+unsigned long ut_atol(uint8_t *p, int format)
 {
 	unsigned long a;
 	int i,m,k;
+	int multiplier = 0x10;
+	if (format == FORMAT_DECIMAL){
+		multiplier = 10;
+	}
+
 	a=0;
 	m=0;
 	for (i=0; p[i]!='\0'; i++)
@@ -25,15 +30,19 @@ unsigned long ut_atol(uint8_t *p)
 		m++;
 		if (p[i]<='9' && p[i]>='0') k=p[i]-'0';
 		else k=p[i]-'a'+0xa;
-		if (m>1) a=a*0x10;
+		if (m>1) a=a*multiplier;
 		a=a+k;
 	}
 	return a;
 }
-unsigned int ut_atod(uint8_t *p)
+unsigned int ut_atoi(uint8_t *p, int format)
 {
 	unsigned int a;
 	int i,m,k;
+	int multiplier = 0x10;
+	if (format == FORMAT_DECIMAL){
+		multiplier = 10;
+	}
 
 	a=0;
 	m=0;
@@ -43,28 +52,12 @@ unsigned int ut_atod(uint8_t *p)
 		m++;
 		if (p[i]<='9' && p[i]>='0') k=p[i]-'0';
 		else return 0;
-		if (m>1) a=a*10;
+		if (m>1) a=a*multiplier;
 		a=a+k;
 	}
 	return a;
 }
-unsigned int ut_atoi(uint8_t *p)
-{         
-	unsigned int a;
-	int i,m,k;
-	a=0;
-	m=0;         
-	for (i=0; p[i]!='\0'; i++)
-	{
-		if (p[i] == '0' && m==0) continue;
-		m++;
-		if (p[i]<='9' && p[i]>='0') k=p[i]-'0';
-		else k=p[i]-'a'+0xa;
-		if (m>1) a=a*0x10;
-		a=a+k;                                                 
-	}
-	return a;
-}
+
 int ut_min(int a, int b){
 	if (a<b) return a;
 	else return b;

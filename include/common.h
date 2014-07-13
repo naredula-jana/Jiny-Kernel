@@ -12,17 +12,10 @@
 #include "spinlock.h"
 //#include "ipc.h"
 
-
-
 #ifndef NULL
 #define NULL ((void *) 0)
 #endif
 #define POW2(n) (1 << (n))
-
-enum sock_type {
-          SOCK_STREAM     = 1,
-          SOCK_DGRAM      = 2
-};
 
 /* return to system calls */
 #define SYSCALL_SUCCESS 0
@@ -42,9 +35,7 @@ extern spinlock_t g_global_lock;
 	if (g_conf_syscall_debug==1)	{\
 		ut_printf("SYSCALL(%x :%d uip: %x :%d jiff:%d) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip,g_current_task->stats.syscall_count,g_jiffies); ut_printf(x); \
 	}else if (g_conf_syscall_debug==2) {\
-		if (strace_wait() == JSUCCESS) {\
-				ut_log("SYSCALL(%x :%d uip: %x :%d) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip,g_current_task->stats.syscall_count); ut_log(x); \
-		}\
+				ut_log("SYSCALL(%x :%d uip: %x :%d jiff:%d) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip,g_current_task->stats.syscall_count,g_jiffies); ut_log(x); \
     }\
 } while (0) 
 

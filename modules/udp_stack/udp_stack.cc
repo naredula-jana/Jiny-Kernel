@@ -22,17 +22,18 @@ unsigned short in_cksum(unsigned short *addr, int len){
     answer = ~sum;
     return (answer);
 }
-class network_stack udpip_stack;
-int network_stack::open(network_connection *conn){
+
+int network_stack::open(void *conn, int flags){
 	return JSUCCESS;
 }
-int network_stack::close(network_connection *conn){
+int network_stack::close(void *conn){
 	return JSUCCESS;
 }
-int network_stack::read(network_connection *conn, uint8_t *raw_data, int raw_len, uint8_t *app_data, int app_maxlen){
+int network_stack::read(void *conn, uint8_t *raw_data, int raw_len, uint8_t *app_data, int app_maxlen){
 	struct ether_pkt *pkt=(struct ether_pkt *)(raw_data+10);
 	int len;
 	int hdr_len;
+	ut_printf("raw received length :%x \n",raw_len);
 
 	if (app_data ==0) return 0;
 	len=ntohs(pkt->iphdr.tot_len);
@@ -43,17 +44,17 @@ int network_stack::read(network_connection *conn, uint8_t *raw_data, int raw_len
 		return 0;
 	}
 	ut_memcpy(app_data,&pkt->data,len);
-	//ut_printf("received length :%x \n",len);
+	ut_printf("received length :%x \n",len);
 
 	return len;
 }
 
 
-int network_stack::write(network_connection *conn, uint8_t *app_data, int app_len){
+int network_stack::write(void *conn, uint8_t *app_data, int app_len){
      struct ether_pkt *pkt=(struct ether_pkt *)temp_buff;
      int len;
      unsigned char brdcst[7]={0xff,0xff,0xff,0xff,0xff,0xff,0xff};
-
+#if 0
     /* mac header */
      ut_memcpy(pkt->machdr.src,g_mac,6);
      ut_memcpy(pkt->machdr.dest, brdcst,6);
@@ -69,14 +70,16 @@ int network_stack::write(network_connection *conn, uint8_t *app_data, int app_le
     pkt->iphdr.protocol=IPPROTO_UDP;
     pkt->iphdr.check=0;
     pkt->iphdr.saddr=htonl(conn->src_ip);
-    pkt->iphdr.daddr=conn->dest_ip;
+ //   pkt->iphdr.daddr=conn->dest_ip;
     pkt->iphdr.tot_len=htons(sizeof(struct iphdr)+sizeof(struct udphdr)+app_len);
     pkt->iphdr.check=in_cksum((unsigned short*) &(pkt->iphdr),sizeof(struct iphdr));
 
     /* udp header */
+
     if (conn->src_port==0){
     	conn->src_port = 100;
     }
+
     pkt->udphdr.source=conn->src_port;
     pkt->udphdr.dest=conn->dest_port;
     pkt->udphdr.checksum=0;
@@ -86,13 +89,16 @@ int network_stack::write(network_connection *conn, uint8_t *app_data, int app_le
     ut_memcpy((unsigned char *)&pkt->data, app_data, app_len);
 
     len=sizeof(struct ether_pkt) -1 +app_len;
-    return conn->net_dev->write(0,(unsigned char *)temp_buff,len);
+#endif
+ //   return conn->net_dev->write(0,(unsigned char *)temp_buff,len);
+    return 1; // TODO need to send the packet
 }
 network_stack net_stack;
 extern "C" {
-void init_udpstack(){
+void *init_udpstack(){
 	net_stack.name = "jiny_udp ip stack";
-	socket::net_stack_list[0] = &net_stack;
+//	socket::net_stack_list[0] = &net_stack;
 	ut_log(" initilizing Jiny udpip stack \n");
+	return &net_stack;
 }
 }

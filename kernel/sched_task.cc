@@ -510,6 +510,24 @@ int init_tasking(unsigned long unused) {
 	ar_registerInterrupt(IPI_CLEARPAGETABLE, &ipi_pagetable_interrupt, (char *) "IPI_PTABLE", NULL);
 	return JSUCCESS;
 }
+static int continue_parent_task(unsigned long ppid){
+	unsigned long flags;
+	struct list_head *pos;
+	struct task_struct *task;
+
+	spin_lock_irqsave(&g_global_lock, flags);
+	list_for_each(pos, &g_task_queue.head) {
+		task = list_entry(pos, struct task_struct, task_queue);
+		if (task->pid == ppid) {
+			if (task->state == TASK_STOPPED){
+				task->state == TASK_RUNNING;
+				_add_to_runqueue(task, -1);
+			}
+			break;
+		}
+	}
+	spin_unlock_irqrestore(&g_global_lock, flags);
+}
 /* This function should not block, if it block then the idle thread may block */
 void sc_delete_task(struct task_struct *task) {
 	unsigned long intr_flags;
@@ -576,7 +594,7 @@ void sc_before_syscall() {
 
 void sc_after_syscall() {
 	/* Handle any pending signal */
-	SYSCALL_DEBUG("syscall ret  state:%x\n",g_current_task->state);
+	//SYSCALL_DEBUG("syscall ret  state:%x\n",g_current_task->state);
 	if (g_current_task->pending_signals == 0) {
 		return;
 	}
@@ -851,8 +869,8 @@ void Jcmd_cpu_active(unsigned char *arg1, unsigned char *arg2) {
 		ut_printf(" cpu_active <cpu> <active=0/1>");
 		return;
 	}
-	cpu = ut_atoi(arg1);
-	state = ut_atoi(arg2);
+	cpu = ut_atoi(arg1, FORMAT_DECIMAL);
+	state = ut_atoi(arg2, FORMAT_DECIMAL);
 	if (cpu > getmaxcpus() || state > 1 || cpu < 1 || state < 0) {
 		ut_printf(" Invalid values cpu:%d state:%d valid cpus:1-%d state:0,1 \n", cpu, state, getmaxcpus());
 		return;
@@ -871,7 +889,7 @@ void Jcmd_ipi(unsigned char *arg1, unsigned char *arg2) {
 
 	if (arg1 == 0)
 		return;
-	i = ut_atoi(arg1);
+	i = ut_atoi(arg1,FORMAT_DECIMAL);
 	ut_printf(" sending one IPI's from:%d  to cpu :%d\n", getcpuid(), i);
 	ret = apic_send_ipi_vector(i, IPI_CLEARPAGETABLE);
 	ut_printf(" return value of ipi :%d \n", ret);
@@ -883,8 +901,8 @@ void Jcmd_taskcpu(unsigned char *arg_pid, unsigned char *arg_cpuid) {
 		ut_printf(" taskcpu <pid> <cpuid>\n");
 		return;
 	}
-	pid = ut_atoi(arg_pid);
-	cpuid = ut_atoi(arg_cpuid);
+	pid = ut_atoi(arg_pid,FORMAT_DECIMAL);
+	cpuid = ut_atoi(arg_cpuid, FORMAT_DECIMAL);
 	if (sc_task_stick_to_cpu(pid, cpuid) == SYSCALL_SUCCESS) {
 		ut_printf(" Sucessfully assigned task %x(%d) to cpu %d\n", pid, pid, cpuid);
 	} else {
@@ -900,8 +918,8 @@ void Jcmd_prio(unsigned char *arg1, unsigned char *arg2) {
 		ut_printf(" set cpu priority usage: prio <cpu> <priority>\n");
 		return;
 	}
-	cpu = ut_atoi(arg1);
-	priority = ut_atoi(arg2);
+	cpu = ut_atoi(arg1, FORMAT_DECIMAL);
+	priority = ut_atoi(arg2, FORMAT_DECIMAL);
 	if (cpu < MAX_CPUS && priority < 255) {
 		ut_printf(" current priority : %d newpriority: %d \n",apic_get_task_priority(),priority);
 		g_cpu_state[cpu].cpu_priority = priority;
@@ -912,7 +930,7 @@ void Jcmd_prio(unsigned char *arg1, unsigned char *arg2) {
 int Jcmd_kill(uint8_t *arg1, uint8_t *arg2) {
 	int pid;
 	if (arg1 != 0) {
-		pid = ut_atoi(arg1);
+		pid = ut_atoi(arg1, FORMAT_DECIMAL);
 	} else {
 		ut_printf(" Error: kill pid is needed\n");
 		return 0;
@@ -1084,13 +1102,16 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 
 //	ut_log(" New thread is created:%d %s on %d\n",p->pid,p->name,p->allocated_cpu);
 	ret_pid = p->pid;
+
 	spin_lock_irqsave(&g_global_lock, flags);
 	list_add_tail(&p->task_queue, &g_task_queue.head);
 	_add_to_runqueue(p, -1);
-
 	spin_unlock_irqrestore(&g_global_lock, flags);
-	if (clone_flags & CLONE_VFORK) { //TODO : sys-vfork partially deone, need to use to signals suspend and continue the parent process
 
+	p->clone_flags = clone_flags;
+	if (clone_flags & CLONE_VFORK) { //TODO : sys-vfork partially done, need to use to signals suspend and continue the parent process
+		g_current_task->state = TASK_STOPPED;
+		sc_schedule();
 	}
 
 	SYSCALL_DEBUG("clone return pid :%d \n", ret_pid);
@@ -1112,6 +1133,10 @@ int SYS_sc_exit(int status) {
 	ar_updateCpuState(g_current_task, 0);
 
 	release_resources(g_current_task, 1);
+
+	if (g_current_task->clone_flags & CLONE_VFORK){
+		continue_parent_task(g_current_task->ppid);
+	}
 
 	spin_lock_irqsave(&g_global_lock, flags);
 	g_current_task->state = TASK_DEAD; /* this should be last statement before schedule */
@@ -1223,6 +1248,9 @@ ut_log(" execve : %s  pid :%d \n",g_current_task->name,g_current_task->pid);
 	g_current_task->thread.userland.user_fs = 0;
 
 	g_current_task->thread.userland.user_fs_base = 0;
+	if (g_current_task->clone_flags & CLONE_VFORK){
+		continue_parent_task(g_current_task->ppid);
+	}
 	ar_updateCpuState(g_current_task, 0);
 
 	push_to_userland();

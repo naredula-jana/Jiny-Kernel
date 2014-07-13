@@ -144,7 +144,6 @@ static unsigned long init_free_area(unsigned long start_mem, unsigned long end_m
 	unsigned long i;
 	unsigned long start_addrspace = KADDRSPACE_START;
 	int size;
-//	unsigned long start_addrspace = KERNEL_CODE_START;
 
 	/*
 	 * Select nr of pages we try to keep free for important stuff
@@ -375,22 +374,16 @@ int init_memory(unsigned long arg1){
 		current_end_memused = symbols_end;
 	}
 
-#if 0
-	virt_start_addr=initialise_paging(phy_end_addr, current_end_memused);
-	virt_end_addr=(unsigned long)__va(phy_end_addr);
-	virt_real_start_addr = KERNEL_CODE_START;
-#else
-	virt_start_addr=initialise_paging_new(phy_end_addr, current_end_memused,&virt_real_start_addr,&virt_end_addr);
-#endif
 
+	virt_start_addr=initialise_paging_new(phy_end_addr, current_end_memused,&virt_real_start_addr,&virt_end_addr);
 	ut_log("	After Paging initialized Virtual start_addr: %x virtual endaddr: %x  current end:%x virtualreal_start:%x\n",virt_start_addr,virt_end_addr,current_end_memused,virt_real_start_addr);
-	ut_log("	code+data  : %x  -%x size:%dK\n",&_start,&_end);
+	ut_log("	code+data  : %x  -%x size:%dK",&_start,&_end);
 	ut_log("	free area  : %x - %x size:%dM\n",virt_start_addr,virt_end_addr,(virt_end_addr-virt_start_addr)/1000000);
 	virt_start_addr=init_free_area( virt_start_addr, virt_end_addr);
 
 	pc_size = g_pagecache_size ;
 	pc_init((unsigned char *)virt_start_addr,pc_size);
-	ut_log("	pagecache  : %x - %x size:%dM\n",virt_start_addr,virt_start_addr+pc_size,pc_size/1000000);
+	ut_log("	pagecache  : %x - %x size:%dM",virt_start_addr,virt_start_addr+pc_size,pc_size/1000000);
 
 	virt_start_addr=virt_start_addr+pc_size;
 	init_mem(virt_start_addr, virt_end_addr, virt_real_start_addr);
@@ -446,7 +439,7 @@ int Jcmd_testmem(char *arg1, char *arg2){
 	int i;
 	int size=40000;
 	if (arg1){
-		size=ut_atod(arg1);
+		size=ut_atoi(arg1,FORMAT_DECIMAL);
 	}
 	for (i=0; i<size; i++){
 		mm_getFreePages(0, 0);

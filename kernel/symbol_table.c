@@ -38,16 +38,72 @@ static int add_symbol_types(unsigned long unused);
 extern int init_kernel_module(symb_table_t *symbol_table, int total_symbols);
 unsigned char *symbols_end=0;
 static char *subsystems[]={"SYS_","sc_","ut_","fs_","p9_","ipc_","pc_","ar_","mm_","vm_","Jcmd_","virtio_",0};
+extern unsigned char kernel_args[1024];
+int init_kernel_args(unsigned long arg1){
+	unsigned char tmp_arg[200],tmp_value[200];
+	int i,j,k,flag_arg;
+
+	/* read and load kernel args */
+		j=0;
+		tmp_arg[0]=0;
+		tmp_value[0]=0;
+		flag_arg=0;
+		//return ret;
+		ut_log(" kernel args :%s: \n",kernel_args);
+		for (i=0; i<1023 && j<200; i++){
+		//	ut_log(" args : %c : %x \n",kernel_args[i],kernel_args[i]);
+		//	continue;
+			if (kernel_args[i]==0){
+				break;
+			}
+	#if 1
+			if (flag_arg==0)
+				tmp_arg[j]=kernel_args[i];
+			else
+				tmp_value[j]=kernel_args[i];
+
+			if (kernel_args[i]=='='){
+				tmp_arg[j]=0;
+				j=0;
+				flag_arg=1;
+				continue;
+			}
+
+			if (kernel_args[i]==' ' || kernel_args[i]==',' || kernel_args[i+1]=='\0'){
+				if (kernel_args[i+1]=='\0'){
+					if (flag_arg==0){
+						tmp_arg[j+1]=0;
+					}else{
+						tmp_value[j+1]=0;
+					}
+				}else{
+					if (flag_arg==0){
+						tmp_arg[j]=0;
+					}else{
+						tmp_value[j]=0;
+					}
+				}
+				ut_log(" Appllying the kernel arg  %s=%s \n",tmp_arg,tmp_value);
+				ut_symbol_execute(SYMBOL_CONF, tmp_arg,tmp_value,0);
+				j=-1;
+				tmp_arg[0]=0;
+				tmp_value[0]=0;
+				flag_arg=0;
+			}
+	#endif
+			j++;
+		}
+}
 unsigned long  init_symbol_table(unsigned long bss_start,unsigned long bss_end) {
-	int i=0;
-	int k;
+	int i=0,k;
 	unsigned char *p;
 	symb_table_t *sym_table;
 	unsigned char *addr,*name;
 	unsigned char *start_p=0;
-	unsigned char *end_p;
+	unsigned char *end_p,*plen;
 	int len;
 	unsigned long ret=0;
+
 
 	symbols_end=0;
 	g_symbol_table =0;
@@ -73,13 +129,21 @@ unsigned long  init_symbol_table(unsigned long bss_start,unsigned long bss_end) 
 				k++;
 				if (k==1){
 					sym_table->type=p[1];
+					plen=p+1;
+				}else if (k==2 && p[1]!='0'){
+					sym_table->type=p[1];
 				}
 				name = p + 1;
 			}
 			p++;
 		}
 		p[0] = 0;
-		sym_table->address = ut_atol(addr);
+		if (plen && plen[0]=='0'){
+			sym_table->len = ut_atoi(plen, FORMAT_HEX);
+		}else{
+			sym_table->len = 0;
+		}
+		sym_table->address = ut_atol(addr, FORMAT_HEX);
 		sym_table->name = name;
 		sym_table++;
 //while(1);
@@ -104,6 +168,7 @@ unsigned long  init_symbol_table(unsigned long bss_start,unsigned long bss_end) 
 	symbols_end=ret;
 	add_symbol_types(0);
 	init_kernel_module(g_symbol_table, g_total_symbols);
+	//init_kernel_args(0);
 	return ret;
 }
 #if 1
@@ -112,7 +177,6 @@ static int add_symbol_types(unsigned long unused) {
 	int confs = 0;
 	int stats = 0;
 	int cmds = 0;
-
 
 	for (i = 0;  i<g_total_symbols && g_symbol_table[i].name != 0 ; i++) {
 		unsigned char sym[100], dst[100];
@@ -169,87 +233,53 @@ int ut_symbol_show(int type){
 }
 
 static unsigned char buf[26024];
-static int Jcmd_cat(unsigned char *arg1, unsigned char *arg2) {
-	struct file *fp;
-	int i, ret;
-
-	if (arg1 == 0)
-		return 0;
-	fp = fs_open(arg1, 0, 0);
-	ut_printf("filename :%s: \n", arg1);
-	if (fp == 0) {
-		ut_printf(" Error opening file :%s: \n", arg1);
-		return 0;
-	}
-	buf[1000] = 0;
-	ret = 1;
-	i = 1;
-
-	while (ret > 0) {
-		ret = fs_read(fp, buf, 20000);
-		buf[20001] = '\0';
-		if (ret > 0) {
-			buf[20] = '\0';
-			ut_printf("lne: %d: DATA Read  ::%s:: \n", ret,buf);
-		} else {
-			ut_printf(" Return value of read :%i: \n", ret);
+static int Jcmd_sset(unsigned char *arg1, unsigned char *arg2) {
+	int i,len,count;
+	count=0;
+	for (i = 0; i < g_total_symbols; i++) {
+		if (g_symbol_table[i].type==SYMBOL_CONF){
+			//len = g_symbol_table[i+1].address - g_symbol_table[i].address;
+			len = g_symbol_table[i].len;
+			if (len > 8){
+				unsigned char *val=g_symbol_table[i].address;
+				ut_printf("%d: %s -> %s\n",count,g_symbol_table[i].name,val);
+			}else if (len ==4){
+				unsigned int *val=g_symbol_table[i].address;
+				ut_printf("%d: %s -> %d\n",count,g_symbol_table[i].name,*val);
+			}else {
+				unsigned long *val=g_symbol_table[i].address;
+				ut_printf("%d: %s -> %d\n",count,g_symbol_table[i].name,*val);
+			}
 		}
-		i++;
 	}
-	return 0;
+	return 1;
 }
-#if 0
-struct Jcmd_struct{
-	unsigned char *name;
-	void (*jcmd)(uint8_t *arg1,uint8_t *arg2);
-}jcmd_struct;
-extern void Jcmd_ps(uint8_t *arg1,uint8_t *arg2);
-extern void Jcmd_cpu(uint8_t *arg1,uint8_t *arg2);
-extern void Jcmd_dmesg(uint8_t *arg1,uint8_t *arg2);
-extern void Jcmd_shutdown(uint8_t *arg1,uint8_t *arg2);
-extern void Jcmd_maps(uint8_t *arg1,uint8_t *arg2);
-extern void Jcmd_locks(uint8_t *arg1,uint8_t *arg2);
-extern void Jcmd_pt(unsigned char *arg1,unsigned char *arg2);
-extern void Jcmd_sys(unsigned char *arg1,unsigned char *arg2);
-extern void Jcmd_mem(unsigned char *arg1,unsigned char *arg2);
-extern void Jcmd_network(unsigned char *arg1,unsigned char *arg2);
-extern void Jcmd_jdevices(unsigned char *arg1,unsigned char *arg2);
-static struct Jcmd_struct jcmds[]={
-		{"shutdown",&Jcmd_shutdown},
-		{"ls",&Jcmd_ls},
-		{"cpu",&Jcmd_cpu},
-		{"ps",&Jcmd_ps},
-		{"maps", &Jcmd_maps},
-		{"dmesg",&Jcmd_dmesg},
-		{"sys",&Jcmd_sys},
-		{"pt",&Jcmd_pt},
-		{"locks",&Jcmd_locks},
-		{"mem",&Jcmd_mem},
-		{"network",&Jcmd_network},
-		{"cat",&Jcmd_cat},
-		{"jdevices",&Jcmd_jdevices},
-		{0,0}
-};
-#endif
+extern int g_conf_func_debug;
 int ut_symbol_execute(int type, char *name, uint8_t *argv1,uint8_t *argv2){
-    int i,k,*conf;
+    int i,k,*confint;
+    unsigned long *conflong;
+    unsigned char new_name[200];
 	int (*func)(char *argv1,char *argv2);
-#if 0
-	for (k=0; k<jcmds[k].name!=0; k++){
-		if (ut_strcmp(name,jcmds[k].name)==0){
-			jcmds[k].jcmd(argv1,argv2);
-			return JSUCCESS;
-		}
-	}
-	return JFAIL;
-#endif
+
 	for (i = 0; i < g_total_symbols; i++) {
 		if (g_symbol_table[i].type != type) continue;
 		if (type==SYMBOL_CONF){
-			if (ut_strcmp((unsigned char *)g_symbol_table[i].name,(unsigned char *) name) != 0) continue;
-		    conf=(int *)g_symbol_table[i].address;
 		    if (argv1==0) return 0;
-		    *conf=(int)ut_atoi((unsigned char *)argv1);
+			ut_snprintf(new_name,200,"g_conf_%s",name);
+			if (ut_strcmp((unsigned char *)g_symbol_table[i].name,(unsigned char *) new_name) != 0) continue;
+			if (g_symbol_table[i].len == 4){
+				confint=(int *)g_symbol_table[i].address;
+				*confint=(int)ut_atoi((unsigned char *)argv1, FORMAT_DECIMAL);
+				ut_log(" Setting conf variable %s->:%d: (%s)  \n",g_symbol_table[i].name,*confint,argv1,g_symbol_table[i].address);
+			}else if (g_symbol_table[i].len == 8){
+				conflong=(int *)g_symbol_table[i].address;
+			    *conflong=(int)ut_atol((unsigned char *)argv1, FORMAT_DECIMAL);
+			    ut_log(" Setting conf variable %s->:%d: (%s)  \n",g_symbol_table[i].name,*conflong,argv1,g_symbol_table[i].address);
+			}else if (g_symbol_table[i].len > 8){
+				ut_strcpy(g_symbol_table[i].address,argv1);
+				ut_log(" Setting conf variable %s->:%s  \n",g_symbol_table[i].name,argv1,g_symbol_table[i].address);
+			}
+
 		    return 1;
 		}else {/*this is Jcmd_  leave 5 characters and match */
 			if (ut_strcmp((unsigned char *)&g_symbol_table[i].name[5], (unsigned char *)name) != 0) continue;

@@ -286,7 +286,9 @@ int virtio_net_jdriver::net_attach_device(class jdevice *jdev) {
 	//	outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 0xffff);
 	}
 
-//	virtio_disable_cb(this->vq[1]); /* disable interrupts on sending side */
+#if 0
+	virtio_disable_cb(this->vq[1]); /* disable interrupts on sending side */
+#endif
 
 	if (msi_vector > 0) {
 		for (i = 0; i < 3; i++){
@@ -295,10 +297,15 @@ int virtio_net_jdriver::net_attach_device(class jdevice *jdev) {
 				ut_snprintf(irq_name,MAX_DEVICE_NAME,"%s_recv_msi",jdev->name);
 				ar_registerInterrupt(msi_vector + i, virtio_net_recv_interrupt, irq_name, (void *) this);
 			}
+#if 0
+			// TODO : enabling sending side interrupts causes freeze in the buffer consumption on the sending side,
+			// till  all the buffers are full for the first time. this happens especially on the smp
+
 			if (i!=0){
 				ut_snprintf(irq_name,MAX_DEVICE_NAME,"%s_send_msi",jdev->name);
 				ar_registerInterrupt(msi_vector + i, virtio_net_send_interrupt, irq_name, (void *) this);
 			}
+#endif
 		}
 	}
 
@@ -307,7 +314,7 @@ int virtio_net_jdriver::net_attach_device(class jdevice *jdev) {
 
 	inb(pci_ioaddr + VIRTIO_PCI_ISR);
 	virtio_queue_kick(this->vq[0]);
-	virtio_queue_kick(this->vq[1]);
+//	virtio_queue_kick(this->vq[1]);
 
 	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER_OK);
 	ut_log("VirtioNet:  Initilization Completed status:%x\n", virtio_get_pcistatus(pci_ioaddr));
@@ -365,6 +372,7 @@ int virtio_net_jdriver::write(unsigned char *data, int len) {
 	if (addr == 0)
 		return 0;
 	stat_allocs++;
+
 	ut_memset((unsigned char *) addr, 0, 10);
 	ut_memcpy((unsigned char *) addr + 10, data, len);
 	ret = -ERROR_VIRTIO_ENOSPC;

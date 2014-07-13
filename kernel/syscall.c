@@ -304,7 +304,7 @@ void Jcmd_pt(unsigned char *arg1,unsigned char *arg2){
 		found=1;
 		task = g_current_task;
 	} else {
-		pid=ut_atoi(arg1);
+		pid=ut_atoi(arg1, FORMAT_DECIMAL);
 		list_for_each(pos, &g_task_queue.head) {
 			task = list_entry(pos, struct task_struct, task_queue);
 			if (task->pid == pid) {
@@ -359,7 +359,10 @@ unsigned long SYS_sysctl(struct __sysctl_args *args) {
 			ut_printf("Cmd variables:\n");
 			ut_symbol_show(SYMBOL_CMD);
 		} else {
-			ut_symbol_execute(SYMBOL_CMD, carg[0],carg[1], carg[2]);
+			int ret = ut_symbol_execute(SYMBOL_CMD, carg[0],carg[1], carg[2]);
+			if (ret ==0){
+				ut_printf(" Command Failed\n");
+			}
 #if 0
 			for (k=0; k<jcmds[k].name!=0; k++){
 				if (ut_strcmp(carg[0],jcmds[k].name)==0){
@@ -595,7 +598,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { SYS_fs_dup }, { SYS_fs_dup2 }, { snull }, { SYS_nanosleep }, /* 35 = nanosleep */
 { snull }, { SYS_alarm }, { snull }, { SYS_getpid }, { snull }, /* 40 */
 { SYS_socket }, { SYS_connect }, { SYS_accept }, { SYS_sendto }, { SYS_recvfrom }, /* 45 */
-{ snull }, { snull }, { snull }, { SYS_bind }, { SYS_listen }, /* 50 */
+{ SYS_sendmsg }, { SYS_recvmsg }, { snull }, { SYS_bind }, { SYS_listen }, /* 50 */
 { SYS_getsockname }, { snull }, { snull }, { SYS_setsockopt }, { snull }, /* 55 */
 { SYS_sc_clone }, { SYS_sc_fork }, { SYS_sc_vfork }, { SYS_sc_execve }, { SYS_sc_exit }, /* 60 */
 { SYS_wait4 }, { SYS_sc_kill }, { SYS_uname }, { snull }, { snull }, /* 65 */
@@ -672,7 +675,7 @@ void Jcmd_strace(uint8_t *arg1,uint8_t *arg2){
 		return;
 	}
 
-	sid =  ut_atoi(arg2);
+	sid =  ut_atoi(arg2, FORMAT_DECIMAL);
 	ut_printf("Enabled Strace on  syscall id :%d  process name :%s: \n",sid,arg1);
 	ut_strcpy(strace_thread_name,arg1);
 	strace_syscall_id = sid;

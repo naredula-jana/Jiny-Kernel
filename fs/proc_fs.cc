@@ -54,7 +54,7 @@ int get_cmd(unsigned char *filename, struct procfs_cmd *cmd){
 				continue;
 			}
 			if (k==2){
-				cmd->pid=ut_atod(token);
+				cmd->pid=ut_atoi(token, FORMAT_DECIMAL);
 				if (filename[i+1]=='\0'){
 					cmd->cmd_type = PROC_PID_DIR;
 					return JSUCCESS;

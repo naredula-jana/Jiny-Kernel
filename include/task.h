@@ -96,6 +96,7 @@ struct task_struct {
 	unsigned long pending_signals;	
 	int killed; /* some as send send a kill signal or self killed */
 	atomic_t count; /* usage count */
+	int clone_flags; /* clone flags of the parent task, this is used for vfork call */
 
 	unsigned long pid,ppid;
 	unsigned char name[MAX_TASK_NAME+1];

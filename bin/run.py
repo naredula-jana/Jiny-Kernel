@@ -62,8 +62,8 @@ def start_jiny(options):
     serial_port = int(options.serial_port)- 1 + int(options.vm_instance)
     if (options.networking_with_vhost):
 # for netmap do insmod ./netmap_lin.ko 
-        args += ["-netdev","netmap,id=guest0,ifname=vale0.%s" %(options.vm_instance), "-device","virtio-net-pci,mac=00:30:48:DB:5E:0%s,netdev=guest0" % (options.vm_instance)]
-#        args += ["-netdev","tap,id=guest0,vhost=on,vhostforce", "-device","virtio-net-pci,mac=00:30:48:DB:5E:0%s,netdev=guest0" % (options.vm_instance)]
+#        args += ["-netdev","netmap,id=guest0,ifname=vale0.%s" %(options.vm_instance), "-device","virtio-net-pci,mac=00:30:48:DB:5E:0%s,netdev=guest0" % (options.vm_instance)]
+        args += ["-netdev","tap,id=guest0,vhost=on,vhostforce", "-device","virtio-net-pci,mac=00:30:48:DB:5E:0%s,netdev=guest0" % (options.vm_instance)]
     if (options.networking_without_vhost):
         args += ["-netdev","tap,id=guest0,vhost=off", "-device","virtio-net-pci,mac=00:30:48:DB:5E:0%s,netdev=guest0" % (options.vm_instance)]
  
@@ -77,7 +77,7 @@ def start_jiny(options):
     else:
         args += ["-nographic"]
         
-    args += ["-append","abc=10def=20ghi=30"]
+    args += ["-append", "%s"%(options.kernel_args)]
     if (options.boot_without_grub):
 #        args += ["-kernel", "/opt_src/Jiny-Kernel/bin/jiny_kernel.bin"]
         args += ["-kernel", "/opt_src/Jiny-Kernel/bin/jiny_image.bin"]
@@ -131,12 +131,14 @@ if (__name__ == "__main__"):
                         help="vm instance")
     parser.add_argument("-m", "--memory_size", action="store", default="1024M",
                         help="memory")
+    parser.add_argument("-k", "--kernel_args", action="store", default="ipaddr=192.168.0.8 gw=192.168.0.1",
+                        help="kernel arguments")
     parser.add_argument("-r", "--command", action="store", default="date",
                         help="command to run: example \"ls -l \"")
     
     parser.add_argument("-n", "--networking_without_vhost", action="store_true",default=True,
                         help="need networking without vhost")
-    parser.add_argument("-N", "--networking_with_vhost", action="store_true",
+    parser.add_argument("-N", "--networking_with_vhost", action="store_true",default=False,
                         help="need networking with vhost")
     parser.add_argument("-S", "--snapshot", action="store_true",
                         help="start from snapshot")

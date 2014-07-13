@@ -92,7 +92,7 @@ else
 	ld -r $(LWIP_OBJ) -o lwip-module.o
 endif
 endif
-	make SOURCE_ROOT=$$PWD -C modules/udp_stack
+#	make SOURCE_ROOT=$$PWD -C modules/udp_stack
 	make SOURCE_ROOT=$$PWD -C drivers/hostshm
 	make SOURCE_ROOT=$$PWD -C drivers/virtio
 	make SOURCE_ROOT=$$PWD -C drivers/virtio/9p
@@ -105,7 +105,7 @@ endif
 	$(LCPP)  -nostdlib -g -I.  -feliminate-dwarf2-dups $(LINK_FLAG)  $(OBJ_32CODE)  $(OBJECTS) -Wl,-N -T kernel/kernel.ldp -o bin/jiny_kernel.elf
 	objdump -D -l bin/jiny_kernel.elf > bin/obj_file
 	objcopy -O binary bin/jiny_kernel.elf bin/jiny_kernel.bin
-	nm bin/jiny_kernel.elf | sort  > bin/jiny_symbols
+	nm -S bin/jiny_kernel.elf | sort  > bin/jiny_symbols
 	cat bin/jiny_kernel.bin bin/jiny_symbols > bin/jiny_image.bin
 
 	

@@ -18,21 +18,6 @@ extern "C"{
 #include "interface.h"
 
 extern int g_network_ip;
-
-int set_proto_conn(void *arg_conn, void *proto_conn, uint16_t local_port, uint16_t remote_port) {
-	network_connection *conn = arg_conn;
-	if (proto_conn!=0){
-		conn->proto_connection = proto_conn;
-	}
-	if (local_port != 0 && conn->src_port == 0) {
-		conn->src_port = local_port;
-	}
-	if (remote_port != 0 ) {
-		conn->dest_port = remote_port;
-	}
-	return 1;
-}
-
 static spinlock_t _netstack_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"netstack");
 unsigned long stack_flags;
 void netstack_lock(){
@@ -43,15 +28,7 @@ void netstack_unlock(){
 	spin_unlock_irqrestore(&_netstack_lock, stack_flags);
 	return;
 }
-void *get_proto_conn(void *arg_conn) {
-	network_connection *conn = arg_conn;
-	return conn->proto_connection;
-}
-void get_dest_addr(void *arg_conn, uint32_t *ip, uint16_t *port) {
-	network_connection *conn = arg_conn;
-	*ip = conn->dest_ip;
-	*port = conn->dest_port;
-}
+
 int wait_for_sock_data(vinode *inode, int timeout){
 	socket *sock=inode;
 	return sock->ioctl(SOCK_IOCTL_WAITFORDATA,timeout/10);
@@ -152,6 +129,15 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len) {
 	unsigned char *buf = 0;
 	int buf_len;
 
+	/* if the message is peeked, then get the message from the peeked buf*/
+	if (peeked_msg_len != 0){
+		buf_len = peeked_msg_len;
+		if (buf_len > app_len) buf_len=app_len;
+
+		ut_memcpy(app_data,peeked_msg, buf_len);
+		peeked_msg_len =0;
+		return buf_len;
+	}
 	/* push a packet in to protocol stack  */
 	ret = remove_from_queue(&buf, &buf_len);
 	if (ret == JSUCCESS) {
@@ -168,6 +154,15 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len) {
 		free_page((unsigned long)buf);
 	}
 	return ret;
+}
+int socket::peek(){
+	if (peeked_msg_len == 0 ){
+		if (peeked_msg == 0){
+			peeked_msg = (unsigned long) alloc_page(0);
+		}
+		peeked_msg_len = read(0,peeked_msg,PAGE_SIZE);
+	}
+	return peeked_msg_len;
 }
 
 int socket::write(unsigned long offset, unsigned char *app_data, int app_len) {
@@ -186,9 +181,16 @@ int socket::write(unsigned long offset, unsigned char *app_data, int app_len) {
 }
 int socket::close() {
 	int ret;
-
+	atomic_dec(&this->count);
+	if (this->count.counter > 0){
+		return JFAIL;
+	}
 	ret = net_stack->close(&network_conn);
 	ipc_unregister_waitqueue(&queue.waitq);
+	if (peeked_msg == 0 ){
+		free_page(peeked_msg);
+	}
+
 	delete_sock(this);
 	// TODO: need to clear the socket
 	ut_free(this);
@@ -196,11 +198,15 @@ int socket::close() {
 }
 
 int socket::ioctl(unsigned long arg1, unsigned long arg2) {
-	int ret;
+	int ret = SYSCALL_FAIL;
 	if (arg1 == SOCK_IOCTL_BIND){
-		ret = net_stack->bind(network_conn.src_port);
+		ret = net_stack->bind(&network_conn, network_conn.src_port);
 	}else if (arg1 == SOCK_IOCTL_CONNECT){
-		ret = net_stack->connect(&network_conn, network_conn.dest_ip,network_conn.dest_port);
+		if (network_conn.type == SOCK_DGRAM ){
+			ret = SYSCALL_SUCCESS;
+		}else{
+			ret = net_stack->connect(&network_conn, network_conn.dest_ip,network_conn.dest_port);
+		}
 	}else if (arg1 == SOCK_IOCTL_WAITFORDATA){
 		if (queue.queue_len == 0){
 			ipc_waiton_waitqueue(&queue.waitq, arg2);
@@ -208,7 +214,7 @@ int socket::ioctl(unsigned long arg1, unsigned long arg2) {
 		}
 		return queue.queue_len;
 	}
-	return JSUCCESS;
+	return ret;
 }
 socket *socket::list[MAX_SOCKETS];
 int socket::list_size = 0;
@@ -228,8 +234,8 @@ void socket::print_stats() {
 	for (i=0; i<list_size;i++){
 		socket *sock=list[i];
 		if (sock==0) continue;
-		ut_printf("socket: local:%x:%x remote:%x:%x (%d:%d/%d:%d/%d) qeueu full error:%d\n",
-				sock->network_conn.src_ip,sock->network_conn.src_port,sock->network_conn.dest_ip,sock->network_conn.dest_port,sock->stat_in
+		ut_printf("socket: count:%d local:%x:%x remote:%x:%x (%d:%d/%d:%d/%d) qeueu full error:%d\n",
+				sock->count.counter,sock->network_conn.src_ip,sock->network_conn.src_port,sock->network_conn.dest_ip,sock->network_conn.dest_port,sock->stat_in
 		    ,sock->stat_in_bytes,sock->stat_out,sock->stat_out_bytes,sock->stat_err,sock->queue.error_full);
 	}
 	return;
@@ -256,7 +262,7 @@ vinode* socket::create_new(int arg_type) {
 
 	if (net_stack_list[0] == 0)
 		return 0;
-//	socket *sock = new socket();
+
 	socket *sock = (socket *)ut_calloc(sizeof(socket));
 	if (sock == 0)
 		return 0;
@@ -287,10 +293,18 @@ vinode* socket::create_new(int arg_type) {
 	//ipc_register_waitqueue(&sock->queue.waitq, "socket_waitq", WAIT_QUEUE_WAKEUP_ONE);
 	ipc_register_waitqueue(&sock->queue.waitq, "socket_waitq", 0);
 	sock->net_stack = net_stack_list[0];
-	sock->network_conn.net_dev = net_dev;
+	sock->network_conn.family = AF_INET;
 	sock->network_conn.type = arg_type;
 	sock->network_conn.src_ip = g_network_ip;
-	sock->network_conn.protocol = IPPROTO_UDP;
+	if (arg_type == SOCK_DGRAM){
+		sock->network_conn.protocol = IPPROTO_UDP;
+	}else{
+		sock->network_conn.protocol = IPPROTO_TCP;
+	}
+	sock->stat_in = 0;
+	sock->stat_in_bytes =0;
+	sock->stat_out =0;
+	sock->stat_out_bytes =0;
 	sock->net_stack->open(&sock->network_conn,1);
 	return (vinode *) sock;
 }
@@ -448,7 +462,7 @@ int SYS_connect(int fd, struct sockaddr *addr, int len) {
 //	if (socket->network_conn.proto_connection == 0)
 //		return SYSCALL_FAIL;
 
-	socket->ioctl(SOCK_IOCTL_CONNECT,0);
+	ret = socket->ioctl(SOCK_IOCTL_CONNECT,0);
 
 	SYSCALL_DEBUG("connect ret:%d  addr:%x\n", ret, ksock_addr.addr);
 	return ret;
@@ -475,7 +489,9 @@ unsigned long SYS_sendto(int sockfd, void *buf, size_t len, int flags, struct so
 
 	return sock->write(0, (unsigned char *) buf, len);
 }
-
+int SYS_sendmsg(){
+	return 0;
+}
 int SYS_recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *dest_addr, int addrlen) {
 	int ret;
 	SYSCALL_DEBUG("RECVfrom fd:%d  buf:%x dest_addr:%x\n", sockfd, buf, dest_addr);
@@ -493,5 +509,49 @@ int SYS_recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *
 		dest_addr->sin_port = sock->network_conn.dest_port;
 	}
 	return ret;
+}
+
+
+/*
+recvmsg(3, {msg_name(16)={sa_family=AF_INET, sin_port=htons(52402), sin_addr=inet_addr("127.0.0.1")}, msg_iov(1)=[{NULL, 0}], msg_controllen=32, {cmsg_len=28, cmsg_level=SOL_IP, cmsg_type=, ...}, msg_flags=MSG_TRUNC}, MSG_PEEK) = 0
+;*/
+enum
+  {
+    MSG_OOB     = 0x01, /* Process out-of-band data.  */
+    MSG_PEEK        = 0x02, /* Peek at incoming messages.  */
+    MSG_DONTROUTE   = 0x04 /* Don't use local routing.  */
+  };
+
+int SYS_recvmsg(int sockfd, struct msghdr *msg, int flags){
+	int i,ret;
+
+	ut_printf(" RecvMSG fd :%d  msg :%x flags:%x \n",sockfd,msg,flags);
+	if (msg == 0){
+		return 0;
+	}
+	ut_printf("  name: %x namelen:%x msg_iov:%x iovlen:%d control:%x controllen:%x flags:%x\n",
+			msg->msg_name,msg->msg_namelen, msg->msg_iov, msg->msg_iovlen, msg->msg_control,msg->msg_controllen,msg->msg_flags);
+
+	if (sock_check(sockfd) == JFAIL || g_current_task->fs->filep[sockfd] == 0)
+		return 0;
+
+	struct file *file = g_current_task->fs->filep[sockfd];
+	struct socket *sock = (struct socket *) file->vinode;
+
+	if (flags & MSG_PEEK){
+		ret = sock->peek();
+		if (ret > 0){
+			struct sockaddr *p = msg->msg_name;
+			p->sin_port = sock->network_conn.dest_port;
+			p->addr = sock->network_conn.dest_ip;
+			p->family = sock->network_conn.family;
+			return 0;
+		}
+	}
+	for ( i=0; i<msg->msg_iovlen; i++){
+		ut_printf("%d: IOV base :%x len: %x \n",msg->msg_iov[i].iov_base,msg->msg_iov[i].iov_len);
+		//if (msg->msg_iov[i].iov_base == 0) return -1;
+	}
+
 }
 }

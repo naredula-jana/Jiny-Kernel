@@ -158,7 +158,7 @@ int SYS_fs_dup2(int fd_old, int fd_new) {
 	g_current_task->fs->filep[fd_new] = fp_new;
 
 last:
-	SYSCALL_DEBUG("dup2 Return ret:%d new_fd:%d \n",ret,fd_new);
+	//SYSCALL_DEBUG("dup2 Return ret:%d new_fd:%d \n",ret,fd_new);
 	return ret;
 }
 int SYS_fs_read(unsigned long fd, uint8_t *buff, unsigned long len) {

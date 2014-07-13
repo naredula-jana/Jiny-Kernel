@@ -574,7 +574,7 @@ int Jcmd_print_trace(unsigned char *arg_pid, unsigned char *arg_cpu_id) {
     int count=0;
 
     if (arg_pid != 0){
-    	pid = ut_atoi(arg_pid);
+    	pid = ut_atoi(arg_pid, FORMAT_DECIMAL);
     }
 	for (i = 0; i < trace_index && i < MAX_TRACES; i++) {
 		if (pid!=-1 && traces[i].pid!=pid) continue;

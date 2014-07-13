@@ -543,7 +543,8 @@ int fs_write(struct file *filep, uint8_t *buff, unsigned long len) {
 	}
 	struct vinode *inode = (struct vinode *) filep->vinode;
 	if (inode ==0 || !(inode->file_type&filep->type) ){
-		BUG();
+		return 0;
+		//BUG();
 	}
 
 

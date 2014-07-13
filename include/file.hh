@@ -17,6 +17,7 @@ extern "C" {
 #include "common.h"
 #include "mm.h"
 #include "interface.h"
+#include "network_stack.hh"
 extern void *g_inode_lock; /* protects inode_list */
 extern kmem_cache_t *g_slab_filep;
 #define ENOSPC          28      /* No space left on device */
@@ -64,18 +65,8 @@ struct sock_queue_struct {
 };
 #define MAX_SOCKETS 100
 class jdevice;
-class network_stack;
-class network_connection{
-public:
-	int type; /* udp or tcp */
-	uint32_t dest_ip,src_ip;
-	uint16_t dest_port,src_port;
-	uint8_t 	protocol; /* ip_protocol , tcp or udp */
 
-	jdevice *net_dev;
-	void *proto_connection;  /* protocol connection */
 
-};
 #define MAX_NETWORK_STACKS 5
 enum {
 	SOCK_IOCTL_BIND=1,
@@ -87,15 +78,19 @@ public:
 	class network_connection network_conn;
 	network_stack *net_stack;
 	struct sock_queue_struct queue;
+	unsigned char *peeked_msg;
+	int peeked_msg_len;
 
 	int read(unsigned long offset, unsigned char *data, int len);
 	int write(unsigned long offset, unsigned char *data, int len);
 	int close();
 	int ioctl(unsigned long arg1,unsigned long arg2);
+	int peek();
 
 	int add_to_queue(unsigned char *buf, int len);
 	int remove_from_queue(unsigned char **buf,  int *len);
 
+	/* static/class members */
 	static vinode *create_new(int type);
 	static int delete_sock(socket *sock);
 	static int attach_rawpkt(unsigned char *c, unsigned int len, unsigned char **replace_buf);

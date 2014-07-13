@@ -19,6 +19,7 @@ enum {
 typedef struct {
 	unsigned char *name;
 	unsigned long address;
+	int len;
 	char type;
 	char *file_lineno; /* currently not filled */
 	int sec_index;

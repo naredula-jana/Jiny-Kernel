@@ -494,7 +494,7 @@ int Jcmd_maps(char *arg1, char *arg2) {
 		found=1;
 		task = g_current_task;
 	} else {
-		pid=ut_atoi(arg1);
+		pid=ut_atoi(arg1, FORMAT_DECIMAL);
 		list_for_each(pos, &g_task_queue.head) {
 			task = list_entry(pos, struct task_struct, task_queue);
 			if (task->pid == pid) {

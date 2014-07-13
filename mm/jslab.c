@@ -609,7 +609,7 @@ int Jcmd_jslabmalloc(unsigned char *arg1, unsigned char *arg2) {
 		 create_jcache(&test_cache,"test", 100, JSLAB_FLAGS_DEBUG);
 		 test_created =1;
 	}
-	type=ut_atoi(arg1);
+	type=ut_atoi(arg1, FORMAT_DECIMAL);
 
 	addr = (unsigned long)jslab_alloc_from_cache(&test_cache,0);
 	ut_printf("New addr :%x \n", addr);

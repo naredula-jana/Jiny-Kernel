@@ -9,11 +9,10 @@
 #include "jiny_api.h"
 #define MAX_AUX_VEC_ENTRIES 25 
 
-struct iovec {
-     void  *iov_base;    /* Starting address */
-     size_t iov_len;     /* Number of bytes to transfer */
+struct iovec {                    /* Scatter/gather array items */
+    void  *iov_base;              /* Starting address */
+    size_t iov_len;               /* Number of bytes to transfer */
 };
-
 /* Naming : SYS : system call
  *
  */
@@ -202,7 +201,16 @@ struct sockaddr {
 	uint16_t sin_port;
 	uint32_t addr;
 	char     sin_zero[8];  // zero this if you want to
-
+};
+#define socklen_t int
+struct msghdr {
+    void         *msg_name;       /* optional address */
+    socklen_t     msg_namelen;    /* size of address */
+    struct iovec *msg_iov;        /* scatter/gather array */
+    size_t        msg_iovlen;     /* # elements in msg_iov */
+    void         *msg_control;    /* ancillary data, see below */
+    socklen_t     msg_controllen; /* ancillary data buffer len */
+    int           msg_flags;      /* flags on received message */
 };
 struct Socket_API{
 	void* (*open)(int type);
@@ -218,6 +226,8 @@ struct Socket_API{
 	int (*close)(void *conn,int sock_type);
 	int (*network_status)(void *arg1,void *arg2);
 };
+
+
 int register_to_socketLayer(struct Socket_API *api);
 int socket_close(struct file *file);
 int socket_read(struct file *file, uint8_t *buff, unsigned long len);
@@ -230,7 +240,8 @@ int SYS_connect(int fd, struct sockaddr  *addr, int len);
 unsigned long SYS_sendto(int sockfd,  void *buf, size_t len, int flags,
                 struct sockaddr *dest_addr, int addrlen);
 int SYS_recvfrom(int sockfd,  void *buf, size_t len, int flags,  struct sockaddr *dest_addr, int addrlen);
-
+int SYS_sendmsg();
+int SYS_recvmsg(int sockfd, struct msghdr *msg, int flags);
 /* Utilities */
 void ut_showTrace(unsigned long *stack_top);
 int ut_strcmp(uint8_t *str1, uint8_t *str2);
@@ -243,9 +254,12 @@ uint8_t *ut_strncpy(uint8_t *dest, const uint8_t *src,int n);
 uint8_t *ut_strcat(uint8_t *dest, const uint8_t *src);
 uint8_t *ut_strstr(uint8_t *s1,uint8_t *s2);
 int ut_strlen(const uint8_t * s);
-unsigned long ut_atol(uint8_t *p);
-unsigned int ut_atod(uint8_t *p);
-unsigned int ut_atoi(uint8_t *p);
+enum{
+	FORMAT_HEX=1,
+	FORMAT_DECIMAL=2
+};
+unsigned long ut_atol(uint8_t *p, int format);
+unsigned int ut_atoi(uint8_t *p, int format);
 int ut_sprintf(uint8_t * buf, const uint8_t *fmt, ...);
 int ut_snprintf(uint8_t * buf, size_t size, const char *fmt, ...);
 void ut_log(const char *format, ...);

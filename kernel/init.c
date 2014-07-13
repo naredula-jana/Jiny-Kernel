@@ -44,6 +44,7 @@ int  init_code_readonly(unsigned long arg1);
 int init_kmemleak(unsigned long arg1);
 int init_acpi(unsigned long arg1);
 int init_network_stack(unsigned long arg1);
+int  init_kernel_args(unsigned long arg1);
 typedef struct {
 	int (*func)(unsigned long arg);
 	unsigned long arg1;
@@ -54,6 +55,7 @@ static inittable_t inittable[] = {
 		{init_physical_memory,0,"PhysicalMemory"},
 		{init_descriptor_tables,0,"ISR and Descriptors"},
 		{init_memory,0,           "Main memory"},
+		{init_kernel_args,0, "Kernel Args"},
 #ifndef JINY_SLAB
 		{init_kmem_cache,0,       "kmem cache"},
 #endif
@@ -92,6 +94,7 @@ unsigned long g_phy_mem_size=0;
 #define CHECK_FLAG(flags,bit)	((flags) & (1 << (bit)))
 extern int _edata; // data and bsss start
 extern addr_t end; // end of code and data region
+unsigned char kernel_args[1024];
 int init_physical_memory(unsigned long unused){
 	multiboot_info_t *mbi;
 	unsigned long *mbi_ptr,*magic_ptr;
@@ -126,10 +129,11 @@ int init_physical_memory(unsigned long unused){
 	}
 
 	g_phy_mem_size = max_addr;
-	ut_log("  Physical memory size :%x (%d)  magic_ptr :%x cmdline: %x :%s\n",g_phy_mem_size,g_phy_mem_size,magic_ptr,mbi->cmdline,__va(mbi->cmdline+0x20));
+	ut_log("  Physical memory size :%x (%d)  magic_ptr :%x cmdline: %x :%s\n",g_phy_mem_size,g_phy_mem_size,magic_ptr,mbi->cmdline,__va(mbi->cmdline));
 	ut_log("  end of data :%x  image end:%x\n",&_edata, &end);
-
+	ut_memcpy(&kernel_args[0], __va(mbi->cmdline),1023);
 	init_symbol_table(&_edata, &end);
+	ut_log(" End of sybol provcessing \n");
 	//while(1);
 	return JSUCCESS;
 }
@@ -213,24 +217,24 @@ int init_kernel_vmaps(unsigned long arg1){
 
 	return JSUCCESS;
 }
-extern void send_thread();
+extern int g_conf_func_debug;
 void cmain() {  /* This is the first c function to be executed */
 	int i,ret;
 
 	g_cpu_state[0].current_task = g_current_task;
 
 //	while(1);
+	ut_log(" Before g_conf_func_debug-> :%x(%d)\n",g_conf_func_debug,g_conf_func_debug);
 	for (i=0; inittable[i].func != 0; i++){
 		ut_log("%d : INITIALIZING :%s  ...\n",i, inittable[i].comment);
-		//ut_printf("..INITIALIZING :%s  ...\n",inittable[i].comment);
 		ret = inittable[i].func(inittable[i].arg1);
 		if (ret==JSUCCESS){
-			//ut_log(" ... Success\n");
+
 		}else{
 			ut_log("	%s : ....Failed error:%d\n",inittable[i].comment,ret);
 		}
 	}
-//while(1);
+	ut_log(" After g_conf_func_debug-> :%x(%d)\n",g_conf_func_debug,g_conf_func_debug);
 	uint32_t val[5];
 	do_cpuid(1,val);
 	ut_log("	cpuid result %x : %x :%x :%x \n",val[0],val[1],val[2],val[3]);
@@ -240,11 +244,10 @@ void cmain() {  /* This is the first c function to be executed */
 	sti(); /* start the interrupts finally */
 
 #if 1
-	//sc_createKernelThread(send_thread, 0, (unsigned char *)"test_send",0);
 	sc_createKernelThread(shell_main, 0, (unsigned char *)"shell_main",0);
 	sc_createKernelThread(housekeeper_thread, 0, (unsigned char *)"house_keeper",0);
 #endif
-	ut_log("	Initalization COMPLETED  time since boot:%d  ten_msecs\n",get_kvm_time_fromboot());
+	ut_log("	Initialization COMPLETED  time since boot:%d  ten_msecs\n",get_kvm_time_fromboot());
 
 	idleTask_func();
 	return;

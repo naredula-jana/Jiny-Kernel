@@ -781,7 +781,8 @@ struct func_debug {
 static int func_hits_count=0;
 struct func_debug func_hits[MAX_FUNC_HITS];
 static int stat_cpu_rip_unknown_hit = 0;
-int g_conf_func_debug=982;
+long g_conf_func_debug=982;
+//int g_conf_func_debug;  // TODO like cause the kernel to crash
 static unsigned long stat_unknown_ip=0;
 
 void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
@@ -812,9 +813,9 @@ void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
 				if ((option == 2) && (modulep->symbol_table[j].stats.hits == 0))
 					continue;
 
-				ut_snprintf(buf, bsize, "	%3d:t:%2d s_idx:%2d hits:%4d (rip=%p) %s -> %p \n", j, modulep->symbol_table[j].type,
+				ut_snprintf(buf, bsize, "	%3d:t:%2d s_idx:%2d hits:%4d (rip=%p) %s -> %p (%d) \n", j, modulep->symbol_table[j].type,
 						modulep->symbol_table[j].sec_index, modulep->symbol_table[j].stats.hits,
-						modulep->symbol_table[j].stats.rip, modulep->symbol_table[j].name, modulep->symbol_table[j].address);
+						modulep->symbol_table[j].stats.rip, modulep->symbol_table[j].name, modulep->symbol_table[j].address,modulep->symbol_table[j].len);
 				SYS_fs_write(1, buf, ut_strlen(buf));
 				total_hits = total_hits + modulep->symbol_table[j].stats.hits;
 			}
