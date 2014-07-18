@@ -192,8 +192,8 @@ public:
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);
 	int dettach_device(jdevice *dev);
-	int read(unsigned char *buf, int len);
-	int write(unsigned char *buf, int len);
+	int read(unsigned char *buf, int len, int flags);
+	int write(unsigned char *buf, int len, int flags);
 	int print_stats();
 	int ioctl(unsigned long arg1,unsigned long arg2);
 };
@@ -212,7 +212,7 @@ jdriver *keyboard_jdriver::attach_device(class jdevice *jdev) {
 int keyboard_jdriver::dettach_device(class jdevice *jdev) {
 	return JSUCCESS;
 }
-int keyboard_jdriver::read(unsigned char *buff, int len){
+int keyboard_jdriver::read(unsigned char *buff, int len, int read_flags){
 	int ret=0;
 
 	if (len >0 && buff!=0){
@@ -237,7 +237,7 @@ int keyboard_jdriver::read(unsigned char *buff, int len){
 	return ret;
 }
 
-int keyboard_jdriver::write(unsigned char *buff, int len){
+int keyboard_jdriver::write(unsigned char *buff, int len, int wr_flags){
 	int i;
 	int ret=0;
 	for (i = 0; i < len; i++) {

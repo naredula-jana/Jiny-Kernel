@@ -72,15 +72,15 @@ void jdevice::print_stats() {
 	}
 	ut_printf("\n");
 }
-int jdevice::read(unsigned long unused, unsigned char *buf, int len){
+int jdevice::read(unsigned long unused, unsigned char *buf, int len, int flags){
 	if (driver != 0){
-		return driver->read(buf,len);
+		return driver->read(buf,len, flags);
 	}
 	return -1;
 }
-int jdevice::write(unsigned long unused, unsigned char *buf, int len){
+int jdevice::write(unsigned long unused, unsigned char *buf, int len, int flags){
 	if (driver != 0){
-		return driver->write(buf,len);
+		return driver->write(buf,len, flags);
 	}
 	return -1;
 }

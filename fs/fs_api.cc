@@ -173,9 +173,7 @@ int SYS_fs_read(unsigned long fd, uint8_t *buff, unsigned long len) {
 		return 0;
 	}
 
-	if (file->type == NETWORK_FILE) {
-		//return socket_read(file, buff, len);
-	} else if (file->type == DEV_NULL_FILE) {
+	if (file->type == DEV_NULL_FILE) {
 		//ut_memset(buff,0,len-1);
 		return len;
 	}

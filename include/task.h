@@ -17,12 +17,15 @@
 
 #define TASK_SIZE 4*(PAGE_SIZE)  /* TODO : it is redefined in multiboot.h  also */
 
-#define TASK_RUNNING            0
-#define TASK_INTERRUPTIBLE      1
-#define TASK_UNINTERRUPTIBLE    2
-#define TASK_STOPPED            4
-#define TASK_KILLING            8
-#define TASK_DEAD               64
+enum{
+ TASK_RUNNING = 0,
+ TASK_INTERRUPTIBLE    =  0x1,
+ /*  TASK_UNINTERRUPTIBLE  =  0x2,   NOT used */
+ TASK_STOPPED          =  0x4,
+ TASK_KILLING          =  0x8,
+ TASK_DEAD             =  0x10,
+ TASK_NONPREEMPTIVE    =  0x20
+};
 
 struct user_regs {
 	struct gpregs gpres;

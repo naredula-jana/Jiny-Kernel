@@ -61,6 +61,7 @@
 
 #include "uip_arp.h"
 
+
 #include <string.h>
 #define memset ut_memset
 #define memcpy ut_memcpy
@@ -114,8 +115,10 @@ static u8_t i, c;
 static u8_t arptime;
 static u8_t tmpage;
 
-#define BUF   ((struct arp_hdr *)&uip_buf[0])
-#define IPBUF ((struct ethip_hdr *)&uip_buf[0])
+
+/* JANA changed  below */
+#define BUF   ((struct arp_hdr *)uip_buf)
+#define IPBUF ((struct ethip_hdr *)uip_buf)
 /*-----------------------------------------------------------------------------------*/
 /**
  * Initialize the ARP module.

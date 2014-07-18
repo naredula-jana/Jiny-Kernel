@@ -232,7 +232,7 @@ int ut_symbol_show(int type){
 	return count;
 }
 
-static unsigned char buf[26024];
+//static unsigned char buf[26024];
 static int Jcmd_sset(unsigned char *arg1, unsigned char *arg2) {
 	int i,len,count;
 	count=0;

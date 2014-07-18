@@ -15,8 +15,8 @@ public:
 	jdriver* driver;
 
 	jdevice();
-	int read(unsigned long offset, unsigned char *data, int len);
-	int write(unsigned long offset, unsigned char *data, int len);
+	int read(unsigned long offset, unsigned char *data, int len, int flags);
+	int write(unsigned long offset, unsigned char *data, int len, int flags);
 	int close();
 	int ioctl(unsigned long arg1,unsigned long arg2);
 
@@ -38,8 +38,8 @@ public:
 	virtual int probe_device(jdevice *dev)=0;
 	virtual jdriver *attach_device(jdevice *dev)=0; /* attach the driver by creating a new driver if it is sucessfull*/
 	virtual int dettach_device(jdevice *dev)=0;
-	virtual int read(unsigned char *buf, int len)=0;
-	virtual int write(unsigned char *buf, int len)=0;
+	virtual int read(unsigned char *buf, int len, int flags)=0;
+	virtual int write(unsigned char *buf, int len, int flags)=0;
 	virtual int print_stats()=0;
 	virtual int ioctl(unsigned long arg1,unsigned long arg2)=0;
 };
@@ -67,8 +67,8 @@ public:
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);
 	int dettach_device(jdevice *dev);
-	int read(unsigned char *buf, int len);
-	int write(unsigned char *buf, int len);
+	int read(unsigned char *buf, int len, int flags);
+	int write(unsigned char *buf, int len, int flags);
 	int ioctl(unsigned long arg1,unsigned long arg2);
 
 	wait_queue_t send_waitq;
@@ -82,8 +82,8 @@ public:
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);
 	int dettach_device(jdevice *dev);
-	int read(unsigned char *buf, int len);
-	int write(unsigned char *buf, int len);
+	int read(unsigned char *buf, int len, int flags);
+	int write(unsigned char *buf, int len, int flags);
 	int ioctl(unsigned long arg1,unsigned long arg2);
 	void *virtio_dev; /* TODO : need to remove later */
 

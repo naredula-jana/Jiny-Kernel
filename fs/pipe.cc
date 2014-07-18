@@ -86,13 +86,13 @@ int pipe::init(int type) {
 
 	file_type = type;
 }
-int pipe::read(unsigned long unused, unsigned char *buf, int len){
+int pipe::read(unsigned long unused, unsigned char *buf, int len, int read_flags){
 	int ret;
 	ret = fs_recv_from_pipe(this->pipe_index,buf,len);
 	update_stat_in(1,ret);
 	return ret;
 }
-int pipe::write(unsigned long unused, unsigned char *buf, int len){
+int pipe::write(unsigned long unused, unsigned char *buf, int len, int wr_flags){
 	int ret;
 
 	ret = fs_send_to_pipe(this->pipe_index,buf,len);

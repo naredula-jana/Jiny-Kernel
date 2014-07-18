@@ -30,6 +30,8 @@ int SYS_sc_exit(int status);
 void sc_delete_task(struct task_struct *task);
 int sc_task_stick_to_cpu(unsigned long pid, int cpu_id);
 int SYS_sc_kill(unsigned long pid,unsigned long signal);
+void sc_enable_nonpreemptive();
+void sc_disable_nonpreemptive();
 
 int Jcmd_threadlist_stat( uint8_t *arg1,uint8_t *arg2);
 
@@ -52,6 +54,8 @@ void mm_free (const void *objp);
 extern void *vmalloc(int size, int flags);
 void jslab_pagefault(unsigned long addr, unsigned long faulting_ip, struct fault_ctx *ctx);
 void memleakHook_alloc(unsigned char *ptr, int size, int type, void *cachep);
+int mm_set_debug_data(unsigned long addr, unsigned long data);
+int mm_check_debug_data(unsigned long addr, unsigned long data);
 
 unsigned long jalloc_page(int flags);
 int jfree_page(unsigned long p);

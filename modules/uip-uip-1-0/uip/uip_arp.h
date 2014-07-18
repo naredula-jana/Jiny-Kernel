@@ -54,7 +54,7 @@
 
 #include "uip.h"
 
-
+#include "jiny_uip.h"
 extern struct uip_eth_addr uip_ethaddr;
 
 /**

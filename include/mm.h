@@ -156,6 +156,7 @@ typedef struct page {
 	struct list_head list; /*TODO: currently used 1)  SLAB 2) pagecache:inodelist  */
 #ifdef MEMORY_DEBUG
 	unsigned long bt_addr_list[MAX_BACKTRACE_LENGTH];
+	unsigned long option_data;
 #endif
 	unsigned long magic_number;
 } page_struct_t;

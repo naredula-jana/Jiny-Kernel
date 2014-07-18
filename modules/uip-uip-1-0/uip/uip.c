@@ -150,10 +150,20 @@ const struct uip_eth_addr uip_ethaddr = {{UIP_ETHADDR0,
 #else
 struct uip_eth_addr uip_ethaddr = {{0,0,0,0,0,0}};
 #endif
+struct uip_conn uip_conns[UIP_CONNS];
+                             /* The uip_conns array holds all TCP
+				connections. */
+struct uip_conn *uip_conn;   /* uip_conn always points to the current
+				connection. */
 
+
+#if 0
 #ifndef UIP_CONF_EXTERNAL_BUFFER
+
 u8_t uip_buf[UIP_BUFSIZE + 2];   /* The packet buffer that contains
 				    incoming packets. */
+
+
 #endif /* UIP_CONF_EXTERNAL_BUFFER */
 
 void *uip_appdata;               /* The uip_appdata pointer points to
@@ -176,12 +186,12 @@ u16_t uip_len, uip_slen;
 u8_t uip_flags;     /* The uip_flags variable is used for
 				communication between the TCP/IP stack
 				and the application program. */
-struct uip_conn *uip_conn;   /* uip_conn always points to the current
-				connection. */
 
-struct uip_conn uip_conns[UIP_CONNS];
-                             /* The uip_conns array holds all TCP
-				connections. */
+#else
+#include "jiny_uip.h"
+struct jiny_uip jiny_uip[MAX_CPUS];
+#endif
+
 u16_t uip_listenports[UIP_LISTENPORTS];
                              /* The uip_listenports list all currently
 				listning ports. */
@@ -1135,7 +1145,7 @@ uip_process(u8_t flag)
       goto udp_found;
     }
   }
-  UIP_LOG("udp: no matching connection found");
+  //UIP_LOG("udp: no matching connection found");
   goto drop;
   
  udp_found:

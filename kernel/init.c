@@ -176,7 +176,7 @@ int  init_code_readonly(unsigned long arg1){
 /****************************************House Keeper *******************************************/
 
 void housekeeper_thread(void *arg){
-	sc_sleep(3000);  /* TODO : need to wait some part of initilization*/
+	sc_sleep(30);  /* TODO : need to wait some part of initilization*/
 	init_log_file(0);
 	while(1){
 		sc_sleep(10);

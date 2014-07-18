@@ -5,7 +5,7 @@ extern "C" {
 extern void netstack_lock();
 extern void netstack_unlock();
 }
-
+#define WRITE_BUF_CREATED 0x100
 enum _socket_type
 {
   SOCK_STREAM = 1,      /* Sequenced,reliable andconnection-based byte streams.  */
@@ -38,7 +38,7 @@ public:
     int read(network_connection *conn, uint8_t *raw_data, int raw_len, uint8_t *app_data, int app_maxlen);
 	int close(network_connection *conn);
 	int bind(network_connection *conn, uint16_t port);
-	int connect(network_connection *conn, uint32_t ip, uint16_t port);
+	int connect(network_connection *conn);
 };
 
 #endif

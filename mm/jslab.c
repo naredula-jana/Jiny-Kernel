@@ -297,6 +297,7 @@ int init_jslab(unsigned long arg1) {
 	init_jslab_debug();
 #endif
 	init_zeropage_cache();
+	init_percpu_page_cache();
 	init_done = 1;
 	return JSUCCESS;
 }
@@ -390,7 +391,7 @@ int jslab_destroy_cache(jcache_t *cachep) {
  *    so that zero pages stays in the zero page list for a period of time otherwise KSM will consume lot of CPU cycles in moving the pages from one state to another.
  *
  * */
-int g_conf_zeropage_cache = 1;
+int g_conf_zeropage_cache = 0;
 #define MAX_ZEROLIST_SIZE 40000  /* 4k*40000 =160 Mb */
 typedef struct {
 	int cache_size; /* total number of pages */
@@ -493,11 +494,34 @@ int housekeep_zeropage_cache() { /* clear the page at every call */
 static unsigned long stat_page_allocs=0;
 static unsigned long stat_page_alloc_zero=0;
 static unsigned long stat_page_frees=0;
-
+struct percpu_pagecache {
+	char inuse;
+#define MAX_STACK_SIZE 1000
+	unsigned long stack[MAX_STACK_SIZE+1];
+	int top;
+};
+static struct percpu_pagecache page_cache[MAX_CPUS];
+void init_percpu_page_cache(){
+	int i;
+	ut_memset(page_cache,0,MAX_CPUS*sizeof(struct percpu_pagecache));
+	return;
+}
 unsigned long jalloc_page(int flags){
 	stat_page_allocs++;
 	if (flags&MEM_CLEAR){
 		stat_page_alloc_zero++;
+	}else{
+		int cpu=getcpuid();
+		if (page_cache[cpu].inuse == 0){
+			page_cache[cpu].inuse=1;
+			if (page_cache[cpu].top > 0){
+				unsigned long ret = page_cache[cpu].stack[page_cache[cpu].top -1];
+				page_cache[cpu].top--;
+				page_cache[cpu].inuse=0;
+				return ret;
+			}
+			page_cache[cpu].inuse=0;
+		}
 	}
 	if (g_conf_zeropage_cache==1){
 		unsigned long page;
@@ -509,6 +533,19 @@ unsigned long jalloc_page(int flags){
 int jfree_page(unsigned long p){
 	stat_page_frees++;
 	//ut_log(" jfree_page:%x \n",p);
+	if (1) {
+		int cpu = getcpuid();
+		if (page_cache[cpu].inuse == 0) {
+			page_cache[cpu].inuse = 1;
+			if (page_cache[cpu].top < MAX_STACK_SIZE) {
+				page_cache[cpu].stack[page_cache[cpu].top]=p;
+				page_cache[cpu].top++;
+				page_cache[cpu].inuse = 0;
+				return 0;
+			}
+			page_cache[cpu].inuse = 0;
+		}
+	}
 	if (g_conf_zeropage_cache==1){
 		if (insert_into_zeropagecache(p,0) == JSUCCESS)
 			return 0;

@@ -82,6 +82,7 @@ static int addBufToQueue(struct virtqueue *vq, unsigned char *buf, unsigned long
 	if (buf == 0){
 		BRK;
 	}
+
 	ut_memset(buf, 0, sizeof(struct virtio_net_hdr));
 
 	sg[0].page_link = (unsigned long) buf;
@@ -164,7 +165,9 @@ static int virtio_net_poll_device(void *private_data, int enable_interrupt, int 
 		addr = (unsigned char *) virtio_removeFromQueue(driver->vq[0], (unsigned int *) &len);
 		if (addr != 0) {
 			driver->stat_recvs++;
+			replace_buf = 0;
 			netif_rx(addr, len, &replace_buf);
+
 			addBufToQueue(driver->vq[0], replace_buf, 4096);
 			ret = ret + 1;
 		} else {
@@ -185,7 +188,7 @@ static spinlock_t virtionet_lock = SPIN_LOCK_UNLOCKED(
 
 static int netdriver_xmit(unsigned char* data, unsigned int len, void *private_data) {
 	virtio_net_jdriver *net_driver = (virtio_net_jdriver *) private_data;
-	return net_driver->write(data, len);
+	return net_driver->write(data, len, 0);
 }
 
 static int virtio_net_recv_interrupt(void *private_data) {
@@ -198,8 +201,11 @@ static int virtio_net_recv_interrupt(void *private_data) {
 
 	driver->stat_recv_interrupts++;
 	virtio_disable_cb(driver->vq[0]);
+#if 1
 	netif_rx_enable_polling(private_data, virtio_net_poll_device);
-	//virtio_net_poll_device(private_data,0,10);
+#else
+	virtio_net_poll_device(private_data,0,10);
+#endif
 	return 0;
 
 }
@@ -335,7 +341,7 @@ jdriver *virtio_net_jdriver::attach_device(class jdevice *jdev) {
 int virtio_net_jdriver::dettach_device(jdevice *jdev) {
 	return JFAIL;
 }
-int virtio_net_jdriver::read(unsigned char *buf, int len) {
+int virtio_net_jdriver::read(unsigned char *buf, int len, int rd_flags) {
 	return 0;
 }
 int virtio_net_jdriver::free_send_bufs(){
@@ -358,7 +364,7 @@ int virtio_net_jdriver::free_send_bufs(){
 		}
 	}
 }
-int virtio_net_jdriver::write(unsigned char *data, int len) {
+int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 	jdevice *dev;
 	int i, ret;
 	unsigned long flags;
@@ -368,13 +374,17 @@ int virtio_net_jdriver::write(unsigned char *data, int len) {
 	if (dev == 0 || data == 0)
 		return 0;
 
-	addr = (unsigned long) alloc_page(0);
-	if (addr == 0)
-		return 0;
-	stat_allocs++;
+	if (wr_flags == WRITE_BUF_CREATED) {
+		addr = data-10;
+	} else {
+		addr = (unsigned long) alloc_page(0);
+		if (addr == 0)
+			return JFAIL;
+		stat_allocs++;
+		ut_memset((unsigned char *) addr, 0, 10);
+		ut_memcpy((unsigned char *) addr + 10, data, len);
+	}
 
-	ut_memset((unsigned char *) addr, 0, 10);
-	ut_memcpy((unsigned char *) addr + 10, data, len);
 	ret = -ERROR_VIRTIO_ENOSPC;
 //ut_printf(" VIRTIO addr----------------------------------------- :%x \n",addr);
 	spin_lock_irqsave(&virtionet_lock, flags);
@@ -393,9 +403,10 @@ int virtio_net_jdriver::write(unsigned char *data, int len) {
 			spin_unlock_irqrestore(&virtionet_lock, flags);
 			virtio_queue_kick(this->vq[1]);
 			virtio_enable_cb(this->vq[1]);
-
+#if 0 /* sending process should not be blocking */
 			ipc_waiton_waitqueue(&send_waitq, 20);
 			spin_lock_irqsave(&virtionet_lock, flags);
+#endif
 		}
 	}
 #else
@@ -416,7 +427,7 @@ int virtio_net_jdriver::write(unsigned char *data, int len) {
 
 	spin_unlock_irqrestore(&virtionet_lock, flags);
 	free_send_bufs();
-	return 1;
+	return JSUCCESS;  /* Here Sucess indicates the buffer is freed or consumed */
 }
 int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 	unsigned char *arg_mac = (unsigned char *) arg2;
@@ -491,10 +502,10 @@ jdriver *virtio_p9_jdriver::attach_device(class jdevice *jdev) {
 int virtio_p9_jdriver::dettach_device(jdevice *jdev) {
 	return JFAIL;
 }
-int virtio_p9_jdriver::read(unsigned char *buf, int len) {
+int virtio_p9_jdriver::read(unsigned char *buf, int len, int flags) {
 	return 0;
 }
-int virtio_p9_jdriver::write(unsigned char *buf, int len) {
+int virtio_p9_jdriver::write(unsigned char *buf, int len, int flags) {
 	return 0;
 }
 int virtio_p9_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {

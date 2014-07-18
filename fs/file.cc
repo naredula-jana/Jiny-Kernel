@@ -124,7 +124,7 @@ struct page *fs_inode::fs_genericRead(unsigned long offset) {
 	return page;
 }
 
-int fs_inode::read(unsigned long offset, unsigned char *data, int len) {
+int fs_inode::read(unsigned long offset, unsigned char *data, int len, int read_flags) {
 	struct page *page;
 
 	page = this->fs_genericRead(offset);
@@ -151,7 +151,7 @@ int fs_inode::read(unsigned long offset, unsigned char *data, int len) {
 
 	return ret;
 }
-int fs_inode::write(unsigned long offset, unsigned char *data, int len) {
+int fs_inode::write(unsigned long offset, unsigned char *data, int len, int wr_flags) {
 	int ret, tmp_len;
 	int size, page_offset;
 	struct page *page;
@@ -522,7 +522,7 @@ long fs_read(struct file *filep, uint8_t *buff, unsigned long len) {
 	if (vinode == 0){
 		BUG();
 	}
-	ret = vinode->read(filep->offset, buff, len);
+	ret = vinode->read(filep->offset, buff, len,0);
 	if (ret > 0) {
 		filep->offset = filep->offset + ret;
 	}
@@ -550,7 +550,7 @@ int fs_write(struct file *filep, uint8_t *buff, unsigned long len) {
 
 	DEBUG("Write  filename from hs  :%s: offset:%d inode:%x \n", filep->filename, filep->offset, filep->inode);
 
-	ret = inode->write(filep->offset, buff, len);
+	ret = inode->write(filep->offset, buff, len,0);
 	if (ret < 0) {
 		ut_log(" fs_write fails error:%x pid:%d \n", ret, g_current_task->pid);
 		return 0;

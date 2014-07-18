@@ -121,7 +121,7 @@ inline int getcpuid() {
 	if (imps_num_cpus == 1)
 		return 0;
 
-	asm volatile("movq %%gs:0x48,%0" : "=r" (cpuid));
+	asm volatile("movq %%gs:0x48,%0" : "=r" (cpuid)); // TODO : Hardcoded 48 need to replace with define symbol
 
 	if (cpuid >= MAX_CPUS || cpuid < 0 || cpuid >= imps_num_cpus){
 		BUG();

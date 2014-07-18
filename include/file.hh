@@ -38,19 +38,19 @@ public:
 	unsigned char filename[MAX_FILENAME];
 	int file_type; /* type of file */
 
-	int stat_out,stat_in,stat_err;
-	int stat_in_bytes,stat_out_bytes;
+	unsigned long stat_out,stat_in,stat_err;
+	unsigned long stat_in_bytes,stat_out_bytes;
 
 	void update_stat_in(int in_req,int in_byte);
 	void update_stat_out(int out_req,int out_byte);
 
 	/* TODO : preserve the order, this is C++ fix  */
-	virtual int read(unsigned long offset, unsigned char *data, int len)=0;
-	virtual int write(unsigned long offset, unsigned char *data, int len)=0;
+	virtual int read(unsigned long offset, unsigned char *data, int len, int flags)=0;
+	virtual int write(unsigned long offset, unsigned char *data, int len, int flags)=0;
 	virtual int close()=0;
 	virtual int ioctl(unsigned long arg1,unsigned long arg2)=0;
 };
-#define MAX_SOCKET_QUEUE_LENGTH 500
+#define MAX_SOCKET_QUEUE_LENGTH 1500
 struct sock_queue_struct {
 	wait_queue_t waitq;
 	int producer, consumer;
@@ -61,7 +61,7 @@ struct sock_queue_struct {
 	spinlock_t spin_lock; /* lock to protect while adding and revoing from queue */
 	int stat_processed[MAX_CPUS];
 	int queue_len;
-	int error_full;
+	unsigned long error_full;
 };
 #define MAX_SOCKETS 100
 class jdevice;
@@ -81,16 +81,17 @@ public:
 	unsigned char *peeked_msg;
 	int peeked_msg_len;
 
-	int read(unsigned long offset, unsigned char *data, int len);
-	int write(unsigned long offset, unsigned char *data, int len);
+	int read(unsigned long offset, unsigned char *data, int len, int flags);
+	int write(unsigned long offset, unsigned char *data, int len, int flags);
 	int close();
 	int ioctl(unsigned long arg1,unsigned long arg2);
 	int peek();
 
+	void init_socket(int type);
 	int add_to_queue(unsigned char *buf, int len);
 	int remove_from_queue(unsigned char **buf,  int *len);
 
-	/* static/class members */
+/* static/class members */
 	static vinode *create_new(int type);
 	static int delete_sock(socket *sock);
 	static int attach_rawpkt(unsigned char *c, unsigned int len, unsigned char **replace_buf);
@@ -100,8 +101,12 @@ public:
 	static network_stack *net_stack_list[MAX_NETWORK_STACKS];
 	static jdevice *net_dev;
 	static int stat_raw_drop;
+	static int stat_raw_default;
 	static int stat_raw_attached;
+	static class socket *default_socket;
+	static void init_socket_layer();
 	static void print_stats();
+	static void default_pkt_thread(void *arg1, void *arg2);
 };
 typedef struct hard_link hard_link_t;
 typedef struct hard_link{
@@ -135,8 +140,8 @@ public:
 
 	int init(uint8_t *filename, unsigned long mode, struct filesystem *vfs);
 
-	int read(unsigned long offset, unsigned char *data, int len);
-	int write(unsigned long offset, unsigned char *data, int len);
+	int read(unsigned long offset, unsigned char *data, int len, int flags);
+	int write(unsigned long offset, unsigned char *data, int len, int flags);
 	int close();
 	int ioctl(unsigned long arg1,unsigned long arg2);
 	static kmem_cache_t *slab_objects;
@@ -147,8 +152,8 @@ class pipe :public vinode {
 public:
 	long pipe_index;
 	int init(int type);
-	int read(unsigned long unsued, unsigned char *data, int len);
-	int write(unsigned long unused, unsigned char *data, int len);
+	int read(unsigned long unsued, unsigned char *data, int len, int flags);
+	int write(unsigned long unused, unsigned char *data, int len, int flags);
 	int close();
 	int ioctl(unsigned long arg1,unsigned long arg2);
 };

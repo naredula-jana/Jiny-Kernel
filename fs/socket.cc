@@ -18,14 +18,17 @@ extern "C"{
 #include "interface.h"
 
 extern int g_network_ip;
+int default_sock_queue_len=0;
 static spinlock_t _netstack_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"netstack");
 unsigned long stack_flags;
 void netstack_lock(){
-	spin_lock_irqsave(&_netstack_lock, stack_flags);
+	//spin_lock_irqsave(&_netstack_lock, stack_flags);
+	sc_enable_nonpreemptive();
 	return;
 }
 void netstack_unlock(){
-	spin_unlock_irqrestore(&_netstack_lock, stack_flags);
+	//spin_unlock_irqrestore(&_netstack_lock, stack_flags);
+	sc_disable_nonpreemptive();
 	return;
 }
 
@@ -54,7 +57,7 @@ int socket::attach_rawpkt(unsigned char *buff, unsigned int len, unsigned char *
 			if ((pkt->udphdr.dest == sock->network_conn.src_port)) {
 				if (sock->add_to_queue(buff, len) == JSUCCESS) {
 					//ut_log(" PACKET queued .\n");
-					*replace_buf = (unsigned char *) alloc_page(0);
+				//	*replace_buf = (unsigned char *) alloc_page(0);
 					stat_raw_attached++;
 					return JSUCCESS;
 				}
@@ -63,10 +66,12 @@ int socket::attach_rawpkt(unsigned char *buff, unsigned int len, unsigned char *
 			}
 		}
 	}
-	/* no established sockets matches , pass the default up */
-	if (net_stack_list[0] != 0){
-		net_stack_list[0]->read(0, buff, len, 0, 0);
+	//ut_log(" msg: %x  addr:%x  raw_default:%x \n",default_sock_queue_len,buff,stat_raw_default);
+	if (default_socket->add_to_queue(buff, len) == JSUCCESS) {
+		stat_raw_default++;
+		return JSUCCESS;
 	}
+
 	stat_raw_drop++;
 	return JFAIL;
 }
@@ -84,9 +89,14 @@ int socket::add_to_queue(unsigned char *buf, int len) {
 		queue.data[queue.producer].buf = buf;
 		queue.producer++;
 		queue.queue_len++;
-		if (queue.producer >= MAX_SOCKET_QUEUE_LENGTH)
+		if (queue.producer >= MAX_SOCKET_QUEUE_LENGTH){
 			queue.producer = 0;
+		}
 		ret = JSUCCESS;
+#if 0
+		mm_check_debug_data(buf,0x0);
+		mm_set_debug_data(buf,0x123456);
+#endif
 		ipc_wakeup_waitqueue(&queue.waitq);
 		goto last;
 	}
@@ -96,6 +106,7 @@ last:
 	spin_unlock_irqrestore(&(queue.spin_lock), flags);
 	return ret;
 }
+
 int socket::remove_from_queue(unsigned char **buf, int *len) {
 	unsigned long flags;
 	int ret = JFAIL;
@@ -124,7 +135,7 @@ int socket::remove_from_queue(unsigned char **buf, int *len) {
 static void *vptr_socket[7] = { (void *) &socket::read, (void *)&socket::write, (void *)&socket::close, (void *) &socket::ioctl,
 		0 };
 
-int socket::read(unsigned long offset, unsigned char *app_data, int app_len) {
+int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int read_flags) {
 	int ret = 0;
 	unsigned char *buf = 0;
 	int buf_len;
@@ -141,7 +152,11 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len) {
 	/* push a packet in to protocol stack  */
 	ret = remove_from_queue(&buf, &buf_len);
 	if (ret == JSUCCESS) {
-		ret = net_stack->read(&network_conn, buf, buf_len, app_data, app_len);
+		network_connection *conn=&network_conn;
+		if (network_conn.type == 0){ /* default socket */
+			conn=0;
+		}
+		ret = net_stack->read(conn, buf, buf_len, app_data, app_len);
 		if (ret > 0) {
 			stat_in++;
 			stat_in_bytes = stat_in_bytes + ret;
@@ -151,7 +166,9 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len) {
 	}
 
 	if (buf > 0) {
+		//mm_set_debug_data(buf,0x0); /* for debugging pupose only */
 		free_page((unsigned long)buf);
+
 	}
 	return ret;
 }
@@ -160,12 +177,12 @@ int socket::peek(){
 		if (peeked_msg == 0){
 			peeked_msg = (unsigned long) alloc_page(0);
 		}
-		peeked_msg_len = read(0,peeked_msg,PAGE_SIZE);
+		peeked_msg_len = read(0,peeked_msg,PAGE_SIZE,0);
 	}
 	return peeked_msg_len;
 }
 
-int socket::write(unsigned long offset, unsigned char *app_data, int app_len) {
+int socket::write(unsigned long offset, unsigned char *app_data, int app_len, int wr_flags) {
 	int ret = 0;
 	if (app_data == 0)
 		return 0;
@@ -187,7 +204,7 @@ int socket::close() {
 	}
 	ret = net_stack->close(&network_conn);
 	ipc_unregister_waitqueue(&queue.waitq);
-	if (peeked_msg == 0 ){
+	if (peeked_msg != 0 ){
 		free_page(peeked_msg);
 	}
 
@@ -199,13 +216,14 @@ int socket::close() {
 
 int socket::ioctl(unsigned long arg1, unsigned long arg2) {
 	int ret = SYSCALL_FAIL;
+
 	if (arg1 == SOCK_IOCTL_BIND){
 		ret = net_stack->bind(&network_conn, network_conn.src_port);
 	}else if (arg1 == SOCK_IOCTL_CONNECT){
 		if (network_conn.type == SOCK_DGRAM ){
 			ret = SYSCALL_SUCCESS;
 		}else{
-			ret = net_stack->connect(&network_conn, network_conn.dest_ip,network_conn.dest_port);
+			ret = net_stack->connect(&network_conn);
 		}
 	}else if (arg1 == SOCK_IOCTL_WAITFORDATA){
 		if (queue.queue_len == 0){
@@ -219,7 +237,9 @@ int socket::ioctl(unsigned long arg1, unsigned long arg2) {
 socket *socket::list[MAX_SOCKETS];
 int socket::list_size = 0;
 int socket::stat_raw_drop = 0;
+int socket::stat_raw_default = 0;
 int socket::stat_raw_attached = 0;
+socket *socket::default_socket=0;
 /* TODO need  a lock */
 jdevice *socket::net_dev;
 network_stack *socket::net_stack_list[MAX_NETWORK_STACKS];
@@ -227,16 +247,17 @@ void socket::print_stats() {
 	unsigned char *name = 0;
 	int i,len;
 
-	if (net_stack_list[0])
+	if (net_stack_list[0]){
 		name = net_stack_list[0]->name;
-	ut_printf("Socket total:%d netstack:%s raw_drop:%d raw_attached:%d\n", list_size, name, stat_raw_drop, stat_raw_attached);
+	}
+	ut_printf("Socket total:%d netstack:%s raw_drop:%d raw_attached:%d raw_default: %d\n", list_size, name, stat_raw_drop, stat_raw_attached, stat_raw_default);
 
 	for (i=0; i<list_size;i++){
 		socket *sock=list[i];
 		if (sock==0) continue;
-		ut_printf("socket: count:%d local:%x:%x remote:%x:%x (%d:%d/%d:%d/%d) qeueu full error:%d\n",
+		ut_printf("socket: count:%d local:%x:%x remote:%x:%x (IO: %d/%d: StatErr: %d Qfull:%d)\n",
 				sock->count.counter,sock->network_conn.src_ip,sock->network_conn.src_port,sock->network_conn.dest_ip,sock->network_conn.dest_port,sock->stat_in
-		    ,sock->stat_in_bytes,sock->stat_out,sock->stat_out_bytes,sock->stat_err,sock->queue.error_full);
+		    ,sock->stat_out,sock->stat_err,sock->queue.error_full);
 	}
 	return;
 }
@@ -255,6 +276,29 @@ int socket::delete_sock(socket *sock) {
 		return JSUCCESS;
 	else
 		return JFAIL;
+}
+void socket::init_socket(int type){
+	queue.spin_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"socketnetq_lock");
+	//ipc_register_waitqueue(&sock->queue.waitq, "socket_waitq", WAIT_QUEUE_WAKEUP_ONE);
+	ipc_register_waitqueue(&queue.waitq, "socket_waitq", 0);
+	net_stack = net_stack_list[0];
+	network_conn.family = AF_INET;
+	network_conn.type = type;
+	network_conn.src_ip = g_network_ip;
+	if (type == SOCK_DGRAM){
+		network_conn.protocol = IPPROTO_UDP;
+		net_stack->open(&network_conn,1);
+	}else if (type == SOCK_STREAM){
+		network_conn.protocol = IPPROTO_TCP;
+		net_stack->open(&network_conn,1);
+	} else{
+		network_conn.protocol = 0;
+	}
+	stat_in = 0;
+	stat_in_bytes =0;
+	stat_out =0;
+	stat_out_bytes =0;
+
 }
 vinode* socket::create_new(int arg_type) {
 	int i;
@@ -289,27 +333,28 @@ vinode* socket::create_new(int arg_type) {
 		return 0;
 	}
 
-	sock->queue.spin_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"socketnetq_lock");
-	//ipc_register_waitqueue(&sock->queue.waitq, "socket_waitq", WAIT_QUEUE_WAKEUP_ONE);
-	ipc_register_waitqueue(&sock->queue.waitq, "socket_waitq", 0);
-	sock->net_stack = net_stack_list[0];
-	sock->network_conn.family = AF_INET;
-	sock->network_conn.type = arg_type;
-	sock->network_conn.src_ip = g_network_ip;
-	if (arg_type == SOCK_DGRAM){
-		sock->network_conn.protocol = IPPROTO_UDP;
-	}else{
-		sock->network_conn.protocol = IPPROTO_TCP;
-	}
-	sock->stat_in = 0;
-	sock->stat_in_bytes =0;
-	sock->stat_out =0;
-	sock->stat_out_bytes =0;
-	sock->net_stack->open(&sock->network_conn,1);
+	sock->init_socket(arg_type);
+
 	return (vinode *) sock;
+}
+void socket::default_pkt_thread(void *arg1, void *arg2){
+	while(1){
+		default_socket->read(0,0,0,0);
+		default_sock_queue_len = default_socket->queue.consumer;
+	}
+}
+void socket::init_socket_layer(){
+	int pid;
+
+	default_socket = (socket *)ut_calloc(sizeof(socket));
+	void **p = (void **) default_socket;
+	*p = &vptr_socket[0];
+	default_socket->init_socket(0);
+	pid = sc_createKernelThread(socket::default_pkt_thread, 0, (unsigned char *) "socket_default",0);
 }
 
 
+/* API calls */
 extern "C" {
 static int sock_check(int sockfd) {
 	if ((sockfd < 0 || sockfd > MAX_FDS)) {
@@ -355,7 +400,7 @@ int SYS_bind(int fd, struct sockaddr *addr, int len) {
 	ret = 0;
 	sock->network_conn.src_ip = addr->addr;
 	sock->network_conn.src_port = addr->sin_port;
-	//ret = socket_api->bind((void *)sock->network_conn.proto_connection, addr, sock->network_conn.type);
+
 	sock->ioctl(SOCK_IOCTL_BIND,0);
 	SYSCALL_DEBUG("Bindret :%x (%d) port:%x\n", ret, ret, addr->sin_port);
 
@@ -368,6 +413,7 @@ static uint32_t net_htonl(uint32_t n) {
 
 int SYS_getsockname(int sockfd, struct sockaddr *addr, int *addrlen) {
 	int ret = SYSCALL_SUCCESS;
+
 	SYSCALL_DEBUG("getsockname %d \n", sockfd);
 	if (sock_check(sockfd) == JFAIL || addr == 0) {
 		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
@@ -385,7 +431,6 @@ int SYS_getsockname(int sockfd, struct sockaddr *addr, int *addrlen) {
 			return SYSCALL_FAIL;
 		}
 	}
-
 	addr->family = AF_INET;
 	addr->addr = net_htonl(g_network_ip);
 	addr->sin_port = inode->network_conn.src_port;
@@ -483,11 +528,15 @@ unsigned long SYS_sendto(int sockfd, void *buf, size_t len, int flags, struct so
 		return 0;
 	}
 	if (dest_addr > 0) {
-		sock->network_conn.dest_ip = dest_addr->addr;
+		if (dest_addr->addr != 0){
+			sock->network_conn.dest_ip = dest_addr->addr;
+		}else{
+			sock->network_conn.dest_ip = sock->network_conn.src_ip;
+		}
 		sock->network_conn.dest_port = dest_addr->sin_port;
 	}
 
-	return sock->write(0, (unsigned char *) buf, len);
+	return sock->write(0, (unsigned char *) buf, len, 0);
 }
 int SYS_sendmsg(){
 	return 0;
@@ -502,7 +551,7 @@ int SYS_recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *
 	struct file *file = g_current_task->fs->filep[sockfd];
 	struct socket *sock = (struct socket *) file->vinode;
 
-	ret = sock->read(0, (unsigned char *) buf, len);
+	ret = sock->read(0, (unsigned char *) buf, len, 0);
 	SYSCALL_DEBUG(" Recv from ret  :%d\n",ret);
 	if (dest_addr > 0) {
 		dest_addr->addr = sock->network_conn.dest_ip;

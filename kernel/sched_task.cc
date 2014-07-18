@@ -636,12 +636,13 @@ static struct task_struct * _get_dead_task() {
 void sc_remove_dead_tasks() {
 	unsigned long intr_flags;
 
+	if (g_cpu_state[getcpuid()].idle_task == g_current_task){
+		return;
+	}
 	while (1) {
 		spin_lock_irqsave(&g_global_lock, intr_flags);
 		struct task_struct *task = 0;
-		if (g_cpu_state[getcpuid()].idle_task != g_current_task) {
-			task = _get_dead_task();
-		}
+		task = _get_dead_task();
 		spin_unlock_irqrestore(&g_global_lock, intr_flags);
 
 		if (task != 0) {
@@ -666,11 +667,10 @@ void sc_schedule() { /* _schedule function task can land here. */
 		return;
 	}
 	if (g_current_task->current_cpu
-			!= cpuid|| g_current_task->magic_numbers[0] != MAGIC_LONG || g_current_task->magic_numbers[1] != MAGIC_LONG) /* safety check */
-			{
+			!= cpuid|| g_current_task->magic_numbers[0] != MAGIC_LONG || g_current_task->magic_numbers[1] != MAGIC_LONG){ /* safety check */
 		DEBUG(" Task Stack got CORRUPTED task:%x :%x :%x \n",g_current_task,g_current_task->magic_numbers[0],g_current_task->magic_numbers[1]);
-		BUG();
-			}
+	    BUG();
+    }
 
 	/* schedule */
 	spin_lock_irqsave(&g_global_lock, intr_flags);
@@ -686,6 +686,9 @@ unsigned long _schedule(unsigned long flags) {
 	int cpuid = getcpuid();
 
 	g_current_task->ticks++;
+	if (g_current_task->state == TASK_NONPREEMPTIVE){
+		return g_current_task->flags;
+	}
 	prev = g_current_task;
 
 	/* Only Active cpu will pickup the task, others runs idle task with external interrupts disable */
@@ -1020,6 +1023,19 @@ static int get_free_cpu() {
 	}
 #endif
 	return 0;
+
+}
+void sc_enable_nonpreemptive(){
+	if (g_current_task->state != TASK_RUNNING){
+		BUG();
+	}
+	g_current_task->state = TASK_NONPREEMPTIVE;
+}
+void sc_disable_nonpreemptive(){
+	if (g_current_task->state != TASK_NONPREEMPTIVE){
+		BUG();
+	}
+	g_current_task->state = TASK_RUNNING;
 
 }
 unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*fn)(void *, void *), void **args) {

@@ -227,7 +227,39 @@ static void init_mem(unsigned long start_mem, unsigned long end_mem, unsigned lo
 	return;
 }
 /*****************************************************************  API functions */
+#if 0
+int mm_check_debug_data(unsigned long addr, unsigned long data){
+#ifdef MEMORY_DEBUG
+	unsigned long flags;
+	spin_lock_irqsave(&free_area_lock, flags);
 
+	unsigned long map_nr = MAP_NR(addr);
+	page_struct_t *page = g_mem_map + map_nr;
+	if ( page->option_data!=data){
+		BUG();
+	}
+
+	spin_unlock_irqrestore(&free_area_lock, flags);
+#endif
+}
+int mm_set_debug_data(unsigned long addr, unsigned long data){
+#ifdef MEMORY_DEBUG
+	unsigned long flags;
+	spin_lock_irqsave(&free_area_lock, flags);
+
+	unsigned long map_nr = MAP_NR(addr);
+	page_struct_t *page = g_mem_map + map_nr;
+	if (data==0xffff && page->option_data==0x0){
+		BUG();
+	}
+	if (data==0x0 && page->option_data==0x0){
+		BUG();
+	}
+	page->option_data = data;
+	spin_unlock_irqrestore(&free_area_lock, flags);
+#endif
+}
+#endif
 int mm_putFreePages(unsigned long addr, unsigned long order) {
 	unsigned long map_nr = MAP_NR(addr);
 	int ret = 0;
@@ -244,6 +276,11 @@ int mm_putFreePages(unsigned long addr, unsigned long order) {
 		if (PageReserved(map)) {
 			BUG();
 		}
+#ifdef MEMORY_DEBUG
+		if (map->option_data != 0){
+			BUG();
+		}
+#endif
 		if (atomic_dec_and_test(&map->count)) {
 			if (PageSwapCache(map)){
 				ut_log("PANIC Freeing swap cache pages");

@@ -73,6 +73,7 @@ typedef uip_ip6addr_t uip_ipaddr_t;
 typedef uip_ip4addr_t uip_ipaddr_t;
 #endif /* UIP_CONF_IPV6 */
 
+
 /*---------------------------------------------------------------------------*/
 /* First, the functions that should be called from the
  * system. Initialization, the periodic timer and incoming packets are
@@ -425,7 +426,8 @@ void uip_setipid(u16_t id);
  }
  \endcode
  */
-extern u8_t uip_buf[UIP_BUFSIZE+2];
+// JANA extern u8_t uip_buf[UIP_BUFSIZE+2];
+//extern u8_t *uip_buf;
 
 /** @} */
 
@@ -1102,7 +1104,7 @@ u16_t htons(u16_t val);
  * called. If the application wishes to send data, the application may
  * use this space to write the data into before calling uip_send().
  */
-extern void *uip_appdata;
+//extern void *uip_appdata;
 
 #if UIP_URGDATA > 0
 /* u8_t *uip_urgdata:

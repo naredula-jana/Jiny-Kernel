@@ -460,20 +460,28 @@ int SYS_select(int nfds, int *readfds, int *writefds, int *exceptfds, struct tim
 	int i;
 	SYSCALL_DEBUG("select (TODO)  nfds:%x readfds:%x write:%x execpt:%x timeout:%d  \n", nfds, readfds,writefds,exceptfds,timeout);
 
-	if (readfds != 0 && timeout == 0) {
+	//if (readfds != 0 && timeout == 0) {
+	if (readfds != 0 ) {
 		p = readfds;
 		for (i = 0; i < 32; i++) {
 			if (test_bit(i,p)) {
 				break;
 			}
-		}
+		} /* TODO :need to extend for multiple fds */
 		if (i == 32)
 			return 0;
 		SYSCALL_DEBUG("select checking read fd :%d \n",i);
 		while (1) {
-			int ret = SYS_fs_read(i,0,0);
-			if (ret > 0) return 1;
-			sc_sleep(100);
+			struct file *file = fd_to_file(i);
+			if (file && file->type == NETWORK_FILE){
+				if (wait_for_sock_data(file->vinode, 100) >0) {
+					return 1;
+				}
+			}else {
+				int ret = SYS_fs_read(i,0,0);
+				if (ret > 0) return 1;
+				sc_sleep(100);
+			}
 		}
 	}
 	SYSCALL_DEBUG("select readval :%x \n",*p);

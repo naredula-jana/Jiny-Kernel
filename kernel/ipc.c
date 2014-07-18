@@ -377,6 +377,9 @@ int ipc_waiton_waitqueue(wait_queue_t *waitqueue, unsigned long ticks) {
 	unsigned long flags;
 
 	spin_lock_irqsave(&g_global_lock, flags);
+	if (g_current_task->state == TASK_NONPREEMPTIVE){
+		BUG();
+	}
 	g_current_task->state = TASK_INTERRUPTIBLE;
 	ut_snprintf(g_current_task->status_info,MAX_TASK_STATUS_DATA ,"wait-%s: %d",waitqueue->name,ticks);
 	g_current_task->stats.wait_start_tick_no = g_jiffies ;

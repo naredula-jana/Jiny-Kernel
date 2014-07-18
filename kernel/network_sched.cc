@@ -123,7 +123,7 @@ last:
 
 int network_scheduler::remove_from_queue(unsigned char **buf, unsigned int *len, unsigned char *replace_inbuf) {
 	unsigned long flags;
-	int ret=0;
+	int ret=JFAIL;
 	spin_lock_irqsave(&(queue.spin_lock), flags);
 	if ((queue.data[queue.consumer].buf != 0)
 			&& (queue.data[queue.consumer].len != 0)) {
@@ -138,7 +138,7 @@ int network_scheduler::remove_from_queue(unsigned char **buf, unsigned int *len,
 		queue.stat_processed[getcpuid()]++;
 		if (queue.consumer >= MAX_QUEUE_LENGTH)
 			queue.consumer = 0;
-		ret  = 1;
+		ret  = JSUCCESS;
 	}
 	spin_unlock_irqrestore(&(queue.spin_lock), flags);
 	return ret;
@@ -149,31 +149,31 @@ int network_scheduler::netRx_BH(void *arg,void *arg2) {
 	unsigned char *data;
 	unsigned int len;
 	int qret;
+	int loops=0;
 	unsigned char *replace_buf = get_freebuf();
 
 	while (1) {
 		poll_devices();
 
-		qret = remove_from_queue(&data, &len, replace_buf);
-		if (qret ==0 ){
-			ipc_waiton_waitqueue(&queue.waitq, 1000);
-			qret = remove_from_queue(&data, &len, replace_buf);
-		}
-
-		while ( qret == 1) {
+		loops=0;
+		qret = JSUCCESS;
+		while (qret == JSUCCESS) {
 			int ret = 0;
-			stat_netrx_bh_recvs++;
-
-			if (socket::attach_rawpkt(data,len,&replace_buf)==JSUCCESS){
-
-			}else{
-				replace_buf = data;
-			}
+			data =0;
+			replace_buf =0;
 			qret = remove_from_queue(&data, &len, replace_buf);
-			if (qret == 0 && replace_buf!=0){
-				jfree_page(replace_buf);
+			if (qret == JSUCCESS) {
+				loops++;
+				stat_netrx_bh_recvs++;
+
+				if (socket::attach_rawpkt(data, len, &replace_buf) == JFAIL) {
+					replace_buf = data;
+					jfree_page(replace_buf);
+				}
 			}
-			replace_buf = 0;
+		}
+		if (loops == 0){
+			ipc_waiton_waitqueue(&queue.waitq,10);
 		}
 	}
 	return 1;
@@ -292,9 +292,10 @@ int init_networking() {
 	int pid;
 	net_sched.init();
 	pid = sc_createKernelThread(netif_thread, 0, (unsigned char *) "netRx_BH_1",0);
+	socket::init_socket_layer();
 	return JSUCCESS;
 }
-int init_network_stack() {
+int init_network_stack() { /* this should be initilised once the devices are up */
 #ifdef JINY_UDPSTACK
 	socket::net_stack_list[0] = init_udpstack();
 #endif
@@ -311,11 +312,11 @@ int netif_rx(unsigned char *data, unsigned int len, unsigned char **replace_buf)
 int netif_rx_enable_polling(void *private_data, int (*poll_func)(void *private_data, int enable_interrupt, int total_pkts)) {
 	return net_sched.netif_rx_enable_polling(private_data,poll_func);
 }
-int net_send_eth_frame(unsigned char *buf,int len){
+int net_send_eth_frame(unsigned char *buf,int len, int write_flags){
 	if (socket::net_dev != 0){
-		return socket::net_dev->write(0,buf,len);
+		return socket::net_dev->write(0,buf,len, write_flags);
 	}else{
-		return 0;
+		return JFAIL;
 	}
 }
 extern struct Socket_API *socket_api;
