@@ -31,52 +31,35 @@
 
 extern "C" {
 #include "common.h"
-int g_network_ip=0x0ad18100; /* 10.209.129.0  */
+
 unsigned char g_mac[7];
 }
 #include "jdevice.h"
 #include "file.hh"
 #include "network.hh"
-#define MAX_QUEUE_LENGTH 600
-
-struct queue_struct {
-	wait_queue_t waitq;
-	int producer, consumer;
-	struct {
-		unsigned char *buf;
-		unsigned int len; /* actual data length , not the buf lenegth, buf always constant length */
-	} data[MAX_QUEUE_LENGTH];
-	spinlock_t spin_lock; /* lock to protect while adding and revoing from queue */
-	int stat_processed[MAX_CPUS];
-	int queue_len;
-	int error_full;
-};
 
 #define MAX_POLL_DEVICES 5
-struct device_under_poll_struct{
+struct device_under_poll_struct {
 	void *private_data;
 	int (*poll_func)(void *private_data, int enable_interrupt, int total_pkts);
 	int active;
 };
 
 class network_scheduler {
-	 int network_enabled;
-	 struct queue_struct queue;
-	 struct device_under_poll_struct device_under_poll[MAX_POLL_DEVICES];
-	 int poll_underway ;
-	 void  *g_netBH_lock ; /* All BH code will serialised by this lock */
-	 int stat_netrx_bh_recvs;
-	 int poll_devices();
+	int network_enabled;
+	wait_queue_t waitq;
+	struct device_under_poll_struct device_under_poll[MAX_POLL_DEVICES];
+	int poll_underway;
+	void *g_netBH_lock; /* All BH code will serialised by this lock */
+	int stat_netrx_bh_recvs;
+	int poll_devices();
 
-public :
+public:
 	jdevice *device;
 	int init();
-	int add_to_queue(unsigned char *buf, int len, unsigned char **replace_outbuf);
-	int remove_from_queue(unsigned char **buf, unsigned int *len, unsigned char *replace_inbuf);
-	int netRx_BH(void *arg,void *arg2);
-	int netif_rx(unsigned char *data, unsigned int len, unsigned char **replace_buf);
-	int netif_rx_enable_polling(void *private_data,
-			int (*poll_func)(void *private_data, int enable_interrupt,int total_pkts));
+	int netRx_BH(void *arg, void *arg2);
+	int netif_rx(unsigned char *data, unsigned int len);
+	int netif_rx_enable_polling(void *private_data, int (*poll_func)(void *private_data, int enable_interrupt, int total_pkts));
 };
 
 static network_scheduler net_sched;
@@ -92,97 +75,36 @@ static int stat_to_driver = 0;
  *
  *
  */
-static unsigned char *get_freebuf(){
-	/* size of buf is hardcoded to 4096, this is linked to network driverbuffer size */
-	return (unsigned char *)alloc_page(0);
-}
-int network_scheduler::add_to_queue(unsigned char *buf, int len, unsigned char **replace_outbuf) {
-	unsigned long flags;
-	int ret=0;
-	if (buf == 0 || len == 0)
-		return ret;
 
-	//ut_log("Recevied from  network and keeping in queue: len:%d  stat count:%d prod:%d cons:%d\n",len,stat_queue_len,queue.producer,queue.consumer);
-	spin_lock_irqsave(&(queue.spin_lock), flags);
-	if (queue.data[queue.producer].len == 0) {
-		queue.data[queue.producer].len = len;
-		*replace_outbuf = queue.data[queue.producer].buf;
-		queue.data[queue.producer].buf = buf;
-		queue.producer++;
-		queue.queue_len++;
-		if (queue.producer >= MAX_QUEUE_LENGTH)
-			queue.producer = 0;
-		ret = 1;
-		goto last;
-	}
-	queue.error_full++;
-last:
-	spin_unlock_irqrestore(&(queue.spin_lock), flags);
-	return ret;
-}
 
-int network_scheduler::remove_from_queue(unsigned char **buf, unsigned int *len, unsigned char *replace_inbuf) {
-	unsigned long flags;
-	int ret=JFAIL;
-	spin_lock_irqsave(&(queue.spin_lock), flags);
-	if ((queue.data[queue.consumer].buf != 0)
-			&& (queue.data[queue.consumer].len != 0)) {
-		*buf = queue.data[queue.consumer].buf;
-		*len = queue.data[queue.consumer].len;
-		//	ut_log("netrecv : receving from queue len:%d  prod:%d cons:%d\n",queue.data[queue.consumer].len,queue.producer,queue.consumer);
-
-		queue.data[queue.consumer].len = 0;
-		queue.data[queue.consumer].buf = replace_inbuf;
-		queue.consumer++;
-		queue.queue_len--;
-		queue.stat_processed[getcpuid()]++;
-		if (queue.consumer >= MAX_QUEUE_LENGTH)
-			queue.consumer = 0;
-		ret  = JSUCCESS;
-	}
-	spin_unlock_irqrestore(&(queue.spin_lock), flags);
-	return ret;
-}
-
+extern int g_conf_net_sendbuf_delay;
 /*   Release the buffer after calling the callback */
-int network_scheduler::netRx_BH(void *arg,void *arg2) {
-	unsigned char *data;
-	unsigned int len;
+int network_scheduler::netRx_BH(void *arg, void *arg2) {
 	int qret;
-	int loops=0;
-	unsigned char *replace_buf = get_freebuf();
 
 	while (1) {
-		poll_devices();
-
-		loops=0;
-		qret = JSUCCESS;
-		while (qret == JSUCCESS) {
-			int ret = 0;
-			data =0;
-			replace_buf =0;
-			qret = remove_from_queue(&data, &len, replace_buf);
-			if (qret == JSUCCESS) {
-				loops++;
-				stat_netrx_bh_recvs++;
-
-				if (socket::attach_rawpkt(data, len, &replace_buf) == JFAIL) {
-					replace_buf = data;
-					jfree_page(replace_buf);
-				}
+		if (poll_devices() > 0) {
+			continue;
+		}
+#if 1
+		if (g_conf_net_sendbuf_delay != 0) { /* if sendbuf_delay is enabled, smp is having negative impact and rate of recving falls down */
+			if (device != 0) {
+				device->ioctl(NETDEV_IOCTL_FLUSH_SENDBUF, 0);
 			}
+			ipc_waiton_waitqueue(&waitq, 50);
+		} else {
+			ipc_waiton_waitqueue(&waitq, 10000);
 		}
-		if (loops == 0){
-			ipc_waiton_waitqueue(&queue.waitq,10);
-		}
+#endif
 	}
 	return 1;
 }
 int network_scheduler::poll_devices() {
-	int i,j;
+	int i, j;
 	int ret = 0;
+	int pending_devices = 0;
 
-
+#if 0
 	mutexLock(g_netBH_lock);
 	if (poll_underway == 0) {
 		poll_underway = 1;
@@ -191,57 +113,50 @@ int network_scheduler::poll_devices() {
 	mutexUnLock(g_netBH_lock);
 	if (ret == 0)
 		return ret;
+#endif
 
 	for (i = 0; i < MAX_POLL_DEVICES; i++) {
-		if (device_under_poll[i].private_data != 0
-				&& device_under_poll[i].active == 1) {
-			int max_pkts=50;
-			int total_pkts=0;
-			int pkts=0;
-			for (j=0; j<20; j++){
+		if (device_under_poll[i].private_data != 0 && device_under_poll[i].active == 1) {
+			int max_pkts = 50;
+			int total_pkts = 0;
+			int pkts = 0;
+			for (j = 0; j < 20; j++) {
 				pkts = device_under_poll[i].poll_func(device_under_poll[i].private_data, 0, max_pkts);
-				if (pkts==0 ) break;
-				total_pkts = total_pkts+pkts;
+				if (pkts == 0)
+					break;
+				total_pkts = total_pkts + pkts;
 			}
-			if (total_pkts == 0){
+			if (total_pkts == 0) {
 				device_under_poll[i].active = 0;
 				device_under_poll[i].poll_func(device_under_poll[i].private_data, 1, max_pkts); /* enable interrupts */
-			}else{
-				if (total_pkts > 2){ /* if there are more then 2 unprocessed packets wake up any sleeping thread to picku[p */
-					ipc_wakeup_waitqueue(&queue.waitq);
+				pkts = device_under_poll[i].poll_func(device_under_poll[i].private_data, 0, max_pkts);
+				if (pkts != 0){
+					device_under_poll[i].active = 1;
+					pending_devices++;
 				}
+			} else {
+				pending_devices++;
 			}
 		}
 	}
 	poll_underway = 0;
-	return 1;
+	return pending_devices;
 }
-int network_scheduler::netif_rx(unsigned char *data, unsigned int len, unsigned char **replace_buf) {
-	if (network_enabled==0){
-		*replace_buf = data;
-		return 0;
+int network_scheduler::netif_rx(unsigned char *data, unsigned int len) {
+	if (socket::attach_rawpkt(data, len) == JFAIL) {
+		jfree_page(data);
 	}
-	if (add_to_queue(data, len,replace_buf) == 0 && data != 0 && len != 0) {
-		*replace_buf = data; /* fail to queue, so the packet is getting dropped and freed  */
-	}else{
-		ipc_wakeup_waitqueue(&queue.waitq); /* wake all consumers , i.e all the netBH */
-	}
-	stat_from_driver++;
-	if (*replace_buf < (unsigned char *)0x10000){ /* invalid address*/
-		*replace_buf=get_freebuf();
-	}
-	return 1;
+	return JSUCCESS;
 }
 int network_scheduler::netif_rx_enable_polling(void *private_data,
-		int (*poll_func)(void *private_data, int enable_interrupt,
-				int total_pkts)) {
+		int (*poll_func)(void *private_data, int enable_interrupt, int total_pkts)) {
 	int i;
 	for (i = 0; i < MAX_POLL_DEVICES; i++) {
 		if (device_under_poll[i].private_data == 0 || device_under_poll[i].private_data == private_data) {
 			device_under_poll[i].private_data = private_data;
 			device_under_poll[i].poll_func = poll_func;
 			device_under_poll[i].active = 1;
-			ipc_wakeup_waitqueue(&queue.waitq);
+			ipc_wakeup_waitqueue(&waitq);
 			return 1;
 		}
 	}
@@ -255,43 +170,33 @@ int network_scheduler::init() {
 		device_under_poll[i].private_data = 0;
 		device_under_poll[i].active = 0;
 	}
-	ut_memset((unsigned char *) &queue, 0, sizeof(struct queue_struct));
-	for (i=0; i<MAX_QUEUE_LENGTH; i++){
-		queue.data[i].buf = get_freebuf();
-		queue.data[i].len = 0; /* this represent actual data length */
-		if (queue.data[i].buf == 0){
-			BUG();
-		}
-	}
-	queue.spin_lock = SPIN_LOCK_UNLOCKED("netq_lock");
-	ipc_register_waitqueue(&queue.waitq, "netRx_BH",WAIT_QUEUE_WAKEUP_ONE);
-	//ipc_register_waitqueue(&queue.waitq, "netRx_BH",0);
+
+	ipc_register_waitqueue(&waitq, "netRx_BH", WAIT_QUEUE_WAKEUP_ONE);
+	//ipc_register_waitqueue(&waitq, "netRx_BH",0);
 	g_netBH_lock = mutexCreate("mutex_netBH");
-	poll_underway =0;
+	poll_underway = 0;
 	network_enabled = 1;
 	return JSUCCESS;
 }
-int register_netdevice(jdevice *device){
-
+int register_netdevice(jdevice *device) {
 	net_sched.device = device;
 	socket::net_dev = device;
-	device->ioctl(0,(unsigned long)&g_mac);
+	device->ioctl(NETDEV_IOCTL_GETMAC, (unsigned long) &g_mac);
 
-	g_network_ip = g_network_ip | g_mac[5];
-	ut_log(" register netdev : %x  ip:%x\n",g_mac[5],g_network_ip);
+	ut_log(" register netdev : %x \n", g_mac[5]);
 	return JSUCCESS;
 }
 extern "C" {
 extern int init_udpstack();
 extern int init_netmod_uipstack();
-int netif_thread(void *arg1,void *arg2){
-	return net_sched.netRx_BH(arg1,arg2);
+int netif_thread(void *arg1, void *arg2) {
+	return net_sched.netRx_BH(arg1, arg2);
 }
 
 int init_networking() {
 	int pid;
 	net_sched.init();
-	pid = sc_createKernelThread(netif_thread, 0, (unsigned char *) "netRx_BH_1",0);
+	pid = sc_createKernelThread(netif_thread, 0, (unsigned char *) "netRx_BH_1", 0);
 	socket::init_socket_layer();
 	return JSUCCESS;
 }
@@ -306,35 +211,35 @@ int init_network_stack() { /* this should be initilised once the devices are up 
 	return JSUCCESS;
 }
 
-int netif_rx(unsigned char *data, unsigned int len, unsigned char **replace_buf) {
-	return net_sched.netif_rx(data,len,replace_buf);
+int netif_rx(unsigned char *data, unsigned int len) {
+	return net_sched.netif_rx(data, len);
 }
 int netif_rx_enable_polling(void *private_data, int (*poll_func)(void *private_data, int enable_interrupt, int total_pkts)) {
-	return net_sched.netif_rx_enable_polling(private_data,poll_func);
+	return net_sched.netif_rx_enable_polling(private_data, poll_func);
 }
-int net_send_eth_frame(unsigned char *buf,int len, int write_flags){
-	if (socket::net_dev != 0){
-		return socket::net_dev->write(0,buf,len, write_flags);
-	}else{
+int net_send_eth_frame(unsigned char *buf, int len, int write_flags) {
+	if (socket::net_dev != 0) {
+		return socket::net_dev->write(0, buf, len, write_flags);
+	} else {
 		return JFAIL;
 	}
 }
 extern struct Socket_API *socket_api;
-void net_get_mac(unsigned char *mac){
-	if (net_sched.device){
-		net_sched.device->ioctl(0,(unsigned long)mac);
+void net_get_mac(unsigned char *mac) {
+	if (net_sched.device) {
+		net_sched.device->ioctl(NETDEV_IOCTL_GETMAC, (unsigned long) mac);
 	}
 }
 
 void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
-	if (net_sched.device){
+	if (net_sched.device) {
 		unsigned char mac[10];
 
 		net_sched.device->print_stats();
-		net_sched.device->ioctl(0,(unsigned long)&mac);
-		ut_printf(" mac: %x:%x:%x:%x:%x:%x  ip:%x\n",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5],g_network_ip);
+		net_sched.device->ioctl(NETDEV_IOCTL_GETMAC, (unsigned long) &mac);
+		ut_printf(" mac: %x:%x:%x:%x:%x:%x  \n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 	}
-	socket::print_stats();
+	socket::print_all_stats();
 
 	return;
 }

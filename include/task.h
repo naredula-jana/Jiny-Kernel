@@ -110,10 +110,10 @@ struct task_struct {
 	int current_cpu;
 	int stick_to_cpu; /* by default run on any cpu */
 
-	int counter;
+	int counter;  /* ticks for evry 1 context switch*/
 	long sleep_ticks;
-	unsigned long cpu_contexts; /* every cpu context , it will be incremented */
-	unsigned long ticks;	
+	//unsigned long cpu_contexts; /* every cpu context , it will be incremented */
+	//unsigned long ticks;
 
 	struct thread_struct thread;
 	struct mm_struct *mm;
@@ -140,11 +140,12 @@ struct task_struct {
 	struct list_head wait_queue; /* wait queue */
 
 	struct {
-		unsigned long ticks_consumed;
+		unsigned long total_contexts;
 		unsigned long mem_consumed;
 		unsigned wait_start_tick_no;
 		int wait_line_no; /* line number where mutex lock as triggered */
 		int syscall_count;
+		unsigned long ticks_consumed;
 	} stats;
 
 	unsigned long magic_numbers[4]; /* already stack is default fill with magic numbers */

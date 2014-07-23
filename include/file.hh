@@ -73,6 +73,10 @@ enum {
 	SOCK_IOCTL_CONNECT=2,
 	SOCK_IOCTL_WAITFORDATA=3
 };
+enum {
+	NETDEV_IOCTL_GETMAC=1,
+	NETDEV_IOCTL_FLUSH_SENDBUF=2
+};
 class socket: public vinode {
 public:
 	class network_connection network_conn;
@@ -86,6 +90,7 @@ public:
 	int close();
 	int ioctl(unsigned long arg1,unsigned long arg2);
 	int peek();
+	void print_stats();
 
 	void init_socket(int type);
 	int add_to_queue(unsigned char *buf, int len);
@@ -94,7 +99,7 @@ public:
 /* static/class members */
 	static vinode *create_new(int type);
 	static int delete_sock(socket *sock);
-	static int attach_rawpkt(unsigned char *c, unsigned int len, unsigned char **replace_buf);
+	static int attach_rawpkt(unsigned char *c, unsigned int len);
 
 	static class socket *list[MAX_SOCKETS];
 	static int list_size;
@@ -105,7 +110,7 @@ public:
 	static int stat_raw_attached;
 	static class socket *default_socket;
 	static void init_socket_layer();
-	static void print_stats();
+	static void print_all_stats();
 	static void default_pkt_thread(void *arg1, void *arg2);
 };
 typedef struct hard_link hard_link_t;

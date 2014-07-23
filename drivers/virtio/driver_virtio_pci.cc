@@ -166,7 +166,7 @@ static int virtio_net_poll_device(void *private_data, int enable_interrupt, int 
 		if (addr != 0) {
 			driver->stat_recvs++;
 			replace_buf = 0;
-			netif_rx(addr, len, &replace_buf);
+			netif_rx(addr, len);
 
 			addBufToQueue(driver->vq[0], replace_buf, 4096);
 			ret = ret + 1;
@@ -184,7 +184,7 @@ static int virtio_net_poll_device(void *private_data, int enable_interrupt, int 
 	return ret;
 }
 static spinlock_t virtionet_lock = SPIN_LOCK_UNLOCKED(
-		(unsigned char *) "new1_virtio_net");
+		(unsigned char *) "virtio_net");
 
 static int netdriver_xmit(unsigned char* data, unsigned int len, void *private_data) {
 	virtio_net_jdriver *net_driver = (virtio_net_jdriver *) private_data;
@@ -200,12 +200,10 @@ static int virtio_net_recv_interrupt(void *private_data) {
 		inb(dev->pci_device.pci_ioaddr + VIRTIO_PCI_ISR);
 
 	driver->stat_recv_interrupts++;
-	virtio_disable_cb(driver->vq[0]);
-#if 1
+	//virtio_disable_cb(driver->vq[0]); /* disabling interrupts have Big negative impact on packet recived when smp enabled */
+
 	netif_rx_enable_polling(private_data, virtio_net_poll_device);
-#else
-	virtio_net_poll_device(private_data,0,10);
-#endif
+
 	return 0;
 
 }
@@ -322,6 +320,8 @@ int virtio_net_jdriver::net_attach_device(class jdevice *jdev) {
 	virtio_queue_kick(this->vq[0]);
 //	virtio_queue_kick(this->vq[1]);
 
+	pending_kick_onsend =0;
+
 	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER_OK);
 	ut_log("VirtioNet:  Initilization Completed status:%x\n", virtio_get_pcistatus(pci_ioaddr));
 	return 1;
@@ -364,6 +364,7 @@ int virtio_net_jdriver::free_send_bufs(){
 		}
 	}
 }
+int g_conf_net_sendbuf_delay=0;
 int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 	jdevice *dev;
 	int i, ret;
@@ -394,19 +395,15 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 		ret = addBufToQueue(this->vq[1], (unsigned char *) addr, len + 10);
 		if (ret == -ERROR_VIRTIO_ENOSPC){
 			stat_err_nospace++;
+			spin_unlock_irqrestore(&virtionet_lock, flags);
 			free_send_bufs();
+			spin_lock_irqsave(&virtionet_lock, flags);
 			ret = addBufToQueue(this->vq[1], (unsigned char *) addr, len + 10);
 		}
-
 		if (ret == -ERROR_VIRTIO_ENOSPC){
 			stat_err_nospace++;
-			spin_unlock_irqrestore(&virtionet_lock, flags);
 			virtio_queue_kick(this->vq[1]);
 			virtio_enable_cb(this->vq[1]);
-#if 0 /* sending process should not be blocking */
-			ipc_waiton_waitqueue(&send_waitq, 20);
-			spin_lock_irqsave(&virtionet_lock, flags);
-#endif
 		}
 	}
 #else
@@ -420,22 +417,42 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 		stat_err_nospace++;
 		stat_frees++;
 	}
-	if ((stat_sends%1)==0){
+	if (g_conf_net_sendbuf_delay == 1) {
+		if ((stat_sends % 50) == 0) {
+			virtio_queue_kick(this->vq[1]);
+			stat_send_kicks++;
+		} else {
+			pending_kick_onsend = 1;
+		}
+	} else {
 		virtio_queue_kick(this->vq[1]);
-		stat_send_kicks++;
 	}
-
 	spin_unlock_irqrestore(&virtionet_lock, flags);
+
 	free_send_bufs();
 	return JSUCCESS;  /* Here Sucess indicates the buffer is freed or consumed */
 }
 int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 	unsigned char *arg_mac = (unsigned char *) arg2;
-	if (arg_mac == 0)
-		return JFAIL;
-	else {
-		ut_memcpy(arg_mac, mac, 6);
-		return JSUCCESS;
+	if (arg1 == NETDEV_IOCTL_GETMAC) {
+		if (arg_mac == 0)
+			return JFAIL;
+		else {
+			ut_memcpy(arg_mac, mac, 6);
+			return JSUCCESS;
+		}
+	} else if (arg1 == NETDEV_IOCTL_FLUSH_SENDBUF) {
+		if (pending_kick_onsend!=0){
+			unsigned long flags;
+
+			spin_lock_irqsave(&virtionet_lock, flags);
+			virtio_queue_kick(this->vq[1]);
+			pending_kick_onsend=0;
+			spin_unlock_irqrestore(&virtionet_lock, flags);
+			return JSUCCESS;
+		}else{
+			return JFAIL;
+		}
 	}
 }
 /***************************************************************************************************/

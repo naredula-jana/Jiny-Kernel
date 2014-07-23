@@ -144,8 +144,8 @@ static void fill_fault_context(struct fault_ctx *fctx, void *rsp, int fault_num,
 	fctx->old_rsp = p;
 	cpu_ctx.gprs = fctx->gprs;
 	cpu_ctx.istack_frame = fctx->istack_frame;
-//	g_cpu_state[getcpuid()].stat_rip = fctx->istack_frame->rip;  // TODO: done only for cpu=0
-	g_cpu_state[0].stat_rip = fctx->istack_frame->rip; // TODO: done only for cpu=0
+	g_cpu_state[getcpuid()].stat_rip = fctx->istack_frame->rip;  // TODO: done only for cpu=0
+//	g_cpu_state[0].stat_rip = fctx->istack_frame->rip; // TODO: done only for cpu=0
 }
 static int stack_depth = 0;
 // This gets called from our ASM interrupt handler stub.

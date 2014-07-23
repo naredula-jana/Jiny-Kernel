@@ -27,7 +27,7 @@ typedef struct {
 	struct {
 		unsigned long hits;
 		unsigned long rip;
-	}stats;
+	}stats[MAX_CPUS];
 }symb_table_t;
 extern unsigned long g_multiboot_mod1_addr;
 extern unsigned long g_multiboot_mod1_len;

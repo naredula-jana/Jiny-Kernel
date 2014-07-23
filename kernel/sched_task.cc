@@ -281,22 +281,14 @@ void sc_set_fsdevice(unsigned int device_in, unsigned int device_out) {
 }
 
 static void init_task_struct(struct task_struct *p, struct mm_struct *mm, struct fs_struct *fs) {
+	ut_memset((unsigned char *)p,0,sizeof(struct task_struct));
+	p->magic_numbers[0]=p->magic_numbers[1]=p->magic_numbers[2]=p->magic_numbers[3]=MAGIC_LONG;
+
 	atomic_set(&p->count, 1);
 	p->mm = mm; /* TODO increase the corresponding count */
 	p->fs = fs;
-	p->locks_sleepable = 0;
-	p->locks_nonsleepable = 0;
-	p->trace_on = 0;
-	p->callstack_top = 0;
-	p->ticks = 0;
-	p->cpu_contexts = 0;
 	INIT_LIST_HEAD(&(p->dead_tasks.head));
-	p->pending_signals = 0;
-	p->killed = 0;
-	p->exit_code = 0;
 //	p->cpu = getcpuid();
-	p->thread.userland.user_fs = 0;
-	p->thread.userland.user_fs_base = 0;
 
 	/* TODO : this is very simple round robin allocation, need to change dynamically with advanced algo */
 	p->allocated_cpu = curr_cpu_assigned;
@@ -309,16 +301,7 @@ static void init_task_struct(struct task_struct *p, struct mm_struct *mm, struct
 	p->stick_to_cpu = 0xffff;
 	p->ppid = g_current_task->pid;
 	p->trace_stack_length = 10; /* some initial stack length, we do not know at what point tracing starts */
-	p->run_queue.next = 0;
-	p->run_queue.prev = 0;
-	p->task_queue.next = 0;
-	p->task_queue.prev = 0;
-	p->wait_for_child_exit = 0;
-	p->wait_queue.next = p->wait_queue.prev = (struct list_head *) 0;
-	p->stats.ticks_consumed = 0;
-	p->status_info[0] = 0;
 
-	p->stats.syscall_count = 0;
 	/* link to queue */
 	free_pid_no++;
 	if (free_pid_no == 0)
@@ -685,7 +668,7 @@ unsigned long _schedule(unsigned long flags) {
 	struct task_struct *prev, *next;
 	int cpuid = getcpuid();
 
-	g_current_task->ticks++;
+//	g_current_task->stats.ticks_consumed++;
 	if (g_current_task->state == TASK_NONPREEMPTIVE){
 		return g_current_task->flags;
 	}
@@ -762,7 +745,8 @@ unsigned long _schedule(unsigned long flags) {
 		_add_to_runqueue(prev, -1);
 	}
 	next->current_cpu = cpuid; /* get cpuid based on this */
-	next->cpu_contexts++;
+	//next->cpu_contexts++;
+	next->stats.total_contexts++;
 	g_cpu_state[cpuid].current_task = next;
 	g_cpu_state[cpuid].stat_total_contexts++;
 	arch_spinlock_transfer(&g_global_lock, prev, next);
@@ -781,41 +765,24 @@ unsigned long _schedule(unsigned long flags) {
 int do_softirq() {
 	static unsigned long house_keeper_count=0;
 	int i;
+	int cpuid=getcpuid();
 
 	house_keeper_count++;
-	g_cpu_state[getcpuid()].stat_idleticks++;
+	g_cpu_state[cpuid].stat_idleticks++;
 
 	/* collect cpu stats */
-	if (getcpuid() == 0 && g_conf_cpu_stats != 0) {
-		int cpuid = getcpuid();
+	//if (cpuid == 0 && g_conf_cpu_stats != 0) {
+	if (g_conf_cpu_stats != 0) {
 		perf_stat_rip_hit(g_cpu_state[cpuid].stat_rip);
 	}
 
 	/* 2. Test of wait queues for any expiry. time queue is one of the wait queue  */
-	if (getcpuid() == 0) {
+	if (cpuid == 0) {
 		ipc_check_waitqueues();
 	}
 
-	/* TODO: Workaround for bug:  house keeping to check if the cpus stuck with error in gdt descriptors
-	 * BAD: Looks like the problem fixed with IDT desccriptor correction
-	 *  ES =0000 0000000000000000 ffffffff 00000000
-CS =0008 0000000000000000 ffffffff 00a09900 DPL=0 CS64 [--A]
-SS =0000 0000000000000000 ffffffff 00000000
-DS =0000 0000000000000000 ffffffff 00000000
-FS =0000 0000000000000000 ffffffff 00000000
-GS =0000 ffffffff803bf2c0 ffffffff 00000000
-
-GOOD:
-ES =0000 0000000000000000 000fffff 00000000
-CS =0008 0000000000000000 ffffffff 00a09900 DPL=0 CS64 [--A]
-SS =0010 0000000000000000 ffffffff 00a09300 DPL=0 DS   [-WA]
-DS =0000 0000000000000000 000fffff 00000000
-FS =0000 0000000000000000 ffffffff 00c00000
-GS =0000 ffffffff803bf200 000fffff 00000000
-	 *
-	 * */
 #if 1
-	if (getcpuid() == 0  && (house_keeper_count%100)==0){
+	if (cpuid == 0  && (house_keeper_count%100)==0){
 		for (i=1; i< getmaxcpus(); i++){
 			if (g_cpu_state[i].active == 0 || g_cpu_state[i].run_queue_length==0 ) continue;
 			if (g_cpu_state[i].last_total_contexts == g_cpu_state[i].stat_total_contexts){
@@ -838,6 +805,7 @@ GS =0000 ffffffff803bf200 000fffff 00000000
 		}
 	}
 #endif
+
 	if (g_current_task->counter <= 0) {
 		sc_schedule();
 	}
@@ -950,7 +918,7 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	unsigned char *buf;
 	int all = 0;
 
-	ut_printf(" pid allocatedcpu: state generation ticks sleep_ticks mm mm_count name cpu\n");
+	ut_printf(" pid allocatedcpu: state (cont-switches/total ticks)  mm:mm_count name cpu\n");
 
 	if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "all") == 0) {
 		all = 1;
@@ -973,9 +941,9 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 
 		len = len
 				- ut_snprintf(buf + max_len - len, len,
-						"cpu-%d: %3d %3d %5x  %5x %4d %7s sleeptick(%3d:%d) cpu:%3d :%s: count:%d status:%s stickcpu:%x\n",
-						task->allocated_cpu, task->state, task->cpu_contexts, task->ticks, task->mm, task->mm->count.counter,
-						task->name, task->sleep_ticks, task->stats.ticks_consumed, task->current_cpu, task->fs->cwd,
+						"cpu-%d: %3d (%5d/%7d)  %5x:%d %7s sleeptick(%3d) cpu:%3d :%s: count:%d status:%s stickcpu:%x\n",
+						task->allocated_cpu, task->state, task->stats.total_contexts, task->stats.ticks_consumed, task->mm, task->mm->count.counter,
+						task->name, task->sleep_ticks, task->current_cpu, task->fs->cwd,
 						task->count.counter, task->status_info, task->stick_to_cpu);
 		temp_bt.count = 0;
 		//if (task->state != TASK_RUNNING) {

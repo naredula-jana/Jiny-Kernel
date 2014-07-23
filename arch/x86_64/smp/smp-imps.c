@@ -118,15 +118,17 @@ static int apic_getcpuid() {
 }
 inline int getcpuid() {
 	unsigned long cpuid;
+#if 0
 	if (imps_num_cpus == 1)
 		return 0;
-
+#endif
 	asm volatile("movq %%gs:0x48,%0" : "=r" (cpuid)); // TODO : Hardcoded 48 need to replace with define symbol
-
+#if 1
 	if (cpuid >= MAX_CPUS || cpuid < 0 || cpuid >= imps_num_cpus){
 		BUG();
 		return 0;
 	}
+#endif
 
 	return cpuid;
 }

@@ -48,6 +48,7 @@ class virtio_jdriver: public jdriver {
 public:
 	unsigned long stat_send_kicks;
 	unsigned long stat_recv_kicks;
+	unsigned char pending_kick_onsend;
 
 	int virtio_create_queue(uint16_t index, int qType);
 	int print_stats();

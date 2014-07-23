@@ -25,7 +25,7 @@ extern int jfree_page(unsigned char *p);
 #define DEBUG
 
 int network_stack::open(network_connection *conn, int flags) {
-	struct uip_udp_conn *uip_conn;
+	struct uip_udp_conn_struct *uip_conn;
 	uip_conn = uip_udp_new(0, 0);
 	conn->proto_connection = uip_conn;
 	conn->src_port = uip_conn->lport;

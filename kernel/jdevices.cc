@@ -100,10 +100,12 @@ int jdevice::close(){
 static void *vptr_jdevice[7] = {
 		(void *) &jdevice::read, (void *) &jdevice::write,
 		(void *) &jdevice::close, (void *) &jdevice::ioctl, 0 };
+extern void *_ZTV7jdevice;
 int jdevice::init(unsigned char *dev_name) {
 	int i;
 	void **p = (void **) this;
 	*p = &vptr_jdevice[0];
+	*p = &_ZTV7jdevice + 2;  /* vtable from compiler generated */
 	ut_snprintf(name,MAX_DEVICE_NAME,"%s",dev_name);
 	return JSUCCESS;
 }
@@ -112,9 +114,13 @@ void register_jdriver(class jdriver *driver) {
 	jdriver_list[driver_count] = driver;
 	driver_count++;
 }
+/*
 
-void *operator new(int sz) {
+calling new :  new (arg1,arg2..) type
+ */
+void *operator new(int sz,const char *name) {
     void *obj = ut_calloc(sz);
+    ut_log(" new class name : %s: \n",name);
     return obj;
 }
 /*********************************************************************************/
@@ -133,7 +139,7 @@ static int scan_pci_devices() {
 				if (device_count >= (MAX_DEVICES - 1))
 					return JSUCCESS;
 				//jdevice_list[device_count] = (class jdevice *) ut_calloc(sizeof(class jdevice));
-				jdevice_list[device_count] = new jdevice();
+				jdevice_list[device_count] = new ("jdevice") jdevice();
 				if (jdevice_list[device_count]->init_pci(i, j, k) == JFAIL) {
 					ut_free(jdevice_list[device_count]);
 					continue;

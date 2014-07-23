@@ -549,7 +549,7 @@ int Jcmd_ls(uint8_t *arg1, uint8_t *arg2) {
 		if (len < 500) break;
 	}
 	mutexUnLock(g_inode_lock);
-	socket::print_stats();
+	socket::print_all_stats();
 	len = len - ut_snprintf(buf+max_len-len, len,"Total pages :%d\n", total_pages);
 
 	len = ut_strlen(buf);

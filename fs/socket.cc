@@ -17,7 +17,7 @@ extern "C"{
 #include "mm.h"
 #include "interface.h"
 
-extern int g_network_ip;
+
 int default_sock_queue_len=0;
 static spinlock_t _netstack_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"netstack");
 unsigned long stack_flags;
@@ -42,7 +42,7 @@ int wait_for_sock_data(vinode *inode, int timeout){
  attach_rawpkt -> add_to_queue
  remove_from_queue->net_stack:read
  */
-int socket::attach_rawpkt(unsigned char *buff, unsigned int len, unsigned char **replace_buf) {
+int socket::attach_rawpkt(unsigned char *buff, unsigned int len) {
 	unsigned char *port;
 	socket *sock;
 	int i;
@@ -56,8 +56,6 @@ int socket::attach_rawpkt(unsigned char *buff, unsigned int len, unsigned char *
 		if ((pkt->iphdr.protocol == sock->network_conn.protocol)) {
 			if ((pkt->udphdr.dest == sock->network_conn.src_port)) {
 				if (sock->add_to_queue(buff, len) == JSUCCESS) {
-					//ut_log(" PACKET queued .\n");
-				//	*replace_buf = (unsigned char *) alloc_page(0);
 					stat_raw_attached++;
 					return JSUCCESS;
 				}
@@ -67,11 +65,12 @@ int socket::attach_rawpkt(unsigned char *buff, unsigned int len, unsigned char *
 		}
 	}
 	//ut_log(" msg: %x  addr:%x  raw_default:%x \n",default_sock_queue_len,buff,stat_raw_default);
+#if 1
 	if (default_socket->add_to_queue(buff, len) == JSUCCESS) {
 		stat_raw_default++;
 		return JSUCCESS;
 	}
-
+#endif
 	stat_raw_drop++;
 	return JFAIL;
 }
@@ -128,7 +127,7 @@ int socket::remove_from_queue(unsigned char **buf, int *len) {
 		}
 		spin_unlock_irqrestore(&(queue.spin_lock), flags);
 		if (ret == JFAIL)
-			ipc_waiton_waitqueue(&queue.waitq, 1000);
+			ipc_waiton_waitqueue(&queue.waitq, 10);
 	}
 	return ret;
 }
@@ -234,6 +233,13 @@ int socket::ioctl(unsigned long arg1, unsigned long arg2) {
 	}
 	return ret;
 }
+
+void socket::print_stats(){
+	ut_printf("socket: count:%d local:%x:%x remote:%x:%x (IO: %d/%d: StatErr: %d Qfull:%d)\n",
+			count.counter,network_conn.src_ip,network_conn.src_port,network_conn.dest_ip,network_conn.dest_port,stat_in
+	    ,stat_out,stat_err,queue.error_full);
+}
+
 socket *socket::list[MAX_SOCKETS];
 int socket::list_size = 0;
 int socket::stat_raw_drop = 0;
@@ -243,7 +249,7 @@ socket *socket::default_socket=0;
 /* TODO need  a lock */
 jdevice *socket::net_dev;
 network_stack *socket::net_stack_list[MAX_NETWORK_STACKS];
-void socket::print_stats() {
+void socket::print_all_stats() {
 	unsigned char *name = 0;
 	int i,len;
 
@@ -252,12 +258,11 @@ void socket::print_stats() {
 	}
 	ut_printf("Socket total:%d netstack:%s raw_drop:%d raw_attached:%d raw_default: %d\n", list_size, name, stat_raw_drop, stat_raw_attached, stat_raw_default);
 
+	default_socket->print_stats();
 	for (i=0; i<list_size;i++){
 		socket *sock=list[i];
 		if (sock==0) continue;
-		ut_printf("socket: count:%d local:%x:%x remote:%x:%x (IO: %d/%d: StatErr: %d Qfull:%d)\n",
-				sock->count.counter,sock->network_conn.src_ip,sock->network_conn.src_port,sock->network_conn.dest_ip,sock->network_conn.dest_port,sock->stat_in
-		    ,sock->stat_out,sock->stat_err,sock->queue.error_full);
+		sock->print_stats();
 	}
 	return;
 }
@@ -284,7 +289,7 @@ void socket::init_socket(int type){
 	net_stack = net_stack_list[0];
 	network_conn.family = AF_INET;
 	network_conn.type = type;
-	network_conn.src_ip = g_network_ip;
+	network_conn.src_ip = 0;
 	if (type == SOCK_DGRAM){
 		network_conn.protocol = IPPROTO_UDP;
 		net_stack->open(&network_conn,1);
@@ -432,7 +437,8 @@ int SYS_getsockname(int sockfd, struct sockaddr *addr, int *addrlen) {
 		}
 	}
 	addr->family = AF_INET;
-	addr->addr = net_htonl(g_network_ip);
+	//addr->addr = net_htonl(g_network_ip);
+	addr->sin_port = inode->network_conn.src_ip;
 	addr->sin_port = inode->network_conn.src_port;
 	//ret = socket_api->get_addr(file->inode->fs_private, addr);
 

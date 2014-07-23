@@ -787,11 +787,12 @@ static unsigned long stat_unknown_ip=0;
 
 void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
 	module_t *modulep = 0;
-	int i, j;
+	int i, j,k;
 	int option = 0;
 	unsigned char *buf;
 	int bsize = 1000;
 	int total_hits = 0;
+	int cpu;
 
 	buf = mm_malloc(bsize+10, 0);
 	if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "all") == 0) {
@@ -799,6 +800,12 @@ void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
 	} else if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "stat") == 0) {
 		option = 2;
 	}
+	cpu=-1;
+	if (arg2 != 0){
+		cpu=ut_atoi(arg2,FORMAT_DECIMAL);
+	}
+	ut_snprintf(buf, bsize, " Stats for cpu: %d \n",cpu);
+	SYS_fs_write(1, buf, ut_strlen(buf));
 	for (i = 0; i < total_modules; i++) {
 		modulep = g_modules[i];
 		modulep->use_count++;
@@ -810,14 +817,27 @@ void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
 		}
 		if (option != 0) {
 			for (j = 0; modulep->symbol_table[j].name != 0; j++) {
-				if ((option == 2) && (modulep->symbol_table[j].stats.hits == 0))
-					continue;
+				unsigned long hits = 0;
 
-				ut_snprintf(buf, bsize, "	%3d:t:%2d s_idx:%2d hits:%4d (rip=%p) %s -> %p (%d) \n", j, modulep->symbol_table[j].type,
-						modulep->symbol_table[j].sec_index, modulep->symbol_table[j].stats.hits,
-						modulep->symbol_table[j].stats.rip, modulep->symbol_table[j].name, modulep->symbol_table[j].address,modulep->symbol_table[j].len);
+				if (option == 2) {
+					if (cpu == -1) {
+						for (k = 0; k < MAX_CPUS; k++) {
+							hits = hits + modulep->symbol_table[j].stats[k].hits;
+						}
+					}else if (cpu < MAX_CPUS){
+						hits =  modulep->symbol_table[j].stats[cpu].hits;
+					}
+					if (hits == 0) {
+						continue;
+					}
+				}
+
+				ut_snprintf(buf, bsize, "	%3d:t:%2d s_idx:%2d hits:%4d (rip=%p) %s -> %p (%d) \n", j,
+						modulep->symbol_table[j].type, modulep->symbol_table[j].sec_index, hits,
+						modulep->symbol_table[j].stats[0].rip, modulep->symbol_table[j].name, modulep->symbol_table[j].address,
+						modulep->symbol_table[j].len);
 				SYS_fs_write(1, buf, ut_strlen(buf));
-				total_hits = total_hits + modulep->symbol_table[j].stats.hits;
+				total_hits = total_hits + hits;
 			}
 		}
 		modulep->use_count--;
@@ -836,16 +856,18 @@ void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
 
 void Jcmd_reset_cpu_stat() {
 	module_t *modulep = 0;
-	int i, j;
+	int i, j,cpu;
+
 	for (i = 0; i < total_modules; i++) {
 		modulep = g_modules[i];
 		modulep->use_count++;
 
 		for (j = 0; modulep->symbol_table[j].name != 0; j++) {
-			modulep->symbol_table[j].stats.hits = 0;
-			modulep->symbol_table[j].stats.rip = 0;
+			for (cpu = 0; cpu < MAX_CPUS; cpu++) {
+				modulep->symbol_table[j].stats[cpu].hits = 0;
+				modulep->symbol_table[j].stats[cpu].rip = 0;
+			}
 		}
-
 		modulep->use_count--;
 	}
 	stat_cpu_rip_unknown_hit = 0;
@@ -913,11 +935,14 @@ int ut_mod_symbol_execute(int type, char *name, char *argv1, char *argv2) {
 }
 
 int perf_stat_rip_hit(unsigned long rip) {
-	module_t *modulep = 0;
+	int ret = JFAIL;
 	int addr_found=0;
 	int j;
 	int curr=0;
 	unsigned long cur_max=0;
+	module_t *modulep = 0;
+	int cpu=getcpuid();
+
 	for (j = 0; j < total_modules; j++) {
 		int min = 0;
 		int max;
@@ -941,8 +966,8 @@ int perf_stat_rip_hit(unsigned long rip) {
 		curr = min;
 
 		if ((rip >= modulep->symbol_table[curr].address) && (rip <= modulep->symbol_table[curr + 1].address)) {
-			modulep->symbol_table[curr].stats.hits++;
-			modulep->symbol_table[curr].stats.rip = rip;
+			modulep->symbol_table[curr].stats[cpu].hits++;
+			modulep->symbol_table[curr].stats[cpu].rip = rip;
 
 			if (g_conf_func_debug == curr){
 				int f;
@@ -960,11 +985,13 @@ int perf_stat_rip_hit(unsigned long rip) {
 				}
 			}
 		}
-		return JSUCCESS;
+		ret = JSUCCESS;
+		goto last;
 	}
 	stat_cpu_rip_unknown_hit++;
 	stat_unknown_ip=rip;
-	return JFAIL;
+last:
+	return ret;
 }
 static module_t kernel_module;
 int init_kernel_module(symb_table_t *symbol_table, int total_symbols){
