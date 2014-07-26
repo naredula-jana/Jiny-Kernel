@@ -16,8 +16,9 @@ static int device_count = 0;
 #define MAX_DRIVERS 100
 class jdriver *jdriver_list[MAX_DRIVERS];
 static int driver_count = 0;
-jdevice::jdevice(){
-
+jdevice::jdevice(unsigned char *arg_name, int arg_type){
+	ut_snprintf(name ,MAX_DEVICE_NAME,arg_name);
+	file_type = arg_type;
 }
 int jdevice::init_pci(uint8_t bus, uint8_t device, uint8_t function) {
 	pci_device.pci_addr.bus = bus;
@@ -97,32 +98,40 @@ int jdevice::close(){
 	}
 	return -1;
 }
-static void *vptr_jdevice[7] = {
-		(void *) &jdevice::read, (void *) &jdevice::write,
-		(void *) &jdevice::close, (void *) &jdevice::ioctl, 0 };
-extern void *_ZTV7jdevice;
-int jdevice::init(unsigned char *dev_name) {
-	int i;
-	void **p = (void **) this;
-	*p = &vptr_jdevice[0];
-	*p = &_ZTV7jdevice + 2;  /* vtable from compiler generated */
-	ut_snprintf(name,MAX_DEVICE_NAME,"%s",dev_name);
-	return JSUCCESS;
-}
+
 void register_jdriver(class jdriver *driver) {
 
 	jdriver_list[driver_count] = driver;
 	driver_count++;
 }
-/*
 
+int g_conf_obj_count=1;
+/*
 calling new :  new (arg1,arg2..) type
  */
 void *operator new(int sz,const char *name) {
     void *obj = ut_calloc(sz);
-    ut_log(" new class name : %s: \n",name);
+
+    if(g_conf_obj_count == 1){
+    	unsigned long tmp_p = obj;
+    	tmp_p=tmp_p+8;
+    	class jobject *jobj = tmp_p;
+    	jobj->jobject_id = ut_count_obj_add(name);
+    }
     return obj;
 }
+void jfree_obj(unsigned long addr){
+
+    if(g_conf_obj_count == 1){
+    	unsigned long tmp_p = addr;
+
+    	tmp_p=tmp_p+8;
+    	class jobject *obj=tmp_p;
+    	ut_count_obj_free(obj->jobject_id);
+    }
+	ut_free(addr);
+}
+
 /*********************************************************************************/
 extern "C" {
 
@@ -138,14 +147,14 @@ static int scan_pci_devices() {
 			for (k = 0; k < MAX_PCI_FUNC; k++) {
 				if (device_count >= (MAX_DEVICES - 1))
 					return JSUCCESS;
-				//jdevice_list[device_count] = (class jdevice *) ut_calloc(sizeof(class jdevice));
-				jdevice_list[device_count] = new ("jdevice") jdevice();
+
+				jdevice_list[device_count] = jnew_obj(jdevice,"pci", 0) ;
+
 				if (jdevice_list[device_count]->init_pci(i, j, k) == JFAIL) {
-					ut_free(jdevice_list[device_count]);
+					jfree_obj(jdevice_list[device_count]);
 					continue;
 				}
 
-				jdevice_list[device_count]->init((unsigned char *) "pci");
 				/* attach the device to the know driver */
 				for (d = 0; d < driver_count; d++) {
 					if (jdriver_list[d]->probe_device(jdevice_list[device_count]) == JSUCCESS) {
@@ -163,8 +172,8 @@ extern void init_p9_jdriver();
 extern void init_net_jdriver();
 extern void init_keyboard_jdriver();
 extern void init_serial_jdriver();
-struct jdevice keyboard_device,serial1_device,serial2_device;
-struct jdevice vga_device;
+static struct jdevice *keyboard_device,*serial1_device,*serial2_device;
+static struct jdevice *vga_device;
 int init_jdevices(unsigned long unused_arg1) {
 	device_count = 0;
 	int d,k;
@@ -173,23 +182,16 @@ int init_jdevices(unsigned long unused_arg1) {
 	init_net_jdriver();
 	init_keyboard_jdriver();
 	init_serial_jdriver();
-	ut_memset((unsigned char *)&keyboard_device,0,sizeof(class jdevice));
-	ut_memset((unsigned char *)&vga_device,0,sizeof(class jdevice));
-	ut_memset((unsigned char *)&serial1_device,0,sizeof(class jdevice));
-	ut_memset((unsigned char *)&serial2_device,0,sizeof(class jdevice));
-	jdevice_list[0] = &keyboard_device;
-	jdevice_list[1] = &vga_device;
-	jdevice_list[2] = &serial1_device;
-	jdevice_list[3] = &serial2_device;
-	jdevice_list[0]->init((unsigned char *)"/dev/keyboard");
-	jdevice_list[1]->init((unsigned char *)"/dev/vga");
-	jdevice_list[2]->init((unsigned char *)"/dev/serial1");
-	jdevice_list[3]->init((unsigned char *)"/dev/serial2");
 
-	keyboard_device.file_type = IN_FILE;
-	vga_device.file_type = OUT_FILE;
-	serial1_device.file_type = IN_FILE | OUT_FILE;
-	serial2_device.file_type = IN_FILE | OUT_FILE;
+	keyboard_device = jnew_obj(jdevice, "/dev/keyboard",IN_FILE);
+	vga_device = jnew_obj(jdevice,"/dev/vga",OUT_FILE);
+	serial1_device = jnew_obj(jdevice,"/dev/serial1",IN_FILE | OUT_FILE);
+	serial2_device = jnew_obj(jdevice,"/dev/serial2",IN_FILE | OUT_FILE);
+
+	jdevice_list[0] = keyboard_device;
+	jdevice_list[1] = vga_device;
+	jdevice_list[2] = serial1_device;
+	jdevice_list[3] = serial2_device;
 
 	device_count=4;
 
@@ -205,17 +207,18 @@ int init_jdevices(unsigned long unused_arg1) {
 	}
 
 	scan_pci_devices();
+
 	return JSUCCESS;
 }
 void *get_keyboard_device(int device_type,int file_type){
 	if (device_type == DEVICE_KEYBOARD){
 		if (file_type == IN_FILE)
-			return (void *)&keyboard_device;
+			return (void *)keyboard_device;
 		else
-			return (void *)&vga_device;
+			return (void *)vga_device;
 	}else{
 		if (file_type == IN_FILE || file_type == OUT_FILE)
-			return (void *)&serial1_device;
+			return (void *)serial1_device;
 	}
 }
 void Jcmd_jdevices() {

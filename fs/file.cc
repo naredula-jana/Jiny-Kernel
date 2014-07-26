@@ -30,7 +30,6 @@ kmem_cache_t *g_slab_filep;
 
 kmem_cache_t *fs_inode::slab_objects = 0;
 
-
 void vinode::update_stat_in(int in_req,int in_byte){
 	if (in_byte <= 0) return;
 	stat_in = stat_in+in_req;
@@ -43,39 +42,32 @@ void vinode::update_stat_out(int out_req,int out_byte){
 }
 /******************************************** fs_inode class **********************************/
 
-static void *vptr_vinode[7] = {
-		(void *) &fs_inode::read, (void *) &fs_inode::write,
-		(void *) &fs_inode::close, (void *) &fs_inode::ioctl, 0 };
-
-int fs_inode::init(uint8_t *filename, unsigned long mode, struct filesystem *vfs) {
+fs_inode::fs_inode(uint8_t *arg_filename, unsigned long mode, struct filesystem *arg_vfs) {
 	int i;
-	void **p = (void **) this;
-	*p = &vptr_vinode[0];
 
-	this->count.counter = 1;
-	this->nrpages = 0;
-	this->stat_locked_pages.counter = 0;
+	ut_log("Filname in CONSTRUCTOR : %s \n",arg_filename);
+	count.counter = 1;
+	nrpages = 0;
+	stat_locked_pages.counter = 0;
 
-	this->flags = INODE_LONGLIVED;
-	this->fileStat.st_size = 0;
-	this->fs_private = 0;
-	this->fileStat.inode_no = 0;
-	this->fileStat_insync = 0;
-	this->open_mode = mode;
-	this->vfs = vfs;
-	ut_strcpy(this->filename, (uint8_t *) filename);
-	for (i = 0; i < PAGELIST_HASH_SIZE; i++)
-		INIT_LIST_HEAD(&(this->page_list[i]));
-	INIT_LIST_HEAD(&(this->vma_list));
-	INIT_LIST_HEAD(&(this->inode_link));
-	DEBUG(
-			" inode init filename:%s: :%x  :%x \n", filename, &this->page_list, &(this->page_list));
+	flags = INODE_LONGLIVED;
+	fileStat.st_size = 0;
+	fs_private = 0;
+	fileStat.inode_no = 0;
+	fileStat_insync = 0;
+	open_mode = mode;
+	vfs = arg_vfs;
+	ut_strcpy(filename, (uint8_t *) arg_filename);
+	for (i = 0; i < PAGELIST_HASH_SIZE; i++){
+		INIT_LIST_HEAD(&(page_list[i]));
+	}
+	INIT_LIST_HEAD(&(vma_list));
+	INIT_LIST_HEAD(&(inode_link));
+	DEBUG(" inode init filename:%s: :%x  :%x \n", filename, &page_list, &(page_list));
 
 	mutexLock(g_inode_lock);
-	list_add(&this->inode_link, &fs_inode_list);
+	list_add(&inode_link, &fs_inode_list);
 	mutexUnLock(g_inode_lock);
-
-	return JSUCCESS;
 }
 struct page *fs_inode::fs_genericRead(unsigned long offset) {
 	struct page *page;
@@ -229,8 +221,10 @@ int fs_inode::close() {
 	}
 	mutexUnLock(g_inode_lock);
 
-	if (ret == JSUCCESS)
-		mm_slab_cache_free(fs_inode::slab_objects, this);
+	if (ret == JSUCCESS){
+		//mm_slab_cache_free(fs_inode::slab_objects, this);
+		jfree_obj(this);
+	}
 
 	return ret;
 }
@@ -388,12 +382,12 @@ static struct fs_inode *fs_getInode(uint8_t *arg_filename, int flags,
 	}
 	mutexUnLock(g_inode_lock);
 #if 1
-	ret_inode = (fs_inode *) mm_slab_cache_alloc(fs_inode::slab_objects, 0);
+	//ret_inode = (fs_inode *) mm_slab_cache_alloc(fs_inode::slab_objects, 0);
+	ret_inode = jnew_obj(fs_inode, filename, mode & 0x3, vfs);
 
 	if (ret_inode != 0) {
 		struct fileStat stat;
 
-		ret_inode->init(filename, mode & 0x3, vfs);
 		struct filesystem *vfs_fs = ret_inode->vfs;
 		if (vfs_fs ==0){
 			ret_inode = 0;

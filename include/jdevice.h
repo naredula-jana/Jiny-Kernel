@@ -14,7 +14,7 @@ public:
 	unsigned char name[MAX_DEVICE_NAME];
 	jdriver* driver;
 
-	jdevice();
+	jdevice(unsigned char *name, int type);
 	int read(unsigned long offset, unsigned char *data, int len, int flags);
 	int write(unsigned long offset, unsigned char *data, int len, int flags);
 	int close();
@@ -23,12 +23,11 @@ public:
 	/* pci details */
 	pci_device_t pci_device;
 	int init_pci(uint8_t bus, uint8_t device, uint8_t function);
-	int init(unsigned char *name);
 
 	void print_stats();
 };
 
-class jdriver {
+class jdriver: public jobject {
 public:
 	unsigned char *name;
 	jdevice *device;
@@ -74,6 +73,7 @@ public:
 
 	wait_queue_t send_waitq;
 	unsigned char mac[7];
+	static int test_k;
 };
 
 class virtio_p9_jdriver: public virtio_jdriver {
@@ -87,8 +87,6 @@ public:
 	int write(unsigned char *buf, int len, int flags);
 	int ioctl(unsigned long arg1,unsigned long arg2);
 	void *virtio_dev; /* TODO : need to remove later */
-
-
 };
 
 

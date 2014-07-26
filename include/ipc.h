@@ -1,9 +1,19 @@
 #ifndef IPC_H
 #define IPC_H
 
+class wait_queue {
+public:
+	struct list_head head;
+	char *name;
+	void *used_for; /* it can be used for semaphore/mutex  or raw waitqueue */
+	unsigned long flags;
+
+	int stat_wait_count;
+	int stat_wait_ticks;
+};
+
+extern "C" {
 #include "list.h"
-
-
 #define SPINLOCK_DEBUG 1
 #define RECURSIVE_SPINLOCK 1
 typedef struct {  /* Do not change the order , initilization will break */
@@ -78,7 +88,5 @@ uint32_t ipc_sem_wait(sys_sem_t *sem, unsigned int timeout);
 #define sys_sem_new ipc_sem_new
 #define sys_sem_free ipc_sem_free
 #define sys_sem_signal ipc_sem_signal
-
-
-
+}
 #endif

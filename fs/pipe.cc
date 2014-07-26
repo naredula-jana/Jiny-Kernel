@@ -76,14 +76,8 @@ last:
 
 	return ret;
 }
-static void *vptr_pipe[7] = {
-		(void *) &pipe::read, (void *) &pipe::write,
-		(void *) &pipe::close, (void *) &pipe::ioctl, 0 };
-int pipe::init(int type) {
-	int i;
-	void **p = (void **) this;
-	*p = &vptr_pipe[0];
 
+int pipe::init(int type) {
 	file_type = type;
 }
 int pipe::read(unsigned long unused, unsigned char *buf, int len, int read_flags){
@@ -254,8 +248,12 @@ unsigned long SYS_pipe(int *fds) {
 	} else {
 		return -1;
 	}
+#if 0
 	wpipe = (struct pipe *)ut_calloc(sizeof(struct pipe));
 	rpipe = (struct pipe *)ut_calloc(sizeof(struct pipe));
+#endif
+	wpipe = jnew_obj(pipe);
+	rpipe = jnew_obj(pipe);
 
 	wpipe->init(OUT_PIPE_FILE);
 	rpipe->init(IN_PIPE_FILE);

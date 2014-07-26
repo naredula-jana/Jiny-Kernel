@@ -172,6 +172,48 @@ unsigned long  init_symbol_table(unsigned long bss_start,unsigned long bss_end) 
 	return ret;
 }
 #if 1
+#define MAX_CLASSESS 100
+struct class_types{
+	int count; /* currently active objects */
+	unsigned long use; /* so far the number of objects created */
+	unsigned char *name;
+};
+#define CLASS_ID_START 0x5 /* this is to avoid 0 index */
+static struct class_types classtype_list[MAX_CLASSESS];
+static int class_count=0;
+int ut_count_obj_add(unsigned char *name) {
+	int i;
+
+	for (i = 0; i < class_count; i++) {
+		if (ut_strstr(classtype_list[i].name, name) != 0) {
+			classtype_list[i].count++;
+			classtype_list[i].use++;
+			//ut_log("   name:%s : %d \n",name,classtype_list[i].count);
+			return i + CLASS_ID_START ;
+		}
+	}
+	return 0;
+}
+int ut_count_obj_free(int id) {
+	int i;
+
+	i = id - CLASS_ID_START;
+	if (i >= 0 && (i < class_count)) {
+		classtype_list[i].count--;
+		//ut_log("   name:%s : %d \n",name,classtype_list[i].count);
+		return JSUCCESS;
+	}
+	return JFAIL;
+}
+void Jcmd_obj_list(){
+	int i;
+
+	ut_printf("  ClassName           Count         used\n");
+	for (i = 0; i < class_count; i++) {
+		ut_printf("  %9s  -> %d  : %d\n",&classtype_list[i].name[5],classtype_list[i].count,classtype_list[i].use);
+	}
+	return;
+}
 static int add_symbol_types(unsigned long unused) {
 	int i,j;
 	int confs = 0;
@@ -206,6 +248,17 @@ static int add_symbol_types(unsigned long unused) {
 		if (ut_strcmp(sym, dst) == 0) {
 			g_symbol_table[i].type = SYMBOL_CMD;
 			cmds++;
+			continue;
+		}
+
+		ut_strcpy(sym, g_symbol_table[i].name);
+		sym[4] = '\0'; /* Jcmd_ */
+		ut_strcpy(dst, (unsigned char *)"_ZTV");
+		if (ut_strcmp(sym, dst) == 0) {
+			classtype_list[class_count].name = g_symbol_table[i].name;
+			classtype_list[class_count].count = 0;
+			classtype_list[class_count].use = 0;
+			class_count++;
 			continue;
 		}
 	}

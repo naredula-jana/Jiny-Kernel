@@ -52,7 +52,7 @@ typedef struct {
 } inittable_t;
 
 static inittable_t inittable[] = {
-		{init_physical_memory,0,"PhysicalMemory"},
+		{init_physical_memory,0,"PhysicalMemory and Symbol table"},
 		{init_descriptor_tables,0,"ISR and Descriptors"},
 		{init_memory,0,           "Main memory"},
 		{init_kernel_args,0, "Kernel Args"},

@@ -109,7 +109,7 @@ public:
 	int ioctl(unsigned long arg1, unsigned long arg2);
 	int serial_device_no;
 };
-serial_jdriver serial_driver;
+static serial_jdriver *serial_driver;
 int serial_jdriver::probe_device(class jdevice *jdev) {
 
 	if (ut_strcmp(jdev->name, (unsigned char *) "/dev/serial1") == 0  || ut_strcmp(jdev->name, (unsigned char *) "/dev/serial2") == 0) {
@@ -119,11 +119,11 @@ int serial_jdriver::probe_device(class jdevice *jdev) {
 }
 jdriver *serial_jdriver::attach_device(class jdevice *jdev) {
 	if (ut_strcmp(jdev->name, (unsigned char *) "/dev/serial1") == 0){
-		serial_driver.serial_device_no = DEVICE_SERIAL1;
+		serial_driver->serial_device_no = DEVICE_SERIAL1;
 	}else{
-		serial_driver.serial_device_no = DEVICE_SERIAL2;
+		serial_driver->serial_device_no = DEVICE_SERIAL2;
 	}
-	COPY_OBJ(serial_jdriver, &serial_driver, new_obj, jdev);
+	COPY_OBJ(serial_jdriver, serial_driver, new_obj, jdev);
 
 	return (jdriver *) new_obj;
 }
@@ -187,18 +187,11 @@ int serial_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 
 extern "C" {
 
-static void *vptr_serial[8] = { (void *) &serial_jdriver::probe_device,
-		(void *) &serial_jdriver::attach_device,
-		(void *) &serial_jdriver::dettach_device,
-		(void *) &serial_jdriver::read, (void *) &serial_jdriver::write,
-		(void *) &serial_jdriver::print_stats, (void *) &serial_jdriver::ioctl,
-		0 };
 void init_serial_jdriver() {
-	void **p = (void **) &serial_driver;
-	*p = &vptr_serial[0];
 
-	serial_driver.name = (unsigned char *) "serial_driver";
-	register_jdriver(&serial_driver);
+	serial_driver = jnew_obj(serial_jdriver);
+	serial_driver->name = (unsigned char *) "serial_driver";
+	register_jdriver(serial_driver);
 }
 
 }

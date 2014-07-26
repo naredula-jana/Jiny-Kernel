@@ -1,4 +1,5 @@
 //#define DEBUG_ENABLE 1
+extern "C"{
 #include "9p.h"
 #define cpu_to_le16(x) x /* already intel is little indian */
 #define cpu_to_le32(x) x /* already intel is little indian */
@@ -56,10 +57,11 @@ int p9_pdu_finalize(struct p9_fcall *pdu) {
 
 	pdu->size = 0;
 	err = p9_pdu_write_v(pdu, "dbw", size, pdu->type, pdu->tag);
-	if (pdu->client->type == P9_TYPE_TWRITE)
+	if (pdu->client->type == P9_TYPE_TWRITE){
 		pdu->size = size + pdu->client->userdata_len;
-	else
+	}else{
 	    pdu->size = size;
+	}
 
 #ifdef CONFIG_NET_9P_DEBUG
 	if ((p9_debug_level & P9_DEBUG_PKT) == P9_DEBUG_PKT)
@@ -310,4 +312,5 @@ int p9_read_rpc(p9_client_t *client, const char *fmt, ...) {
 		DEBUG(" recv error data :%s: \n ", &recv[9]);
 	}
 	return ret;
+}
 }

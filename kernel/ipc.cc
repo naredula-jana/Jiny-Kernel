@@ -8,6 +8,7 @@
  *   Author: Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
  *
  */
+extern "C"{
 #include "interface.h"
 static int ipc_init_done=0;
 extern int _sc_task_assign_to_cpu(struct task_struct *task);
@@ -567,5 +568,6 @@ void ipc_test1() {
 		ipc_sem_wait(&sem, 1000);
 	}
 	ipc_sem_free(&sem);
+}
 }
 #endif

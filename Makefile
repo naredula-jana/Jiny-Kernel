@@ -12,9 +12,8 @@ OBJ_XEN=drivers/xen/xen_init.o drivers/xen/xenbus.o drivers/xen/evntchn.o driver
 
 OBJ_VIRTIO= drivers/virtio/virtio_ring.o \
 	drivers/virtio/virtio_memballoon.o \
-	drivers/virtio/9p/9p.o \
+	drivers/virtio/9p/p9.o \
 	drivers/virtio/9p/p9_fs.o drivers/virtio/driver_virtio_pci.o
-	#	drivers/virtio/net/test_udpserver.o  \
 
 OBJ_MEMLEAK=mm/memleak/memleak.o mm/memleak/os_dep.o mm/memleak/prio_tree.o  mm/memleak/memleak_hook.o
 
@@ -35,7 +34,7 @@ OBJ_DRIVER = drivers/display.o drivers/driver_keyboard.o drivers/driver_serial.o
 
 OBJ_KERNEL = kernel/debug.o kernel/jdevices.o kernel/init.o  kernel/acpi.o kernel/ipc.o  kernel/network_sched.o kernel/kshell.o  kernel/symbol_table.o  kernel/syscall.o  kernel/sched_task.o  kernel/util.o kernel/module_app.o
 	
-OBJ_MEM= mm/memory.o mm/jslab.o mm/mmap.o mm/pagecache.o 
+OBJ_MEM= mm/memory.o mm/jslab.o mm/mmap.o mm/pagecache.o mm/vm.o
 OBJ_FS=	fs/binfmt_elf.o fs/pipe.o fs/file.o fs/fs_api.o fs/socket.o fs/vfs.o fs/proc_fs.o
 OBJ_SMP = arch/$(ARCH_DIR)/smp/smp-imps.o  arch/$(ARCH_DIR)/smp/apic.o arch/$(ARCH_DIR)/smp/mptables.o
 

@@ -4,15 +4,17 @@
 * the Free Software Foundation; either version 2 of the License, or
 * (at your option) any later version.
 *
-*   kernel/mmap.c
+*   kernel/vm.cc
 *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
 *
 */
 //#define DEBUG_ENABLE
+extern "C" {
 #include "common.h"
 #include "mm.h"
 #include "task.h"
 #include "interface.h"
+int Jcmd_maps(char *arg1, char *arg2);
 /*
  *
  *    vma -> mm  -> pagetable
@@ -184,7 +186,7 @@ unsigned long vm_dup_vmaps(struct mm_struct *src_mm,struct mm_struct *dest_mm){ 
 	while (vma) {
 		new_vma = mm_slab_cache_alloc(vm_area_cachep, 0);
 		if (new_vma == 0){
-			Jcmd_mem();
+			Jcmd_mem(0,0);
 			BUG();
 			return 0;
 		}
@@ -561,4 +563,5 @@ last:
     ut_printf(buf);
 	vfree(buf);
 	return 1;
+}
 }

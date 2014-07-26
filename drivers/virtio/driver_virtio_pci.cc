@@ -432,6 +432,7 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 	free_send_bufs();
 	return JSUCCESS;  /* Here Sucess indicates the buffer is freed or consumed */
 }
+static int virtio_net_jdriver::test_k=2; // TEST purpose
 int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 	unsigned char *arg_mac = (unsigned char *) arg2;
 	if (arg1 == NETDEV_IOCTL_GETMAC) {
@@ -529,31 +530,23 @@ int virtio_p9_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 	return 0;
 }
 /*************************************************************************************************/
-static virtio_p9_jdriver p9_jdriver;
-static virtio_net_jdriver net_jdriver;
+static virtio_p9_jdriver *p9_jdriver;
+static virtio_net_jdriver *net_jdriver;
 
 extern "C" {
-static void *vptr_p9[7] = { (void *) &virtio_p9_jdriver::probe_device, (void *) &virtio_p9_jdriver::attach_device,
-		(void *) &virtio_p9_jdriver::dettach_device, (void *) &virtio_p9_jdriver::read, (void *) &virtio_p9_jdriver::write,
-		(void *) &virtio_jdriver::print_stats, 0 };
+
 void init_p9_jdriver() {
-	void **p = (void **) &p9_jdriver;
-	*p = &vptr_p9[0];
+	p9_jdriver = jnew_obj(virtio_p9_jdriver);
+	p9_jdriver->name = (unsigned char *) "p9_driver";
 
-	p9_jdriver.name = (unsigned char *) "p9_driver";
-
-	register_jdriver(&p9_jdriver);
+	register_jdriver(p9_jdriver);
 }
-void *vptr_net[8] = { (void *) &virtio_net_jdriver::probe_device, (void *) &virtio_net_jdriver::attach_device,
-		(void *) &virtio_net_jdriver::dettach_device, (void *) &virtio_net_jdriver::read, (void *) &virtio_net_jdriver::write,
-		(void *) &virtio_jdriver::print_stats, (void *) &virtio_net_jdriver::ioctl, 0 };
+
 void init_net_jdriver() {
-	void **p = (void **) &net_jdriver;
-	*p = &vptr_net[0];
+	net_jdriver = jnew_obj(virtio_net_jdriver);
+	net_jdriver->name = (unsigned char *) "net_driver";
 
-	net_jdriver.name = (unsigned char *) "net_driver";
-
-	register_jdriver(&net_jdriver);
+	register_jdriver(net_jdriver);
 }
 struct virtqueue *virtio_jdriver_getvq(void *driver, int index) {
 	virtio_jdriver *jdriver = (virtio_jdriver *) driver;

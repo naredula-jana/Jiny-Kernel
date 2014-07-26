@@ -197,7 +197,7 @@ public:
 	int print_stats();
 	int ioctl(unsigned long arg1,unsigned long arg2);
 };
-keyboard_jdriver keyboard_driver;
+static keyboard_jdriver *keyboard_driver;
 int keyboard_jdriver::probe_device(class jdevice *jdev) {
 
 	if ((ut_strcmp(jdev->name , (unsigned char *)"/dev/keyboard") == 0) || (ut_strcmp(jdev->name , (unsigned char *)"/dev/vga") == 0)){
@@ -206,7 +206,7 @@ int keyboard_jdriver::probe_device(class jdevice *jdev) {
 	return JFAIL;
 }
 jdriver *keyboard_jdriver::attach_device(class jdevice *jdev) {
-	COPY_OBJ(keyboard_jdriver,&keyboard_driver,new_obj,jdev);
+	COPY_OBJ(keyboard_jdriver,keyboard_driver,new_obj,jdev);
 	return (jdriver *)new_obj;
 }
 int keyboard_jdriver::dettach_device(class jdevice *jdev) {
@@ -259,13 +259,10 @@ int keyboard_jdriver::ioctl(unsigned long arg1,unsigned long arg2 ){
 }
 
 extern "C" {
-static void *vptr_keyboard[8]={(void *)&keyboard_jdriver::probe_device,(void *)&keyboard_jdriver::attach_device,(void *)&keyboard_jdriver::dettach_device,(void *)&keyboard_jdriver::read,
-		(void *)&keyboard_jdriver::write,(void *)&keyboard_jdriver::print_stats,(void *)&keyboard_jdriver::ioctl,0};
-void init_keyboard_jdriver() {
-	void **p=(void **)&keyboard_driver;
-	*p=&vptr_keyboard[0];
 
-	keyboard_driver.name = (unsigned char *)"keyboard_driver";
-	register_jdriver(&keyboard_driver);
+void init_keyboard_jdriver() {
+	keyboard_driver = jnew_obj(keyboard_jdriver);
+	keyboard_driver->name = (unsigned char *)"keyboard_driver";
+	register_jdriver(keyboard_driver);
 }
 }

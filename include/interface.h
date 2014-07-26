@@ -89,6 +89,7 @@ int pc_init(uint8_t *start_addr,unsigned long len);
 int Jcmd_pagecache_stat(char *arg1,char *arg2);
 int pc_pageDirted(struct page *p);
 int pc_pagecleaned(struct page *page);
+int pc_check_valid_addr(uint8_t *addr, int len);
 
 
 unsigned long fs_getVmaPage(struct vm_area_struct *vma,unsigned long offset);
@@ -257,6 +258,8 @@ uint8_t *ut_strcpy(uint8_t *dest, const uint8_t *src);
 uint8_t *ut_strncpy(uint8_t *dest, const uint8_t *src,int n);
 uint8_t *ut_strcat(uint8_t *dest, const uint8_t *src);
 uint8_t *ut_strstr(uint8_t *s1,uint8_t *s2);
+int ut_count_obj_add(unsigned char *name);
+int ut_count_obj_free(int id);
 int ut_strlen(const uint8_t * s);
 enum{
 	FORMAT_HEX=1,
@@ -274,6 +277,7 @@ int strace_wait(void);
 int ut_get_wallclock(unsigned long *sec, unsigned long *usec);
 void ut_putchar(uint8_t c);
 void udelay(int loops);
+int Jcmd_mem(char *arg1, char *arg2);
 
 /* scheduling */
 unsigned long sc_createKernelThread(int (*fn)(void *, void *),void **argv,uint8_t *name, unsigned long flags);
