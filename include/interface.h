@@ -18,10 +18,14 @@ struct iovec {                    /* Scatter/gather array items */
  */
 /* scheduling */
 extern task_queue_t g_task_queue;
+
+#if 0
 extern int ipc_register_waitqueue(wait_queue_t *waitqueue, char *name, unsigned long flags);
 extern int ipc_unregister_waitqueue(wait_queue_t *waitqueue);
 int ipc_wakeup_waitqueue(wait_queue_t *waitqueue);
 int ipc_waiton_waitqueue(wait_queue_t *waitqueue, unsigned long ticks);
+#endif
+
 int sc_sleep( long ticks); /* each tick is 100HZ or 10ms */
 unsigned long SYS_sc_fork();
 unsigned long SYS_sc_vfork();
@@ -185,13 +189,7 @@ int init_kernel();
 int init_memory(unsigned long unused);
 int init_descriptor_tables();
 int init_driver_keyboard();
-int init_tasking(unsigned long unused);
-int init_serial(unsigned long unused);
 
-int init_vfs();
-int init_smp_force(unsigned long ncpus);
-int init_syscall(unsigned long cpuid);
-int init_networking();
 
 /**************************  Networking ***/
 #define NETWORK_PROTOCOLSTACK 1
@@ -261,6 +259,8 @@ uint8_t *ut_strstr(uint8_t *s1,uint8_t *s2);
 int ut_count_obj_add(unsigned char *name);
 int ut_count_obj_free(int id);
 int ut_strlen(const uint8_t * s);
+int ut_mod_symbol_execute(int type, char *name, char *argv1, char *argv2);
+unsigned long ut_mod_get_symbol_addr(unsigned char *name);
 enum{
 	FORMAT_HEX=1,
 	FORMAT_DECIMAL=2

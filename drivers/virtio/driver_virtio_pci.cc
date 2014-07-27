@@ -9,7 +9,7 @@
 *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
 *
 */
-
+#include "file.hh"
 extern "C" {
 #include "common.h"
 #include "pci.h"
@@ -103,14 +103,14 @@ static int addBufToQueue(struct virtqueue *vq, unsigned char *buf, unsigned long
 
 /*******************************  virtio_jdriver ********************************/
 
-int virtio_jdriver::print_stats() {
+void virtio_jdriver::print_stats() {
 
 	ut_printf("%s: Send(P,K,I): %d,%d,%d  Recv(P,K,I):%d,%d,%d allocs:%d free:%d err:%d\n", this->name, this->stat_sends,
 			this->stat_send_kicks, this->stat_send_interrupts, this->stat_recvs, this->stat_recv_kicks, this->stat_recv_interrupts, this->stat_allocs,
 			this->stat_frees, this->stat_err_nospace);
 	print_vq(vq[0]);
 	print_vq(vq[1]);
-	return JSUCCESS;
+	//return JSUCCESS;
 }
 int virtio_jdriver::virtio_create_queue(uint16_t index, int qType) {
 	int size;
@@ -217,7 +217,7 @@ static int virtio_net_send_interrupt(void *private_data) {
 
 	driver->stat_send_interrupts++;
 	virtio_disable_cb(driver->vq[1]);
-	auto ret = ipc_wakeup_waitqueue(&(driver->send_waitq));
+	driver->send_waitq->wakeup();
 	return 0;
 
 }
@@ -286,7 +286,7 @@ int virtio_net_jdriver::net_attach_device(class jdevice *jdev) {
 	this->virtio_create_queue(1, 2);
 	if (msi_vector > 0) {
 		outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 1);
-		ipc_register_waitqueue(&send_waitq, "waitq_net", 0);
+		send_waitq = jnew_obj(wait_queue, "waitq_net", 0);
 	//	outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 0xffff);
 	}
 
@@ -457,17 +457,15 @@ int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 	}
 }
 /***************************************************************************************************/
-extern wait_queue_t p9_waitq;
+extern wait_queue *p9_waitq;
 static int virtio_9p_interrupt(void *private_data) { // TODO: handling similar  type of interrupt generating while serving P9 interrupt.
 	virtio_p9_jdriver *driver = (virtio_p9_jdriver *) private_data;
 
 	if (driver->device->pci_device.msi == 0)
 		inb(driver->device->pci_device.pci_ioaddr + VIRTIO_PCI_ISR);
 
-	auto ret = ipc_wakeup_waitqueue(&p9_waitq); /* wake all the waiting processes */
-	if (ret == 0) {
-		//ut_log("ERROR:New  p9 wait No one is waiting requests:%d intr:%d\n",stat_request,stat_intr);
-	}
+	p9_waitq->wakeup(); /* wake all the waiting processes */
+
 	return 0;
 }
 int virtio_p9_jdriver::probe_device(class jdevice *jdev) {
@@ -506,7 +504,7 @@ int virtio_p9_jdriver::p9_attach_device(class jdevice *jdev) {
 	ut_log("	Virtio P9:  VIRTIO PCI COMPLETED with driver ok :%x \n", virtio_get_pcistatus(pci_ioaddr));
 	inb(pci_ioaddr + VIRTIO_PCI_ISR);
 
-	ipc_register_waitqueue(&p9_waitq, "waitq_p9", 0);
+	p9_waitq= jnew_obj(wait_queue, "waitq_p9", 0);
 	ar_registerInterrupt(32 + jdev->pci_device.pci_header.interrupt_line, virtio_9p_interrupt, "virt_p9_irq", (void *) this);
 
 	p9_initFs(this);

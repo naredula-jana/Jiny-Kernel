@@ -8,6 +8,7 @@
  *   Author: Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
  *
  */
+extern "C" {
 #include "common.h"
 #include "mach_dep.h"
 /*******************************   Usage *****************************
@@ -597,5 +598,5 @@ int Jcmd_print_trace(unsigned char *arg_pid, unsigned char *arg_cpu_id) {
 	ut_printf(" Total trace records : %d \n",count);
 	return 1;
 }
-
+}
 

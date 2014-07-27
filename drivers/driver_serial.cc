@@ -105,7 +105,7 @@ public:
 	int dettach_device(jdevice *dev);
 	int read(unsigned char *buf, int len, int flags);
 	int write(unsigned char *buf, int len, int flags);
-	int print_stats();
+	void print_stats();
 	int ioctl(unsigned long arg1, unsigned long arg2);
 	int serial_device_no;
 };
@@ -173,9 +173,9 @@ int serial_jdriver::write(unsigned char *buf, int len, int wr_flags) {
 	stat_sends = stat_sends + ret;
 	return ret;
 }
-int serial_jdriver::print_stats() {
+void serial_jdriver::print_stats() {
 	ut_printf(" sends:%d recvs :%d", stat_sends, stat_recvs);
-	return JSUCCESS;
+	//return JSUCCESS;
 }
 int serial_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 	if (arg1 == 0) {

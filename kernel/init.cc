@@ -8,6 +8,7 @@
 *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
 *
 */
+extern "C" {
 #include "common.h"
 
 #include "pci.h"
@@ -45,6 +46,13 @@ int init_kmemleak(unsigned long arg1);
 int init_acpi(unsigned long arg1);
 int init_network_stack(unsigned long arg1);
 int  init_kernel_args(unsigned long arg1);
+int init_tasking(unsigned long unused);
+int init_serial(unsigned long unused);
+int init_vfs(unsigned long arg);
+int init_smp_force(unsigned long ncpus);
+int init_syscall(unsigned long cpuid);
+int init_networking(unsigned long arg);
+
 typedef struct {
 	int (*func)(unsigned long arg);
 	unsigned long arg1;
@@ -174,7 +182,7 @@ int  init_code_readonly(unsigned long arg1){
 }
 
 /****************************************House Keeper *******************************************/
-
+extern int housekeep_zeropage_cache();
 void housekeeper_thread(void *arg){
 	sc_sleep(30);  /* TODO : need to wait some part of initilization*/
 	init_log_file(0);
@@ -193,7 +201,7 @@ extern volatile unsigned char *g_video_ram;
 unsigned long g_vmalloc_start=0;
 unsigned long g_vmalloc_size=0;
 extern int shell_main(void *arg);
-
+extern int init_jslab_vmalloc();
 int init_kernel_vmaps(unsigned long arg1){
 	unsigned long ret;
 	int map_size;
@@ -253,7 +261,8 @@ void cmain() {  /* This is the first c function to be executed */
 	return;
 }
 
-
+extern int acpi_shutdown();
 void Jcmd_shutdown(){
 	acpi_shutdown();
+}
 }

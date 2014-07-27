@@ -107,7 +107,9 @@ int pipe::ioctl(unsigned long arg1,unsigned long arg2){
 	return 0;
 }
 
+void pipe::print_stats(){
 
+}
 /*************************** End of pipe ******************************/
 
 static int fs_recv_from_pipe(long pipe_index, uint8_t *buf, int len) {

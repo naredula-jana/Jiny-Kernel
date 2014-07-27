@@ -9,6 +9,7 @@
  *   Author: Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
  *
  */
+extern "C" {
 #include "common.h"
 #include "mach_dep.h"
 
@@ -62,7 +63,7 @@ static unsigned int *acpiCheckRSDPtr(unsigned int *ptr)
    uint8_t check = 0;
    int i;
 
-   if (ut_memcmp(sig, rsdp, 8) == 0)
+   if (ut_memcmp(sig, (unsigned char *)rsdp, 8) == 0)
    {
       // check checksum rsdpd
       bptr = (uint8_t *) ptr;
@@ -125,12 +126,12 @@ static  unsigned int *acpiGetRSDPtr(void)
 // checks for a given header and validates checksum
 static  int acpiCheckHeader(unsigned int *ptr, char *sig)
 {
-	unsigned char *p=ptr;
+	unsigned char *p=(unsigned char *)ptr;
 	if (p <KADDRSPACE_START){
 		p=__va(p);
-		ptr=p;
+		ptr=(unsigned int *)p;
 	}
-   if (ut_memcmp(ptr, sig, 4) == 0)
+   if (ut_memcmp((unsigned char *)ptr, sig, 4) == 0)
    {
       char *checkPtr = (char *) ptr;
       int len = *(ptr + 1);
@@ -215,7 +216,7 @@ int init_acpi(unsigned long unused_arg1)
 
    ut_printf(" first : phy %x \n",ptr);
    unsigned char *p=__va(ptr);
-   ptr=p;
+   ptr=(unsigned int *)p;
 #ifdef DEBUG
    ut_printf(" first :virt  %x \n",ptr);
 #endif
@@ -330,4 +331,5 @@ void acpi_shutdown(void)
       outw((unsigned int) PM1b_CNT, SLP_TYPb | SLP_EN );
 
    ut_printf("acpi poweroff failed.\n");
+}
 }

@@ -97,7 +97,7 @@ int socket::add_to_queue(unsigned char *buf, int len) {
 		mm_check_debug_data(buf,0x0);
 		mm_set_debug_data(buf,0x123456);
 #endif
-		ipc_wakeup_waitqueue(&queue.waitq);
+		queue.waitq->wakeup();
 		goto last;
 	}
 	queue.error_full++;
@@ -128,7 +128,7 @@ int socket::remove_from_queue(unsigned char **buf, int *len) {
 		}
 		spin_unlock_irqrestore(&(queue.spin_lock), flags);
 		if (ret == JFAIL)
-			ipc_waiton_waitqueue(&queue.waitq, 10);
+			queue.waitq->wait(10);
 	}
 	return ret;
 }
@@ -204,7 +204,7 @@ int socket::close() {
 		return JFAIL;
 	}
 	ret = net_stack->close(&network_conn);
-	ipc_unregister_waitqueue(&queue.waitq);
+	queue.waitq->unregister();
 	if (peeked_msg != 0 ){
 		free_page(peeked_msg);
 	}
@@ -228,7 +228,7 @@ int socket::ioctl(unsigned long arg1, unsigned long arg2) {
 		}
 	}else if (arg1 == SOCK_IOCTL_WAITFORDATA){
 		if (queue.queue_len == 0){
-			ipc_waiton_waitqueue(&queue.waitq, arg2);
+			queue.waitq->wait(arg2);
 			//ut_log(" Woken from the queue : %d\n",queue.queue_len);
 		}
 		return queue.queue_len;
@@ -287,7 +287,7 @@ int socket::delete_sock(socket *sock) {
 void socket::init_socket(int type){
 	queue.spin_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"socketnetq_lock");
 	//ipc_register_waitqueue(&sock->queue.waitq, "socket_waitq", WAIT_QUEUE_WAKEUP_ONE);
-	ipc_register_waitqueue(&queue.waitq, "socket_waitq", 0);
+	queue.waitq = jnew_obj(wait_queue, "socket_waitq", 0);
 	net_stack = net_stack_list[0];
 	network_conn.family = AF_INET;
 	network_conn.type = type;

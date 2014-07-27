@@ -29,12 +29,11 @@ OBJ_ARCH=  arch/$(ARCH_DIR)/vsyscall_emu_64.o \
 	arch/$(ARCH_DIR)/paging.o \
 	arch/$(ARCH_DIR)/interrupt.o  
 	
-OBJ_DRIVER = drivers/display.o drivers/driver_keyboard.o drivers/driver_serial.o drivers/hostshm/host_fs.o \
-	drivers/hostshm/shm_device.o drivers/hostshm/shm_queue.o
+OBJ_DRIVER = drivers/display.o drivers/driver_keyboard.o drivers/driver_serial.o 
 
 OBJ_KERNEL = kernel/debug.o kernel/jdevices.o kernel/init.o  kernel/acpi.o kernel/ipc.o  kernel/network_sched.o kernel/kshell.o  kernel/symbol_table.o  kernel/syscall.o  kernel/sched_task.o  kernel/util.o kernel/module_app.o
 	
-OBJ_MEM= mm/memory.o mm/jslab.o mm/mmap.o mm/pagecache.o mm/vm.o
+OBJ_MEM= mm/memory.o mm/jslab.o mm/pagecache.o mm/vm.o
 OBJ_FS=	fs/binfmt_elf.o fs/pipe.o fs/file.o fs/fs_api.o fs/socket.o fs/vfs.o fs/proc_fs.o
 OBJ_SMP = arch/$(ARCH_DIR)/smp/smp-imps.o  arch/$(ARCH_DIR)/smp/apic.o arch/$(ARCH_DIR)/smp/mptables.o
 
@@ -92,7 +91,7 @@ else
 endif
 endif
 #	make SOURCE_ROOT=$$PWD -C modules/udp_stack
-	make SOURCE_ROOT=$$PWD -C drivers/hostshm
+#	make SOURCE_ROOT=$$PWD -C drivers/hostshm
 	make SOURCE_ROOT=$$PWD -C drivers/virtio
 	make SOURCE_ROOT=$$PWD -C drivers/virtio/9p
 	make SOURCE_ROOT=$$PWD -C drivers/virtio/net

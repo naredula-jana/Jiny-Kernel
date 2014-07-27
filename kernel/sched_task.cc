@@ -11,6 +11,8 @@
 //#define DEBUG_ENABLE 1
 #if 1
 #include "arch.hh"
+#include "file.hh"
+#include "ipc.hh"
 extern "C" {
 #include "common.h"
 #include "descriptor_tables.h"
@@ -26,7 +28,7 @@ unsigned long g_jiffie_tick = 0;
 static int curr_cpu_assigned = 0;
 //static struct fs_struct *fs_kernel;
 static unsigned long free_pid_no = 1; // TODO need to make unique when  wrap around
-static wait_queue_t timer_queue;
+static wait_queue *timer_queue;
 static int g_conf_cpu_stats = 1;
 static int g_conf_dynamic_assign_cpu = 0; /* minimizes the IPI interrupt by reassigning the the task to running cpu */
 static int stat_dynamic_assign_errors = 1;
@@ -136,7 +138,7 @@ int sc_sleep(long ticks) /* each tick is 100HZ or 10ms */
 /* TODO : return number ticks elapsed  instead of 1*/
 /* TODO : when multiple user level thread sleep it is not returning in correct time , it may be because the idle thread halting*/
 {
-	return ipc_waiton_waitqueue(&timer_queue, ticks);
+	return timer_queue->wait(ticks);
 }
 static backtrace_t temp_bt;
 
@@ -366,8 +368,9 @@ static int release_resources(struct task_struct *child_task, int attach_to_paren
 	}
 	last:
 	spin_unlock_irqrestore(&g_global_lock, flags);
-	if (parent != 0)
+	if (parent != 0){
 		ipc_del_from_waitqueues(parent);
+	}
 	DEBUG("dead child attached to parent\n");
 	return 1;
 }
@@ -438,7 +441,7 @@ int init_tasking(unsigned long unused) {
 	g_print_lock = mutexCreate((char *) "mutex_print");
 
 	INIT_LIST_HEAD(&(g_task_queue.head));
-	ipc_register_waitqueue(&timer_queue, (char *) "timer", 0);
+	timer_queue = jnew_obj(wait_queue,"timer", 0);
 
 	atomic_set(&g_kernel_mm->count, 1);
 	g_kernel_mm->mmap = 0x0;

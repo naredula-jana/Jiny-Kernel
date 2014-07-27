@@ -64,7 +64,7 @@ def start_jiny(options):
 # for netmap do insmod ./netmap_lin.ko 
 #        args += ["-netdev","netmap,id=guest0,ifname=vale0.%s" %(options.vm_instance), "-device","virtio-net-pci,mac=00:30:48:DB:5E:0%s,netdev=guest0" % (options.vm_instance)]
         args += ["-netdev","tap,id=guest0,vhost=on,vhostforce", "-device","virtio-net-pci,mac=00:30:48:DB:5E:0%s,netdev=guest0" % (options.vm_instance)]
-    if (options.networking_without_vhost):
+    else:
         args += ["-netdev","tap,id=guest0,vhost=off", "-device","virtio-net-pci,mac=00:30:48:DB:5E:0%s,netdev=guest0" % (options.vm_instance)]
  
     if (options.graphics):
@@ -136,7 +136,7 @@ if (__name__ == "__main__"):
     parser.add_argument("-r", "--command", action="store", default="date",
                         help="command to run: example \"ls -l \"")
     
-    parser.add_argument("-n", "--networking_without_vhost", action="store_true",default=True,
+    parser.add_argument("-n", "--networking_without_vhost", action="store_true",default=False,
                         help="need networking without vhost")
     parser.add_argument("-N", "--networking_with_vhost", action="store_true",default=False,
                         help="need networking with vhost")

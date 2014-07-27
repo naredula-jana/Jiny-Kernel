@@ -39,7 +39,7 @@ public:
 	virtual int dettach_device(jdevice *dev)=0;
 	virtual int read(unsigned char *buf, int len, int flags)=0;
 	virtual int write(unsigned char *buf, int len, int flags)=0;
-	virtual int print_stats()=0;
+	virtual void print_stats()=0;
 	virtual int ioctl(unsigned long arg1,unsigned long arg2)=0;
 };
 
@@ -50,7 +50,7 @@ public:
 	unsigned char pending_kick_onsend;
 
 	int virtio_create_queue(uint16_t index, int qType);
-	int print_stats();
+	void print_stats();
 
 	struct virtqueue *vq[5];
 	unsigned long stat_allocs,stat_frees,stat_err_nospace;
@@ -71,7 +71,7 @@ public:
 	int write(unsigned char *buf, int len, int flags);
 	int ioctl(unsigned long arg1,unsigned long arg2);
 
-	wait_queue_t send_waitq;
+	wait_queue *send_waitq;
 	unsigned char mac[7];
 	static int test_k;
 };

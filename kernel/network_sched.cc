@@ -47,7 +47,7 @@ struct device_under_poll_struct {
 
 class network_scheduler {
 	int network_enabled;
-	wait_queue_t waitq;
+	wait_queue *waitq;
 	struct device_under_poll_struct device_under_poll[MAX_POLL_DEVICES];
 	int poll_underway;
 	void *g_netBH_lock; /* All BH code will serialised by this lock */
@@ -91,9 +91,9 @@ int network_scheduler::netRx_BH(void *arg, void *arg2) {
 			if (device != 0) {
 				device->ioctl(NETDEV_IOCTL_FLUSH_SENDBUF, 0);
 			}
-			ipc_waiton_waitqueue(&waitq, 50);
+			waitq->wait(50);
 		} else {
-			ipc_waiton_waitqueue(&waitq, 10000);
+			waitq->wait(10000);
 		}
 #endif
 	}
@@ -156,7 +156,7 @@ int network_scheduler::netif_rx_enable_polling(void *private_data,
 			device_under_poll[i].private_data = private_data;
 			device_under_poll[i].poll_func = poll_func;
 			device_under_poll[i].active = 1;
-			ipc_wakeup_waitqueue(&waitq);
+			waitq->wakeup();
 			return 1;
 		}
 	}
@@ -171,7 +171,7 @@ int network_scheduler::init() {
 		device_under_poll[i].active = 0;
 	}
 
-	ipc_register_waitqueue(&waitq, "netRx_BH", WAIT_QUEUE_WAKEUP_ONE);
+	waitq = jnew_obj(wait_queue,"netRx_BH", WAIT_QUEUE_WAKEUP_ONE);
 	//ipc_register_waitqueue(&waitq, "netRx_BH",0);
 	g_netBH_lock = mutexCreate("mutex_netBH");
 	poll_underway = 0;

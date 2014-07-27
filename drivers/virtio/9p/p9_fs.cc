@@ -1,4 +1,5 @@
 //#define DEBUG_ENABLE 1
+extern "C"{
 #include "vfs.h"
 #include "mm.h"
 #include "common.h"
@@ -281,7 +282,7 @@ static uint32_t p9_readdir(uint32_t fid, unsigned char *data,
 
 	addr = p9_write_rpc(&client, "dqd", fid, 0, 28000);
 
-	ret=p9_get_dir_entries(&client,data,data_len, offset);
+	ret=p9_get_dir_entries(&client,(struct dirEntry *)data,data_len, offset);
 	return ret;
 }
 static unsigned char test1[1000];
@@ -413,7 +414,7 @@ static uint32_t p9_remove(uint32_t fid) {
 			ret = JSUCCESS;
 			for (i = 0; i < MAX_P9_FILES; i++) {
 				if (client.files[i].fid ==fid) { /* remove the fid as the file is sucessfully removed */
-					ut_memset(&client.files[i],0,sizeof(p9_file_t));
+					ut_memset((unsigned char *)&client.files[i],0,sizeof(p9_file_t));
 					break;
 				}
 			}
@@ -436,7 +437,7 @@ static uint32_t p9_close(uint32_t fid) {
 			ret = JSUCCESS;
 			for (i = 0; i < MAX_P9_FILES; i++) {
 				if (client.files[i].fid == fid) { /* remove the fid as the file is sucessfully closed */
-					ut_memset(&client.files[i],0,sizeof(p9_file_t));
+					ut_memset((unsigned char *)&client.files[i],0,sizeof(p9_file_t));
 					break;
 				}
 			}
@@ -590,7 +591,7 @@ static long p9Read(void *inodep, uint64_t offset, unsigned char *data, unsigned 
 
 static long p9ReadDir(void *inodep, struct dirEntry *dir_ptr, unsigned long dir_max, int *offset) {
 	if (p9ClientInit() == JFAIL) return JFAIL;
-    return  (long)p9Request(REQUEST_READDIR, inodep, offset, dir_ptr, dir_max, 0, 0);
+    return  (long)p9Request(REQUEST_READDIR, inodep, offset, (unsigned char *)dir_ptr, dir_max, 0, 0);
 }
 
 static int p9Remove(void *inodep) {
@@ -600,7 +601,7 @@ static int p9Remove(void *inodep) {
 
 static int p9Stat(void *inodep, struct fileStat *statp) {
 	if (p9ClientInit() == JFAIL) return JFAIL;
-    return  p9Request(REQUEST_STAT, inodep, 0, statp, 0, 0, 0);
+    return  p9Request(REQUEST_STAT, inodep, 0, (unsigned char *)statp, 0, 0, 0);
 }
 
 static int p9Close(void *inodep) {
@@ -618,7 +619,7 @@ static int p9_unmount(){
 		if (client.files[i].fid != 0) {
 			p9_close(client.files[i].fid);
 		}
-		ut_memset(&client.files[i],0,sizeof(p9_file_t));
+		ut_memset((unsigned char *)&client.files[i],0,sizeof(p9_file_t));
 	}
 	p9_close(client.root_fid);
 	client.root_fid = 0;
@@ -644,4 +645,4 @@ int p9_initFs(void *p9driver) {
 
 	return 1;
 }
-
+}

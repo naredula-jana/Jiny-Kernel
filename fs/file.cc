@@ -231,6 +231,9 @@ int fs_inode::close() {
 int fs_inode::ioctl(unsigned long arg1,unsigned long arg2) {
 	return JSUCCESS;
 }
+void fs_inode::print_stats(){
+
+}
 /***************************************************************************************/
 extern "C" {
 static void inode_sync(struct fs_inode *inode, unsigned long truncate) {
@@ -616,7 +619,7 @@ unsigned long fs_registerFileSystem(struct filesystem *fs,unsigned char *mount_p
 	return 1;
 }
 extern int init_procfs();
-int init_vfs() {
+int init_vfs(unsigned long unused_arg) {
 	int i;
 	g_slab_filep = kmem_cache_create((const unsigned char *) "file_struct",
 			sizeof(struct file), 0, 0, 0, 0);

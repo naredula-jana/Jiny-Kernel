@@ -8,6 +8,7 @@
 *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
 *
 */
+#include "file.hh"
 extern "C" {
 #include "keyboard.h"
 #include "common.h"
@@ -80,7 +81,7 @@ static struct {
 	unsigned char kb_buffer[MAX_BUF+1];
 	int current_pos;
 	int read_pos;
-	wait_queue_t kb_waitq;
+	wait_queue *kb_waitq;
 }input_devices[MAX_INPUT_DEVICES];
 
 
@@ -101,7 +102,7 @@ unsigned char dr_kbGetchar(int input_id) {
 		return -1;
 
 	while (input_devices[i].current_pos == 0) {
-		ipc_waiton_waitqueue(&input_devices[i].kb_waitq, 100);
+		input_devices[i].kb_waitq->wait(100);
 	}
 //TODO: the below code need to be protected by spin lock if multiple reader are there
 	if (input_devices[i].read_pos < input_devices[i].current_pos) {
@@ -142,7 +143,7 @@ int ar_addInputKey(int device_id, unsigned char c) {
 	}
 	if (i >= MAX_INPUT_DEVICES)
 		return -1;
-	ipc_wakeup_waitqueue(&input_devices[i].kb_waitq);
+	input_devices[i].kb_waitq->wakeup();
 
 	return 1;
 }
@@ -175,10 +176,10 @@ int init_driver_keyboard() {
 
 		if (i == 0) {
 			input_devices[i].device_id = DEVICE_SERIAL1;
-			ipc_register_waitqueue(&input_devices[i].kb_waitq, "kb-serial",0);
+			input_devices[i].kb_waitq = jnew_obj(wait_queue, "kb-serial",0);
 		} else {
 			input_devices[i].device_id = DEVICE_KEYBOARD;
-			ipc_register_waitqueue(&input_devices[i].kb_waitq, "kb-key",0);
+			input_devices[i].kb_waitq = jnew_obj(wait_queue, "kb-key",0);
 		}
 	}
 
@@ -194,7 +195,7 @@ public:
 	int dettach_device(jdevice *dev);
 	int read(unsigned char *buf, int len, int flags);
 	int write(unsigned char *buf, int len, int flags);
-	int print_stats();
+	void print_stats();
 	int ioctl(unsigned long arg1,unsigned long arg2);
 };
 static keyboard_jdriver *keyboard_driver;
@@ -247,9 +248,9 @@ int keyboard_jdriver::write(unsigned char *buff, int len, int wr_flags){
 	stat_sends = stat_sends+ret;
 	return ret;
 }
-int keyboard_jdriver::print_stats(){
+void keyboard_jdriver::print_stats(){
 	ut_printf(" sends:%d recvs: %d",stat_sends,stat_recvs);
-	return JSUCCESS;
+	//return JSUCCESS;
 }
 int keyboard_jdriver::ioctl(unsigned long arg1,unsigned long arg2 ){
 	if (arg1 ==0){

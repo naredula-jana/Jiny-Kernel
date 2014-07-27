@@ -13,6 +13,7 @@
 */
 #ifndef _JINYKERNEL_FILE_HH
 #define _JINYKERNEL_FILE_HH
+
 extern "C" {
 #include "common.h"
 #include "mm.h"
@@ -32,7 +33,21 @@ extern void ut_putchar_vga(unsigned char c, int device);
 }
 
 #define PIPE_IMPL 1
-class vinode {
+
+void *operator new(int sz,const char *name);
+void jfree_obj(unsigned long addr);
+#define STRLEN(s) (sizeof(s)/sizeof(s[0]))
+#define jnew_obj(x,y...) new (#x) x(y);
+
+class jobject { /* All objects will be inherited from here */
+public:
+	int jobject_id; /* currently used only for debugging purpose */
+	virtual void print_stats()=0;
+};
+
+#include "ipc.hh"
+
+class vinode: public jobject {
 public:
 	atomic_t count; /* usage count */
 	unsigned char filename[MAX_FILENAME];
@@ -49,10 +64,11 @@ public:
 	virtual int write(unsigned long offset, unsigned char *data, int len, int flags)=0;
 	virtual int close()=0;
 	virtual int ioctl(unsigned long arg1,unsigned long arg2)=0;
+	virtual void print_stats()=0;
 };
 #define MAX_SOCKET_QUEUE_LENGTH 1500
 struct sock_queue_struct {
-	wait_queue_t waitq;
+	wait_queue *waitq;
 	int producer, consumer;
 	struct {
 		unsigned char *buf;
@@ -143,12 +159,13 @@ public:
 	char fileStat_insync;
 	hard_link_t *hard_links;
 
-	int init(uint8_t *filename, unsigned long mode, struct filesystem *vfs);
+	fs_inode(uint8_t *filename, unsigned long mode, struct filesystem *vfs);
 
 	int read(unsigned long offset, unsigned char *data, int len, int flags);
 	int write(unsigned long offset, unsigned char *data, int len, int flags);
 	int close();
 	int ioctl(unsigned long arg1,unsigned long arg2);
+	void print_stats();
 	static kmem_cache_t *slab_objects;
 };
 
@@ -161,6 +178,7 @@ public:
 	int write(unsigned long unused, unsigned char *data, int len, int flags);
 	int close();
 	int ioctl(unsigned long arg1,unsigned long arg2);
+	void print_stats();
 };
 
 /*******************************************************************************/

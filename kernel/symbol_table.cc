@@ -13,6 +13,7 @@
  *    Jcmd_xxx   - commands in the format cmd arg1 arg2
  *    Jcmd_xxx_stat  - display stats
  */
+extern "C" {
 #include "common.h"
 
 
@@ -154,7 +155,7 @@ unsigned long  init_symbol_table(unsigned long bss_start,unsigned long bss_end) 
 	sym_table++;
 	g_total_symbols=i+1;
 
-	p=sym_table;
+	p=(unsigned char *)sym_table;
 	for (i=0; i<g_total_symbols-1; i++){
 		ut_strcpy(p,g_symbol_table[i].name);
 		g_symbol_table[i].name = p;
@@ -325,7 +326,7 @@ int ut_symbol_execute(int type, char *name, uint8_t *argv1,uint8_t *argv2){
 				*confint=(int)ut_atoi((unsigned char *)argv1, FORMAT_DECIMAL);
 				ut_log(" Setting conf variable %s->:%d: (%s)  \n",g_symbol_table[i].name,*confint,argv1,g_symbol_table[i].address);
 			}else if (g_symbol_table[i].len == 8){
-				conflong=(int *)g_symbol_table[i].address;
+				conflong=(unsigned long *)g_symbol_table[i].address;
 			    *conflong=(int)ut_atol((unsigned char *)argv1, FORMAT_DECIMAL);
 			    ut_log(" Setting conf variable %s->:%d: (%s)  \n",g_symbol_table[i].name,*conflong,argv1,g_symbol_table[i].address);
 			}else if (g_symbol_table[i].len > 8){
@@ -454,7 +455,7 @@ static void init_dwarf() {
 	if (file == 0) {
 		ut_log(" init_dwarf: ERROR : fail to open the file \n");
 	}
-	p=dwarf_table;
+	p=(unsigned char *)dwarf_table;
 	ret=0;
 	do {
 		tret = fs_read(file, p, 0x200000-ret);
@@ -530,7 +531,7 @@ static void print_data_structures(int i,unsigned long addr) {
 				if (size==1){
 					ut_printf(" %s->%s(%x) size:%d(%s) \n",dwarf_table[j].name,p,p,size,dwarf_table[member].name);
 				}else if (size==8){
-					unsigned long *data=p;
+					unsigned long *data=(unsigned long *)p;
 					ut_printf(" %s->%x(%x) size:%d(%s) \n",dwarf_table[j].name,*data,data,size,dwarf_table[member].name);
 				}else {
 					ut_printf(" %s->STRUCT size:%d(%s) \n",dwarf_table[j].name,size,dwarf_table[member].name);
@@ -567,4 +568,5 @@ void Jcmd_dwarf(unsigned char *arg1, unsigned char *arg2) {
 		}
 	}
 	ut_printf(" Error: cannot find the dwarf info\n");
+}
 }
