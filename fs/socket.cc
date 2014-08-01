@@ -93,10 +93,7 @@ int socket::add_to_queue(unsigned char *buf, int len) {
 			queue.producer = 0;
 		}
 		ret = JSUCCESS;
-#if 0
-		mm_check_debug_data(buf,0x0);
-		mm_set_debug_data(buf,0x123456);
-#endif
+
 		queue.waitq->wakeup();
 		goto last;
 	}
@@ -128,14 +125,11 @@ int socket::remove_from_queue(unsigned char **buf, int *len) {
 		}
 		spin_unlock_irqrestore(&(queue.spin_lock), flags);
 		if (ret == JFAIL)
-			queue.waitq->wait(10);
+			queue.waitq->wait(1000);
 	}
 	return ret;
 }
-#if 0
-static void *vptr_socket[7] = { (void *) &socket::read, (void *)&socket::write, (void *)&socket::close, (void *) &socket::ioctl,
-		0 };
-#endif
+
 int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int read_flags) {
 	int ret = 0;
 	unsigned char *buf = 0;
@@ -286,7 +280,6 @@ int socket::delete_sock(socket *sock) {
 }
 void socket::init_socket(int type){
 	queue.spin_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"socketnetq_lock");
-	//ipc_register_waitqueue(&sock->queue.waitq, "socket_waitq", WAIT_QUEUE_WAKEUP_ONE);
 	queue.waitq = jnew_obj(wait_queue, "socket_waitq", 0);
 	net_stack = net_stack_list[0];
 	network_conn.family = AF_INET;
@@ -305,13 +298,11 @@ void socket::init_socket(int type){
 	stat_in_bytes =0;
 	stat_out =0;
 	stat_out_bytes =0;
-
 }
 
 extern "C"{
 #undef memset
-void memset(uint8_t *dest, uint8_t val, long len) /* user by new by the compiler*/
-{
+void memset(uint8_t *dest, uint8_t val, long len){ /* user by new by the compiler*/
 	uint8_t *temp = (uint8_t *)dest;
 	long i;
 	DEBUG("memset NEW dest :%x val :%x LEN addr:%x len:%x temp:%x \n",dest,val,&len,len,&temp);/* TODO */
@@ -327,15 +318,7 @@ vinode* socket::create_new(int arg_type) {
 	if (net_stack_list[0] == 0)
 		return 0;
 
-#if 0
-	socket *sock = (socket *)ut_calloc(sizeof(socket));
-	if (sock == 0)
-		return 0;
-	void **p = (void **) sock;
-	*p = &vptr_socket[0];
-#endif
 	socket *sock = jnew_obj(socket);
-	//socket *sock = 0;
 
 	for (i = 0; i < list_size && found == 0; i++) {
 		if (list[i] == 0) {
@@ -356,7 +339,6 @@ vinode* socket::create_new(int arg_type) {
 		ut_free(sock);
 		return 0;
 	}
-
 	sock->init_socket(arg_type);
 
 	return (vinode *) sock;
@@ -369,13 +351,8 @@ void socket::default_pkt_thread(void *arg1, void *arg2){
 }
 void socket::init_socket_layer(){
 	int pid;
-#if 0
-	default_socket = (socket *)ut_calloc(sizeof(socket));
-	void **p = (void **) default_socket;
-	*p = &vptr_socket[0];
-#endif
+
 	default_socket = jnew_obj(socket);
-	//default_socket = 0;
 	default_socket->init_socket(0);
 	pid = sc_createKernelThread(socket::default_pkt_thread, 0, (unsigned char *) "socket_default",0);
 }

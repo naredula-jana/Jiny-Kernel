@@ -4,7 +4,6 @@
 #include "mm.h"
 #include "vfs.h"
 #include "task.h"
-#include "ipc.h"
 
 #include "jiny_api.h"
 #define MAX_AUX_VEC_ENTRIES 25 
@@ -19,12 +18,6 @@ struct iovec {                    /* Scatter/gather array items */
 /* scheduling */
 extern task_queue_t g_task_queue;
 
-#if 0
-extern int ipc_register_waitqueue(wait_queue_t *waitqueue, char *name, unsigned long flags);
-extern int ipc_unregister_waitqueue(wait_queue_t *waitqueue);
-int ipc_wakeup_waitqueue(wait_queue_t *waitqueue);
-int ipc_waiton_waitqueue(wait_queue_t *waitqueue, unsigned long ticks);
-#endif
 
 int sc_sleep( long ticks); /* each tick is 100HZ or 10ms */
 unsigned long SYS_sc_fork();
@@ -87,7 +80,6 @@ unsigned long vm_dup_vmaps(struct mm_struct *src_mm,struct mm_struct *dest_mm);
 unsigned long vm_create_kmap(unsigned char *name, unsigned long map_size, unsigned long prot, unsigned long flags, unsigned long pgoff);
 void vm_vma_stat(struct vm_area_struct *vma, unsigned long vaddr,unsigned long faulting_ip, int write_fault,unsigned long optional);
 
-
 /* page cache */
 int pc_init(uint8_t *start_addr,unsigned long len);
 int Jcmd_pagecache_stat(char *arg1,char *arg2);
@@ -95,9 +87,7 @@ int pc_pageDirted(struct page *p);
 int pc_pagecleaned(struct page *page);
 int pc_check_valid_addr(uint8_t *addr, int len);
 
-
 unsigned long fs_getVmaPage(struct vm_area_struct *vma,unsigned long offset);
-
 int pc_deletePage(struct page *page);
 int pc_putFreePage(struct page *page);
 page_struct_t *pc_get_dirty_page();
@@ -109,7 +99,6 @@ int pc_housekeep(void);
 
 /*vfs */
 unsigned long fs_registerFileSystem(struct filesystem *fs, unsigned char *mnt_pnt);
-
 unsigned long fs_putInode(void *fs_inode);
 int Jcmd_ls(uint8_t *arg1,uint8_t *arg2);
 struct file *fs_open(uint8_t *filename,int mode,int flags);
@@ -151,7 +140,6 @@ unsigned long SYS_fs_fdatasync(unsigned long fd );
 unsigned long SYS_fs_fadvise(unsigned long fd,unsigned long offset, unsigned long len,int advise);
 
 /* Utilities */
-
 void ut_getBackTrace(unsigned long *rbp, unsigned long task_addr, backtrace_t *bt);
 int perf_stat_rip_hit(unsigned long rip);
 unsigned long get_kvm_time_fromboot();
@@ -180,7 +168,6 @@ int getmaxcpus();
 int apic_send_ipi_vector(int cpu, uint8_t vector);
 void apic_disable_partially();
 
-
 int read_apic_isr(int isr);
 void local_apic_send_eoi(void);
 
@@ -189,7 +176,6 @@ int init_kernel();
 int init_memory(unsigned long unused);
 int init_descriptor_tables();
 int init_driver_keyboard();
-
 
 /**************************  Networking ***/
 #define NETWORK_PROTOCOLSTACK 1
@@ -229,7 +215,6 @@ struct Socket_API{
 	int (*close)(void *conn,int sock_type);
 	int (*network_status)(void *arg1,void *arg2);
 };
-
 
 int register_to_socketLayer(struct Socket_API *api);
 int socket_close(struct file *file);
@@ -285,9 +270,17 @@ void SYS_sc_execve(uint8_t *file,uint8_t **argv,uint8_t **env);
 void **sc_get_thread_argv();
 void sc_set_fsdevice(unsigned int in, unsigned int out);
 
-
 uint8_t dr_kbGetchar(int device_id);
-
 int pagetable_walk(int level,unsigned long ptable_addr, int print);
+
+void *ipc_mutex_create(char *name);
+int ipc_mutex_lock(void *p, int line);
+int ipc_mutex_unlock(void *p, int line);
+int ipc_mutex_destroy(void *p);
+#define mutexCreate ipc_mutex_create
+#define mutexLock(p)      do { ipc_mutex_lock((void *)p,__LINE__); } while (0)
+#define mutexUnLock(p)      do { ipc_mutex_unlock((void *)p,__LINE__); } while (0)
+#define mutexDestroy ipc_mutex_destroy
+
 #endif
 

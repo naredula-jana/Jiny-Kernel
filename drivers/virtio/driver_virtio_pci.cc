@@ -10,6 +10,7 @@
 *
 */
 #include "file.hh"
+#include "network.hh"
 extern "C" {
 #include "common.h"
 #include "pci.h"
@@ -166,7 +167,8 @@ static int virtio_net_poll_device(void *private_data, int enable_interrupt, int 
 		if (addr != 0) {
 			driver->stat_recvs++;
 			replace_buf = 0;
-			netif_rx(addr, len);
+			//netif_rx(addr, len);
+			net_sched.netif_rx(addr, len);
 
 			addBufToQueue(driver->vq[0], replace_buf, 4096);
 			ret = ret + 1;
@@ -202,7 +204,12 @@ static int virtio_net_recv_interrupt(void *private_data) {
 	driver->stat_recv_interrupts++;
 	//virtio_disable_cb(driver->vq[0]); /* disabling interrupts have Big negative impact on packet recived when smp enabled */
 
-	netif_rx_enable_polling(private_data, virtio_net_poll_device);
+#if 1  /* handing over the packets to net bx thread  */
+	net_sched.netif_rx_enable_polling(private_data, virtio_net_poll_device);
+#else /* without net bx  */
+	virtio_net_poll_device(private_data,1,1000);
+ #endif
+
 
 	return 0;
 

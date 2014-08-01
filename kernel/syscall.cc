@@ -8,6 +8,7 @@
  *   Author: Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
  *
  */
+extern "C"{
 #include "common.h"
 #include "isr.h"
 
@@ -63,7 +64,7 @@ unsigned long SYS_setpgid(unsigned long pid, unsigned long gid);
 unsigned long SYS_geteuid() ;
 unsigned long SYS_sigaction();
 unsigned long SYS_rt_sigprocmask();
-unsigned long SYS_ioctl();
+unsigned long SYS_ioctl(int d, int request, unsigned long *addr);
 unsigned long SYS_getpid();
 unsigned long SYS_getppid();
 unsigned long SYS_getpgrp();
@@ -388,7 +389,7 @@ unsigned long SYS_wait4(int pid, void *status, unsigned long option,
 
 	struct list_head *node;
 	node = g_current_task->dead_tasks.head.next;
-	if (list_empty(&(g_current_task->dead_tasks.head.next))) {
+	if (list_empty((g_current_task->dead_tasks.head.next))) {
 		if (!(option & WNOHANG)){
 			g_current_task->wait_for_child_exit = 1;
 			sc_sleep(10);
@@ -455,6 +456,7 @@ unsigned long SYS_getcwd(uint8_t *buf, int len) {
 /*************************************
  * TODO : partially implemented calls
  * **********************************/
+extern int wait_for_sock_data(void *inode, int timeout);
 int SYS_select(int nfds, int *readfds, int *writefds, int *exceptfds, struct timeval *timeout){
 	int *p;
 	int i;
@@ -688,4 +690,5 @@ void Jcmd_strace(uint8_t *arg1,uint8_t *arg2){
 	ut_strcpy(strace_thread_name,arg1);
 	strace_syscall_id = sid;
 	return;
+}
 }

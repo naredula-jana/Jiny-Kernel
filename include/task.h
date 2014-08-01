@@ -12,7 +12,37 @@
 #define TASK_H
 
 #include "mm.h"
-#include "ipc.h"
+
+
+#define SPINLOCK_DEBUG 1
+#define RECURSIVE_SPINLOCK 1
+typedef struct {  /* Do not change the order , initilization will break */
+        volatile unsigned int lock;
+        unsigned long stat_count;
+#ifdef SPINLOCK_DEBUG
+#define MAX_SPIN_LOG 100
+        unsigned char *name;
+        unsigned long stat_locks;
+        unsigned long stat_unlocks;
+        unsigned long stat_recursive_locks;
+        unsigned long recursive_count;
+        int linked; /* linked this structure to stats */
+        int recursion_allowed;
+        unsigned long pid;
+        unsigned long contention;
+        unsigned int log_length;
+        struct {
+            int line;
+            unsigned int pid;
+            unsigned int cpuid;
+            unsigned long spins;
+            unsigned char *name;
+        }log[MAX_SPIN_LOG];
+#endif
+} spinlock_t;
+
+
+
 #include "descriptor_tables.h"
 
 #define TASK_SIZE 4*(PAGE_SIZE)  /* TODO : it is redefined in multiboot.h  also */

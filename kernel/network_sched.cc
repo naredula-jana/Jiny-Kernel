@@ -14,8 +14,8 @@
  *   sendpath from app :   app-> send -> socket -> tcpip_stack(send) -> jdevice -> jdriver
  *   recvpath from app :   app-> recv -> socket(blocking)
  *                     :   app-> recv -> socket -> tcpip_stack(recv)
- *   recvpath from dev (interrupt) :   jdriver -> netif_rx (to queue)
- *                   (polling)  : thread-> (from queue) netif_BH -> socket (attach_raw : unblocking + buffering)
+ *   recvpath from dev (interrupt) :   jdriver -> netif_rx_enable_polling(enable polling)
+ *                   (polling)  : thread-> (from device queue) netif_BH -> socket (attach_raw : unblocking + buffering)
  *      netif_BH and interrupt on the same cpu to minimize the lock.
  *
  * Network:speeding the network using the Vanjacbson paper
@@ -38,44 +38,9 @@ unsigned char g_mac[7];
 #include "file.hh"
 #include "network.hh"
 
-#define MAX_POLL_DEVICES 5
-struct device_under_poll_struct {
-	void *private_data;
-	int (*poll_func)(void *private_data, int enable_interrupt, int total_pkts);
-	int active;
-};
-
-class network_scheduler {
-	int network_enabled;
-	wait_queue *waitq;
-	struct device_under_poll_struct device_under_poll[MAX_POLL_DEVICES];
-	int poll_underway;
-	void *g_netBH_lock; /* All BH code will serialised by this lock */
-	int stat_netrx_bh_recvs;
-	int poll_devices();
-
-public:
-	jdevice *device;
-	int init();
-	int netRx_BH(void *arg, void *arg2);
-	int netif_rx(unsigned char *data, unsigned int len);
-	int netif_rx_enable_polling(void *private_data, int (*poll_func)(void *private_data, int enable_interrupt, int total_pkts));
-};
-
-static network_scheduler net_sched;
+network_scheduler net_sched;
 static int stat_from_driver = 0;
 static int stat_to_driver = 0;
-/***********************************************************************
- *  1) for every buf is added will get back a replace buf
- *  2) for every buf removed will given back the replace buf.
- *  Using 1) and 2) techniques allocation and free  is completely avoided from driver to queue and vice versa.
- *  the Cost is the queue should be prefilled with some buffers.
- *
- *    path: netif_rx -> add_to_queue -> netRx_BH
- *
- *
- */
-
 
 extern int g_conf_net_sendbuf_delay;
 /*   Release the buffer after calling the callback */
@@ -103,17 +68,6 @@ int network_scheduler::poll_devices() {
 	int i, j;
 	int ret = 0;
 	int pending_devices = 0;
-
-#if 0
-	mutexLock(g_netBH_lock);
-	if (poll_underway == 0) {
-		poll_underway = 1;
-		ret = 1;
-	}
-	mutexUnLock(g_netBH_lock);
-	if (ret == 0)
-		return ret;
-#endif
 
 	for (i = 0; i < MAX_POLL_DEVICES; i++) {
 		if (device_under_poll[i].private_data != 0 && device_under_poll[i].active == 1) {
@@ -172,7 +126,6 @@ int network_scheduler::init() {
 	}
 
 	waitq = jnew_obj(wait_queue,"netRx_BH", WAIT_QUEUE_WAKEUP_ONE);
-	//ipc_register_waitqueue(&waitq, "netRx_BH",0);
 	g_netBH_lock = mutexCreate("mutex_netBH");
 	poll_underway = 0;
 	network_enabled = 1;
@@ -211,12 +164,6 @@ int init_network_stack() { /* this should be initilised once the devices are up 
 	return JSUCCESS;
 }
 
-int netif_rx(unsigned char *data, unsigned int len) {
-	return net_sched.netif_rx(data, len);
-}
-int netif_rx_enable_polling(void *private_data, int (*poll_func)(void *private_data, int enable_interrupt, int total_pkts)) {
-	return net_sched.netif_rx_enable_polling(private_data, poll_func);
-}
 int net_send_eth_frame(unsigned char *buf, int len, int write_flags) {
 	if (socket::net_dev != 0) {
 		return socket::net_dev->write(0, buf, len, write_flags);

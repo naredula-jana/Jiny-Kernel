@@ -74,12 +74,37 @@ void ut_memcpy(uint8_t *dest, uint8_t *src, long len)
 		BUG();
 	}
 	DEBUG(" src:%x dest:%x len:%x \n",src,dest,len);
+#if 0
 	for(i=len; i>0; i--) 
 	{
 		*dp = *sp;
 		dp++;
 		sp++;
 	}
+#else
+//	if ((((unsigned long)dp & 0x7) == 0) && (((unsigned long)sp & 0x7)==0)) {
+	if (1){
+		unsigned long *dst_p = dp;
+		unsigned long *src_p = sp;
+		while (len > 8) {
+			*dst_p = *src_p;
+			dst_p++;
+			src_p++;
+			len = len - 8;
+		}
+		dp = dst_p;
+		sp = src_p;
+	}
+	while (len > 0) {
+		*dp = *sp;
+		dp++;
+		sp++;
+		len--;
+	}
+
+#endif
+
+	return;
 }
 // Write len copies of val into dest.
 void ut_memset(uint8_t *dest, uint8_t val, long len)

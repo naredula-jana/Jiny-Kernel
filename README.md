@@ -9,27 +9,28 @@
      - **Normal priority app**: can run large in number like any traditional unix system in ring-3 with performance less when compare to high priority app.  
 
 2. **How different is Jiny from OS like Linux?**
- - Thin kernel : Jiny is thin kernel, it is having very small set of drivers based on virtio, since it runs on hypervisor. Currently it supports only on x86_64 architecture. this makes the size of code small when compare to linux.
- - OS for Cloud: designed from groundup  to run on hypervisor, So it runs faster when compare to linux.
- - Object oriented: Most of subsystems will be in object oriented language like c++11.
- - Single app inside the vm: Designed to run single application efficiently when compare to traditional os.
- - Network packet processing: Most of cycles in packet processing is spent in the app context(i.e at the edge) as against in the bottom half in linux, this will minimizing the locks in the SMP. Detailed description is present in the [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf)
+ - **Thin kernel** : Jiny is thin kernel, it is having very small set of drivers based on virtio, since it runs on hypervisor. Currently it supports only on x86_64 architecture. this makes the size of code small when compare to linux.
+ - **OS for Cloud**: designed from groundup  to run on hypervisor, So it runs faster when compare to linux.
+ - **Object oriented**: Most of subsystems will be in object oriented language like c++11.
+ - **Single app inside the vm**: Designed to run single application efficiently when compare to traditional os.
+ - **Network packet processing**: Most of cycles in packet processing is spent in the app context(i.e at the edge) as against in the bottom half in linux, this will minimizing the locks in the SMP. Detailed description is present in the [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf)
    
 3. **For What purpose Jiny can be used?**
  - Running single apps like  JVM( tomcat or any java server), memcached  etc inside the Jiny vm as high priority app. Single app can be wrapped by a thin os like Jiny to enhance the performance.  Here the app will run much faster when compare to the same app in other vm's like freebsd or linux. Thin OS like JIny along with virtulization hardware can act like a performance enhancer for the apps on the metal.
  - Running multiple normal priority application like any traditional unix like systems with optimizations for vm. 
 
 4. **What is the development plan and current status?**.
+
   **Completed**: Developing traditional unix like kernel with small foot print(Completed)
  - bringing kernel up on x86_64 without any user level app, cli using kernel shell.
- - Implementing most of the linux system calls, so that statically compiled app's on linux can run as it is. Currently app's like busybox can run as it is.
+ - Implementing most of the linux system calls, so that  app's on linux can run as it is. Currently app's like busybox can run as it is.
  - Running high priority app as kernel module.
     
   **In progress:** 
   - Traditional OS changes:  
      - Converting most of subsystems from c to c++11.
      - Running jvm's like jamvm,openjdk: this need to implement some missing system call like futext etc.
-   -  HIgh priority app related changes:
+   -  High priority app related changes:
      - Modifying the  virtual memory layer to make high priority app run in the same space as that of the kernel.
      - Providing additional API's to app's like JVM for improving the Garbage collection.
       - Scheduler changes: To disable/minimize the interrupts on the cpu that is loaded with high priority app. This is to reduce the cpu overhead and locks.
@@ -37,7 +38,7 @@
       - changes to libc: This will make high prority app run as app instead of loading as a kernel module.
 
  
-##Benchmark:
+###Benchmark-1(CPU centric):
 **Overview:** An application execution time on the metal is compared with the same app wrapped using thin OS like Jiny and launched as vm. The single app running in Jiny vm outperforms by completing in 6 seconds when compare to the same running on the metal that took 44sec. The key reason for superior performance in Jiny os is, it accelerates the app by allowing  it to run in ring-0 so that the overhead of system calls and context switches are minimized. The protection of system from app malfunctioning is left to virtulization hardware. To run in Jiny vm, the app need to recompile without any changes using the modified c library.
 
 **Application(app) used for testing:** A simple C application that read and writes in to a /dev/null file repeatedly in a tight loop is used, this is a system call intensive application. [The app](../master/modules/test_file/test_file.c) is executed in four environments on the metal, inside the Jiny as High priority, as normal priority inside Jiny  and inside the linux vm.   
@@ -58,13 +59,23 @@
         
 - **From end user point of view**: To run the app inside the Jiny vm as high priority app, it need to recompile so the syscall located in libc will replaced with corresponding function calls. app is not required any change , only libc will be modified. start time in the first case will be slightly slower since vm need to be started before the app. so long running applications like servers will be suitable for high priority app.
 
-**What type of apps are suitable?.**
- App that has given improvement if they are ported to kernel module are well suited to run as high priority app in Jiny.
-
-####Conclusion
+####Benchmark-1 summary
  1. Virtulization hardware along with thin OS like Jiny can function as hardware assit  layer to speedup the app on metal. Launching single app using Jiny Vm will be useful not only from virtulization point of view but also to increase the speed.
  2. In the test,I have used syscall intensive app that as shown huge improvement when compare to app on metal, but other workload like io intensive may not give that large improvement.  Speeds of virtulization io path are improving continuously both in software or hardware,  so  io intensive  apps also will become better in the future.
  3. Most of apps as  high priority app in Jiny will  show big performance improvement when compare the same app in linux or freebsd vm's. 
+
+###Benchmark-2(Network centric):
+Network relaed app comparisons with other OS like linux. Networking in jiny is based on the  [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). Udp client and server is used to test the maxumum throughput of udp servers on the vm. udp client on the host sends the packet to the udp server inside the vm, udp server responds back the packet. The below shows the maximum throughput:
+
+1. ubuntu 14(linux vm) :  94M
+2. Jiny  : 155M
+3. Jiny with delay in send door bell : 170M
+
+Packet size used by udp client: 200 bytes. 
+Number of cores in the linux/Jiny Vm are 2. 
+
+####Benchmark-1 summary
+ 1. Between  test-2(155M) and test-3(170M):  For every packete send on the NIC, issuing the door bell cost MMIO opearation, that is causing the vm exit. postponing doorbell for few packets as improved the throughput, but this is not practical as it cause extra delay in holding the send packet. 
 
 ## Features currently Available:
 
@@ -84,15 +95,18 @@
     - KVM : virtio + memory ballooning
     - KVM : clock
 - SMP: APIC,MSIX
-- Networking:  LWIP4.0 as a kernel module
+- Networking:  Used third party tcp/ip stacks.
+     - TCP/ip stack from uip ( from [AdamDunkels](https://github.com/adamdunkels/uip)  as kernel module. The above Benchamark-2 is with uip : currently only udp is supported, need to add tcp.
+     - LWIP4.0 as a kernel module: 
 - Debugging features:
    - memoryleak detection.
    - function tracing or call graph.
    - syscall debugging.
    - stack capture at any point. 
+   - code profiling. 
 - Loadable Modules:  Supports loadable kernel module. Lwip tcp/ip stack compiled as kernel module.
 - User level:
-   - Statically compiled user app can be launched from kernel shell or busy box.
+   - Statically and dynamically compiled user app can be launched from kernel shell or busy box.
    - busybox shell can successfully run on top of Jiny kernel, network apps can able to use socket layer.
 - Hardware: It was fully tested for x86/64. partially done for x86_32.
 

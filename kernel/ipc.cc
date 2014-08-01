@@ -32,53 +32,10 @@ int ipc_mutex_lock(void *p, int line) {
 	int ret;
 
 	return sem->lock(line);
-#if 0
-	if (p == 0)
-		return 0;
-	if ((sem->owner_pid == g_current_task->pid) && sem->recursive_count != 0){
-		//ut_log("mutex_lock Recursive mutex: thread:%s  count:%d line:%d \n",g_current_task->name,sem->recursive_count,line);
-		sem->recursive_count++;
-		sem->stat_recursive_count++;
-		return 1;
-	}
-	assert (g_current_task->locks_nonsleepable == 0);
-
-	g_current_task->stats.wait_line_no = line;
-	ret = 0;
-	while (ret != 1){
-		ret = sem->wait(10000);
-	}
-	g_current_task->status_info[0] = 0;
-	sem->owner_pid = g_current_task->pid;
-	sem->recursive_count =1;
-	g_current_task->locks_sleepable++;
-	assert (g_current_task->locks_nonsleepable == 0);
-
-	sem->stat_line = line;
-	sem->stat_acquired_start_time = g_jiffies;
-	return 1;
-#endif
 }
 int ipc_mutex_unlock(void *p, int line) {
 	semaphore *sem = p;
 	sem->unlock(line);
-#if 0
-	if (p == 0)
-		return 0;
-	if ((sem->owner_pid == g_current_task->pid) && sem->recursive_count > 1){
-		//ut_log("mutex_unlock Recursive mutex: thread:%s  recursive count:%d line:%d \n",g_current_task->name,sem->recursive_count,line);
-		sem->recursive_count--;
-		return 1;
-	}
-	sem->owner_pid = 0;
-	sem->recursive_count =0;
-	g_current_task->locks_sleepable--;
-	sem->stat_line = -line;
-	sem->stat_total_acquired_time += (g_jiffies-sem->stat_acquired_start_time);
-	sem->signal();
-
-	return 1;
-#endif
 }
 
 int ipc_mutex_destroy(void *p) {
@@ -88,19 +45,6 @@ int ipc_mutex_destroy(void *p) {
 	sem->free();
 	return 1;
 }
-
-
-#if 0
-int sys_sem_valid(sys_sem_t *sem) {
-	return sem->valid_entry;
-}
-
-void sys_sem_set_invalid(sys_sem_t *sem) {
-
-	sem->valid_entry = 0;
-}
-#endif
-
 
 
 int init_ipc(){

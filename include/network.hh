@@ -1,5 +1,6 @@
 #ifndef _JINYKERNEL_NETWORK_HH
 #define _JINYKERNEL_NETWORK_HH
+
 extern "C" {
 #include "common.h"
 #include "mm.h"
@@ -9,7 +10,7 @@ extern unsigned char g_mac[];
 #include "file.hh"
 #include "jdevice.h"
 
-
+#if 1
 struct machdr{
 	uint8_t dest[6];
 	uint8_t src[6];
@@ -42,6 +43,7 @@ struct ether_pkt{
 	struct udphdr udphdr;
 	unsigned char data;
 } __attribute__((packed));
+#endif
 
 #define htons(A) ((((uint16_t)(A) & 0xff00) >> 8) | \
 (((uint16_t)(A) & 0x00ff) << 8))
@@ -56,4 +58,29 @@ struct ether_pkt{
 
 #include "network_stack.hh"
 
+#define MAX_POLL_DEVICES 5
+struct device_under_poll_struct {
+	void *private_data;
+	int (*poll_func)(void *private_data, int enable_interrupt, int total_pkts);
+	int active;
+};
+
+class network_scheduler {
+	int network_enabled;
+	wait_queue *waitq;
+	struct device_under_poll_struct device_under_poll[MAX_POLL_DEVICES];
+	int poll_underway;
+	void *g_netBH_lock; /* All BH code will serialised by this lock */
+	int stat_netrx_bh_recvs;
+	int poll_devices();
+
+public:
+	jdevice *device;
+	int init();
+	int netRx_BH(void *arg, void *arg2);
+	int netif_rx(unsigned char *data, unsigned int len);
+	int netif_rx_enable_polling(void *private_data, int (*poll_func)(void *private_data, int enable_interrupt, int total_pkts));
+};
+
+extern class network_scheduler net_sched;
 #endif

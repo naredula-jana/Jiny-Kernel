@@ -25,6 +25,8 @@
 #define __SPINLOCK_LOCKED   1
 #define __SPINLOCK_UNLOCKED 0
 
+//#define SPINLOCK_DEBUG_LOG 1
+
 #ifdef SPINLOCK_DEBUG
 #define SPIN_LOCK_UNLOCKED(x) (spinlock_t) { __SPINLOCK_UNLOCKED,0,x,0,0,0,0,-1,1,0,0,0}
 #define MAX_SPINLOCKS 100
@@ -87,7 +89,7 @@ static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 		g_spinlock_count++;
 	}
 
-#if 1
+#ifdef SPINLOCK_DEBUG_LOG
 	if (lock->log_length >= MAX_SPIN_LOG) lock->log_length=0;
 	lock->log[lock->log_length].line = line;
 	lock->log[lock->log_length].pid = g_current_task->pid;
@@ -133,7 +135,7 @@ static inline void arch_spinlock_unlock(spinlock_t *lock, int line) {
 #endif
 	if (1){
 		lock->stat_unlocks++;
-#if 1
+#if SPINLOCK_DEBUG_LOG
 		if (lock->log_length >= MAX_SPIN_LOG) lock->log_length=0;
 		lock->log[lock->log_length].line = line;
 		lock->log[lock->log_length].pid = g_current_task->pid;

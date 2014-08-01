@@ -4,7 +4,7 @@
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  *
- *   include/libc_highpriority.h
+ *   include/libc_highpriority.h  // This is for high priority tasks
  *   Author: Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
  */
 #define socket SYS_socket

@@ -499,30 +499,50 @@ struct percpu_pagecache {
 #define MAX_STACK_SIZE 1000
 	unsigned long stack[MAX_STACK_SIZE+1];
 	int top;
+	unsigned long stat_allocs,stat_frees,stat_miss_alloc,stat_miss_free;
 };
 static struct percpu_pagecache page_cache[MAX_CPUS];
+static spinlock_t jslab_cache_lock = SPIN_LOCK_UNLOCKED("jslab_cache");
 void init_percpu_page_cache(){
 	int i;
 	ut_memset(page_cache,0,MAX_CPUS*sizeof(struct percpu_pagecache));
+
 	return;
 }
 unsigned long jalloc_page(int flags){
+#ifdef CPU_CACHE
+	int cpu=getcpuid();
+#else
+	int cpu=0;
+	unsigned long irq_flags;
+	spin_lock_irqsave(&jslab_cache_lock, irq_flags);
+#endif
+
 	stat_page_allocs++;
 	if (flags&MEM_CLEAR){
 		stat_page_alloc_zero++;
 	}else{
-		int cpu=getcpuid();
 		if (page_cache[cpu].inuse == 0){
 			page_cache[cpu].inuse=1;
 			if (page_cache[cpu].top > 0){
 				unsigned long ret = page_cache[cpu].stack[page_cache[cpu].top -1];
 				page_cache[cpu].top--;
 				page_cache[cpu].inuse=0;
+				page_cache[cpu].stat_allocs++;
+#ifndef CPU_CACHE
+				spin_unlock_irqrestore(&jslab_cache_lock, irq_flags);
+#endif
 				return ret;
 			}
 			page_cache[cpu].inuse=0;
+
 		}
 	}
+	page_cache[cpu].stat_miss_alloc++;
+#ifndef CPU_CACHE
+	spin_unlock_irqrestore(&jslab_cache_lock, irq_flags);
+#endif
+
 	if (g_conf_zeropage_cache==1){
 		unsigned long page;
 		page = get_from_zeropagecache(flags);
@@ -531,21 +551,38 @@ unsigned long jalloc_page(int flags){
 	return mm_getFreePages(flags, 0);
 }
 int jfree_page(unsigned long p){
+#ifdef CPU_CACHE
+	int cpu = getcpuid();
+#else
+	int cpu =0;
+	unsigned long flags;
+	spin_lock_irqsave(&jslab_cache_lock, flags);
+#endif
+
 	stat_page_frees++;
 	//ut_log(" jfree_page:%x \n",p);
 	if (1) {
-		int cpu = getcpuid();
+
 		if (page_cache[cpu].inuse == 0) {
 			page_cache[cpu].inuse = 1;
 			if (page_cache[cpu].top < MAX_STACK_SIZE) {
 				page_cache[cpu].stack[page_cache[cpu].top]=p;
 				page_cache[cpu].top++;
 				page_cache[cpu].inuse = 0;
+				page_cache[cpu].stat_frees++;
+#ifndef CPU_CACHE
+				spin_unlock_irqrestore(&jslab_cache_lock, flags);
+#endif
 				return 0;
 			}
 			page_cache[cpu].inuse = 0;
 		}
 	}
+	page_cache[cpu].stat_miss_free++;
+#ifndef CPU_CACHE
+	spin_unlock_irqrestore(&jslab_cache_lock, flags);
+#endif
+
 	if (g_conf_zeropage_cache==1){
 		if (insert_into_zeropagecache(p,0) == JSUCCESS)
 			return 0;
@@ -638,6 +675,7 @@ jcache_t test_cache;
 int Jcmd_jslabmalloc(unsigned char *arg1, unsigned char *arg2) {
 	unsigned long addr;
 	int type;
+	int i;
 	static int test_created=0;
 
 	if (arg1 == 0)
@@ -660,12 +698,14 @@ int Jcmd_jslabmalloc(unsigned char *arg1, unsigned char *arg2) {
 		ut_printf(" Legal modified the contents in the address @ :%x\n",p);
 		*p='2';
 	}
+
 	return 1;
 }
 extern int g_stat_pagefaults_write;
 int Jcmd_jslab(unsigned char *arg1, unsigned char *arg2) {
 	jcache_t *cachep;
 	struct list_head *c;
+	int i;
 
 	list_for_each(c, &(cache_list)) {
 		cachep = list_entry(c, jcache_t , cache_list);
@@ -680,7 +720,9 @@ int Jcmd_jslab(unsigned char *arg1, unsigned char *arg2) {
 	ut_printf("malloc :%d frees:%d  pagefault_write:%d\n",stat_mallocs,stat_frees,g_stat_pagefaults_write);
 	ut_printf("single page allocs(zero_alloc):%d(%d) page frees:%d zeropagecache dirty/clean: %d/%d\n",stat_page_allocs,
 			stat_page_alloc_zero,stat_page_frees,zeropage_cache.max_dirtypage_index,zeropage_cache.max_cleanpage_index);
-
+	for (i=0; i <MAX_CPUS; i++){
+		ut_printf(" alloc: %d frees:%d missalloc:%d  missfrees:%d \n",page_cache[i].stat_allocs,page_cache[i].stat_frees,page_cache[i].stat_miss_alloc,page_cache[i].stat_miss_free);
+	}
 	return 1;
 }
 

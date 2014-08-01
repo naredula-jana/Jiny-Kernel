@@ -61,21 +61,7 @@ public:
 	void free(); /* TODO : this should be  merged with destructor */
 };
 extern "C"{
-#if 0
-struct semaphore {
-	int count;
-	spinlock_t sem_lock; /* this is to protect count */
-	wait_queue *wait_queue;
-	int valid_entry;
-	char *name;
-	unsigned long owner_pid; /* pid that is owning */
-	int recursive_count;
 
-	unsigned int stat_line;
-	unsigned int stat_recursive_count;
-	unsigned long stat_acquired_start_time;
-	unsigned long stat_total_acquired_time;
-};
-#endif
+
 }
 #endif

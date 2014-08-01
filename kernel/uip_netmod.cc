@@ -44,6 +44,7 @@ int network_stack::close(network_connection *conn) {
 
 #define BUF ((struct uip_eth_hdr *)&uip_buf[0])
 #define UDPBUF ((struct uip_udpip_hdr *)&uip_buf[UIP_LLH_LEN])
+#define EXTRA_INITIAL_BYTES 10
 int network_stack::read(network_connection *conn, uint8_t *raw_data, int raw_len, uint8_t *app_data, int app_maxlen) {
 	int ret = JFAIL;
 	int pkt_len;
@@ -51,7 +52,7 @@ int network_stack::read(network_connection *conn, uint8_t *raw_data, int raw_len
 
 	netstack_lock();
 	DEBUG("new UIP raw received length :%d  conn:%x   ..... :uip_conn:%x \n", raw_len,conn,uip_conn);
-	uip_len = raw_len - 10;
+	uip_len = raw_len - EXTRA_INITIAL_BYTES;
 	pkt_len = uip_len;
 	if (uip_buf!=0){
 		while(1);
@@ -60,11 +61,11 @@ int network_stack::read(network_connection *conn, uint8_t *raw_data, int raw_len
 	if (jbuf ==0) {
 		goto last;
 	}else{
-		uip_buf = jbuf+10;;
-		ut_memset(jbuf,0,10);
+		uip_buf = jbuf+EXTRA_INITIAL_BYTES;
+		ut_memset(jbuf,0,EXTRA_INITIAL_BYTES);
 	}
 
-	ut_memcpy(uip_buf, raw_data + 10, uip_len);
+	ut_memcpy(jbuf, raw_data , uip_len+EXTRA_INITIAL_BYTES);
 
 	if (conn != 0 && conn->protocol == IPPROTO_UDP) {
 		uip_appdata = 0;
