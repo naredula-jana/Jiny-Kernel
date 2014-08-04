@@ -103,25 +103,7 @@ unsigned long SYS_fs_open(char *filename, int mode, int flags) {
 		}
 	}
 	goto last;
-#if 0
-	total = g_current_task->mm->fs.total;
-	if (filep != 0 && total < MAX_FDS) {
-		for (i = 3; i < MAX_FDS; i++) { /* fds: 0,1,2 are for in/out/error */
-			if (g_current_task->mm->fs.filep[i] == 0) {
-				break;
-			}
-		}
-		if (i == MAX_FDS){
-			goto fail;
-		}
-		g_current_task->mm->fs.filep[i] = filep;
-		if (i >= total)
-			g_current_task->mm->fs.total = i + 1;
 
-		ret = i;
-		goto last;
-	}
-#endif
 fail:
 	if (filep != 0)
 		fs_close(filep);

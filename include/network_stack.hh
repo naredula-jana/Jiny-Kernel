@@ -11,7 +11,8 @@ enum _socket_type
   SOCK_STREAM = 1,      /* Sequenced,reliable andconnection-based byte streams.  */
   SOCK_DGRAM = 2,       /* Connectionless, unreliable datagrams.  */
   SOCK_RAW = 3,         /* Raw protocol type.  */
-  SOCK_RDM = 4
+  SOCK_RDM = 4,
+  SOCK_STREAM_CHILD=200
 };
 #define AF_INET 2  /* family */
 
@@ -25,6 +26,7 @@ public:
 	uint16_t dest_port,src_port;
 	uint8_t 	protocol; /* ip_protocol , tcp or udp */
 
+	network_connection *child_connection; /* this for listening  tcp connection */
 	void *proto_connection;  /* protocol connection */
 };
 class network_stack{

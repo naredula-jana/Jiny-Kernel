@@ -270,7 +270,7 @@ void SYS_sc_execve(uint8_t *file,uint8_t **argv,uint8_t **env);
 void **sc_get_thread_argv();
 void sc_set_fsdevice(unsigned int in, unsigned int out);
 
-uint8_t dr_kbGetchar(int device_id);
+uint8_t dr_kbGetchar(int device_id, int peek_data);
 int pagetable_walk(int level,unsigned long ptable_addr, int print);
 
 void *ipc_mutex_create(char *name);

@@ -627,9 +627,10 @@ int init_vfs(unsigned long unused_arg) {
 			(const unsigned char *) "fs_vinodes", sizeof(struct fs_inode), 0,
 			JSLAB_FLAGS_DEBUG, 0, 0);
 
-	for (i = 0; i < MAX_SOCKETS; i++) {
-		socket::list[i] = 0;
-	}
+
+	socket::udp_list.size =0;
+	socket::tcp_listner_list.size=0;
+	socket::tcp_connected_list.size=0;
 	init_procfs();
 	return JSUCCESS;
 }

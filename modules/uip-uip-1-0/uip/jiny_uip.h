@@ -17,6 +17,9 @@ struct jiny_uip{
 	                and the application program. */
 //	struct uip_conn *uip_conn;
 	struct uip_udp_conn_struct *uip_udp_conn_s;
+	unsigned char *data;
+	unsigned long data_len;
+	u8_t callback_flags;
 };
 
 #define MAX_CPUS 10
@@ -32,6 +35,9 @@ extern struct jiny_uip jiny_uip[MAX_CPUS];
 #define uip_flags jiny_uip[getcpuid()].uip_flags
 //#define uip_conn jiny_uip[getcpuid()].uip_conn
 #define uip_udp_conn jiny_uip[getcpuid()].uip_udp_conn_s
+#define jiny_uip_data jiny_uip[getcpuid()].data
+#define jiny_uip_dlen jiny_uip[getcpuid()].data_len
+#define jiny_uip_callback_flags jiny_uip[getcpuid()].callback_flags
 
 #endif
 

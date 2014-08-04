@@ -24,12 +24,10 @@ int default_sock_queue_len=0;
 static spinlock_t _netstack_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"netstack");
 unsigned long stack_flags;
 void netstack_lock(){
-	//spin_lock_irqsave(&_netstack_lock, stack_flags);
 	sc_enable_nonpreemptive();
 	return;
 }
 void netstack_unlock(){
-	//spin_unlock_irqrestore(&_netstack_lock, stack_flags);
 	sc_disable_nonpreemptive();
 	return;
 }
@@ -47,33 +45,42 @@ int socket::attach_rawpkt(unsigned char *buff, unsigned int len) {
 	unsigned char *port;
 	socket *sock;
 	int i;
-	for (i = 0; i < list_size; i++) {
-		sock = list[i];
-		if (sock == 0) {
-			continue;
-		}
-		struct ether_pkt *pkt = (struct ether_pkt *) (buff + 10);
 
-		if ((pkt->iphdr.protocol == sock->network_conn.protocol)) {
+	struct ether_pkt *pkt = (struct ether_pkt *) (buff + 10);
+	if (pkt->iphdr.protocol == IPPROTO_UDP) {
+		for (i=0; i<udp_list.size; i++) {
+			sock = udp_list.list[i];
+			if (sock == 0) continue;
 			if ((pkt->udphdr.dest == sock->network_conn.src_port)) {
-				if (sock->add_to_queue(buff, len) == JSUCCESS) {
-					stat_raw_attached++;
-					return JSUCCESS;
-				}
-			} else {
-				//ut_log(" recevied Not match :%x :%x \n", pkt->udphdr.dest, sock->network_conn.src_port);
+				sock->add_to_queue(buff, len);
+				return JSUCCESS;
 			}
 		}
+	} else if(pkt->iphdr.protocol == IPPROTO_TCP){
+		/* first tcp connected clients, then listners */
+		for (i=0; i<tcp_connected_list.size; i++) {
+			sock = tcp_connected_list.list[i];
+			if (sock == 0) continue;
+			/* tcp and udp ports are located in same location in raw packet  , source and dest udp port is used to search for connected tcp sockets */
+			if ((pkt->udphdr.dest == sock->network_conn.src_port) && (pkt->udphdr.source == sock->network_conn.dest_port)) {
+				sock->add_to_queue(buff, len);
+				return JSUCCESS;
+			}
+		}
+		for (i=0; i<tcp_listner_list.size; i++) {
+			sock = tcp_listner_list.list[i];
+			if (sock == 0) continue;
+			if ((pkt->udphdr.dest == sock->network_conn.src_port)) {
+				sock->add_to_queue(buff, len);
+				return JSUCCESS;
+			}
+		}
+
 	}
-	//ut_log(" msg: %x  addr:%x  raw_default:%x \n",default_sock_queue_len,buff,stat_raw_default);
-#if 1
-	if (default_socket->add_to_queue(buff, len) == JSUCCESS) {
-		stat_raw_default++;
-		return JSUCCESS;
-	}
-#endif
-	stat_raw_drop++;
-	return JFAIL;
+
+	default_socket->add_to_queue(buff, len);
+	stat_raw_default++;
+	return JSUCCESS;
 }
 int socket::add_to_queue(unsigned char *buf, int len) {
 	unsigned long flags;
@@ -85,7 +92,6 @@ int socket::add_to_queue(unsigned char *buf, int len) {
 	spin_lock_irqsave(&(queue.spin_lock), flags);
 	if (queue.data[queue.producer].len == 0) {
 		queue.data[queue.producer].len = len;
-		//	*replace_outbuf = queue.data[queue.producer].buf;
 		queue.data[queue.producer].buf = buf;
 		queue.producer++;
 		queue.queue_len++;
@@ -93,14 +99,19 @@ int socket::add_to_queue(unsigned char *buf, int len) {
 			queue.producer = 0;
 		}
 		ret = JSUCCESS;
-
-		queue.waitq->wakeup();
 		goto last;
 	}
 	queue.error_full++;
 
 last:
 	spin_unlock_irqrestore(&(queue.spin_lock), flags);
+	if (ret == JFAIL){
+		jfree_page(buf);
+		stat_raw_drop++;
+	}else{
+		queue.waitq->wakeup();
+		stat_raw_attached++;
+	}
 	return ret;
 }
 
@@ -144,6 +155,7 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int
 		peeked_msg_len =0;
 		return buf_len;
 	}
+read_again:
 	/* push a packet in to protocol stack  */
 	ret = remove_from_queue(&buf, &buf_len);
 	if (ret == JSUCCESS) {
@@ -155,15 +167,23 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int
 		if (ret > 0) {
 			stat_in++;
 			stat_in_bytes = stat_in_bytes + ret;
-		} else{
+		} else{ /* when tcp contraol packets are consumed, need to look for the data packets */
+
+			stat_in++;
 			stat_err++;
+			if (buf > 0) {
+				free_page((unsigned long)buf);
+				buf =0 ;
+			}
+			if (ret < 0){
+				return 0;
+			}
+			goto read_again;  /* tcp control packets will get observed, nothing ouput */
 		}
 	}
 
 	if (buf > 0) {
-		//mm_set_debug_data(buf,0x0); /* for debugging pupose only */
 		free_page((unsigned long)buf);
-
 	}
 	return ret;
 }
@@ -221,23 +241,26 @@ int socket::ioctl(unsigned long arg1, unsigned long arg2) {
 			ret = net_stack->connect(&network_conn);
 		}
 	}else if (arg1 == SOCK_IOCTL_WAITFORDATA){
-		if (queue.queue_len == 0){
+		if ((queue.queue_len == 0)  && (arg2 != 0)){
 			queue.waitq->wait(arg2);
 			//ut_log(" Woken from the queue : %d\n",queue.queue_len);
 		}
+		return queue.queue_len;
+	}else if (arg1 == GENERIC_IOCTL_PEEK_DATA){
 		return queue.queue_len;
 	}
 	return ret;
 }
 
 void socket::print_stats(){
-	ut_printf("socket: count:%d local:%x:%x remote:%x:%x (IO: %d/%d: StatErr: %d Qfull:%d)\n",
+	ut_printf("socket: count:%d local:%x:%x remote:%x:%x (IO: %d/%d: StatErr: %d Qfull:%d)  %x\n",
 			count.counter,network_conn.src_ip,network_conn.src_port,network_conn.dest_ip,network_conn.dest_port,stat_in
-	    ,stat_out,stat_err,queue.error_full);
+	    ,stat_out,stat_err,queue.error_full, &network_conn);
 }
 
-socket *socket::list[MAX_SOCKETS];
-int socket::list_size = 0;
+sock_list_t socket::udp_list;
+sock_list_t socket::tcp_listner_list;
+sock_list_t socket::tcp_connected_list;
 int socket::stat_raw_drop = 0;
 int socket::stat_raw_default = 0;
 int socket::stat_raw_attached = 0;
@@ -245,6 +268,15 @@ socket *socket::default_socket=0;
 /* TODO need  a lock */
 jdevice *socket::net_dev;
 network_stack *socket::net_stack_list[MAX_NETWORK_STACKS];
+static void print_list(sock_list_t *listp){
+	int i;
+	for (i=0; i<listp->size;i++){
+		socket *sock=listp->list[i];
+		if (sock==0) continue;
+		sock->print_stats();
+	}
+	return;
+}
 void socket::print_all_stats() {
 	unsigned char *name = 0;
 	int i,len;
@@ -252,31 +284,39 @@ void socket::print_all_stats() {
 	if (net_stack_list[0]){
 		name = net_stack_list[0]->name;
 	}
-	ut_printf("Socket total:%d netstack:%s raw_drop:%d raw_attached:%d raw_default: %d\n", list_size, name, stat_raw_drop, stat_raw_attached, stat_raw_default);
+
+	ut_printf("Socket  netstack:%s raw_drop:%d raw_attached:%d raw_default: %d\n",  name, stat_raw_drop, stat_raw_attached, stat_raw_default);
 
 	default_socket->print_stats();
-	for (i=0; i<list_size;i++){
-		socket *sock=list[i];
-		if (sock==0) continue;
-		sock->print_stats();
-	}
+	print_list(&socket::tcp_listner_list);
+	print_list(&socket::udp_list);
+	print_list(&socket::tcp_connected_list);
+
 	return;
+}
+static int delete_sock_from_list(sock_list_t *listp,socket *sock){
+	int i;
+	for (i = 0; i < listp->size; i++) {
+		if (listp->list[i] == sock) {
+			listp->list[i] = 0;
+			return JSUCCESS;
+		}
+	}
+	return JFAIL;
 }
 int socket::delete_sock(socket *sock) {
 	int i;
-	int found = 0;
 
-	for (i = 0; i < list_size && found == 0; i++) {
-		if (list[i] == sock) {
-			list[i] = 0;
-			found = 1;
-			break;
-		}
-	}
-	if (found == 1)
+	if (delete_sock_from_list(&socket::tcp_listner_list,sock)==JSUCCESS){
 		return JSUCCESS;
-	else
-		return JFAIL;
+	}
+	if (delete_sock_from_list(&socket::udp_list,sock)==JSUCCESS){
+		return JSUCCESS;
+	}
+	if (delete_sock_from_list(&socket::tcp_connected_list,sock)==JSUCCESS){
+		return JSUCCESS;
+	}
+	return JFAIL;
 }
 void socket::init_socket(int type){
 	queue.spin_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"socketnetq_lock");
@@ -311,36 +351,48 @@ void memset(uint8_t *dest, uint8_t val, long len){ /* user by new by the compile
 }
 }
 
-vinode* socket::create_new(int arg_type) {
+static int add_sock(sock_list_t *listp,socket *sock){
 	int i;
-	int found = 0;
-
-	if (net_stack_list[0] == 0)
-		return 0;
-
-	socket *sock = jnew_obj(socket);
-
-	for (i = 0; i < list_size && found == 0; i++) {
-		if (list[i] == 0) {
-			list[i] = sock;
+	int found=0;
+	for (i = 0; i < listp->size; i++) {
+		if (listp->list[i] == 0) {
+			listp->list[i] = sock;
 			found = 1;
 			break;
 		}
 	}
 	if (found == 0) {
-		if (list_size < MAX_SOCKETS) {
-			list[list_size] = sock;
-			list_size++;
+		if (listp->size < MAX_SOCKETS) {
+			listp->list[listp->size] = sock;
+			listp->size++;
 			found = 1;
+		}else{
+			return JFAIL;
 		}
 	}
 
-	if (found == 0) {
-		ut_free(sock);
+	return JSUCCESS;
+}
+vinode* socket::create_new(int arg_type) {
+	sock_list_t *list;
+	if (net_stack_list[0] == 0)
 		return 0;
-	}
-	sock->init_socket(arg_type);
+	socket *sock = jnew_obj(socket);
 
+	if (arg_type == SOCK_STREAM){
+		list = &socket::tcp_listner_list;
+	}else if (arg_type == SOCK_STREAM_CHILD){
+		arg_type = SOCK_STREAM;
+		list = &socket::tcp_connected_list;
+	}else {
+		list = &socket::udp_list;
+	}
+	if (add_sock(list, sock) == JFAIL){
+		jfree_obj(sock);
+		return NULL;
+	}
+
+	sock->init_socket(arg_type);
 	return (vinode *) sock;
 }
 void socket::default_pkt_thread(void *arg1, void *arg2){
@@ -457,10 +509,9 @@ int SYS_accept(int fd) {
 	if (file == 0)
 		return SYSCALL_FAIL;
 	struct socket *inode = (struct socket *) file->vinode;
-//	void *conn = socket_api->accept((void *)inode->network_conn.proto_connection);
-//	if (conn == 0)
-//		return SYSCALL_FAIL;
-	int i = SYS_fs_open("/dev/sockets", 0, 0);
+
+/* create child socket */
+	int i = SYS_fs_open("/dev/sockets", SOCK_STREAM_CHILD, 0);
 	if (i == 0) {
 		return SYSCALL_FAIL;
 	}
@@ -474,10 +525,15 @@ int SYS_accept(int fd) {
 	new_inode->network_conn.type = SOCK_STREAM;
 	new_file->flags = file->flags;
 
-	if (i > 0)
+	inode->network_conn.child_connection = &(new_inode->network_conn);
+
+	inode->read(0,0,0,0);
+
+	if (i > 0){
 		inode->stat_out++;
-	else
+	}else{
 		inode->stat_err++;
+	}
 	SYSCALL_DEBUG("accept retfd %d \n", i);
 
 	return i;

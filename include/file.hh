@@ -90,9 +90,17 @@ enum {
 	SOCK_IOCTL_WAITFORDATA=3
 };
 enum {
+	GENERIC_IOCTL_PEEK_DATA=100  /* check for the presence of data */
+};
+enum {
 	NETDEV_IOCTL_GETMAC=1,
 	NETDEV_IOCTL_FLUSH_SENDBUF=2
 };
+class socket;
+typedef struct sock_list_type{
+	class socket *list[MAX_SOCKETS];
+	int size;
+}sock_list_t;
 class socket: public vinode {
 public:
 	class network_connection network_conn;
@@ -117,8 +125,7 @@ public:
 	static int delete_sock(socket *sock);
 	static int attach_rawpkt(unsigned char *c, unsigned int len);
 
-	static class socket *list[MAX_SOCKETS];
-	static int list_size;
+	static sock_list_t udp_list,tcp_listner_list,tcp_connected_list;
 	static network_stack *net_stack_list[MAX_NETWORK_STACKS];
 	static jdevice *net_dev;
 	static int stat_raw_drop;

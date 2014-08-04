@@ -134,7 +134,7 @@ int serial_jdriver::read(unsigned char *buff, int len, int read_flags) {
 	int ret = 0;
 
 	if (len > 0 && buff != 0) {
-		buff[0] = dr_kbGetchar(serial_device_no);
+		buff[0] = dr_kbGetchar(serial_device_no, 0 );
 		stat_recvs++;
 		ret = 1;
 
@@ -180,6 +180,8 @@ void serial_jdriver::print_stats() {
 int serial_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 	if (arg1 == 0) {
 		return serial_device_no;
+	}else if (arg1 == GENERIC_IOCTL_PEEK_DATA){
+		 return dr_kbGetchar(serial_device_no, 1);
 	}
 	return serial_device_no;
 }

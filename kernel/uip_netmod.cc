@@ -25,10 +25,15 @@ extern int jfree_page(unsigned char *p);
 #define DEBUG
 
 int network_stack::open(network_connection *conn, int flags) {
-	struct uip_udp_conn_struct *uip_conn;
-	uip_conn = uip_udp_new(0, 0);
-	conn->proto_connection = uip_conn;
-	conn->src_port = uip_conn->lport;
+	conn->proto_connection = 0;
+	if (conn->protocol == IPPROTO_UDP) {
+		struct uip_udp_conn_struct *uip_conn;
+		uip_conn = uip_udp_new(0, 0);
+		conn->proto_connection = uip_conn;
+		conn->src_port = uip_conn->lport;
+	} else if (conn->protocol == IPPROTO_TCP) {
+		conn->src_port = 0;
+	}
 
 	return JSUCCESS;
 }
@@ -67,8 +72,10 @@ int network_stack::read(network_connection *conn, uint8_t *raw_data, int raw_len
 
 	ut_memcpy(jbuf, raw_data , uip_len+EXTRA_INITIAL_BYTES);
 
+	uip_appdata = 0;
+	jiny_uip_data = 0;
+	jiny_uip_callback_flags = 0;
 	if (conn != 0 && conn->protocol == IPPROTO_UDP) {
-		uip_appdata = 0;
 		uip_input();
 		if (uip_appdata) {
 			ret = pkt_len - (UIP_LLH_LEN + UIP_IPUDPH_LEN);
@@ -84,7 +91,45 @@ int network_stack::read(network_connection *conn, uint8_t *raw_data, int raw_len
 		uip_len = 0;
 		goto last;
 	}else if (conn != 0 && conn->protocol == IPPROTO_TCP){
-// TODO
+		ret = JFAIL;
+		uip_input();
+		if (jiny_uip_data != 0 ) {
+			ret = jiny_uip_dlen;
+			if (app_data != 0){
+				ut_memcpy(app_data, jiny_uip_data, ret);
+			}
+		}
+		if (jiny_uip_callback_flags == UIP_CLOSE){
+			ret = -1;
+		}
+		if (jiny_uip_callback_flags == UIP_CONNECTED){
+			network_connection *new_conn = conn->child_connection;
+			ut_printf(" New connection details : %x \n",new_conn);
+			if (new_conn != 0){
+				new_conn->dest_port = UDPBUF->srcport;
+				ut_memcpy((unsigned char *)&(new_conn->dest_ip), (unsigned char *)&(UDPBUF->srcipaddr[0]),4);
+				ut_printf(" New connection port : ip : %x:%x \n",new_conn->dest_port,new_conn->dest_ip);
+			}
+			ret = -2;
+		}
+		if (uip_len > 0) {
+			int tret;
+			uip_arp_out();
+			tret = net_send_eth_frame(uip_buf, uip_len, WRITE_BUF_CREATED);
+			if (tret != JFAIL) {
+				tret = 0;
+				jbuf = 0;
+			}
+			uip_len = 0;
+			//ut_printf(" ret :%d \n",ret);
+			goto last;
+		}
+
+		jfree_page(jbuf);
+		jbuf =0 ;
+
+		goto last;
+
 	}else if (conn == 0 ){
 
 	}
@@ -182,23 +227,42 @@ int network_stack::connect(network_connection *conn) { // only for TCP
 	int ret = JFAIL;
 	int i;
 	unsigned data[20];
-
+	unsigned char *buf=0;
+	netstack_lock();
 	if (conn->protocol != IPPROTO_TCP) {
 		ret = JFAIL;
 		goto last;
+	}
+	buf = (unsigned long) jalloc_page(0);
+	if (buf ==0) {
+		goto last;
+	}else{
+		uip_buf = buf+10;
+		ut_memset(buf,0,10);
 	}
 
 	test[0] = conn->dest_ip & 0xffff;
 	test[1] = (conn->dest_ip >> 16) & 0xffff;
 
 	uip_conn = uip_connect(&test, conn->dest_port);
+	if (uip_conn != 0){
+		conn->proto_connection = uip_conn;
+		conn->src_port = uip_conn->lport;
+	}
+	uip_process(UIP_TIMER);
 	uip_process(UIP_TIMER);
 	if (uip_len > 0) {
-		ut_log(" tcp connect  message : %d \n",uip_len);
-		ret = net_send_eth_frame(uip_buf, uip_len,0);
+		uip_arp_out();
+		ut_printf(" tcp connect  message : %d \n",uip_len);
+		ret = net_send_eth_frame(uip_buf, uip_len,WRITE_BUF_CREATED);
 		uip_len = 0;
 	}
 last:
+	uip_buf = 0;
+	if (ret == JFAIL && buf) {
+		jfree_page (buf);
+	}
+	netstack_unlock();
 	return ret;
 }
 network_stack uip_stack;
@@ -210,11 +274,15 @@ void uip_mod_udpappcall(void) { /* NOT used */
 }
 void uip_mod_appcall(void) {
 	if (uip_connected()) {
-		ut_log(" socket connected :%d \n", uip_len);
+		ut_printf("CALLBACK socket connected :%d \n", uip_len);
 
 	}
+	jiny_uip_callback_flags = uip_flags;
+	ut_printf("CALLBACK flag :%x\n",uip_flags);
 	if (uip_len > 0) {
-		ut_log(" Data len :%d :%s:\n", uip_len, uip_appdata);
+		jiny_uip_data = uip_appdata;
+		jiny_uip_dlen = uip_len;
+		ut_printf(" CALLBACK Data len :%d :%s:\n", uip_len, uip_appdata);
 		return;
 	}
 

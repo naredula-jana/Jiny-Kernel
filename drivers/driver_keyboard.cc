@@ -85,7 +85,7 @@ static struct {
 }input_devices[MAX_INPUT_DEVICES];
 
 
-unsigned char dr_kbGetchar(int input_id) {
+unsigned char dr_kbGetchar(int input_id, int peek_data) {
 	int i,device_id;
 	unsigned char c;
 #if 0
@@ -93,7 +93,7 @@ unsigned char dr_kbGetchar(int input_id) {
 		device_id = g_current_task->mm->fs.input_device;
 	else
 #endif
-		device_id = input_id;
+	device_id = input_id;
 	for (i = 0; i < MAX_INPUT_DEVICES; i++) {
 		if (input_devices[i].device_id == device_id)
 			break;
@@ -101,6 +101,13 @@ unsigned char dr_kbGetchar(int input_id) {
 	if (i >= MAX_INPUT_DEVICES)
 		return -1;
 
+	if (peek_data != 0) {
+		if (input_devices[i].current_pos != 0) {
+			return 1;
+		} else {
+			return 0;
+		}
+	}
 	while (input_devices[i].current_pos == 0) {
 		input_devices[i].kb_waitq->wait(100);
 	}
@@ -217,7 +224,7 @@ int keyboard_jdriver::read(unsigned char *buff, int len, int read_flags){
 	int ret=0;
 
 	if (len >0 && buff!=0){
-		buff[0] = dr_kbGetchar(DEVICE_KEYBOARD);
+		buff[0] = dr_kbGetchar(DEVICE_KEYBOARD,0);
 		stat_recvs++;
 		ret=1;
 #if 0
@@ -250,11 +257,12 @@ int keyboard_jdriver::write(unsigned char *buff, int len, int wr_flags){
 }
 void keyboard_jdriver::print_stats(){
 	ut_printf(" sends:%d recvs: %d",stat_sends,stat_recvs);
-	//return JSUCCESS;
 }
 int keyboard_jdriver::ioctl(unsigned long arg1,unsigned long arg2 ){
 	if (arg1 ==0){
 		return DEVICE_KEYBOARD;
+	}else if (arg1 == GENERIC_IOCTL_PEEK_DATA){
+		 return dr_kbGetchar(DEVICE_KEYBOARD, 1);
 	}
 	return DEVICE_KEYBOARD;
 }

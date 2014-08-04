@@ -8,6 +8,7 @@
  *   Author: Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
  *
  */
+#include "file.hh"
 extern "C"{
 #include "common.h"
 #include "isr.h"
@@ -89,7 +90,7 @@ struct pollfd {
 	short events; /* requested events */
 	short revents; /* returned events */
 };
-unsigned long SYS_poll(struct pollfd *fds, int nfds, int timeout);
+unsigned long SYS_poll(struct pollfd *fds, int nfds, struct timeval *timeout);
 /*************************************************************************/
 
 unsigned long SYS_nanosleep(const struct timespec *req, struct timespec *rem);
@@ -490,30 +491,38 @@ int SYS_select(int nfds, int *readfds, int *writefds, int *exceptfds, struct tim
 
 	return SYSCALL_SUCCESS;
 }
-unsigned long SYS_poll(struct pollfd *fds, int nfds, int timeout) {
+unsigned long SYS_poll(struct pollfd *fds, int nfds, struct timeval *timeout) {
 	int i,fd;
 	struct file *file;
+	unsigned long time_duration;
 
-	SYSCALL_DEBUG("poll(partial)  fds:%x nfds:%d timeout:%d  \n", fds, nfds, timeout);
-	if (nfds == 0 || fds == 0 || timeout == 0)
-		return 0;
-	for (i=0; i<nfds; i++){
-		fd=fds[i].fd;
-		file = fd_to_file(fd);
-		if (file==0) continue;
-		if (file->type == NETWORK_FILE){
-#if 1
-			if (nfds ==1){/* TODO :need to extend for multiple fds */
-				if ( wait_for_sock_data(file->vinode, timeout) >0){
-					fds[i].revents = POLLIN ;
-					SYSCALL_DEBUG("poll success Data on one socket\n");
-					return 1;
-				}else
-					return 0;
+	SYSCALL_DEBUG("poll(partial)  fds:%x nfds:%d timeout:%x  \n", fds, nfds, timeout);
+	if (nfds > 1){
+		SYSCALL_DEBUG("poll(partial)  fds[0]:%x fds[1]:%x  \n",fds[0].fd,fds[1].fd );
+	}
+	if (timeout == -1) timeout =0;
+	if (timeout == 0){
+		time_duration = 0xffffff;
+	}else{
+		time_duration = timeout->tv_sec*1000000 + (timeout->tv_usec/1000) ;
+	}
+	if (nfds == 0 || fds == 0 ){
+		return -1;
+	}
+	while (time_duration > 0) {
+		for (i = 0; i < nfds; i++) {
+			fd = fds[i].fd;
+			file = fd_to_file(fd);
+			if (file == 0)
+				continue;
+			vinode *vinode=file->vinode;
+			if (vinode->ioctl(GENERIC_IOCTL_PEEK_DATA,0) != 0){
+				fds[i].revents = POLLIN;
+				return 1;
 			}
-#endif
-			fds[i].revents = POLLIN ;
-		}
+		}/* end of for */
+		sc_sleep(10);
+		time_duration = time_duration - 100;
 	}
 	return SYSCALL_SUCCESS;
 }
