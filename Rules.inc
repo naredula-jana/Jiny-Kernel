@@ -11,6 +11,7 @@ INCLUDE=. -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm  -I $(SOURCE_ROOT)/arch
 
 
 NEW_GCC=/data/opt/gcc-4.8.2/bin/
+NEW_GCC=
 
 #CC=$(NEW_GCC)gcc -g -gdwarf-2 -Wimplicit  -w
 CC=$(NEW_GCC)gcc -g -gdwarf-2 -Wimplicit  -w -Wall -Wmissing-declarations -Wimplicit-function-declaration
