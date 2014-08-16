@@ -9,9 +9,10 @@ SMP=1
 #MEMLEAK_TOOL=1
 INCLUDE=. -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm  -I $(SOURCE_ROOT)/arch/x86_64/
 
+# ubuntu gcc-4.8.2 as the issue: it generates binary of large size, because it place the binary at wrong location 
+# get the gcc-4.8.2 from open source and compile 
+NEW_GCC=/opt/gcc-4.8.2/bin/
 
-NEW_GCC=/data/opt/gcc-4.8.2/bin/
-NEW_GCC=
 
 #CC=$(NEW_GCC)gcc -g -gdwarf-2 -Wimplicit  -w
 CC=$(NEW_GCC)gcc -g -gdwarf-2 -Wimplicit  -w -Wall -Wmissing-declarations -Wimplicit-function-declaration
