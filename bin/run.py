@@ -46,11 +46,10 @@ def start_jiny(options):
     monitor_port = 51007 + int(options.vm_instance)
     vnc_port = 7 + int(options.vm_instance)
     args = [
-        "/opt/qemu-git/bin/qemu-system-x86_64",""
-#        "/opt/qemu_1.7.0/bin/qemu-system-x86_64",""
-        "-enable-kvm",""
+        "/opt/qemu/bin/qemu-system-x86_64",""
+#        "-enable-kvm",""
 #        "-S",""
-        "-bios","/opt/qemu-git/share/qemu/bios.bin",
+#        "-bios","/opt/qemu/share/qemu/bios.bin",
         "-gdb", "tcp::%d,server,nowait" % (gdb_port),
         "-monitor", "tcp::%d,server,nowait,nodelay" % (monitor_port), 
        
@@ -64,13 +63,13 @@ def start_jiny(options):
 # for netmap do insmod ./netmap_lin.ko 
 #        args += ["-netdev","netmap,id=guest0,ifname=vale0.%s" %(options.vm_instance), "-device","virtio-net-pci,mac=00:30:48:DB:5E:0%s,netdev=guest0" % (options.vm_instance)]
         args += ["-netdev","tap,id=guest0,vhost=on,vhostforce", "-device","virtio-net-pci,mac=00:30:48:DB:5E:0%s,netdev=guest0" % (options.vm_instance)]
-    else:
-        args += ["-netdev","tap,id=guest0,vhost=off", "-device","virtio-net-pci,mac=00:30:48:DB:5E:0%s,netdev=guest0" % (options.vm_instance)]
+#    else:
+#        args += ["-netdev","tap,id=guest0,vhost=off", "-device","virtio-net-pci,mac=00:30:48:DB:5E:0%s,netdev=guest0" % (options.vm_instance)]
  
     if (options.graphics):
         print "without graphics"
         if (options.with_p9):
-            args += ["-fsdev","local,security_model=passthrough,id=fsdev0,path=/opt_src/Jiny-Kernel/test/root/","-device","virtio-9p-pci,id=fs0,fsdev=fsdev0,mount_tag=hostshare"]
+            args += ["-fsdev","local,security_model=passthrough,id=fsdev0,path=/opt/jiny_root/","-device","virtio-9p-pci,id=fs0,fsdev=fsdev0,mount_tag=hostshare"]
         args += ["-vnc", ":%d" % (vnc_port),"-serial", "telnet::%d,server,nowait" % (serial_port)] 
         if (options.daemonize):
             args += ["-daemonize"]
@@ -78,12 +77,8 @@ def start_jiny(options):
         args += ["-nographic"]
         
     args += ["-append", "%s"%(options.kernel_args)]
-    if (options.boot_without_grub):
-#        args += ["-kernel", "/opt_src/Jiny-Kernel/bin/jiny_kernel.bin"]
-        args += ["-kernel", "/opt_src/Jiny-Kernel/bin/jiny_image.bin"]
-    else:
-         args += ["-hda", "/home/jana/jiny/bin/new_bootdisk"]
-         args += ["-hdb", "/home/jana/jiny/bin/g2_image"]
+    args += ["-kernel", "/opt_src/Jiny-Kernel/bin/jiny_image.bin"]
+
     if (options.snapshot):
         args += ["-incoming", "exec: gzip -c -d /opt_src/Jiny-Kernel/bin/jiny_apic_snapshot.gz"]
 #        args += ["-incoming", "exec: gzip -c -d /opt_src/Jiny-Kernel/util/s.gz"]
