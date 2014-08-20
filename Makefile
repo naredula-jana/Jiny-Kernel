@@ -69,6 +69,7 @@ test_net:
 	make SOURCE_ROOT=$$PWD -C modules/test_net
 	cp modules/test_net/test_net.o test/root/
 
+# uip tcp/ip stack , similar to lwip
 uip:
 	make SOURCE_ROOT=$$PWD -C   modules/uip-uip-1-0/uip
 
