@@ -34,7 +34,7 @@ OBJ_DRIVER = drivers/display.o drivers/driver_keyboard.o drivers/driver_serial.o
 OBJ_KERNEL = kernel/debug.o kernel/jdevices.o kernel/init.o  kernel/acpi.o kernel/ipc.o  kernel/network_sched.o kernel/kshell.o  kernel/symbol_table.o  kernel/syscall.o  kernel/sched_task.o  kernel/util.o kernel/module_app.o
 	
 OBJ_MEM= mm/memory.o mm/jslab.o mm/pagecache.o mm/vm.o
-OBJ_FS=	fs/binfmt_elf.o fs/pipe.o fs/file.o fs/fs_api.o fs/socket.o fs/vfs.o fs/proc_fs.o
+OBJ_FS=	fs/binfmt_elf.o fs/pipe.o fs/file.o fs/fs_api.o fs/socket.o fs/proc_fs.o
 OBJ_SMP = arch/$(ARCH_DIR)/smp/smp-imps.o  arch/$(ARCH_DIR)/smp/apic.o arch/$(ARCH_DIR)/smp/mptables.o
 
 
@@ -51,7 +51,6 @@ endif
 ifdef UIP_NETWORKING_MODULE
 OBJECTS += kernel/uip_netmod.o
 OBJECTS +=  modules/uip-uip-1-0/uip/uip_arp.o modules/uip-uip-1-0/uip/uip.o  
-//OBJECTS += modules/uip-uip-1-0/uip/uip.o 
 endif
 
  
@@ -121,7 +120,7 @@ clean:
 	make SOURCE_ROOT=$$PWD -C arch/$(ARCH_DIR)/smp clean
 	make SOURCE_ROOT=$$PWD -C mm clean
 	make SOURCE_ROOT=$$PWD -C mm/memleak clean
-	make SOURCE_ROOT=$$PWD -C modules/udp_stack clean
+	make SOURCE_ROOT=$$PWD -C modules/uip-uip-1-0/uip clean
 	\rm bin/jiny_bin
 ifdef LWIP_ENABLE
 	\rm $(LWIP_OBJ)

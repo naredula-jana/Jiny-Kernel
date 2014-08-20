@@ -1,3 +1,4 @@
+#if 0 /* jiny does not need at this point */
 /*
  * Copyright (c) 2004, Swedish Institute of Computer Science.
  * All rights reserved.
@@ -134,3 +135,4 @@ uip_split_output(void)
      
 }
 /*-----------------------------------------------------------------------------*/
+#endif

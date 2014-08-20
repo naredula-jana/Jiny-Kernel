@@ -39,6 +39,7 @@
 #include "uipopt.h"
 #include "psock.h"
 #include "uip.h"
+#include "jiny_uip.h"
 
 #define STATE_NONE 0
 #define STATE_ACKED 1

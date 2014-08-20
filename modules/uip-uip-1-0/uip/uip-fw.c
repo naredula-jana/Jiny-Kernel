@@ -1,3 +1,4 @@
+#if 0 /* jiny does not need */
 /*
  * Copyright (c) 2004, Swedish Institute of Computer Science.
  * All rights reserved.
@@ -530,3 +531,4 @@ uip_fw_periodic(void)
   }
 }
 /*------------------------------------------------------------------------------*/
+#endif
