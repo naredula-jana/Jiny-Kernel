@@ -134,7 +134,7 @@ public:
 	static class socket *default_socket;
 	static void init_socket_layer();
 	static void print_all_stats();
-	static void default_pkt_thread(void *arg1, void *arg2);
+	static int default_pkt_thread(void *arg1, void *arg2);
 };
 typedef struct hard_link hard_link_t;
 typedef struct hard_link{

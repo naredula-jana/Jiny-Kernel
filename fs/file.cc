@@ -55,6 +55,8 @@ fs_inode::fs_inode(uint8_t *arg_filename, unsigned long mode, struct filesystem 
 	fs_private = 0;
 	fileStat.inode_no = 0;
 	fileStat_insync = 0;
+	stat_last_offset=0;
+	hard_links=0;
 	open_mode = mode;
 	vfs = arg_vfs;
 	ut_strcpy(filename, (uint8_t *) arg_filename);
@@ -223,7 +225,7 @@ int fs_inode::close() {
 
 	if (ret == JSUCCESS){
 		//mm_slab_cache_free(fs_inode::slab_objects, this);
-		jfree_obj(this);
+		jfree_obj((unsigned long)this);
 	}
 
 	return ret;
@@ -611,7 +613,7 @@ int fs_close(struct file *filep) {
 }
 /*********************************************************************************************/
 unsigned long fs_registerFileSystem(struct filesystem *fs,unsigned char *mount_pnt) {
-	if (ut_strcmp("/",mount_pnt)==0){
+	if (ut_strcmp((unsigned char *)"/",mount_pnt)==0){
 		gvfs_fs = fs; // TODO : currently only one lowelevel filsystem is hardwired to vfs.
 	}else{
 		procfs_fs=fs;

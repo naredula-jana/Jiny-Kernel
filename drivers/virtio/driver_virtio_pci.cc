@@ -72,7 +72,7 @@ static int get_order(unsigned long size) {
 	return order;
 }
 
-static int addBufToQueue(struct virtqueue *vq, unsigned char *buf, unsigned long len) {
+int addBufToNetQueue(struct virtqueue *vq, unsigned char *buf, unsigned long len) {
 	struct scatterlist sg[2];
 	int ret;
 
@@ -170,7 +170,7 @@ static int virtio_net_poll_device(void *private_data, int enable_interrupt, int 
 			//netif_rx(addr, len);
 			net_sched.netif_rx(addr, len);
 
-			addBufToQueue(driver->vq[0], replace_buf, 4096);
+			addBufToNetQueue(driver->vq[0], replace_buf, 4096);
 			ret = ret + 1;
 		} else {
 			break;
@@ -321,7 +321,7 @@ int virtio_net_jdriver::net_attach_device(class jdevice *jdev) {
 	}
 
 	for (i = 0; i < 120; i++) /* add buffers to recv q */
-		addBufToQueue(this->vq[0], 0, 4096);
+		addBufToNetQueue(this->vq[0], 0, 4096);
 
 	inb(pci_ioaddr + VIRTIO_PCI_ISR);
 	virtio_queue_kick(this->vq[0]);
@@ -399,13 +399,13 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 
 #if 1
 	for (i=0; i<2 && ret == -ERROR_VIRTIO_ENOSPC; i++){
-		ret = addBufToQueue(this->vq[1], (unsigned char *) addr, len + 10);
+		ret = addBufToNetQueue(this->vq[1], (unsigned char *) addr, len + 10);
 		if (ret == -ERROR_VIRTIO_ENOSPC){
 			stat_err_nospace++;
 			spin_unlock_irqrestore(&virtionet_lock, flags);
 			free_send_bufs();
 			spin_lock_irqsave(&virtionet_lock, flags);
-			ret = addBufToQueue(this->vq[1], (unsigned char *) addr, len + 10);
+			ret = addBufToNetQueue(this->vq[1], (unsigned char *) addr, len + 10);
 		}
 		if (ret == -ERROR_VIRTIO_ENOSPC){
 			stat_err_nospace++;
@@ -414,7 +414,7 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 		}
 	}
 #else
-	ret = addBufToQueue(this->vq[1], (unsigned char *) addr, len + 10);
+	ret = addBufToNetQueue(this->vq[1], (unsigned char *) addr, len + 10);
 #endif
 
 	stat_sends++;
@@ -463,6 +463,207 @@ int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 		}
 	}
 }
+/*****************************  Virtio Disk ********************************************/
+#define VIRTIO_BLK_T_IN 0
+#define VIRTIO_BLK_T_OUT 1
+#define VIRTIO_BLK_T_SCSI_CMD 2
+#define VIRTIO_BLK_T_SCSI_CMD_OUT 3
+#define VIRTIO_BLK_T_FLUSH 4
+#define VIRTIO_BLK_T_FLUSH_OUT 5
+#define VIRTIO_BLK_T_BARRIER 0x80000000
+
+#define VIRTIO_BLK_DATA_SIZE 1024
+struct virtio_blk_req {
+	uint32_t type ;
+	uint32_t ioprio ;
+	uint64_t sector ;
+	char data[VIRTIO_BLK_DATA_SIZE]; /*TODO:  currently it made fixed, actually it is  variable size data here like data[][512]; */
+	uint8_t status ;
+	int len;
+};
+struct virtqueue *disk_vq;
+static int virtio_disk_interrupt(void *private_data) {
+	//virtio_disable_cb(disk_vq);
+	return 0;
+}
+void *virtio_disk_jdriver::addBufToQueue( unsigned char *buf, uint64_t len, uint64_t sector) {
+	struct virtqueue *tmp_vq = this->vq[0];
+	struct virtio_blk_req *req;
+	struct scatterlist sg[4];
+	int ret;
+	int transfer_len=len;
+disk_vq=tmp_vq;
+	if (buf == 0) {
+		buf = (unsigned char *) alloc_page(0);
+	//	len = 4096; /* page size */
+	}
+	if (buf == 0 || len>4000){
+		BRK;
+	}
+
+	req = (struct virtio_blk_req *)buf;
+	ut_memset(buf, 0, sizeof(struct virtio_blk_req));
+	req->sector = sector;
+	req->type = VIRTIO_BLK_T_IN;
+	req->status = 0xff;
+
+	sg[0].page_link = (unsigned long) buf;
+	sg[0].length = 16;
+	sg[0].offset = 0;
+
+	sg[1].page_link = (unsigned long) (buf + 16);
+	if (len < blk_size){
+		transfer_len=blk_size;
+	}
+	sg[1].length =  transfer_len;
+	sg[1].offset = 0;
+#if 1
+	sg[2].page_link = (unsigned long) (buf + 16 + VIRTIO_BLK_DATA_SIZE);
+	sg[2].length =  1;
+	sg[2].offset = 0;
+#endif
+	//DEBUG(" scatter gather-0: %x:%x sg-1 :%x:%x \n",sg[0].page_link,__pa(sg[0].page_link),sg[1].page_link,__pa(sg[1].page_link));
+
+	virtio_disable_cb(tmp_vq);
+	ret = virtio_add_buf_to_queue(tmp_vq, sg, 1, 2, (void *) sg[0].page_link, 0);/* send q */
+	virtio_queue_kick(tmp_vq);
+	return (void *)buf;
+}
+int virtio_disk_jdriver::disk_attach_device(class jdevice *jdev) {
+	auto pci_ioaddr = jdev->pci_device.pci_ioaddr;
+	unsigned long features;
+
+	this->device = jdev;
+	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_ACKNOWLEDGE);
+	ut_log("	Virtio disk: Initializing status :%x : \n", virtio_get_pcistatus(pci_ioaddr));
+
+	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER);
+
+	auto addr = pci_ioaddr + VIRTIO_PCI_HOST_FEATURES;
+	features = inl(addr);
+	ut_log("	Virtio disk: Initializing VIRTIO PCI hostfeatures :%x: status :%x :\n", features,  virtio_get_pcistatus(pci_ioaddr));
+
+	this->virtio_create_queue(0, 2);
+	if (jdev->pci_device.msix_cfg.isr_vector > 0) {
+#if 0
+		outw(virtio_dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR,0);
+		outw(virtio_dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR,0xffff);
+		ar_registerInterrupt(msi_vector, virtio_disk_interrupt, "virtio_disk_msi");
+#endif
+	}
+	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER_OK);
+	ut_log("	Virtio disk:  VIRTIO PCI COMPLETED with driver ok :%x \n", virtio_get_pcistatus(pci_ioaddr));
+	inb(pci_ioaddr + VIRTIO_PCI_ISR);
+	ar_registerInterrupt(32 + jdev->pci_device.pci_header.interrupt_line, virtio_disk_interrupt, "virt_disk_irq", (void *) this);
+
+	int i;
+	unsigned long config_data;
+	disk_size=0;
+	/*
+	 * struct v i r t i o _ b l k _ c o n f i g {
+		u64 capacity ;
+		u32 size_max ;
+		u32 seg_max ;
+		s t r u c t v i r t i o _ b l k _ g e o m e t r y {
+			u16 cylinders ;
+			u8 heads;
+			u8 sectors;
+		} g e o m e t r y ;
+		u32 blk_size;
+	}
+	 */
+	for (i=0; i< 6; i++){
+		addr = pci_ioaddr + VIRTIO_MSI_CONFIG_VECTOR + (i*4);
+		config_data = inl(addr);
+		if (i==0){ /* disk size */
+			disk_size = config_data*512;
+		}
+		if (i==1 && config_data>0){
+			disk_size = disk_size  +  (config_data* (0x1 << 32));
+		}
+		if (i == 5){
+			blk_size = config_data;
+		}
+		ut_log(" %d: config data: %x \n",i,config_data);
+	}
+	ut_log(" driver status:  %x :\n",virtio_get_pcistatus(pci_ioaddr));
+
+	return 1;
+}
+
+int virtio_disk_jdriver::probe_device(class jdevice *jdev) {
+	if ((jdev->pci_device.pci_header.vendor_id == VIRTIO_PCI_VENDOR_ID)
+			&& (jdev->pci_device.pci_header.device_id == 0x1001)) {
+		ut_log(" Matches the disk Probe \n");
+		return JSUCCESS;
+	}
+	return JFAIL;
+}
+extern jdriver *disk_driver;
+jdriver *virtio_disk_jdriver::attach_device(class jdevice *jdev) {
+	stat_allocs = 0;
+	stat_frees = 0;
+	stat_err_nospace = 0;
+	COPY_OBJ(virtio_p9_jdriver, this, new_obj, jdev);
+	((virtio_disk_jdriver *) new_obj)->disk_attach_device(jdev);
+	disk_driver=(jdriver *) new_obj;
+	return (jdriver *) new_obj;
+}
+
+int virtio_disk_jdriver::dettach_device(jdevice *jdev) {
+	return JFAIL;
+}
+#define VIRTIO_BLK_S_OK 0
+#define VIRTIO_BLK_S_IOERR 1
+#define VIRTIO_BLK_S_UNSUPP 2
+int virtio_disk_jdriver::read(unsigned char *buf, int len, int offset) {
+	struct virtio_blk_req *req;
+	int sector;
+	int data_len;
+	int initial_skip;
+	unsigned long addr;
+	int qlen,ret;
+	ret=0;
+	/* TODO : need maintain lock */
+	sector = offset / blk_size;
+
+	initial_skip= offset - sector*blk_size;
+	data_len = len+initial_skip;
+
+	if (data_len > VIRTIO_BLK_DATA_SIZE){
+		data_len =VIRTIO_BLK_DATA_SIZE;
+	}
+	req=addBufToQueue(0,data_len,sector);
+#if 1
+	int wait_loop=0;
+	while(wait_loop<5){
+		if (req->status == VIRTIO_BLK_S_OK){
+			break;
+		}
+		sc_sleep(100);
+	}
+#endif
+	if (req->status != VIRTIO_BLK_S_OK){
+		goto last;
+	}
+	ret = data_len-initial_skip;
+	ut_memcpy(buf,&req->data[initial_skip],data_len-initial_skip);
+	addr = virtio_removeFromQueue(vq[0], &qlen);
+	if (addr != 0){
+		free_page(addr);
+	}
+last:
+
+//		ut_printf("%d -> %d  DATA :%x :%x  disksize:%d blksize:%d\n",i,disk_bufs[i]->status,disk_bufs[i]->data[0],disk_bufs[i]->data[1],disk_size,blk_size);
+
+	return ret;
+}
+int virtio_disk_jdriver::write(unsigned char *data, int len, int wr_flags) {
+	return 0;
+}
+int virtio_disk_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
+	return JSUCCESS;
+}
 /***************************************************************************************************/
 extern wait_queue *p9_waitq;
 static int virtio_9p_interrupt(void *private_data) { // TODO: handling similar  type of interrupt generating while serving P9 interrupt.
@@ -490,14 +691,13 @@ int virtio_p9_jdriver::p9_attach_device(class jdevice *jdev) {
 
 	this->device = jdev;
 	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_ACKNOWLEDGE);
-	ut_log("	Virtio P9: Initializing VIRTIO PCI NET status :%x : \n", virtio_get_pcistatus(pci_ioaddr));
+	ut_log("	Virtio P9: Initializing VIRTIO PCI status :%x : \n", virtio_get_pcistatus(pci_ioaddr));
 
 	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER);
 
 	auto addr = pci_ioaddr + VIRTIO_PCI_HOST_FEATURES;
 	features = inl(addr);
-	ut_log("	Virtio P9: Initializing VIRTIO PCI 9P hostfeatures :%x:\n", features);
-
+	ut_log("	Virtio P9: Initializing VIRTIO PCI 9P hostfeatures :%x: status:%x\n", features, virtio_get_pcistatus(pci_ioaddr));
 
 	this->virtio_create_queue(0, 2);
 	if (jdev->pci_device.msix_cfg.isr_vector > 0) {
@@ -537,22 +737,31 @@ int virtio_p9_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 /*************************************************************************************************/
 static virtio_p9_jdriver *p9_jdriver;
 static virtio_net_jdriver *net_jdriver;
+static virtio_disk_jdriver *disk_jdriver;
 
 extern "C" {
 
-void init_p9_jdriver() {
+void init_virtio_p9_jdriver() {
 	p9_jdriver = jnew_obj(virtio_p9_jdriver);
 	p9_jdriver->name = (unsigned char *) "p9_driver";
 
 	register_jdriver(p9_jdriver);
 }
 
-void init_net_jdriver() {
+void init_virtio_net_jdriver() {
 	net_jdriver = jnew_obj(virtio_net_jdriver);
 	net_jdriver->name = (unsigned char *) "net_driver";
 
 	register_jdriver(net_jdriver);
 }
+void init_virtio_disk_jdriver() {
+
+	disk_jdriver = jnew_obj(virtio_disk_jdriver);
+	disk_jdriver->name = (unsigned char *) "disk_driver";
+
+	register_jdriver(disk_jdriver);
+}
+
 struct virtqueue *virtio_jdriver_getvq(void *driver, int index) {
 	virtio_jdriver *jdriver = (virtio_jdriver *) driver;
 

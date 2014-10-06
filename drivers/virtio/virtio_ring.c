@@ -170,7 +170,7 @@ extern int netbh_state;
 void print_vq(struct virtqueue *_vq) {
 	long diff;
 	if (_vq == 0) {
-		ut_printf("vq Empty \n");
+		ut_printf("		vq Empty \n");
 		return;
 	}
 	struct vring_virtqueue *vq = to_vvq(_vq);

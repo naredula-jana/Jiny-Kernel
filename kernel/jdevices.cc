@@ -16,11 +16,33 @@ static int device_count = 0;
 #define MAX_DRIVERS 100
 class jdriver *jdriver_list[MAX_DRIVERS];
 static int driver_count = 0;
+typedef struct {
+	unsigned char *description;
+	  uint16_t vendor_id;
+	  uint16_t device_id;
+}pci_device_vendor_t ;
+
+pci_device_vendor_t pci_device_vendor_list []={
+		{"PIIX3 IDE Interface (Triton II)",0x8086,0x7010},
+		{"PIIX3 PCI-to-ISA Bridge (Triton II)", 0x8086,0x7000},
+		{"Intel Pro 1000/MT",0x8086,0x100e},
+		{"PIIX4/4E/4M Power Management Controller",0x8086,0x7113},
+		{"PCI & Memory", 0x8086, 0x1237},
+		{"VGA controller",0x1013,0xb8},
+		{"Intel(R) 82371AB/EB PCI Bus Master IDE Controller",0x8086,0x7111},
+		{"virtio disk device",VIRTIO_PCI_VENDOR_ID,0x1001},
+		{"virtio net device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_NET_DEVICE_ID},
+		{"virtio p9 device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_9P_DEVICE_ID},
+		{"virtio ballon device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_BALLOON_DEVICE_ID},
+		{0,0,0}
+};
 jdevice::jdevice(unsigned char *arg_name, int arg_type){
 	ut_snprintf(name ,MAX_DEVICE_NAME,arg_name);
 	file_type = arg_type;
 }
 int jdevice::init_pci(uint8_t bus, uint8_t device, uint8_t function) {
+	int i;
+
 	pci_device.pci_addr.bus = bus;
 	pci_device.pci_addr.device = device;
 	pci_device.pci_addr.function = function;
@@ -32,7 +54,14 @@ int jdevice::init_pci(uint8_t bus, uint8_t device, uint8_t function) {
 	ret = pci_generic_read(&this->pci_device.pci_addr, 0, sizeof(pci_dev_header_t), &this->pci_device.pci_header);
 	if (ret != 0 || this->pci_device.pci_header.vendor_id == 0xffff)
 		return JFAIL;
-	ut_log("	scan devices %d:%d:%d  %x:%x\n", bus, device, function, this->pci_device.pci_header.vendor_id,
+	pci_device.description = 0;
+	for (i=0; pci_device_vendor_list[i].description!=0; i++){
+		if (pci_device_vendor_list[i].device_id==pci_device.pci_header.device_id  && pci_device_vendor_list[i].vendor_id==pci_device.pci_header.vendor_id){
+			pci_device.description = pci_device_vendor_list[i].description;
+			break;
+		}
+	}
+	ut_log("---------\n	scan devices %d:%d:%d  %x:%x\n", bus, device, function, this->pci_device.pci_header.vendor_id,
 			this->pci_device.pci_header.device_id);
 
 	ut_log(" reading pci info : bus:dev:fuc : %x:%x:%x \n", pci_device.pci_addr.bus, pci_device.pci_addr.device,
@@ -45,26 +74,30 @@ int jdevice::init_pci(uint8_t bus, uint8_t device, uint8_t function) {
 	pci_hdr = &pci_device.pci_header;
 	bars = &pci_device.pci_bars[0];
 	len = pci_device.pci_bar_count;
-	ut_log(" succeded reading pci info : bus:dev:fuc : %x:%x:%x \n",pci_device.pci_addr.bus,pci_device.pci_addr.device,pci_device.pci_addr.function);
+	ut_log(" succeded reading pci info : bus:dev:fuc : %x:%x:%x barcount:%d\n",pci_device.pci_addr.bus,pci_device.pci_addr.device,pci_device.pci_addr.function,len);
 
-	if (bars[0].addr != 0) {
+	//if (bars[0].addr != 0) {
+	if (len != 0){
 		pci_device.pci_ioaddr = bars[0].addr - 1;
 		pci_device.pci_iolen = bars[0].len;
 		pci_device.pci_mmio = bars[1].addr;
 		pci_device.pci_mmiolen = bars[1].len;
 	} else {
-		ut_log(" ERROR in initializing PCI driver %x : %x \n", bars[0].addr,
-				bars[1].addr);
-		return JFAIL;
+		ut_log(" ERROR in initializing PCI driver %x : %x \n", bars[0].addr,bars[1].addr);
+		//return JFAIL;
 	}
 	return JSUCCESS;
 }
 void jdevice::print_stats() {
+	int i;
+
 	if (ut_strcmp(name, (unsigned char *) "pci") != 0) {
 		ut_printf("%s: ", name);
 	} else {
-		ut_printf("pci bus:dev:func: %2x:%2x:%2x : ", pci_device.pci_addr.bus, pci_device.pci_addr.device,
-				pci_device.pci_addr.function);
+		ut_printf("pci bus:dev:func: %2x:%2x:%2x vendor:%x device:%x descrip :%s: \n", pci_device.pci_addr.bus, pci_device.pci_addr.device,
+				pci_device.pci_addr.function,pci_device.pci_header.vendor_id,pci_device.pci_header.device_id,pci_device.description);
+		for (i=0; pci_device.pci_bars[i].addr!=0 && i<MAX_PCI_BARS; i++)
+			ut_printf(" addr :%x (%d) \n",pci_device.pci_bars[i].addr,pci_device.pci_bars[i].len);
 	}
 	if (driver != 0) {
 		driver->print_stats();
@@ -168,18 +201,21 @@ static int scan_pci_devices() {
 	}
 	return JSUCCESS;
 }
-extern void init_p9_jdriver();
-extern void init_net_jdriver();
+extern void init_virtio_p9_jdriver();
+extern void init_virtio_net_jdriver();
+extern void init_virtio_disk_jdriver();
 extern void init_keyboard_jdriver();
 extern void init_serial_jdriver();
 static struct jdevice *keyboard_device,*serial1_device,*serial2_device;
 static struct jdevice *vga_device;
+jdriver *disk_driver=0;
 int init_jdevices(unsigned long unused_arg1) {
 	device_count = 0;
 	int d,k;
 
-	init_p9_jdriver();
-	init_net_jdriver();
+	init_virtio_p9_jdriver();
+	init_virtio_net_jdriver();
+	init_virtio_disk_jdriver();
 	init_keyboard_jdriver();
 	init_serial_jdriver();
 
@@ -207,6 +243,7 @@ int init_jdevices(unsigned long unused_arg1) {
 	}
 
 	scan_pci_devices();
+	ut_log("-------------\n");
 
 	return JSUCCESS;
 }
@@ -228,10 +265,16 @@ void Jcmd_jdevices() {
 		jdevice_list[i]->print_stats();
 	}
 }
-void *test_addr[5];
-void Jcmd_virttest() {
-
-	jdriver_list[0]->print_stats();
+int test_i=0;
+void Jcmd_read(){
+	unsigned char buf[800];
+	int ret;
+if (disk_driver!=0){
+	ret = disk_driver->read(buf,50,test_i);
+	test_i = test_i + 50;
+	buf[50]=0;
+	ut_printf(" Read from disk ret:%d: :%s: \n",ret,buf);
+}
 }
 extern "C" void __cxa_pure_virtual() { while (1); }  /* TODO : to avoid compilation error */
 }

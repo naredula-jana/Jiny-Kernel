@@ -78,6 +78,9 @@ def start_jiny(options):
         
     args += ["-append", "%s"%(options.kernel_args)]
     args += ["-kernel", "/opt_src/Jiny-Kernel/bin/jiny_image.bin"]
+ #   args += ["-hda", "/opt_src/Jiny-Kernel/bin/disk"]
+    args += ["-drive", "if=virtio,id=drive0,file=/opt_src/Jiny-Kernel/bin/disk"]
+ #   args += ["-device", "ide-drive,drive=drive0,bus=ide.0"]
 
     if (options.snapshot):
         args += ["-incoming", "exec: gzip -c -d /opt_src/Jiny-Kernel/bin/jiny_apic_snapshot.gz"]

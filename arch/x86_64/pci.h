@@ -77,6 +77,7 @@ typedef struct __pci_dev_header_t {
 
   uint32_t device_specific_data[48];
 
+
 } pci_dev_header_t;
 
 typedef struct __pci_addr_t {
@@ -142,6 +143,8 @@ int enable_msix(device_t *dev);
 #define  VIRTIO_PCI_NET_DEVICE_ID 0x1000
 #define VIRTIO_PCI_9P_DEVICE_ID 0x1009
 #define VIRTIO_PCI_BALLOON_DEVICE_ID 0x1002
+#define IDE_PCI_DEVICE_ID 0x7010  /* ide bus */
+#define IDE_CONTROLLER__PCI_DEVICE 0x7011 /* Intel(R) 82371AB/EB PCI Bus Master IDE Controller */
 
 #define XEN_PLATFORM_VENDOR_ID 0x5853
 #define XEN_PLATFORM_DEVICE_ID 0x0001
@@ -160,6 +163,7 @@ typedef struct pci_device {
 	unsigned long pci_mmiolen;
 	struct pcicfg_msix msix_cfg;
 	int msi;
+	unsigned char *description;
 }pci_device_t;
 int read_pci_info_new(pci_device_t *dev);
 int pci_enable_msix(pci_addr_t *addr,struct pcicfg_msix *msix,uint8_t capabilities_pointer);

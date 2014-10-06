@@ -92,6 +92,7 @@ endif
 endif
 #	make SOURCE_ROOT=$$PWD -C modules/udp_stack
 #	make SOURCE_ROOT=$$PWD -C drivers/hostshm
+	make SOURCE_ROOT=$$PWD -C modules/uip-uip-1-0/uip
 	make SOURCE_ROOT=$$PWD -C drivers/virtio
 	make SOURCE_ROOT=$$PWD -C drivers/virtio/9p
 	make SOURCE_ROOT=$$PWD -C drivers/virtio/net

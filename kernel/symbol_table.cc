@@ -308,7 +308,7 @@ static int Jcmd_sset(unsigned char *arg1, unsigned char *arg2) {
 	return 1;
 }
 extern int g_conf_func_debug;
-int ut_symbol_execute(int type, char *name, uint8_t *argv1, uint8_t *argv2) {
+int ut_symbol_execute(int type, unsigned char *name, uint8_t *argv1, uint8_t *argv2) {
 	int i, k, *confint;
 	unsigned long *conflong;
 	unsigned char new_name[200];

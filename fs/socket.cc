@@ -285,7 +285,7 @@ void socket::print_all_stats() {
 		name = net_stack_list[0]->name;
 	}
 
-	ut_printf("Socket  netstack:%s raw_drop:%d raw_attached:%d raw_default: %d\n",  name, stat_raw_drop, stat_raw_attached, stat_raw_default);
+	ut_printf("SOCKET  netstack:%s raw_drop:%d raw_attached:%d raw_default: %d\n",  name, stat_raw_drop, stat_raw_attached, stat_raw_default);
 
 	default_socket->print_stats();
 	print_list(&socket::tcp_listner_list);
@@ -388,18 +388,19 @@ vinode* socket::create_new(int arg_type) {
 		list = &socket::udp_list;
 	}
 	if (add_sock(list, sock) == JFAIL){
-		jfree_obj(sock);
+		jfree_obj((unsigned long)sock);
 		return NULL;
 	}
 
 	sock->init_socket(arg_type);
 	return (vinode *) sock;
 }
-void socket::default_pkt_thread(void *arg1, void *arg2){
+int socket::default_pkt_thread(void *arg1, void *arg2){
 	while(1){
 		default_socket->read(0,0,0,0);
 		default_sock_queue_len = default_socket->queue.consumer;
 	}
+	return 1;
 }
 void socket::init_socket_layer(){
 	int pid;
@@ -662,6 +663,6 @@ int SYS_recvmsg(int sockfd, struct msghdr *msg, int flags){
 		ut_printf("%d: IOV base :%x len: %x \n",msg->msg_iov[i].iov_base,msg->msg_iov[i].iov_len);
 		//if (msg->msg_iov[i].iov_base == 0) return -1;
 	}
-
+	return 0;
 }
 }

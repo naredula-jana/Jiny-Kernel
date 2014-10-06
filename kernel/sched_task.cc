@@ -421,7 +421,7 @@ static struct mm_struct *create_mm() {
 
 	return mm;
 }
-
+extern unsigned long  g_kernel_page_dir;
 int init_tasking(unsigned long unused) {
 	int i;
 	unsigned long task_addr;
@@ -513,6 +513,7 @@ static int continue_parent_task(unsigned long ppid){
 		}
 	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
+	return JSUCCESS;
 }
 /* This function should not block, if it block then the idle thread may block */
 void sc_delete_task(struct task_struct *task) {
@@ -812,6 +813,7 @@ int do_softirq() {
 	if (g_current_task->counter <= 0) {
 		sc_schedule();
 	}
+	return JSUCCESS;
 }
 #endif
 //unsigned long kvm_ticks=0;

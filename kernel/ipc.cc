@@ -238,7 +238,7 @@ int Jcmd_locks(char *arg1, char *arg2) {
 	spin_unlock_irqrestore(&g_global_lock, flags);
 
 	ut_printf("%s",buf);
-	vfree(buf);
+	vfree((unsigned long)buf);
 	return 1;
 }
 
@@ -297,7 +297,7 @@ int wait_queue::unregister() {
 	}
 last:
     spin_unlock_irqrestore(&g_global_lock, irq_flags);
-    jfree_obj(this);
+    jfree_obj((unsigned long)this);
 	return -1;
 }
 void wait_queue::_add_to_me( struct task_struct * p, long ticks) {
@@ -530,7 +530,7 @@ int semaphore::unlock(int line) {
 void semaphore::free() {
 	arch_spinlock_unregister(&(sem_lock));
 	waitqueue->unregister();
-    jfree_obj(this);
+    jfree_obj((unsigned long)this);
 }
 void semaphore::print_stats(){
 

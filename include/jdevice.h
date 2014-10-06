@@ -61,6 +61,7 @@ public:
 	NEW_OBJ->device = jdev;
 
 class virtio_net_jdriver: public virtio_jdriver {
+
 	int net_attach_device(jdevice *dev);
 	int free_send_bufs();
 public:
@@ -76,6 +77,18 @@ public:
 	static int test_k;
 };
 
+class virtio_disk_jdriver: public virtio_jdriver {
+	unsigned long disk_size,blk_size;
+	int disk_attach_device(jdevice *dev);
+	void *addBufToQueue( unsigned char *buf, uint64_t len, uint64_t sector);
+public:
+	int probe_device(jdevice *dev);
+	jdriver *attach_device(jdevice *dev);
+	int dettach_device(jdevice *dev);
+	int read(unsigned char *buf, int len, int flags);
+	int write(unsigned char *buf, int len, int flags);
+	int ioctl(unsigned long arg1,unsigned long arg2);
+};
 class virtio_p9_jdriver: public virtio_jdriver {
 	int p9_attach_device(jdevice *dev);
 
