@@ -52,6 +52,7 @@ int init_vfs(unsigned long arg);
 int init_smp_force(unsigned long ncpus);
 int init_syscall(unsigned long cpuid);
 int init_networking(unsigned long arg);
+extern int init_procfs(unsigned long unused);
 
 typedef struct {
 	int (*func)(unsigned long arg);
@@ -87,6 +88,7 @@ static inittable_t inittable[] = {
 //		{init_code_readonly,0,       "Making code readonly"},
 		{init_kernel_vmaps, 0, "Kernel Vmaps"},
 		{init_jdevices,0,       "devices in c++ "},
+		{init_procfs,0,"Procfs"},
 		{init_acpi,0,       "ACPI initialzed "},
 #ifdef NETWORKING
 		{init_network_stack,0,       "network stacks"},

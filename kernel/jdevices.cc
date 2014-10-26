@@ -208,11 +208,15 @@ extern void init_keyboard_jdriver();
 extern void init_serial_jdriver();
 static struct jdevice *keyboard_device,*serial1_device,*serial2_device;
 static struct jdevice *vga_device;
-jdriver *disk_driver=0;
+
+jdriver *disk_drivers[MAX_DISK_DEVICES];
 int init_jdevices(unsigned long unused_arg1) {
 	device_count = 0;
-	int d,k;
+	int d,k,i;
 
+	for (i=0; i<MAX_DISK_DEVICES; i++){
+		disk_drivers[i]=0;
+	}
 	init_virtio_p9_jdriver();
 	init_virtio_net_jdriver();
 	init_virtio_disk_jdriver();
@@ -266,15 +270,15 @@ void Jcmd_jdevices() {
 	}
 }
 int test_i=0;
-void Jcmd_read(){
+void Jcmd_read() {
 	unsigned char buf[800];
 	int ret;
-if (disk_driver!=0){
-	ret = disk_driver->read(buf,50,test_i);
-	test_i = test_i + 50;
-	buf[50]=0;
-	ut_printf(" Read from disk ret:%d: :%s: \n",ret,buf);
-}
+	if (disk_drivers[0] != 0) {
+		ret = disk_drivers[0]->read(buf, 50, test_i);
+		test_i = test_i + 50;
+		buf[50] = 0;
+		ut_printf(" Read from disk ret:%d: :%s: \n", ret, buf);
+	}
 }
 extern "C" void __cxa_pure_virtual() { while (1); }  /* TODO : to avoid compilation error */
 }

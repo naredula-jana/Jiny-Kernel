@@ -1,0 +1,33 @@
+heat_template_version: 2013-05-23
+
+description: Simple template to deploy a jiny compute instance
+parameters:
+ ip:
+   type: string
+   
+resources:
+  my_image:
+    type: OS::Glance::Image
+    properties:
+      disk_format: ami
+      container_format: ami 
+      location: http://127.0.0.1/
+      min_ram:  12
+      properties: {"os_command_line": {"Fn::Replace": [{'$ip_addr': {get_param: ip}, '$gw_ip': '1.2.3.4'},'ipaddress=$ip_addr, gw=$gw_ip']} , "ramdisk_id":"197fbe24-57bf-4362-ac22-2da53c3af376", "kernel_id":" e1d571d0-2bb5-40b7-8477-76e882798712" }
+
+  my_instance:
+    type: OS::Nova::Server
+    depends_on: my_image
+    properties:
+      image: {get_resource: my_image}
+      flavor: m1.micro
+
+outputs:
+  server_private_ip:
+    description: IP address of server1 in private network
+    value: { get_attr: [ my_instance, first_address ] }
+  server_param_ip:
+    description: IP address of parameters
+    value: { get_param:  ip }
+      
+

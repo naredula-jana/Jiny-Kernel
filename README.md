@@ -84,7 +84,8 @@ Number of cpu cores in the linux and Jiny Vm are 2.
 
 - Page Cache:  LRU and MRU based (based on the published paper in opencirrus) 
 - File Systems: 
-   - 9p+virtio
+   - TarFs : Tar file can be mounted as a root/non-root file system.
+   - 9p 
    - Host based file system based on ivshm(Inter Vm Shared Memory) 
 - Virtualization Features:
    - HighPriority Apps: very basic features is available.

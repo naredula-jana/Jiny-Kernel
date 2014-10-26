@@ -237,10 +237,12 @@ void kshell::kshell_process(){
 	}
 }
 #define USERLEVEL_SHELL "./busybox"
+//#define USERLEVEL_SHELL "/jiny_root/busybox"
 int kshell::main(void *arg) {
 	int i, cmd_type;
 	int ret = 1;
 
+	ut_log("   loading the kernel shell :%s:\n",USERLEVEL_SHELL);
 //	ret = fs_open(USERLEVEL_SHELL,0,0);
 	if (ret != 0) {
 //		fs_close(ret);

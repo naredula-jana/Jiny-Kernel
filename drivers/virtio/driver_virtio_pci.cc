@@ -23,6 +23,7 @@ extern "C" {
 #include "mach_dep.h"
 extern int p9_initFs(void *p);
 extern void print_vq(struct virtqueue *_vq);
+extern int init_tarfs(jdriver *driver_arg);
 }
 #include "jdevice.h"
 extern int register_netdevice(jdevice *device);
@@ -472,8 +473,8 @@ int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 #define VIRTIO_BLK_T_FLUSH_OUT 5
 #define VIRTIO_BLK_T_BARRIER 0x80000000
 
-#define VIRTIO_BLK_DATA_SIZE 1024
-struct virtio_blk_req {
+#define VIRTIO_BLK_DATA_SIZE (4096)
+struct virtio_blk_req {  /* TODO : size of this struct cannot be greater then page size */
 	uint32_t type ;
 	uint32_t ioprio ;
 	uint64_t sector ;
@@ -481,7 +482,7 @@ struct virtio_blk_req {
 	uint8_t status ;
 	int len;
 };
-struct virtqueue *disk_vq;
+//struct virtqueue *disk_vq;
 static int virtio_disk_interrupt(void *private_data) {
 	//virtio_disable_cb(disk_vq);
 	return 0;
@@ -492,12 +493,13 @@ void *virtio_disk_jdriver::addBufToQueue( unsigned char *buf, uint64_t len, uint
 	struct scatterlist sg[4];
 	int ret;
 	int transfer_len=len;
-disk_vq=tmp_vq;
+
+	//disk_vq=tmp_vq;
 	if (buf == 0) {
-		buf = (unsigned char *) alloc_page(0);
-	//	len = 4096; /* page size */
+		//buf = (unsigned char *) alloc_page(0);
+		buf = mm_getFreePages(0,1);
 	}
-	if (buf == 0 || len>4000){
+	if (buf == 0 ){
 		BRK;
 	}
 
@@ -512,7 +514,7 @@ disk_vq=tmp_vq;
 	sg[0].offset = 0;
 
 	sg[1].page_link = (unsigned long) (buf + 16);
-	if (len < blk_size){
+	if (transfer_len < blk_size){
 		transfer_len=blk_size;
 	}
 	sg[1].length =  transfer_len;
@@ -599,14 +601,23 @@ int virtio_disk_jdriver::probe_device(class jdevice *jdev) {
 	}
 	return JFAIL;
 }
-extern jdriver *disk_driver;
+extern jdriver *disk_drivers[];
+
 jdriver *virtio_disk_jdriver::attach_device(class jdevice *jdev) {
+	int i;
 	stat_allocs = 0;
 	stat_frees = 0;
 	stat_err_nospace = 0;
 	COPY_OBJ(virtio_p9_jdriver, this, new_obj, jdev);
 	((virtio_disk_jdriver *) new_obj)->disk_attach_device(jdev);
-	disk_driver=(jdriver *) new_obj;
+	for (i=0; i<5; i++){
+		if (disk_drivers[i]==0){
+			disk_drivers[i]=(jdriver *) new_obj;
+			break;
+		}
+	}
+
+	init_tarfs((jdriver *)new_obj);
 	return (jdriver *) new_obj;
 }
 
@@ -620,7 +631,7 @@ int virtio_disk_jdriver::read(unsigned char *buf, int len, int offset) {
 	struct virtio_blk_req *req;
 	int sector;
 	int data_len;
-	int initial_skip;
+	int initial_skip,blks;
 	unsigned long addr;
 	int qlen,ret;
 	ret=0;
@@ -633,24 +644,44 @@ int virtio_disk_jdriver::read(unsigned char *buf, int len, int offset) {
 	if (data_len > VIRTIO_BLK_DATA_SIZE){
 		data_len =VIRTIO_BLK_DATA_SIZE;
 	}
+	if ((data_len+offset) >= disk_size){
+		data_len = disk_size - offset;
+	}
+	if (data_len <=0){
+		return 0;
+	}
+	blks = data_len/blk_size;
+	if ((blks* blk_size) != data_len ){
+		data_len = (blks+1)*blk_size;
+	}
+	//ut_printf(" data_len :%d sector: %d \n",data_len,sector);
 	req=addBufToQueue(0,data_len,sector);
-#if 1
+
 	int wait_loop=0;
-	while(wait_loop<5){
-		if (req->status == VIRTIO_BLK_S_OK){
+	while(wait_loop<500){
+		if (req->status==VIRTIO_BLK_S_IOERR){
+			ut_printf(" ERROR reading block device data_len:%d: sector:%d:\n",data_len,sector);
+		}
+
+		if (req->status == VIRTIO_BLK_S_OK || req->status==VIRTIO_BLK_S_IOERR){
 			break;
 		}
-		sc_sleep(100);
+		sc_sleep(2);
+		wait_loop++;
 	}
-#endif
+
 	if (req->status != VIRTIO_BLK_S_OK){
 		goto last;
 	}
 	ret = data_len-initial_skip;
-	ut_memcpy(buf,&req->data[initial_skip],data_len-initial_skip);
+	if (ret> len){
+		ret = len;
+	}
+	ut_memcpy(buf,&req->data[initial_skip],ret);
 	addr = virtio_removeFromQueue(vq[0], &qlen);
 	if (addr != 0){
-		free_page(addr);
+		//free_page(addr);
+		mm_putFreePages(addr,1);
 	}
 last:
 
@@ -662,6 +693,9 @@ int virtio_disk_jdriver::write(unsigned char *data, int len, int wr_flags) {
 	return 0;
 }
 int virtio_disk_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
+	if (arg1 == IOCTL_DISK_SIZE){
+		return disk_size;
+	}
 	return JSUCCESS;
 }
 /***************************************************************************************************/
@@ -755,7 +789,6 @@ void init_virtio_net_jdriver() {
 	register_jdriver(net_jdriver);
 }
 void init_virtio_disk_jdriver() {
-
 	disk_jdriver = jnew_obj(virtio_disk_jdriver);
 	disk_jdriver->name = (unsigned char *) "disk_driver";
 

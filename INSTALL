@@ -26,3 +26,39 @@ target remote localhost:1234
 set architecture i386:x86-64
 ---------------------------------------------------
 
+-------------------------------------
+state capture into file :
+1) remove p9 file system and start jiny
+2) stop vm
+3) migrate to file
+
+(qemu) stop
+stop
+(qemu) 
+(qemu) migrate "exec:gzip -c > STATEFILE1.gz"  
+
+     To be supported directly by Migration Protocols, but until then...
+    Save VM state into a compressed file
+        Save 
+
+stop                                                               
+migrate_set_speed 4095m                                            
+migrate "exec:gzip -c > STATEFILE.gz"                              
+
+        Load 
+
+gzip -c -d STATEFILE.gz | <qemu-command-line> -incoming "exec: cat"   or
+<qemu-command-line> -incoming "exec: gzip -c -d STATEFILE.gz"
+source /opt_src/Jiny-Kernel/gdb_macros_qemu 
+(gdb) add_brk
+
+run  -gdb tcp::1336 -m 1024M -snapshot -drive file=/home/jana/jiny/bin/new_bootdisk,index=0,media=disk -drive file=/home/jana/jiny/bin/g2_image,index=1,media=disk -enable-kvm   -vnc :8 -netdev tap,id=guest0,vhost=on,vhostforce -smp 4 -device virtio-net-pci,mac=00:30:48:DB:5E:06,netdev=guest0 -serial telnet::50008,server,nowait  -monitor tcp::51008,server,nowait,nodelay -balloon virtio -incoming "exec: gzip -c -d S.gz"    
+
+-----------------------------------------------------------
+openstack: jiny aki image creation
+echo " " > ./dummy_ramdisk
+echo " " > ./dummy_disk
+KERNEL_ID=`glance image-create --name="jiny-kernel" --disk-format=aki --container-format=aki < ./jiny_image.bin | awk '/ id / { print $4 }'`
+INITRD_ID=`glance image-create --name="dummy-ramdisk" --disk-format=ari --container-format=ari < ./dummy_ramdisk | awk '/ id / { print $4 }'`
+glance image-create --name="jiny-image" --disk-format=ami --container-format=ami --property kernel_id=${KERNEL_ID} --property ramdisk_id=${INITRD_ID} < ./dummy_disk
+

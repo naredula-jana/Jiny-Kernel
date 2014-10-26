@@ -189,9 +189,25 @@ public:
 };
 
 /*******************************************************************************/
+#if 1
+class filesystem {
+public:
+	virtual int open(fs_inode *inode, int flags, int mode)=0;
+	virtual int lseek(struct file *file,  unsigned long offset, int whence)=0;
+	virtual long write(fs_inode *inode, uint64_t offset, unsigned char *buff, unsigned long len)=0;
+	virtual long read(fs_inode *inode, uint64_t offset,  unsigned char *buff, unsigned long len)=0;
+	virtual long readDir(fs_inode *inode, struct dirEntry *dir_ptr, unsigned long dir_max, int *offset)=0;
+	virtual int remove(fs_inode *inode)=0;
+	virtual int stat(fs_inode *inode, struct fileStat *stat)=0;
+	virtual int close(fs_inode *inodep)=0;
+	virtual int fdatasync(fs_inode *inodep)=0;
+	virtual int setattr(fs_inode *inode, uint64_t size)=0;//TODO : currently used for truncate, later need to expand
+	virtual int unmount()=0;
+	virtual void set_mount_pnt(unsigned char *mnt_pnt)=0;
+};
 
-
-
+unsigned long fs_registerFileSystem(filesystem *fs, unsigned char *mnt_pnt);
+#endif
 #define fd_to_file(fd) (fd >= 0 && g_current_task->fs->total > fd) ? (g_current_task->fs->filep[fd]) : ((struct file *)0)
 
 #endif

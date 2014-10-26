@@ -397,7 +397,7 @@ last:
 
 extern unsigned long _start,_end;
 extern addr_t end; // end of code and data region
-unsigned long 	g_pagecache_size = 0x10000000 ;
+unsigned long 	g_pagecache_size = 0x10000000 /4 ;
 extern unsigned long symbols_end;
 addr_t initialise_paging_new(addr_t physical_mem_size, unsigned long virt_image_end, unsigned long *virt_addr_start, unsigned long *virt_addr_end) ;
 int init_memory(unsigned long arg1){

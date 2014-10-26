@@ -77,6 +77,7 @@ public:
 	static int test_k;
 };
 
+#define IOCTL_DISK_SIZE 1
 class virtio_disk_jdriver: public virtio_jdriver {
 	unsigned long disk_size,blk_size;
 	int disk_attach_device(jdevice *dev);
@@ -104,4 +105,8 @@ public:
 
 
 void register_jdriver(class jdriver *driver);
+#define MAX_DISK_DEVICES 5
+extern "C" {
+extern jdriver *disk_drivers[];
+}
 #endif

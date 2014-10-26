@@ -1,4 +1,5 @@
 //#define DEBUG_ENABLE 1
+#include "file.hh"
 extern "C"{
 #include "vfs.h"
 #include "mm.h"
@@ -495,7 +496,8 @@ static void update_size(void *inode,uint64_t offset, int len ) {
 	}
 	return ;
 }
-struct filesystem p9_fs;
+}
+
 extern void *p9_dev;
 /* This is central switch where the call from vfs routed to the p9 functions */
 static int p9Request(unsigned char type, void *inode, uint64_t offset, unsigned char *data, int data_len, int flags, int mode) {
@@ -556,21 +558,38 @@ static int p9Request(unsigned char type, void *inode, uint64_t offset, unsigned 
     return ret;
 }
 
-static int p9Open(struct inode *inodep, int flags, int mode) {
+class p9_fs :public filesystem {
+public:
+	 int open(fs_inode *inode, int flags, int mode);
+	 int lseek(struct file *file,  unsigned long offset, int whence);
+	 long write(fs_inode *inode, uint64_t offset, unsigned char *buff, unsigned long len);
+	 long read(fs_inode *inode, uint64_t offset,  unsigned char *buff, unsigned long len);
+	 long readDir(fs_inode *inode, struct dirEntry *dir_ptr, unsigned long dir_max, int *offset);
+	 int remove(fs_inode *inode);
+	 int stat(fs_inode *inode, struct fileStat *stat);
+	 int close(fs_inode *inodep);
+	 int fdatasync(fs_inode *inodep);
+	 int setattr(fs_inode *inode, uint64_t size);//TODO : currently used for truncate, later need to expand
+	 int unmount();
+	 void set_mount_pnt(unsigned char *mnt_pnt);
+		int abc[200];
+};
+ int p9_fs::open(fs_inode *inodep, int flags, int mode) {
+	 //struct inode *inodep = (struct inode *)inodep_arg;
 	if (p9ClientInit() == JFAIL) return JFAIL;
 	return p9Request(REQUEST_OPEN, inodep, 0, 0, 0, flags, mode);
 }
 
-static int p9Lseek(struct file *filep, unsigned long offset, int whence) {
+int p9_fs::lseek(struct file *filep, unsigned long offset, int whence) {
 	filep->offset = offset;
 	return 1;
 }
 
-static int p9Fdatasync(void *inodep) {
+int p9_fs::fdatasync(fs_inode *inodep) {
 
 	return 1;
 }
-static long p9Write(void *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
+long p9_fs::write(fs_inode *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
 	long ret;
 	p9ClientInit();
     ret = (long) p9Request(REQUEST_WRITE, inodep, offset, data, data_len, 0, 0);
@@ -584,36 +603,36 @@ static long p9Write(void *inodep, uint64_t offset, unsigned char *data, unsigned
     return ret;
 }
 
-static long p9Read(void *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
+long p9_fs::read(fs_inode *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
 	if (p9ClientInit() == JFAIL) return JFAIL;
     return  (long)p9Request(REQUEST_READ, inodep, offset, data, data_len, 0, 0);
 }
 
-static long p9ReadDir(void *inodep, struct dirEntry *dir_ptr, unsigned long dir_max, int *offset) {
+long p9_fs::readDir(fs_inode *inodep, struct dirEntry *dir_ptr, unsigned long dir_max, int *offset) {
 	if (p9ClientInit() == JFAIL) return JFAIL;
     return  (long)p9Request(REQUEST_READDIR, inodep, offset, (unsigned char *)dir_ptr, dir_max, 0, 0);
 }
 
-static int p9Remove(void *inodep) {
+int p9_fs::remove(fs_inode *inodep) {
 	if (p9ClientInit() == JFAIL) return JFAIL;
     return  p9Request(REQUEST_REMOVE, inodep, 0, 0, 0, 0, 0);
 }
 
-static int p9Stat(void *inodep, struct fileStat *statp) {
+int p9_fs::stat(fs_inode *inodep, struct fileStat *statp) {
 	if (p9ClientInit() == JFAIL) return JFAIL;
     return  p9Request(REQUEST_STAT, inodep, 0, (unsigned char *)statp, 0, 0, 0);
 }
 
-static int p9Close(void *inodep) {
+int p9_fs::close(fs_inode *inodep) {
 	if (p9ClientInit() == JFAIL) return JFAIL;
     return  p9Request(REQUEST_CLOSE, inodep, 0, 0, 0, 0, 0);
 }
 
-static int p9Setattr(void *inodep,uint64_t size) {
+int p9_fs::setattr(fs_inode *inodep,uint64_t size) {
 	p9ClientInit();
     return  p9Request(REQUEST_SETATTR, inodep, size, 0, 0, 0, 0);
 }
-static int p9_unmount(){
+int p9_fs::unmount(){
 	int i;
 	for (i = 0; i < MAX_P9_FILES; i++) {
 		if (client.files[i].fid != 0) {
@@ -626,21 +645,16 @@ static int p9_unmount(){
 	ut_log("p9 UNmount\n");
 	return JSUCCESS;
 }
+void p9_fs::set_mount_pnt(unsigned char *mnt_pnt){
+/*TODO: nothing todo in p9fs */
+}
+static class p9_fs *p9_fs_obj;
+extern "C"{
 int p9_initFs(void *p9driver) {
 //	p9ClientInit(); /* TODO need to include here */
-	p9_fs.open = p9Open;
-	p9_fs.read = p9Read;
-	p9_fs.readDir = p9ReadDir;
-	p9_fs.close = p9Close;
-	p9_fs.write = p9Write;
-	p9_fs.remove = p9Remove;
-	p9_fs.stat = p9Stat;
-	p9_fs.fdatasync = p9Fdatasync; //TODO
-	p9_fs.lseek = p9Lseek; //TODO
-	p9_fs.setattr = p9Setattr; //TODO
-	p9_fs.unmount = p9_unmount;
 
-	fs_registerFileSystem(&p9_fs,"/");
+	p9_fs_obj = jnew_obj(p9_fs);
+	fs_registerFileSystem(p9_fs_obj,(unsigned char *)"p9_fs");
 	p9_dev = p9driver;
 
 	return 1;

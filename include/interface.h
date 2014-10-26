@@ -98,7 +98,7 @@ uint8_t *pc_page_to_ptr(struct page *p);
 int pc_housekeep(void);
 
 /*vfs */
-unsigned long fs_registerFileSystem(struct filesystem *fs, unsigned char *mnt_pnt);
+//unsigned long fs_registerFileSystem(filesystem *fs, unsigned char *mnt_pnt);
 unsigned long fs_putInode(void *fs_inode);
 int Jcmd_ls(uint8_t *arg1,uint8_t *arg2);
 struct file *fs_open(uint8_t *filename,int mode,int flags);

@@ -141,6 +141,7 @@ struct dirEntry { /* Do not change the entries , the size of struct is caluclate
 };
 #if 1
 typedef struct fileStat fileStat_t;
+#if 0
 struct filesystem {
 	int (*open)(void *inode, int flags, int mode);
 	int (*lseek)(struct file *file,  unsigned long offset, int whence);
@@ -154,6 +155,8 @@ struct filesystem {
 	int (*setattr)(void *inode, uint64_t size);//TODO : currently used for truncate, later need to expand
 	int (*unmount)();
 };
+#endif
+
 #endif
 #define fd_to_file(fd) (fd >= 0 && g_current_task->fs->total > fd) ? (g_current_task->fs->filep[fd]) : ((struct file *)0)
 int fs_data_sync(int num_pages);
