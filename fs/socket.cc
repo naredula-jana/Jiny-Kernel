@@ -252,7 +252,7 @@ int socket::ioctl(unsigned long arg1, unsigned long arg2) {
 	return ret;
 }
 
-void socket::print_stats(){
+void socket::print_stats(unsigned char *arg1,unsigned char *arg2){
 	ut_printf("socket: count:%d local:%x:%x remote:%x:%x (IO: %d/%d: StatErr: %d Qfull:%d)  %x\n",
 			count.counter,network_conn.src_ip,network_conn.src_port,network_conn.dest_ip,network_conn.dest_port,stat_in
 	    ,stat_out,stat_err,queue.error_full, &network_conn);
@@ -273,7 +273,7 @@ static void print_list(sock_list_t *listp){
 	for (i=0; i<listp->size;i++){
 		socket *sock=listp->list[i];
 		if (sock==0) continue;
-		sock->print_stats();
+		sock->print_stats(0,0);
 	}
 	return;
 }
@@ -287,7 +287,7 @@ void socket::print_all_stats() {
 
 	ut_printf("SOCKET  netstack:%s raw_drop:%d raw_attached:%d raw_default: %d\n",  name, stat_raw_drop, stat_raw_attached, stat_raw_default);
 
-	default_socket->print_stats();
+	default_socket->print_stats(0,0);
 	print_list(&socket::tcp_listner_list);
 	print_list(&socket::udp_list);
 	print_list(&socket::tcp_connected_list);

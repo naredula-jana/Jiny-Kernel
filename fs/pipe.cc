@@ -108,7 +108,7 @@ int pipe::ioctl(unsigned long arg1,unsigned long arg2){
 	return 0;
 }
 
-void pipe::print_stats(){
+void pipe::print_stats(unsigned char *arg1,unsigned char *arg2){
 
 }
 /*************************** End of pipe ******************************/

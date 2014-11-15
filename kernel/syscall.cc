@@ -52,6 +52,7 @@ unsigned long SYS_fs_stat(const char *path, struct stat *buf);
 
 int SYS_fs_dup2(int fd1, int fd2);
 int SYS_fs_dup(int fd1);
+unsigned long SYS_fs_unlink(uint8_t *path);
 unsigned long SYS_fs_readlink(uint8_t *path, char *buf, int bufsiz);
 int SYS_getsockname(int sockfd, struct sockaddr *addr, int *addrlen);
 
@@ -625,7 +626,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { SYS_fs_fcntl }, { snull }, { snull }, { SYS_fs_fdatasync }, /* 75 */
 { snull }, { snull }, { SYS_getdents }, { SYS_getcwd }, { SYS_chdir }, /* 80 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 85 */
-{ snull }, { snull }, { snull }, { SYS_fs_readlink }, { snull }, /* 90 */
+{ snull }, { SYS_fs_unlink }, { snull }, { SYS_fs_readlink }, { snull }, /* 90 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 95 */
 { SYS_gettimeofday }, { SYS_getrlimit }, { snull }, { snull }, { snull }, /* 100 */
 { snull }, { SYS_getuid }, { snull }, { SYS_getgid }, { SYS_setuid }, /* 105 */

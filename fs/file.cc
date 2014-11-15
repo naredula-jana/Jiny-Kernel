@@ -56,7 +56,7 @@ void vinode::update_stat_out(int out_req,int out_byte){
 fs_inode::fs_inode(uint8_t *arg_filename, unsigned long mode, struct filesystem *arg_vfs) {
 	int i;
 
-	ut_log("Filname in CONSTRUCTOR : %s \n",arg_filename);
+	//ut_log("Filname in CONSTRUCTOR : %s \n",arg_filename);
 	count.counter = 1;
 	nrpages = 0;
 	stat_locked_pages.counter = 0;
@@ -244,9 +244,13 @@ int fs_inode::close() {
 	return ret;
 }
 int fs_inode::ioctl(unsigned long arg1,unsigned long arg2) {
-	return JSUCCESS;
+	int ret = JFAIL;
+	if (arg1 == IOCTL_FILE_UNLINK){
+		ret = vfs->remove(this);
+	}
+	return ret;
 }
-void fs_inode::print_stats(){
+void fs_inode::print_stats(unsigned char *arg1,unsigned char *arg2){
 
 }
 unsigned long fs_registerFileSystem(filesystem *fs,unsigned char *type) {
@@ -273,8 +277,42 @@ unsigned long fs_registerFileSystem(filesystem *fs,unsigned char *type) {
 
 	return JFAIL;
 }
+
 /***************************************************************************************/
 extern "C" {
+int Jcmd_mount(uint8_t *arg1, uint8_t *arg2){
+	int i=0;
+
+	while(g_fs_list[i].type != 0){
+		if (g_fs_list[i].fs != 0){
+			ut_printf(" type: %s-> :%s  read_bytes: %xK read reqs:%x rerr:%x  disk_size:%d fs_size:%d",g_fs_list[i].type,g_fs_list[i].mount_pnt,g_fs_list[i].fs->stat_byte_reads/1000,
+					g_fs_list[i].fs->stat_read_req, g_fs_list[i].fs->stat_read_errors ,g_fs_list[i].fs->device_size,g_fs_list[i].fs->filesystem_size);
+			ut_printf("write_bytes: %xK write reqs:%x werr:%x\n",g_fs_list[i].fs->stat_byte_writes/1000,g_fs_list[i].fs->stat_write_req, g_fs_list[i].fs->stat_write_errors );
+			if (arg1 != 0 && i!=0){
+				g_fs_list[i].fs->print_stat();
+			}
+		}
+		i++;
+	}
+	return 1;
+}
+#if 0
+int Jcmd_unmount(uint8_t *arg1, uint8_t *arg2) {
+	struct fs_inode *tmp_inode;
+	struct list_head *p;
+	struct filesystem *vfs_fs = gvfs_fs;
+
+	vfs_fs->unmount();
+	mutexLock(g_inode_lock);
+	list_for_each(p, &fs_inode_list) {
+		tmp_inode = list_entry(p, struct fs_inode, inode_link);
+		tmp_inode->fs_private = 0;
+	}
+	mutexUnLock(g_inode_lock);
+
+	return JSUCCESS;
+}
+#endif
 static void inode_sync(struct fs_inode *inode, unsigned long truncate) {
 	struct page *page;
 	int ret;
@@ -367,7 +405,7 @@ static fs_inode *remove_duplicate_inodes(fs_inode *new_inode) {
 		tmp_inode = list_entry(p, struct fs_inode, inode_link);
 		if (tmp_inode == new_inode)
 			continue;
-		if (new_inode->fileStat.inode_no == tmp_inode->fileStat.inode_no) {
+		if ((new_inode->fileStat.inode_no == tmp_inode->fileStat.inode_no) && (new_inode->vfs == tmp_inode->vfs)) {
 			hard_link = tmp_inode->hard_links;
 
 			while (hard_link != 0) {
@@ -589,7 +627,6 @@ int fs_write(struct file *filep, uint8_t *buff, unsigned long len) {
 
 
 	DEBUG("Write  filename from hs  :%s: offset:%d inode:%x \n", filep->filename, filep->offset, filep->inode);
-
 	ret = inode->write(filep->offset, buff, len,0);
 	if (ret < 0) {
 		ut_log(" fs_write fails error:%x pid:%d \n", ret, g_current_task->pid);
@@ -669,23 +706,7 @@ int init_vfs(unsigned long unused_arg) {
 	return JSUCCESS;
 }
 /************************************************************************************/
-#if 0
-int Jcmd_unmount(uint8_t *arg1, uint8_t *arg2) {
-	struct fs_inode *tmp_inode;
-	struct list_head *p;
-	struct filesystem *vfs_fs = gvfs_fs;
 
-	vfs_fs->unmount();
-	mutexLock(g_inode_lock);
-	list_for_each(p, &fs_inode_list) {
-		tmp_inode = list_entry(p, struct fs_inode, inode_link);
-		tmp_inode->fs_private = 0;
-	}
-	mutexUnLock(g_inode_lock);
-
-	return JSUCCESS;
-}
-#endif
 int fs_sync() {
 	struct fs_inode *tmp_inode;
 	struct list_head *p;

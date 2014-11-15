@@ -59,10 +59,7 @@ static int p9_mount() {
 	return JSUCCESS;
 }
 static int p9_remount=0;
-int Jcmd_mount(){
-	p9_remount = 1;
-	return ;
-}
+
 static int p9ClientInit() {
 	static int init = 0;
 	uint32_t msg_size;
@@ -572,6 +569,7 @@ public:
 	 int setattr(fs_inode *inode, uint64_t size);//TODO : currently used for truncate, later need to expand
 	 int unmount();
 	 void set_mount_pnt(unsigned char *mnt_pnt);
+	 void print_stat();
 		int abc[200];
 };
  int p9_fs::open(fs_inode *inodep, int flags, int mode) {
@@ -644,6 +642,9 @@ int p9_fs::unmount(){
 	client.root_fid = 0;
 	ut_log("p9 UNmount\n");
 	return JSUCCESS;
+}
+void p9_fs::print_stat(){
+
 }
 void p9_fs::set_mount_pnt(unsigned char *mnt_pnt){
 /*TODO: nothing todo in p9fs */

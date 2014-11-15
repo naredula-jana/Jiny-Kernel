@@ -29,7 +29,7 @@ public:
 	wait_queue(char *name, unsigned long flags);
 	int wakeup();
 	int wait(unsigned long ticks);
-	void print_stats();
+	void print_stats(unsigned char *arg1,unsigned char *arg2);
 	int unregister();  /* TODO : this should be  merged with destructor */
 
 	static wait_queue *wait_queues[MAX_WAIT_QUEUES];
@@ -57,7 +57,7 @@ public:
 	uint32_t wait(uint32_t timeout_arg);
 	int lock(int line_no);
 	int unlock(int line_no);
-	void print_stats();
+	void print_stats(unsigned char *arg1,unsigned char *arg2);
 	void free(); /* TODO : this should be  merged with destructor */
 };
 extern "C"{

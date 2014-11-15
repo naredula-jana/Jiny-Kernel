@@ -273,7 +273,34 @@ unsigned long SYS_fs_close(unsigned long fd) {
 
 	return fs_close(file);
 }
+unsigned long SYS_fs_unlink(uint8_t *path) {
+	struct file *fp;
+	int ret = -2; /* no such file exists */
 
+	SYSCALL_DEBUG("unlink (ppath:%x(%s) \n", path, path);
+
+	if (path == 0 ){
+		return ret;
+	}
+
+	fp = (struct file *) fs_open((uint8_t *) path, 0, 0);
+	if (fp == 0) {
+		return ret;
+	}
+	struct fs_inode *inode=(struct fs_inode *)fp->vinode;
+
+	if (inode!=0 ) {
+		ret = inode->ioctl(IOCTL_FILE_UNLINK,0);
+	}
+	fs_close(fp);
+
+	SYSCALL_DEBUG("RET unlink (ppath:%x(%s) \n", path, path);
+	if (ret==JSUCCESS){
+		return 0;
+	}else{
+		return -1;
+	}
+}
 unsigned long SYS_fs_readlink(uint8_t *path, uint8_t *buf, int bufsiz) {
 	struct file *fp;
 	int ret = -2; /* no such file exists */
@@ -518,12 +545,12 @@ int Jcmd_ls(uint8_t *arg1, uint8_t *arg2) {
 		} else {
 			len = len
 					- ut_snprintf(buf + max_len - len, len,
-							"%d: %4d %4d(%2d) %8d %8d %2x/%x %s", i,
+							"%d: %4d %4d(%2d) %8d %8d %2x/%x %s vfs:%x", i,
 							tmp_inode->count, tmp_inode->nrpages,
 							tmp_inode->stat_locked_pages.counter,
 							tmp_inode->fileStat.st_size,
 							tmp_inode->fileStat.inode_no, tmp_inode->file_type,
-							tmp_inode->flags, type );
+							tmp_inode->flags, type,tmp_inode->vfs );
 		}
 		len = len - ut_snprintf(buf + max_len - len, len,"(%d/%d/%d-%s\n",tmp_inode->stat_in,tmp_inode->stat_out,tmp_inode->stat_err,tmp_inode->filename);
 		total_pages = total_pages + tmp_inode->nrpages;

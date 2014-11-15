@@ -24,13 +24,14 @@ public:
 	pci_device_t pci_device;
 	int init_pci(uint8_t bus, uint8_t device, uint8_t function);
 
-	void print_stats();
+	void print_stats(unsigned char *arg1,unsigned char *arg2);
 };
 
 class jdriver: public jobject {
 public:
 	unsigned char *name;
 	jdevice *device;
+	int instances;
 
 	unsigned long stat_sends,stat_recvs,stat_recv_interrupts,stat_send_interrupts;
 	/* TODO : Do not change the order of virtual functions, c++ linking is implemented in handcoded */
@@ -39,7 +40,7 @@ public:
 	virtual int dettach_device(jdevice *dev)=0;
 	virtual int read(unsigned char *buf, int len, int flags)=0;
 	virtual int write(unsigned char *buf, int len, int flags)=0;
-	virtual void print_stats()=0;
+	virtual void print_stats(unsigned char *arg1,unsigned char *arg2)=0;
 	virtual int ioctl(unsigned long arg1,unsigned long arg2)=0;
 };
 
@@ -50,7 +51,7 @@ public:
 	unsigned char pending_kick_onsend;
 
 	int virtio_create_queue(uint16_t index, int qType);
-	void print_stats();
+	void print_stats(unsigned char *arg1,unsigned char *arg2);
 
 	struct virtqueue *vq[5];
 	unsigned long stat_allocs,stat_frees,stat_err_nospace;
@@ -80,9 +81,13 @@ public:
 #define IOCTL_DISK_SIZE 1
 class virtio_disk_jdriver: public virtio_jdriver {
 	unsigned long disk_size,blk_size;
+	spinlock_t io_lock;
+	unsigned char *unfreed_req;
 	int disk_attach_device(jdevice *dev);
-	void *addBufToQueue( unsigned char *buf, uint64_t len, uint64_t sector);
+	void *addBufToQueue(int type, unsigned char *buf, uint64_t len, uint64_t sector,uint64_t data_len);
+	int disk_io(int type,unsigned char *buf, int len, int flags);
 public:
+	wait_queue *waitq;
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);
 	int dettach_device(jdevice *dev);

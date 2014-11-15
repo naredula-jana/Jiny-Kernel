@@ -22,6 +22,7 @@ resources:
       image: {get_resource: my_image}
       flavor: m1.micro
 
+
 outputs:
   server_private_ip:
     description: IP address of server1 in private network

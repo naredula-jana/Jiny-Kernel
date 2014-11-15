@@ -699,7 +699,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 			int stack_var;
 		//	BUG();
 			ut_printf("ERROR: user program Segmentaion Fault addr:%x  ip:%x :%s\n",addr,faulting_ip,g_current_task->name);
-		BUG();
+		//BUG();
 			Jcmd_maps(0,0);
 			ut_log("ERROR: Segmentation fault page fault addr:%x ip:%x  \n",addr,faulting_ip);
 			//Jcmd_lsmod(0,0);

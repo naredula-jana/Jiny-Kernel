@@ -427,7 +427,7 @@ int wait_queue::wait(unsigned long ticks) {
 	else
 		return g_current_task->sleep_ticks;
 }
-void wait_queue::print_stats(){
+void wait_queue::print_stats(unsigned char *arg1,unsigned char *arg2){
 
 }
 /* this call consume system resources */
@@ -532,7 +532,7 @@ void semaphore::free() {
 	waitqueue->unregister();
     jfree_obj((unsigned long)this);
 }
-void semaphore::print_stats(){
+void semaphore::print_stats(unsigned char *arg1,unsigned char *arg2){
 
 }
 

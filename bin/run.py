@@ -78,9 +78,8 @@ def start_jiny(options):
         
     args += ["-append", "%s"%(options.kernel_args)]
     args += ["-kernel", "/opt_src/Jiny-Kernel/bin/jiny_image.bin"]
- #   args += ["-hda", "/opt_src/Jiny-Kernel/bin/disk"]
     args += ["-drive", "if=virtio,id=drive0,file=/opt_src/Jiny-Kernel/bin/disk"]
- #   args += ["-device", "ide-drive,drive=drive0,bus=ide.0"]
+    args += ["-drive", "if=virtio,id=drive1,file=/opt_src/Jiny-Kernel/bin/disk2"]
 
     if (options.snapshot):
         args += ["-incoming", "exec: gzip -c -d /opt_src/Jiny-Kernel/bin/jiny_apic_snapshot.gz"]
@@ -121,7 +120,7 @@ if (__name__ == "__main__"):
     parser = argparse.ArgumentParser(prog='run')
     parser.add_argument("-b", "--boot_without_grub", action="store_true",default=True,
                         help="boot without grub load the kernel directly")
-    parser.add_argument("-c", "--cpus", action="store", default="4",
+    parser.add_argument("-c", "--cpus", action="store", default="1",
                         help="number of vcpus")
     parser.add_argument("-s", "--serial_port", action="store", default="50008",
                         help="serial port")

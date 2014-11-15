@@ -42,7 +42,7 @@ void jfree_obj(unsigned long addr);
 class jobject { /* All objects will be inherited from here */
 public:
 	int jobject_id; /* currently used only for debugging purpose */
-	virtual void print_stats()=0;
+	virtual void print_stats(unsigned char *arg1,unsigned char *arg2)=0;
 };
 
 #include "ipc.hh"
@@ -64,7 +64,7 @@ public:
 	virtual int write(unsigned long offset, unsigned char *data, int len, int flags)=0;
 	virtual int close()=0;
 	virtual int ioctl(unsigned long arg1,unsigned long arg2)=0;
-	virtual void print_stats()=0;
+	virtual void print_stats(unsigned char *arg1,unsigned char *arg2)=0;
 };
 #define MAX_SOCKET_QUEUE_LENGTH 1500
 struct sock_queue_struct {
@@ -87,7 +87,8 @@ class jdevice;
 enum {
 	SOCK_IOCTL_BIND=1,
 	SOCK_IOCTL_CONNECT=2,
-	SOCK_IOCTL_WAITFORDATA=3
+	SOCK_IOCTL_WAITFORDATA=3,
+	IOCTL_FILE_UNLINK=4
 };
 enum {
 	GENERIC_IOCTL_PEEK_DATA=100  /* check for the presence of data */
@@ -114,7 +115,7 @@ public:
 	int close();
 	int ioctl(unsigned long arg1,unsigned long arg2);
 	int peek();
-	void print_stats();
+	void print_stats(unsigned char *arg1,unsigned char *arg2);
 
 	void init_socket(int type);
 	int add_to_queue(unsigned char *buf, int len);
@@ -172,7 +173,7 @@ public:
 	int write(unsigned long offset, unsigned char *data, int len, int flags);
 	int close();
 	int ioctl(unsigned long arg1,unsigned long arg2);
-	void print_stats();
+	void print_stats(unsigned char *arg1,unsigned char *arg2);
 	static kmem_cache_t *slab_objects;
 };
 
@@ -185,13 +186,21 @@ public:
 	int write(unsigned long unused, unsigned char *data, int len, int flags);
 	int close();
 	int ioctl(unsigned long arg1,unsigned long arg2);
-	void print_stats();
+	void print_stats(unsigned char *arg1,unsigned char *arg2);
 };
 
 /*******************************************************************************/
 #if 1
 class filesystem {
+
 public:
+	unsigned long stat_byte_reads,stat_read_req,stat_read_errors;
+	unsigned long stat_byte_writes,stat_write_req,stat_write_errors;
+	unsigned long device_size;
+	unsigned long block_size;
+	unsigned long filesystem_size; /* file system size will be less then disk size */
+	//unsigned long free_space_size;
+
 	virtual int open(fs_inode *inode, int flags, int mode)=0;
 	virtual int lseek(struct file *file,  unsigned long offset, int whence)=0;
 	virtual long write(fs_inode *inode, uint64_t offset, unsigned char *buff, unsigned long len)=0;
@@ -204,6 +213,7 @@ public:
 	virtual int setattr(fs_inode *inode, uint64_t size)=0;//TODO : currently used for truncate, later need to expand
 	virtual int unmount()=0;
 	virtual void set_mount_pnt(unsigned char *mnt_pnt)=0;
+	virtual void print_stat()=0;
 };
 
 unsigned long fs_registerFileSystem(filesystem *fs, unsigned char *mnt_pnt);

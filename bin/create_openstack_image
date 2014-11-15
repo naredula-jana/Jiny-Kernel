@@ -1,6 +1,10 @@
+glance image-delete jiny-image
+glance image-delete jiny-kernel
+glance image-delete jiny-dummyramdisk
+
 echo " " > ./dummy_ramdisk
 echo " " > ./dummy_disk
 KERNEL_ID=`glance image-create --name="jiny-kernel" --disk-format=aki --container-format=aki < ./jiny_image.bin | awk '/ id / { print $4 }'`
-INITRD_ID=`glance image-create --name="dummy-ramdisk" --disk-format=ari --container-format=ari < ./dummy_ramdisk | awk '/ id / { print $4 }'`
-glance image-create --name="jiny-image" --disk-format=ami --container-format=ami --property kernel_id=${KERNEL_ID} --property ramdisk_id=${INITRD_ID} < ./dummy_disk
+INITRD_ID=`glance image-create --name="jiny-dummyramdisk" --disk-format=ari --container-format=ari < ./dummy_ramdisk | awk '/ id / { print $4 }'`
+glance image-create --name="jiny-image" --disk-format=ami --container-format=ami --property kernel_id=${KERNEL_ID} --property ramdisk_id=${INITRD_ID} < ./disk
 

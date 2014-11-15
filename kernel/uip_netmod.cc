@@ -314,14 +314,19 @@ int get_ip(unsigned char *str, int loc) {
 		}
 	}
 }
-void *init_netmod_uipstack() {
-	struct uip_eth_addr mac_addr;
-	uip_stack.name = "UIP stack";
+void Jcmd_ifconfig(unsigned char *arg1,unsigned char *arg2){
 	int i1,i2,i3,i4;
-
-	ut_log(" ipaddr :%s:  gw:%s: \n",g_conf_ipaddr,g_conf_gw);
 	uip_ipaddr_t ipaddr;
-	uip_init();
+	struct uip_eth_addr mac_addr;
+	if (arg1 ==0){
+		ut_printf(" ipaddr :%s gw_addr: %s \n",g_conf_ipaddr,g_conf_gw);
+		ut_printf(" ifconfig <ip_address>\n");
+		return;
+	}
+
+	if (g_conf_ipaddr != arg1){
+		ut_strcpy(g_conf_ipaddr,arg1);
+	}
 
 	i1=get_ip(g_conf_ipaddr,1);
 	i2=get_ip(g_conf_ipaddr,2);
@@ -341,6 +346,13 @@ void *init_netmod_uipstack() {
 	uip_setnetmask(ipaddr);
 	net_get_mac(&(mac_addr.addr[0]));
 	uip_setethaddr(mac_addr);
+}
+void *init_netmod_uipstack() {
+	uip_stack.name = "UIP stack";
+	ut_log(" ipaddr :%s:  gw:%s: \n",g_conf_ipaddr,g_conf_gw);
+
+	uip_init();
+	Jcmd_ifconfig(g_conf_ipaddr,g_conf_gw);
 
 	uip_listen(HTONS(80));
 	ut_log(" initilizing UIP stack \n");

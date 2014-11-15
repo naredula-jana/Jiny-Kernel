@@ -202,7 +202,7 @@ public:
 	int dettach_device(jdevice *dev);
 	int read(unsigned char *buf, int len, int flags);
 	int write(unsigned char *buf, int len, int flags);
-	void print_stats();
+	void print_stats(unsigned char *arg1,unsigned char *arg2);
 	int ioctl(unsigned long arg1,unsigned long arg2);
 };
 static keyboard_jdriver *keyboard_driver;
@@ -255,7 +255,7 @@ int keyboard_jdriver::write(unsigned char *buff, int len, int wr_flags){
 	stat_sends = stat_sends+ret;
 	return ret;
 }
-void keyboard_jdriver::print_stats(){
+void keyboard_jdriver::print_stats(unsigned char *arg1,unsigned char *arg2){
 	ut_printf(" sends:%d recvs: %d",stat_sends,stat_recvs);
 }
 int keyboard_jdriver::ioctl(unsigned long arg1,unsigned long arg2 ){
