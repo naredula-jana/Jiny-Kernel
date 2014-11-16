@@ -85,6 +85,7 @@ class virtio_disk_jdriver: public virtio_jdriver {
 	unsigned char *unfreed_req;
 	int disk_attach_device(jdevice *dev);
 	void *addBufToQueue(int type, unsigned char *buf, uint64_t len, uint64_t sector,uint64_t data_len);
+	void *scsi_addBufToQueue(int type, unsigned char *buf, uint64_t len, uint64_t sector,uint64_t data_len);
 	int disk_io(int type,unsigned char *buf, int len, int flags);
 public:
 	wait_queue *waitq;

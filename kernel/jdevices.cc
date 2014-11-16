@@ -30,7 +30,9 @@ pci_device_vendor_t pci_device_vendor_list []={
 		{"PCI & Memory", 0x8086, 0x1237},
 		{"VGA controller",0x1013,0xb8},
 		{"Intel(R) 82371AB/EB PCI Bus Master IDE Controller",0x8086,0x7111},
-		{"virtio disk device",VIRTIO_PCI_VENDOR_ID,0x1001},
+		{"virtio disk device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_BLOCK_DEVICE_ID},
+		{"virtio scsi device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_SCSI_DEVICE_ID},
+		{"virtio console device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_CONSOLE_DEVICE_ID},
 		{"virtio net device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_NET_DEVICE_ID},
 		{"virtio p9 device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_9P_DEVICE_ID},
 		{"virtio ballon device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_BALLOON_DEVICE_ID},
@@ -61,7 +63,7 @@ int jdevice::init_pci(uint8_t bus, uint8_t device, uint8_t function) {
 			break;
 		}
 	}
-	ut_log("---------\n	scan devices %d:%d:%d  %x:%x\n", bus, device, function, this->pci_device.pci_header.vendor_id,
+	ut_log("--------------------------\n	scan devices %d:%d:%d  %x:%x\n", bus, device, function, this->pci_device.pci_header.vendor_id,
 			this->pci_device.pci_header.device_id);
 
 	ut_log(" reading pci info : bus:dev:fuc : %x:%x:%x \n", pci_device.pci_addr.bus, pci_device.pci_addr.device,

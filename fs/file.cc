@@ -36,7 +36,7 @@ filesystem_list_t g_fs_list[]={
 		{0,"/","tar_fs"},  /* Make the root mount as the first entry, do not repeat the mount point entries */
 		{0,"/p9","p9_fs"},
 		{0,"/proc/","proc"},
-		{0,"/data","tar_fs"},
+		{0,"/data","tar_fs1"},
 		{0,0}
 };
 kmem_cache_t *fs_inode::slab_objects = 0;

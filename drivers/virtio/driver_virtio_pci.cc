@@ -5,7 +5,7 @@
 * the Free Software Foundation; either version 2 of the License, or
 * (at your option) any later version.
 *
-*   driver_virtio_pci.cc
+*   drivers/driver_virtio_pci.cc
 *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
 *
 */
@@ -210,8 +210,6 @@ static int virtio_net_recv_interrupt(void *private_data) {
 #else /* without net bx  */
 	virtio_net_poll_device(private_data,1,1000);
  #endif
-
-
 	return 0;
 
 }
@@ -440,7 +438,7 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 	free_send_bufs();
 	return JSUCCESS;  /* Here Sucess indicates the buffer is freed or consumed */
 }
-static int virtio_net_jdriver::test_k=2; // TEST purpose
+//static int virtio_net_jdriver::test_k=2; // TEST purpose
 int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 	unsigned char *arg_mac = (unsigned char *) arg2;
 	if (arg1 == NETDEV_IOCTL_GETMAC) {
@@ -482,7 +480,7 @@ int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 
 
 #define VIRTIO_BLK_DATA_SIZE (4096)
-struct virtio_blk_req {  /* TODO : size of this struct cannot be greater then page size */
+struct virtio_blk_req {
 	uint32_t type ;
 	uint32_t ioprio ;
 	uint64_t sector ;
@@ -507,6 +505,153 @@ static int virtio_disk_interrupt(void *private_data) {
 	}
 	return 0;
 }
+
+struct virtio_scsi_blk_req {
+	/* out hdr-1, common to block and scsi */
+	uint32_t type ;
+	uint32_t ioprio ;
+	uint64_t sector ;
+
+	/* out hdr-2, common to block and scsi */
+	uint8_t scsi_cmd[100];
+
+	/* in for read /out for write , common to block and scsi */
+	uint8_t data[VIRTIO_BLK_DATA_SIZE]; /*TODO:  currently it made fixed, actually it is  variable size data here like data[][512]; */
+
+	/* in hdr-1, common to block and scsi */
+	#define SCSI_SENSE_BUFFERSIZE 96
+	uint8_t sense[SCSI_SENSE_BUFFERSIZE] ;
+
+	/* in hdr-2, common to block and scsi */
+uint32_t errors;
+uint32_t data_len;
+uint32_t sense_len ;
+uint32_t residual ;
+
+    /* in hdr-3, common to block and scsi */
+	uint8_t status ;
+	int len;
+};
+
+enum {
+SCSI_CMD_TEST_UNIT_READY = 0x00,
+SCSI_CMD_REQUEST_SENSE = 0x03,
+SCSI_CMD_INQUIRY = 0x12,
+SCSI_CMD_READ_16 = 0x88,
+SCSI_CMD_WRITE_16 = 0x8A,
+SCSI_CMD_READ_CAPACITY = 0x9E,
+SCSI_CMD_SYNCHRONIZE_CACHE_10 = 0x35,
+SCSI_CMD_SYNCHRONIZE_CACHE_16 = 0x91,
+SCSI_CMD_REPORT_LUNS = 0xA0,
+};
+struct cdb_readwrite_16 {
+	uint8_t command;
+	uint8_t flags;
+	uint64_t lba;
+	uint32_t count;
+	uint8_t group_number;
+	uint8_t control;
+} __attribute__((packed));
+
+
+static __inline uint32_t bswap32(uint32_t __x)
+{
+return (__x>>24) | (__x>>8&0xff00) | (__x<<8&0xff0000) | (__x<<24);
+}
+static __inline uint64_t bswap64(uint64_t __x)
+{
+return ((bswap32(__x)+0ULL)<<32) | bswap32(__x>>32);
+}
+static void req_construct(unsigned char *buf, unsigned long offset, unsigned long len){
+	struct cdb_readwrite_16 *req = (struct cdb_readwrite_16 *)buf;
+	uint64_t lba;
+	uint32_t count;
+
+	lba = offset/512;
+	count = len/512;
+	req->lba = bswap64(lba);
+	req->count = bswap32(count);
+	req->command = SCSI_CMD_READ_16;
+}
+void *virtio_disk_jdriver::scsi_addBufToQueue(int type, unsigned char *buf_arg, uint64_t len, uint64_t sector, uint64_t data_len) {
+	struct virtqueue *tmp_vq = this->vq[0];
+	struct virtio_scsi_blk_req *req;
+	struct scatterlist sg[8];
+	int ret;
+	int transfer_len=len;
+	int out,in;
+	unsigned char *buf=0;
+ut_printf("Sending the SCSI request sector:%x len:%d  :%d \n",sector,len,data_len);
+	if (buf == 0) {
+		//buf = (unsigned char *) alloc_page(0);
+		buf = mm_getFreePages(0,1);  /* TODO: for write request does not work, need to copy the data buf */
+	}
+	if (buf == 0 ){
+		BRK;
+	}
+
+	req = (struct virtio_scsi_blk_req *)buf;
+	ut_memset(buf, 0, sizeof(struct virtio_scsi_blk_req));
+	req->sector = sector;
+	if (type == DISK_READ){
+		req->type = VIRTIO_BLK_T_SCSI_CMD;
+		out = 2;
+		in = 4;
+	}else{
+		req->type = VIRTIO_BLK_T_OUT;
+		if (data_len>VIRTIO_BLK_DATA_SIZE){
+			ut_memcpy(buf+16, buf_arg, VIRTIO_BLK_DATA_SIZE);
+		}else{
+			ut_memcpy(buf+16, buf_arg, data_len);
+		}
+		out = 2;
+		in = 1;
+
+	}
+	req->status = 0xff;
+	int cmd_len=100;
+	int scsi_sense_hdr =  SCSI_SENSE_BUFFERSIZE;
+	int resp_len=4*4;
+	if (transfer_len < blk_size){
+		transfer_len=blk_size;
+	}
+
+	sg[0].page_link = (unsigned long) buf;
+	sg[0].length = 16;
+	sg[0].offset = 0;
+
+	req_construct(buf+16, sector*512, len );
+	sg[1].page_link = (unsigned long) buf + 16;
+	sg[1].length = 16;
+	sg[1].offset = 0;
+
+	sg[2].page_link = (unsigned long) (buf + 16 + cmd_len);
+	sg[2].length =  transfer_len;
+	sg[2].offset = 0;
+
+
+	sg[3].page_link = (unsigned long) (buf + 16 + cmd_len + VIRTIO_BLK_DATA_SIZE);
+	sg[3].length =  scsi_sense_hdr;
+	sg[3].offset = 0;
+
+	sg[4].page_link = (unsigned long) (buf + 16 + cmd_len + VIRTIO_BLK_DATA_SIZE + scsi_sense_hdr);
+	sg[4].length =  resp_len;
+	sg[4].offset = 0;
+
+	sg[5].page_link = (unsigned long) (buf + 16 + cmd_len +  VIRTIO_BLK_DATA_SIZE + scsi_sense_hdr + resp_len);
+	sg[5].length =  1;
+	sg[5].offset = 0;
+
+	//DEBUG(" scatter gather-0: %x:%x sg-1 :%x:%x \n",sg[0].page_link,__pa(sg[0].page_link),sg[1].page_link,__pa(sg[1].page_link));
+
+	virtio_disable_cb(tmp_vq);
+	ret = virtio_add_buf_to_queue(tmp_vq, sg, out, in, (void *) sg[0].page_link, 0);/* send q */
+	virtio_queue_kick(tmp_vq);
+
+	virtio_enable_cb(tmp_vq);
+sc_sleep(2000);
+	return (void *)buf;
+}
 void *virtio_disk_jdriver::addBufToQueue(int type, unsigned char *buf_arg, uint64_t len, uint64_t sector, uint64_t data_len) {
 	struct virtqueue *tmp_vq = this->vq[0];
 	struct virtio_blk_req *req;
@@ -515,7 +660,6 @@ void *virtio_disk_jdriver::addBufToQueue(int type, unsigned char *buf_arg, uint6
 	int transfer_len=len;
 	int out,in;
 	unsigned char *buf=0;
-
 
 	if (buf == 0) {
 		//buf = (unsigned char *) alloc_page(0);
@@ -579,12 +723,9 @@ int virtio_disk_jdriver::disk_attach_device(class jdevice *jdev) {
 	ut_log("	Virtio disk: Initializing status :%x : \n", virtio_get_pcistatus(pci_ioaddr));
 
 	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER);
-
-
 	auto addr = pci_ioaddr + VIRTIO_PCI_HOST_FEATURES;
 	features = inl(addr);
 	ut_log("	Virtio disk: Initializing VIRTIO PCI hostfeatures :%x: status :%x :\n", features,  virtio_get_pcistatus(pci_ioaddr));
-
 
 	this->virtio_create_queue(0, 2);
 	if (jdev->pci_device.msix_cfg.isr_vector > 0) {
@@ -639,8 +780,9 @@ int virtio_disk_jdriver::disk_attach_device(class jdevice *jdev) {
 
 int virtio_disk_jdriver::probe_device(class jdevice *jdev) {
 	if ((jdev->pci_device.pci_header.vendor_id == VIRTIO_PCI_VENDOR_ID)
-			&& (jdev->pci_device.pci_header.device_id == 0x1001)) {
-		ut_log(" Matches the disk Probe \n");
+			&& ((jdev->pci_device.pci_header.device_id == VIRTIO_PCI_BLOCK_DEVICE_ID) ||
+		(jdev->pci_device.pci_header.device_id == VIRTIO_PCI_SCSI_DEVICE_ID))){
+		ut_log(" Matches the disk Probe :%d\n",jdev->pci_device.pci_header.device_id);
 		return JSUCCESS;
 	}
 	return JFAIL;
@@ -681,6 +823,18 @@ int virtio_disk_jdriver::disk_io(int type,unsigned char *buf, int len, int offse
 	unsigned long addr,flags;
 	int qlen, ret;
 	ret = 0;
+	int scsi_type=0;
+
+#if 0
+	if (disk_size < 1000000){
+		scsi_type=1;
+	}
+#endif
+	if (device->pci_device.pci_header.device_id == VIRTIO_PCI_SCSI_DEVICE_ID){
+		scsi_type=1;
+		ut_printf(" scsi reading ..\n");
+		//BRK;
+	}
 
 	sector = offset / blk_size;
 
@@ -702,7 +856,11 @@ int virtio_disk_jdriver::disk_io(int type,unsigned char *buf, int len, int offse
 	}
 	spin_lock_irqsave(&io_lock, flags);
 	//ut_printf(" data_len :%d sector: %d \n",data_len,sector);
-	req = addBufToQueue(type,buf, data_len, sector,len);
+	if (scsi_type ==0){
+		req = addBufToQueue(type,buf, data_len, sector,len);
+	}else{
+		req = scsi_addBufToQueue(type,buf, data_len, sector,len);
+	}
 
 	int wait_loop = 0;
 	if (req->status == 0xff  ){
