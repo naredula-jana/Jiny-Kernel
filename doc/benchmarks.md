@@ -1,5 +1,4 @@
 ## Optimizations and Benchmarks Summary
-More details of the Benchmarks are available at [Jiny-Benchmarks.](../master/doc/benchmarks.md). 
 
 Jiny Kernel Improvements/Optimization when compare to Linux:  
 - Benchmark-1(CPU centric): Comparisions of cpu centric app running in linux vm versus same app running in Jiny vm. There is big improvement when the same app run in Jiny vm as High priority app. 
@@ -52,17 +51,21 @@ Number of cpu cores in the linux and Jiny Vm are 2.
  2. Difference between Test-2(155M) and Test-3(170M):  For every packet send on the NIC, issuing the door bell in virtio driver cost extra MMIO operation, that is causing the vm exits in kvm hypervisor, this was the reason test-3 got some 15Mbytes extra processing. postponing doorbell for few packets/for a duration of time as improved the throughput at load, but this cause extra delay in holding the send packet when the system is under load. 
  
 ###Benchmark-3(Storage centric):
+   In Progress.
 
 ###Benchmark-4(PageCache):
-
+   Details available in [Page cache optimizations for Hadoop.](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/PageCache-Open-Cirrus.pdf) ..
+   
 ###Benchmark-5(Malloc):
-
+   In Progress.
+   
 ##Papers:
  -   [Page cache optimizations for Hadoop, published and presented in open cirrus-2011 summit](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/PageCache-Open-Cirrus.pdf) .
  -   [Memory optimization techniques](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/malloc_paper_techpulse_submit_final.pdf).
  -   [Jiny pagecache implementation](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/pagecache.txt)
- -   [Tar Fs - Jiny root file system](https://github.com/naredula-jana/Jiny-Kernel/blob/master/master/doc/tar_fs.md)
+ -   [Tar Fs - Jiny root file system](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/tar_fs.md)
 
 ##Related Projects:
- -[Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel).
- -[Vmstate](https://github.com/naredula-jana/vmstate): Virtualmachine state capture and analysis.
+ -   [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel) .
+ -   [Vmstate](https://github.com/naredula-jana/vmstate): Virtualmachine state capture and analysis.
+ 
