@@ -1,8 +1,17 @@
-##Benchmarks
+## Optimizations and Benchmarks Summary
+More details of the Benchmarks are available at [Jiny-Benchmarks.](../master/doc/benchmarks.md). 
+
+Jiny Kernel Improvements/Optimization when compare to Linux:  
+- Benchmark-1(CPU centric): Comparisions of cpu centric app running in linux vm versus same app running in Jiny vm. There is big improvement when the same app run in Jiny vm as High priority app. 
+- Benchmark-2(Network centric): Comparisions of network throughput in linux vm versus Jiny vm. There is  50% improvement in network throughput in Jiny Vm when comapre to linux vm on the same hardware.
+- Benchmark-3(Storage centric): In progress.
+- Benchmark-4(PageCache): Comparisions of Read/write throughput for Hadoop workload. Improvement of 20% in read/write throughput of hdfs/hadoop.
+- Benchmark-5(Malloc): Memory allocation improvements like zero page accumulation and other related techiniques: In progress
+
 ###Benchmark-1(CPU centric):
 **Overview:** An application execution time on the metal is compared with the same app wrapped using thin OS like Jiny and launched as vm. The single app running in Jiny vm outperforms by completing in 6 seconds when compare to the same running on the metal that took 44sec. The key reason for superior performance in Jiny os is, it accelerates the app by allowing  it to run in ring-0 so that the overhead of system calls and context switches are minimized. The protection of system from app malfunctioning is left to virtulization hardware. To run in Jiny vm, the app need to recompile without any changes using the modified c library.
 
-**Application(app) used for testing:** A simple C application that read and writes in to a /dev/null file repeatedly in a tight loop is used, this is a system call intensive application. [The app](../master/modules/test_file/test_file.c) is executed in four environments on the metal, inside the Jiny as High priority, as normal priority inside Jiny  and inside the linux vm.   
+**Application(app) used for testing:** A simple C application that read and writes in to a /dev/null file repeatedly in a tight loop is used, this is a system call intensive application. [The app](https://github.com/naredula-jana/Jiny-Kernel/blob/master/modules/test_file/test_file.c) is executed in four environments on the metal, inside the Jiny as High priority, as normal priority inside Jiny  and inside the linux vm.   
 
 #####Completion time of app in different environments:
 
@@ -41,3 +50,19 @@ Number of cpu cores in the linux and Jiny Vm are 2.
 #####Benchmark-2 summary
  1. Difference between Test-1 and Test-2: Processing the packet in Linux and Jiny are completely different. In Jiny , most of the cpu cycles are spend in the application context as mentioned in  [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). whereas in linux, cpu cycles are split between the app and Network bottom half making packet to process by different cores.
  2. Difference between Test-2(155M) and Test-3(170M):  For every packet send on the NIC, issuing the door bell in virtio driver cost extra MMIO operation, that is causing the vm exits in kvm hypervisor, this was the reason test-3 got some 15Mbytes extra processing. postponing doorbell for few packets/for a duration of time as improved the throughput at load, but this cause extra delay in holding the send packet when the system is under load. 
+ 
+###Benchmark-3(Storage centric):
+
+###Benchmark-4(PageCache):
+
+###Benchmark-5(Malloc):
+
+##Papers:
+ -   [Page cache optimizations for Hadoop, published and presented in open cirrus-2011 summit](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/PageCache-Open-Cirrus.pdf) .
+ -   [Memory optimization techniques](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/malloc_paper_techpulse_submit_final.pdf).
+ -   [Jiny pagecache implementation](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/pagecache.txt)
+ -   [Tar Fs - Jiny root file system](https://github.com/naredula-jana/Jiny-Kernel/blob/master/master/doc/tar_fs.md)
+
+##Related Projects:
+ -[Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel).
+ -[Vmstate](https://github.com/naredula-jana/vmstate): Virtualmachine state capture and analysis.
