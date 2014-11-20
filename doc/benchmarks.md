@@ -59,7 +59,7 @@ Number of cpu cores in the linux and Jiny Vm are 2.
 
 ---------------------------------------------------------------------------------- 
 ###Benchmark-3(Storage centric): In Progress:
-     currently jiny uses  [tar file sytem](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/tar_fs.md) with virtio-disk without vhost, once vhost is available then it can be tuned and benchmark against linux similer to the bencmark-2. 
+  currently jiny uses  [tar file sytem](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/tar_fs.md) with virtio-disk without vhost, once vhost is available then it can be tuned and benchmark against linux similer to the bencmark-2. 
 
 ----------------------------------------------------------------------------------
 ###Benchmark-4(PageCache): Completed.
