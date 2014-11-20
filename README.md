@@ -38,12 +38,13 @@
       - changes to libc: This will make high prority app run as app instead of loading as a kernel module.
 
 
-## Optimizations and Benchmarks Summary
-More details of the Benchmarks are available at [Jiny-Benchmarks.](../master/doc/benchmarks.md). 
+## Performance and Benchmarks Summary
 
-Jiny Kernel Improvements/Optimization when compare to Linux:  
+This section describes Performance comparisions of Jiny Kernel with Linux.
+More details of the Benchmarks are available at [Jiny-Benchmarks.](../master/doc/benchmarks.md). 
+  
 - Benchmark-1(CPU centric): Comparisions of cpu centric app running in linux vm versus same app running in Jiny vm. There is big improvement when the same app run in Jiny vm as High priority app. 
-- Benchmark-2(Network centric): Comparisions of network throughput in linux vm versus Jiny vm. There is  50% improvement in network throughput in Jiny Vm when comapre to linux vm on the same hardware.
+- Benchmark-2(Network centric): Comparisions of network throughput in linux vm versus Jiny vm. There is 50% improvement in network throughput in Jiny Vm when comapre to linux vm on the same hardware.
 - Benchmark-3(Storage centric): In progress.
 - Benchmark-4(PageCache): Comparisions of Read/write throughput for Hadoop workload. Improvement of 20% in read/write throughput of hdfs/hadoop.
 - Benchmark-5(Malloc): Memory allocation improvements like zero page accumulation and other related techiniques: In progress

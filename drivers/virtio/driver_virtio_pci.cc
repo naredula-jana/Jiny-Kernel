@@ -611,7 +611,7 @@ ut_printf("Sending the SCSI request sector:%x len:%d  :%d \n",sector,len,data_le
 	req->status = 0xff;
 	int cmd_len=100;
 	int scsi_sense_hdr =  SCSI_SENSE_BUFFERSIZE;
-	int resp_len=4*4;
+	int resp_len=4*4;  /* scsi response */
 	if (transfer_len < blk_size){
 		transfer_len=blk_size;
 	}
@@ -714,6 +714,19 @@ void *virtio_disk_jdriver::addBufToQueue(int type, unsigned char *buf_arg, uint6
 
 	return (void *)buf;
 }
+uint64_t virtio_config64(unsigned long pcio_addr){
+	uint64_t ret;
+	auto addr = pcio_addr  + VIRTIO_MSI_CONFIG_VECTOR ;
+	ret = inl(addr);
+	ret=ret + (inl(addr+4)* (0x1 << 32));
+	return ret;
+}
+uint32_t virtio_config32(unsigned long pcio_addr){
+	uint64_t ret;
+	auto addr = pcio_addr  + VIRTIO_MSI_CONFIG_VECTOR;
+	ret = inl(addr);
+	return ret;
+}
 int virtio_disk_jdriver::disk_attach_device(class jdevice *jdev) {
 	auto pci_ioaddr = jdev->pci_device.pci_ioaddr;
 	unsigned long features;
@@ -756,22 +769,33 @@ int virtio_disk_jdriver::disk_attach_device(class jdevice *jdev) {
 		u32 blk_size;
 	}
 	 */
-	for (i=0; i< 6; i++){
-		addr = pci_ioaddr + VIRTIO_MSI_CONFIG_VECTOR + (i*4);
-		config_data = inl(addr);
-		if (i==0){ /* disk size */
-			disk_size = config_data*512;
-		}
-		if (i==1 && config_data>0){
-			disk_size = disk_size  +  (config_data* (0x1 << 32));
-		}
-		if (i == 5){
-			blk_size = config_data;
-		}
-		ut_log(" %d: config data: %x \n",i,config_data);
-	}
-	ut_log(" driver status:  %x :\n",virtio_get_pcistatus(pci_ioaddr));
+	if (jdev->pci_device.pci_header.device_id != VIRTIO_PCI_SCSI_DEVICE_ID) {
+		disk_size = virtio_config64(pci_ioaddr + 0) * 512;
+		blk_size = virtio_config32(pci_ioaddr + 20);
+		ut_log(" 	Virtio Disk size:%d(%x)  blk_size:%d\n", disk_size, disk_size,blk_size);
 
+	} else {
+		/*
+		 *    virtio_stl_p(vdev, &scsiconf->num_queues, s->conf.num_queues);
+		 virtio_stl_p(vdev, &scsiconf->seg_max, 128 - 2);
+		 virtio_stl_p(vdev, &scsiconf->max_sectors, s->conf.max_sectors);
+		 virtio_stl_p(vdev, &scsiconf->cmd_per_lun, s->conf.cmd_per_lun);
+		 virtio_stl_p(vdev, &scsiconf->event_info_size, sizeof(VirtIOSCSIEvent));
+		 virtio_stl_p(vdev, &scsiconf->sense_size, s->sense_size);
+		 virtio_stl_p(vdev, &scsiconf->cdb_size, s->cdb_size);
+		 virtio_stw_p(vdev, &scsiconf->max_channel, VIRTIO_SCSI_MAX_CHANNEL);
+		 virtio_stw_p(vdev, &scsiconf->max_target, VIRTIO_SCSI_MAX_TARGET);
+		 virtio_stl_p(vdev, &scsiconf->max_lun, VIRTIO_SCSI_MAX_LUN)
+		 */
+		ut_log(" SCSI Num Queues: %d \n", virtio_config32(pci_ioaddr + 0));
+		ut_log(" SCSI seg max: %d \n", virtio_config32(pci_ioaddr + 4));
+		ut_log(" SCSI max sector: %d \n", virtio_config32(pci_ioaddr + 8));
+		ut_log(" SCSI cmd_per_lun: %d \n", virtio_config32(pci_ioaddr + 12));
+		ut_log(" SCSI event_info_size: %d \n", virtio_config32(pci_ioaddr + 16));
+		ut_log(" SCSI sense size: %d \n", virtio_config32(pci_ioaddr + 20));
+		ut_log(" SCSI cdb size: %d \n", virtio_config32(pci_ioaddr + 24));
+	}
+	ut_log("	driver status:  %x :\n",virtio_get_pcistatus(pci_ioaddr));
 	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER_OK);
 		ut_log("second time	Virtio disk:  VIRTIO PCI COMPLETED with driver ok :%x \n", virtio_get_pcistatus(pci_ioaddr));
 
