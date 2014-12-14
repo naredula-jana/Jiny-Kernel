@@ -2,6 +2,7 @@
 
 typedef unsigned char uint8_t;
 extern "C" {
+
 #include "uip.h"
 #include "uip_arp.h"
 #include "uip_arch.h"
@@ -20,8 +21,8 @@ extern int jfree_page(unsigned char *p);
 }
 
 #include "network_stack.hh"
-#define JSUCCESS 1  /* TODO: need removed , redifined */
-#define JFAIL 0
+#define JSUCCESS 1  /* TODO: need removed , redefined */
+#define JFAIL 0  /* TODO: need removed , redefined */
 #define DEBUG
 
 int network_stack::open(network_connection *conn, int flags) {
@@ -188,6 +189,9 @@ int network_stack::write(network_connection *conn, uint8_t *app_data, int app_le
 		ip = conn->dest_ip;
 		port = conn->dest_port;
 		uip_udp_conn->rport = port;
+		if (uip_udp_conn->lport != conn->src_port ){ /* bind as over written the protcol port , so need to take socket port */
+			uip_udp_conn->lport = conn->src_port;
+		}
 
 		uip_udp_conn->ripaddr[0] = ip & 0xffff;
 		uip_udp_conn->ripaddr[1] = (ip >> 16) & 0xffff;
@@ -318,14 +322,18 @@ void Jcmd_ifconfig(unsigned char *arg1,unsigned char *arg2){
 	int i1,i2,i3,i4;
 	uip_ipaddr_t ipaddr;
 	struct uip_eth_addr mac_addr;
-	if (arg1 ==0){
+	if (arg1 ==0 || arg2==0){
 		ut_printf(" ipaddr :%s gw_addr: %s \n",g_conf_ipaddr,g_conf_gw);
-		ut_printf(" ifconfig <ip_address>\n");
+		ut_printf(" ifconfig <ip_address> <gw_ipaddress>\n");
 		return;
 	}
 
 	if (g_conf_ipaddr != arg1){
 		ut_strcpy(g_conf_ipaddr,arg1);
+	}
+
+	if (g_conf_gw != arg2){
+		ut_strcpy(g_conf_gw,arg2);
 	}
 
 	i1=get_ip(g_conf_ipaddr,1);

@@ -177,7 +177,7 @@ void print_vq(struct virtqueue *_vq) {
 	diff = vq->vring.used->idx - vq->vring.avail->idx;
 	if (diff < 0)
 		diff = diff * (-1);
-	ut_printf("		vq:%x size:%d num_free:%d  free_head:%d used:%x(%d) avail:%x(%d) diff:%d last_use_idx:%d alloc:%d free:%d\n", vq,vq->vring.num,  vq->num_free, vq->free_head,
+	ut_printf("		vq:%x size:%i num_free:%i  free_head:%d used:%x(%d) avail:%x(%d) diff:%d last_use_idx:%d alloc:%d free:%d\n", vq,vq->vring.num,  vq->num_free, vq->free_head,
 			vq->vring.used->idx, vq->vring.used->idx, vq->vring.avail->idx, vq->vring.avail->idx, diff, vq->last_used_idx,vq->stat_alloc,vq->stat_free);
 
 }

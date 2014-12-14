@@ -9,29 +9,6 @@
 *   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
 */
 
-//#define TEST_TAR_FS 1
-
-
-#if TEST_TAR_FS
-int fd;
-#include <stdio.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <string.h>
-#define ut_printf printf
-#define ut_log printf
-#define ut_memcpy memcpy
-#define ut_strcmp strcmp
-#define ut_strcpy strcpy
-#define ut_strstr strstr
-#define ut_strlen strlen
-#define uint8_t char
-#define DEBUG(x...) do { \
-} while (0)
-#else
-
 #include "file.hh"
 #include "jdevice.h"
 extern "C"{
@@ -40,17 +17,10 @@ extern "C"{
 #include "common.h"
 #include "task.h"
 #include "interface.h"
-
-#if 0
-#define DEBUG ut_printf
-#else
 #define DEBUG(x...) do { \
 } while (0)
-#endif
 
 }
-#endif
-
 
 #define RECORDSIZE	512
 #define NAMSIZ		100
@@ -106,9 +76,6 @@ struct header {
 } header;
 
 #define MAX_TAR_FILES 1024
-//#define NEWFILE_SIZE 512*4
-//#define DUMMY_FILENAME ".dummy_file"
-
 
 struct tar_file {
 	uint8_t name[NAMSIZ];
@@ -128,14 +95,10 @@ struct tar_file {
 #define FLAG_SPECIAL_FILE 0x8
 	uint8_t inmem_flags; /* various flags*/
 	unsigned long dummyfile_len; /* this includes the header also */
-
 } tar_file;
 
-#if TEST_TAR_FS
-class tar_fs {
-#else
+
 class tar_fs :public filesystem {
-#endif
     unsigned char mnt_point[200];
     int mnt_len;
     unsigned char magic[8];
@@ -145,10 +108,13 @@ class tar_fs :public filesystem {
 	unsigned long extent_size;
 	unsigned char *dummy_prefix;
 
+	void lock();
+	void unlock();
+
     struct tar_file *get_file(unsigned char *filename);
+
 	int read_from_device(int offset, unsigned char *buf, int len);
 	int write_to_device(int offset, unsigned char *buf, int len);
-
 	int scan_device_forfiles();
 	int create_new_file(unsigned char *filename_arg, int flags);
 	int remove_file(struct tar_file *filep);
@@ -162,9 +128,6 @@ class tar_fs :public filesystem {
 
 public:
 	int init(jdriver *driver_arg, unsigned long extent_size_arg,unsigned char *prefixx);
-
-#if TEST_TAR_FS
-#else
 	 int open(fs_inode *inode, int flags, int mode);
 	 int lseek(struct file *file,  unsigned long offset, int whence);
 	 long write(fs_inode *inode, uint64_t offset, unsigned char *buff, unsigned long len);
@@ -178,12 +141,12 @@ public:
 	 int unmount();
 	 void set_mount_pnt(unsigned char *mnt_pnt);
 	 void print_stat();
-#endif
+
 };
 #define BLK_SIZE 512
 #define CHKBLANKS "        "  /* 8 blanks no null */
 
-static long to_oct(long value,  unsigned  char *where, int digs);
+static void to_oct(long value,  unsigned  char *where, int digs);
 static void compute_cksum(struct header *header) {
 	register int i, sum;
 	register char *p;
@@ -201,10 +164,12 @@ static void compute_cksum(struct header *header) {
 	return;
 }
 
-static long to_oct(long value,  unsigned  char *where, int digs)
+static void to_oct (long value,   unsigned char *where , int digs)
 {
-  --digs;
-  where[--digs] = ' ';		/* put in the space*/
+  --digs;			/* Trailing null slot is left alone */
+  where[--digs] = ' ';		/* put in the space, though */
+
+  /* Produce the digits -- at least one.  */
   do
     {
       where[--digs] = '0' + (char) (value & 7);	/* one octal digit */
@@ -249,19 +214,29 @@ static int get_filename_start(unsigned char *name){
 	return ret;
 }
 
-int tar_fs::store_to_header(struct tar_file *file, struct header *hdr, struct header *dummy_hdr) {
+void tar_fs::lock(){
 
+}
+void tar_fs::unlock(){
+
+}
+int tar_fs::store_to_header(struct tar_file *file, struct header *hdr, struct header *dummy_hdr) {
+	int i;
 	ut_memset((unsigned char *) hdr, 0, sizeof(struct header));
 
 	ut_strcpy(hdr->name, file->name);
 	hdr->linkflag = file->type;
 	ut_memcpy(hdr->arch_linkname, file->arch_linkname, NAMSIZ);
 	to_oct(0, hdr->offset, 12);
-	to_oct(file->atime, hdr->atime, 12);
+	to_oct(file->length, hdr->size, 13); /* this is to avoid the space at the first place*/
+	hdr->size[11] = '\0';
+	for (i=0; i<11; i++){
+		if (hdr->size[i]==' ')hdr->size[i]='0';
+	}
+ 	to_oct(file->atime, hdr->atime, 12);
 	to_oct(file->mtime, hdr->mtime, 12);
 	to_oct(file->ctime, hdr->ctime, 12);
 	to_oct(file->mode, hdr->mode, 8);
-	to_oct(file->length, hdr->size, 8);
 
 	to_oct(0, hdr->uid, 8);
 	to_oct(0, hdr->gid, 8);
@@ -273,7 +248,11 @@ int tar_fs::store_to_header(struct tar_file *file, struct header *hdr, struct he
 			ut_memcpy((unsigned char *)dummy_hdr,(unsigned char *)hdr,sizeof(struct header));
 			ut_snprintf(dummy_hdr->name,NAMSIZ,"%s_%d", (unsigned char *) dummy_prefix,file->device_offset);
 			dummy_hdr->linkflag = LF_NORMAL;
-			to_oct(file->dummyfile_len-block_size, dummy_hdr->size, 8);
+			to_oct(file->dummyfile_len-block_size, dummy_hdr->size, 13);
+			dummy_hdr->size[11]='\0';
+			for (i=0; i<11; i++){
+				if (dummy_hdr->size[i]==' ')dummy_hdr->size[i]='0';
+			}
 			compute_cksum(dummy_hdr);
 	}
 
@@ -355,8 +334,8 @@ int tar_fs::scan_device_forfiles() {
 		}
 
 		file_size = from_oct(12, file.size);
-		DEBUG("%d blk:%d filename :%s  offset:%d  SIZE :%s:%d \n", i,
-				(offset / BLK_SIZE), file.name, offset, file.size, file_size);
+	//	ut_printf("%d blk:%d   offset:%d  SIZE :%s:%d filename :%s \n", i,
+	//			(offset / BLK_SIZE),  offset, file.size, file_size,file.name);
 
 		blks = ciel_length(file_size)/BLK_SIZE;
 
@@ -390,7 +369,6 @@ int tar_fs::scan_device_forfiles() {
 				files[file_count].name[len - 1] = 0;
 			}
 		}
-#if 1
 		if (files[file_count].type == LF_LINK) {
 			for (i=0; i<file_count; i++){
 				if (ut_strcmp(file.arch_linkname,files[i].name) == 0){
@@ -401,7 +379,7 @@ int tar_fs::scan_device_forfiles() {
 				}
 			}
 		}
-#endif
+
 		file_count++;
 		offset = offset + BLK_SIZE + (blks * BLK_SIZE);
 		file.name[0] = 0;
@@ -443,8 +421,8 @@ void tar_fs::print_stat() {
 
 	ut_printf("    total files : %d extentsize: %d\n", file_count,extent_size);
 	for (i = 0; i < file_count; i++) {
-		ut_printf("    %x(%d) blk:%d length:%d :%s--%s  parent:%x type:%x dummy_len:%d off:%d flags:%x\n", i,i,
-				files[i].device_offset / BLK_SIZE, files[i].length,
+		ut_printf("    %x(%d) blk:%d(offset:%d) length:%d :%s--%s  parent:%x type:%x dummy_len:%d off:%d flags:%x\n", i,i,
+				files[i].device_offset/block_size, files[i].device_offset, files[i].length,
 				mnt_point,files[i].name,files[i].parent,files[i].type,files[i].dummyfile_len,files[i].device_offset,files[i].inmem_flags);
 	}
 	return;
@@ -452,11 +430,7 @@ void tar_fs::print_stat() {
 int tar_fs::init(jdriver *driver_arg,unsigned long extent_size_arg, unsigned char *dummy_prefix_arg) {
 	file_count = 0;
 
-#if TEST_TAR_FS
-	fd = open((const char *) "./test.tar", 0);
-#else
 	if (driver_arg == 0) return JFAIL;
-#endif
 
 	driver = driver_arg;
 	file_count = -1;
@@ -487,15 +461,18 @@ int tar_fs::create_new_file(unsigned char *filename_arg, int flags){
 
 	ut_memcpy((unsigned char *)&files[file_count],(unsigned char *)&files[0],sizeof(struct tar_file));
 	ut_memcpy(files[file_count].name,&filename[prefix_len],ut_strlen(&filename[prefix_len]));
-	if (flags & O_DIRECTORY){
-		files[file_count].type = LF_DIR;
-	}else{
-		files[file_count].type = LF_NORMAL;
-	}
+
     files[file_count].length = 0;
     files[file_count].device_offset = filesystem_size +  block_size;
-    files[file_count].inmem_flags = FLAG_METADATA_DIRTY | FLAG_DUMMY_FILE | FLAG_REGULAR_FILE;
-    files[file_count].dummyfile_len = block_size + extent_size;
+
+	if (flags & O_DIRECTORY){
+		files[file_count].type = LF_DIR;
+	    files[file_count].inmem_flags = FLAG_METADATA_DIRTY | FLAG_REGULAR_FILE;
+	}else{
+		files[file_count].type = LF_NORMAL;
+	    files[file_count].inmem_flags = FLAG_METADATA_DIRTY | FLAG_DUMMY_FILE | FLAG_REGULAR_FILE;
+	    files[file_count].dummyfile_len = block_size + extent_size;
+	}
 
     filesystem_size = filesystem_size + (2*block_size) + extent_size;
 	file_count = file_count+1;
@@ -527,25 +504,28 @@ int tar_fs::sync_file_metadata(struct tar_file *filep){
 	if (!(filep->inmem_flags & FLAG_METADATA_DIRTY)){
 		return JSUCCESS;
 	}
-	if (filep->inmem_flags & FLAG_DUMMY_FILE){
+	if ((filep->inmem_flags & FLAG_DUMMY_FILE) && filep->dummyfile_len>0){
 		dummy_hdr = mm_malloc(sizeof(struct header),0);
 	}
 	hdr = mm_malloc(sizeof(struct header),0);
 	store_to_header(filep, hdr,dummy_hdr);
 	if (filep->inmem_flags & FLAG_REGULAR_FILE){
 		ret = write_to_device(filep->device_offset-block_size,(unsigned char *)hdr,sizeof(struct header));
+		//ut_printf("writing meta block :%d: \n",filep->device_offset-block_size);
 	}
+
 	if (dummy_hdr != 0){
 		blks = ciel_length(filep->length) / block_size;
 		if (!(filep->inmem_flags & FLAG_REGULAR_FILE)){
 			blks = -1;
 		}
 		ret = write_to_device(filep->device_offset+(blks * block_size),(unsigned char *)dummy_hdr,sizeof(struct header));
+	//	ut_printf("writing dummy meta block :%d: \n",filep->device_offset+(blks * block_size));
 		mm_free(dummy_hdr);
 	}
 	mm_free(hdr);
 	filep->inmem_flags = filep->inmem_flags & (~FLAG_METADATA_DIRTY);
-	ut_printf(" Meta Data of a file is Synced\n");
+	//ut_printf(" Meta Data of a file is Synced len: %s -> %d: offset:%d\n",filep->name,filep->length,filep->device_offset);
 	return JSUCCESS;
 }
 
@@ -580,7 +560,7 @@ struct tar_file *tar_fs::get_file(unsigned char *filename_arg) {
 			return &files[i];
 		}
 	}
-	ut_printf(" ERROR:  tarfs cannot find the file  :%s: \n",filename);
+	//ut_printf(" ERROR:  tarfs cannot find the file  :%s: \n",filename);
 	return NULL;
 }
 
@@ -628,15 +608,11 @@ struct tar_file *tar_fs::get_dir_entry(unsigned char *dirname_arg, struct tar_fi
 int tar_fs::read_from_device(int offset, unsigned char *buf, int len) {
 	int ret;
 
-#if TEST_TAR_FS
-	lseek(fd, offset, SEEK_SET);
-	ret = read(fd, buf, len);
-#else
 	if (file_count == -1){
 		scan_device_forfiles();
 	}
 	ret = driver->read(buf,len,offset);
-#endif
+
 	if (ret > 0){
 		stat_byte_reads = stat_byte_reads + ret;
 		stat_read_req++;
@@ -652,13 +628,7 @@ int tar_fs::write_to_device(int offset, unsigned char *buf, int len) {
 		scan_device_forfiles();
 	}
 
-#if TEST_TAR_FS
-	lseek(fd, offset, SEEK_SET);
-	ret = read(fd, buf, len);
-#else
 	ret = driver->write(buf,len,offset);
-#endif
-
 	if (ret > 0){
 		stat_byte_writes = stat_byte_reads + ret;
 		stat_write_req++;
@@ -716,6 +686,13 @@ int tar_fs::write_file_contents(unsigned char *filename, unsigned char *buf, int
 	allowed_length = len_arg;
 	if ((filep->length <= (offset+len_arg)) ){
 		long blen = ciel_length(filep->length);
+		if (filep->dummyfile_len ==0 && ((blen+filep->device_offset) == filesystem_size)){ /* if this is a last file */
+			if ((filesystem_size+extent_size) < device_size){ /* refill the last file */
+				filesystem_size = filesystem_size + extent_size;
+				filep->dummyfile_len = filep->dummyfile_len + extent_size;
+				filep->inmem_flags = filep->inmem_flags | FLAG_METADATA_DIRTY;
+			}
+		}
 		if  ((blen+filep->dummyfile_len) > offset){
 			new_size = offset + len_arg;
 			allowed_size = blen+filep->dummyfile_len;
@@ -729,6 +706,7 @@ int tar_fs::write_file_contents(unsigned char *filename, unsigned char *buf, int
 	}
 
 	tmp_ret=1;
+	ret_len=0;
 	while (tmp_ret > 0 && (allowed_length-ret_len)>0){
 		tmp_ret = write_to_device(filep->device_offset+offset+ret_len,buf+ret_len,(allowed_length-ret_len));
 
@@ -752,26 +730,7 @@ int tar_fs::write_file_contents(unsigned char *filename, unsigned char *buf, int
 	}
 	return ret_len;
 }
-#if TEST_TAR_FS
-main() {
-	int ret;
-	unsigned char buf[5000];
-	int next;
 
-	tar_fs fs;
-	fs.init((unsigned char*)"/jiny/");
-	fs.list_files();
-	ret = fs.read_file_contents((unsigned char *)"/aaa/a.c", buf, 4096, 0);
-	buf[ret]=0;
-	ut_printf(" read ret : %d :%s:\n",ret,buf);
-
-	while(1){
-		next = fs.get_dir_entry((unsigned char *)"/jiny/aaa/",next);
-		if (next <= 0){ break; }
-		ut_printf("  child of direcotry :%s:\n",fs.files[next].name);
-	}
-}
-#else
 /* list of virtual functions */
 long tar_fs::read(fs_inode *inodep, uint64_t offset, unsigned char *buff, unsigned long len_arg) {
 	int ret_len=0;
@@ -934,8 +893,8 @@ void tar_fs::set_mount_pnt(unsigned char *mnt_pnt_arg){
 }
 static class tar_fs *tarfs_obj;
 extern "C" {
-
-unsigned long g_conf_tarfs_extent_size=20000 ; /* 20k */
+//unsigned long g_conf_tarfs_extent_size=20000 ; /* 20k */
+unsigned long g_conf_tarfs_extent_size=512*8000 ; /* 512k */
 unsigned char *g_conf_tarfs_dummy_prefix = ".dummy_file";
 int init_tarfs(jdriver *driver_arg) {
 	tarfs_obj = jnew_obj(tar_fs);
@@ -947,4 +906,4 @@ int init_tarfs(jdriver *driver_arg) {
 	}
 }
 }
-#endif
+

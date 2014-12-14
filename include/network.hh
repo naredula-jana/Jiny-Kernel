@@ -72,6 +72,7 @@ class network_scheduler {
 	wait_queue *waitq;
 	struct device_under_poll_struct device_under_poll[MAX_POLL_DEVICES];
 	int poll_underway;
+	int netrx_cpuid; /* cpu id where netrx thread runs */
 	void *g_netBH_lock; /* All BH code will serialised by this lock */
 	int stat_netrx_bh_recvs;
 	int poll_devices();
@@ -79,7 +80,8 @@ class network_scheduler {
 public:
 	jdevice *device;
 	int init();
-	int netRx_BH(void *arg, void *arg2);
+	int netRx_thread(void *arg, void *arg2);
+	int netRx_BH();
 	int netif_rx(unsigned char *data, unsigned int len);
 	int netif_rx_enable_polling(void *private_data, int (*poll_func)(void *private_data, int enable_interrupt, int total_pkts));
 };

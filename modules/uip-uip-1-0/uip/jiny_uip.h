@@ -1,6 +1,8 @@
 #ifndef __JINYUIP_H__
 #define __JINYUIP_H__
 
+#include "types.h"
+
 struct jiny_uip{
 	u8_t *uip_buf;
 
@@ -22,8 +24,8 @@ struct jiny_uip{
 	u8_t callback_flags;
 };
 
+
 #define MAX_CPUS 10
-extern int getcpuid();
 
 extern struct jiny_uip jiny_uip[MAX_CPUS];
 

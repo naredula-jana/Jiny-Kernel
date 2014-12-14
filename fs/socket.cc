@@ -21,6 +21,7 @@ extern "C"{
 
 extern "C"{
 int default_sock_queue_len=0;
+int g_conf_socket_wakeup=1;
 static spinlock_t _netstack_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"netstack");
 unsigned long stack_flags;
 void netstack_lock(){
@@ -109,7 +110,9 @@ last:
 		jfree_page(buf);
 		stat_raw_drop++;
 	}else{
-		queue.waitq->wakeup();
+		if (g_conf_socket_wakeup == 1){
+			queue.waitq->wakeup();
+		}
 		stat_raw_attached++;
 	}
 	return ret;
@@ -135,8 +138,9 @@ int socket::remove_from_queue(unsigned char **buf, int *len) {
 			ret = JSUCCESS;
 		}
 		spin_unlock_irqrestore(&(queue.spin_lock), flags);
-		if (ret == JFAIL)
-			queue.waitq->wait(1000);
+		if (ret == JFAIL){
+			queue.waitq->wait(500);
+		}
 	}
 	return ret;
 }
@@ -213,8 +217,10 @@ int socket::write(unsigned long offset, unsigned char *app_data, int app_len, in
 }
 int socket::close() {
 	int ret;
+	ut_log(" Freeing the socket :%d\n",this->count.counter);
 	atomic_dec(&this->count);
 	if (this->count.counter > 0){
+		ut_log("socket FAILED :%d\n",this->count.counter);
 		return JFAIL;
 	}
 	ret = net_stack->close(&network_conn);
@@ -226,6 +232,7 @@ int socket::close() {
 	delete_sock(this);
 	// TODO: need to clear the socket
 	ut_free(this);
+	ut_log("socket freed\n");
 	return ret;
 }
 
@@ -253,9 +260,9 @@ int socket::ioctl(unsigned long arg1, unsigned long arg2) {
 }
 
 void socket::print_stats(unsigned char *arg1,unsigned char *arg2){
-	ut_printf("socket: count:%d local:%x:%x remote:%x:%x (IO: %d/%d: StatErr: %d Qfull:%d)  %x\n",
+	ut_printf("socket: count:%d local:%x:%x remote:%x:%x (IO: %d/%d: StatErr: %d Qfull:%d Qlen:%d)  %x\n",
 			count.counter,network_conn.src_ip,network_conn.src_port,network_conn.dest_ip,network_conn.dest_port,stat_in
-	    ,stat_out,stat_err,queue.error_full, &network_conn);
+	    ,stat_out,stat_err,queue.error_full,queue.queue_len, &network_conn);
 }
 
 sock_list_t socket::udp_list;
@@ -334,6 +341,7 @@ void socket::init_socket(int type){
 	} else{
 		network_conn.protocol = 0;
 	}
+	count.counter = 1;
 	stat_in = 0;
 	stat_in_bytes =0;
 	stat_out =0;

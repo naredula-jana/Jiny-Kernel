@@ -494,54 +494,104 @@ int housekeep_zeropage_cache() { /* clear the page at every call */
 static unsigned long stat_page_allocs=0;
 static unsigned long stat_page_alloc_zero=0;
 static unsigned long stat_page_frees=0;
-struct percpu_pagecache {
-	char inuse;
+struct page_bucket{
 #define MAX_STACK_SIZE 1000
 	unsigned long stack[MAX_STACK_SIZE+1];
 	int top;
+	struct page_bucket *next;
+};
+#define MAX_BUCKETS 8
+static struct page_bucket *empty_buckets,*full_buckets;
+
+struct percpu_pagecache {
+	char inuse;
+
+    struct page_bucket *buck1,*buck2;
 	unsigned long stat_allocs,stat_frees,stat_miss_alloc,stat_miss_free;
 };
 static struct percpu_pagecache page_cache[MAX_CPUS];
+static struct page_bucket raw_buckets[MAX_BUCKETS];
 static spinlock_t jslab_cache_lock = SPIN_LOCK_UNLOCKED("jslab_cache");
 void init_percpu_page_cache(){
 	int i;
 	ut_memset(page_cache,0,MAX_CPUS*sizeof(struct percpu_pagecache));
 
+	ut_memset(&raw_buckets[0],0,MAX_BUCKETS*sizeof(struct page_bucket));
+	empty_buckets =0;
+	full_buckets = 0;
+	for (i=0; i<MAX_BUCKETS; i++){
+		raw_buckets[i].next = empty_buckets;
+		empty_buckets = &raw_buckets[i];
+	}
 	return;
 }
-unsigned long jalloc_page(int flags){
-#ifdef CPU_CACHE
-	int cpu=getcpuid();
-#else
-	int cpu=0;
+static struct page_bucket *get_bucket(struct page_bucket *in){
+	struct page_bucket *ret;
+	int i;
 	unsigned long irq_flags;
+
 	spin_lock_irqsave(&jslab_cache_lock, irq_flags);
-#endif
+	ret =in;
+	if (in == 0){/* get new empty bucket */
+		if (empty_buckets != 0){
+			ret = empty_buckets;
+			empty_buckets = empty_buckets->next;
+			ret->next =0;
+		}
+	}else if (in->top == 0){ /* get full bucket */
+		if (full_buckets != 0){
+			in->next = empty_buckets;
+			empty_buckets = in;
+			in=full_buckets;
+			full_buckets = in->next;
+			in->next =0;
+			ret =in;
+		}
+	}else { /* get empty bucket */
+		if (empty_buckets != 0){
+			in->next = full_buckets;
+			full_buckets = in;
+			in=empty_buckets;
+			empty_buckets = in->next;
+			in->next =0;
+			ret =in;
+		}
+	}
+	spin_unlock_irqrestore(&jslab_cache_lock, irq_flags);
+
+	return ret;
+}
+unsigned long jalloc_page(int flags){
+	int cpu=getcpuid(); /* local for each cpu */
 
 	stat_page_allocs++;
 	if (flags&MEM_CLEAR){
 		stat_page_alloc_zero++;
 	}else{
 		if (page_cache[cpu].inuse == 0){
+			struct page_bucket *bucket;
 			page_cache[cpu].inuse=1;
-			if (page_cache[cpu].top > 0){
-				unsigned long ret = page_cache[cpu].stack[page_cache[cpu].top -1];
-				page_cache[cpu].top--;
+
+			bucket = page_cache[cpu].buck1;
+			if (bucket && bucket->top == 0){
+				bucket = page_cache[cpu].buck2;
+				if (bucket && bucket->top == 0){
+					page_cache[cpu].buck1 = get_bucket(page_cache[cpu].buck1);
+					bucket = page_cache[cpu].buck1;
+				}
+			}
+
+			if (bucket && bucket->top > 0){
+				unsigned long ret = bucket->stack[bucket->top -1];
+				bucket->top--;
 				page_cache[cpu].inuse=0;
 				page_cache[cpu].stat_allocs++;
-#ifndef CPU_CACHE
-				spin_unlock_irqrestore(&jslab_cache_lock, irq_flags);
-#endif
 				return ret;
 			}
 			page_cache[cpu].inuse=0;
-
 		}
 	}
 	page_cache[cpu].stat_miss_alloc++;
-#ifndef CPU_CACHE
-	spin_unlock_irqrestore(&jslab_cache_lock, irq_flags);
-#endif
 
 	if (g_conf_zeropage_cache==1){
 		unsigned long page;
@@ -551,37 +601,38 @@ unsigned long jalloc_page(int flags){
 	return mm_getFreePages(flags, 0);
 }
 int jfree_page(unsigned long p){
-#ifdef CPU_CACHE
 	int cpu = getcpuid();
-#else
-	int cpu =0;
-	unsigned long flags;
-	spin_lock_irqsave(&jslab_cache_lock, flags);
-#endif
 
 	stat_page_frees++;
 	//ut_log(" jfree_page:%x \n",p);
-	if (1) {
 
-		if (page_cache[cpu].inuse == 0) {
-			page_cache[cpu].inuse = 1;
-			if (page_cache[cpu].top < MAX_STACK_SIZE) {
-				page_cache[cpu].stack[page_cache[cpu].top]=p;
-				page_cache[cpu].top++;
-				page_cache[cpu].inuse = 0;
-				page_cache[cpu].stat_frees++;
-#ifndef CPU_CACHE
-				spin_unlock_irqrestore(&jslab_cache_lock, flags);
-#endif
-				return 0;
-			}
-			page_cache[cpu].inuse = 0;
+	if (page_cache[cpu].inuse == 0) {
+		struct page_bucket *bucket;
+		page_cache[cpu].inuse = 1;
+		if (page_cache[cpu].buck1 == 0){
+			page_cache[cpu].buck1 = get_bucket(0);
+			page_cache[cpu].buck2 = get_bucket(0);
 		}
+
+		bucket = page_cache[cpu].buck1;
+		if (bucket && bucket->top >= MAX_STACK_SIZE){
+			bucket  = page_cache[cpu].buck2;
+			if (bucket && bucket->top >= MAX_STACK_SIZE){
+				bucket = get_bucket(page_cache[cpu].buck1);
+				page_cache[cpu].buck1 = bucket;
+			}
+		}
+
+		if (bucket && bucket->top < MAX_STACK_SIZE) {
+			bucket->stack[bucket->top] = p;
+			bucket->top++;
+			page_cache[cpu].inuse = 0;
+			page_cache[cpu].stat_frees++;
+			return 0;
+		}
+		page_cache[cpu].inuse = 0;
 	}
 	page_cache[cpu].stat_miss_free++;
-#ifndef CPU_CACHE
-	spin_unlock_irqrestore(&jslab_cache_lock, flags);
-#endif
 
 	if (g_conf_zeropage_cache==1){
 		if (insert_into_zeropagecache(p,0) == JSUCCESS)
@@ -589,11 +640,13 @@ int jfree_page(unsigned long p){
 	}
 	return mm_putFreePages(p, 0);
 }
+
 void *ut_calloc(size_t size){
 	void *addr = ut_malloc(size);
 	ut_memset(addr,0,size);
 	return addr;
 }
+
 /*************************** simple vmalloc subsystem ******************************************/
 #if 1
 #define MAX_VBLOCKS 100
@@ -721,7 +774,7 @@ int Jcmd_jslab(unsigned char *arg1, unsigned char *arg2) {
 	ut_printf("single page allocs(zero_alloc):%d(%d) page frees:%d zeropagecache dirty/clean: %d/%d\n",stat_page_allocs,
 			stat_page_alloc_zero,stat_page_frees,zeropage_cache.max_dirtypage_index,zeropage_cache.max_cleanpage_index);
 	for (i=0; i <MAX_CPUS; i++){
-		ut_printf(" alloc: %d frees:%d missalloc:%d  missfrees:%d \n",page_cache[i].stat_allocs,page_cache[i].stat_frees,page_cache[i].stat_miss_alloc,page_cache[i].stat_miss_free);
+		ut_printf(" Alloc: %d Frees:%d missalloc:%d  missfrees:%d \n",page_cache[i].stat_allocs,page_cache[i].stat_frees,page_cache[i].stat_miss_alloc,page_cache[i].stat_miss_free);
 	}
 	return 1;
 }

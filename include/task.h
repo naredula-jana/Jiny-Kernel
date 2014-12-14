@@ -111,18 +111,25 @@ struct mm_struct {
 typedef struct task_queue {
 	struct list_head head;
 	char *name;
+	int length;
 } task_queue_t;
 
 enum {
 	THREAD_LOW_PRIORITY=0,
 	THREAD_HIGH_PRIORITY=1
 };
+/* standard parameters compatabile with linux */
 #define CLONE_VM 0x100
-#define CLONE_KERNEL_THREAD 0x10000
-#define CLONE_VFORK 0x1000
-#define CLONE_FS 0x2000
+#define CLONE_FS 0x200
+#define CLONE_VFORK 0x4000
+
+#define CLONE_KERNEL_THREAD 0x80000000 /* proparatory */
 /*
  - task can be on run queue or in wait queues */
+#define MAX_SYSCALL 255
+struct syscall_stat{
+	int count;
+};
 struct task_struct {
 	volatile long state;    /* -1 unrunnable, 0 runnable, >0 stopped */
 	unsigned long flags;    /* per process flags, defined below */
@@ -142,8 +149,6 @@ struct task_struct {
 
 	int counter;  /* ticks for evry 1 context switch*/
 	long sleep_ticks;
-	//unsigned long cpu_contexts; /* every cpu context , it will be incremented */
-	//unsigned long ticks;
 
 	struct thread_struct thread;
 	struct mm_struct *mm;
@@ -176,6 +181,10 @@ struct task_struct {
 		int wait_line_no; /* line number where mutex lock as triggered */
 		int syscall_count;
 		unsigned long ticks_consumed;
+		unsigned long start_time;
+#if 1
+		struct syscall_stat *syscalls;
+#endif
 	} stats;
 
 	unsigned long magic_numbers[4]; /* already stack is default fill with magic numbers */
@@ -187,18 +196,28 @@ struct cpu_state {
 	struct task_struct *idle_task;
 	task_queue_t run_queue;
 	int run_queue_length;
+	int net_BH; /* enable if the net_RX BH need to be kept on the cpu on a priority basis */
 
 	unsigned char cpu_priority;
 	int active; /* only active cpu will pickup the tasks , otherwise they can only run idle threads */
 	int intr_disabled; /* interrupts disabled except apic timer */
+	int idle_state; /* if the cpu is in idle state set it to 1 */
 
 	int intr_nested_level;
 	unsigned long last_total_contexts; /* used for house keeping */
+	struct{
+		int clock_interrupts;
+		int nonclock_interrupts;
+		unsigned long hits;
+	}cpu_spinstate;
 
-	unsigned long stat_total_contexts;
-	unsigned long stat_nonidle_contexts;
-	unsigned long stat_idleticks; /* in idle function when the timer arrives */
-	unsigned long stat_rip;
+	struct {
+		unsigned long total_contexts;
+		unsigned long nonidle_contexts;
+		unsigned long idleticks; /* in idle function when the timer arrives */
+		unsigned long rip;
+		unsigned long netbh;
+	} stats;
 } __attribute__ ((aligned (64))) ;
 
 
@@ -206,19 +225,9 @@ extern struct cpu_state g_cpu_state[];
 #define is_kernelThread(task) (task->mm == g_kernel_mm)
 #define IPI_INTERRUPT 200
 #define IPI_CLEARPAGETABLE 201
-extern int getcpuid();
+//extern int getcpuid();
 
-#if 0
-static inline struct task_struct *current_task(void)
-{
-	unsigned long addr,p;
-	addr = (unsigned long)&p;
-	addr=addr & (~(TASK_SIZE-1));
 
-    return (struct task_struct *)addr;
-}
-#define g_current_task current_task()
-#else
 static inline struct task_struct *bootup_task(void)
 {
 	unsigned long addr,p;
@@ -230,10 +239,8 @@ static inline struct task_struct *bootup_task(void)
 //#define g_current_task g_cpu_state[0].current_task
 register unsigned long current_stack_pointer asm("esp");
 #define g_current_task ((struct task_struct *)(current_stack_pointer & ~(TASK_SIZE - 1)))
-#endif
 
 #define is_kernel_thread (g_current_task->mm == g_kernel_mm)
-
 typedef struct backtrace{
 	struct{
 	unsigned long ret_addr;

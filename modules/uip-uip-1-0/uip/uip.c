@@ -271,6 +271,9 @@ void uip_log(char *msg);
 #define UIP_LOG(m)
 #endif /* UIP_LOGGING == 1 */
 
+void Jcmd_net_stat(){
+	ut_printf(" udp: recv:%d send:%d  cksumError:%d \n",uip_stat.udp.recv,uip_stat.udp.sent,uip_stat.udp.chkerr);
+}
 #if ! UIP_ARCH_ADD32
 void
 uip_add32(u8_t *op32, u16_t op16)
@@ -955,6 +958,7 @@ uip_process(u8_t flag)
 	}
 
 #if !UIP_CONF_IPV6
+#if 0 /* TODO Jana commented out to improve the performance */
 	if (uip_ipchksum() != 0xffff) { /* Compute and check the IP header
 	 checksum. */
 		UIP_STAT(++uip_stat.ip.drop);
@@ -962,6 +966,7 @@ uip_process(u8_t flag)
 		UIP_LOG("ip: bad checksum.");
 		goto drop;
 	}
+#endif
 #endif /* UIP_CONF_IPV6 */
 
 	if (BUF->proto == UIP_PROTO_TCP) { /* Check for TCP packet. If so,
@@ -1109,7 +1114,7 @@ uip_process(u8_t flag)
 	if (UDPBUF->udpchksum != 0 && uip_udpchksum() != 0xffff) {
 		UIP_STAT(++uip_stat.udp.drop);
 		UIP_STAT(++uip_stat.udp.chkerr);
-		UIP_LOG("udp: bad checksum.");
+		//UIP_LOG("udp: bad checksum.");
 		goto drop;
 	}
 #else /* UIP_UDP_CHECKSUMS */

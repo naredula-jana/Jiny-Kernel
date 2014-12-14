@@ -66,7 +66,7 @@ public:
 	virtual int ioctl(unsigned long arg1,unsigned long arg2)=0;
 	virtual void print_stats(unsigned char *arg1,unsigned char *arg2)=0;
 };
-#define MAX_SOCKET_QUEUE_LENGTH 1500
+#define MAX_SOCKET_QUEUE_LENGTH 2500
 struct sock_queue_struct {
 	wait_queue *waitq;
 	int producer, consumer;
@@ -76,7 +76,7 @@ struct sock_queue_struct {
 	} data[MAX_SOCKET_QUEUE_LENGTH];
 	spinlock_t spin_lock; /* lock to protect while adding and revoing from queue */
 	int stat_processed[MAX_CPUS];
-	int queue_len;
+	unsigned long queue_len;
 	unsigned long error_full;
 };
 #define MAX_SOCKETS 100

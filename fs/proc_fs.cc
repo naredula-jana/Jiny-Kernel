@@ -25,6 +25,24 @@ struct procfs_cmd{
 	int pid;
 	int cmd_type;
 };
+
+class proc_fs :public filesystem {
+public:
+	 int open(fs_inode *inode, int flags, int mode);
+	 int lseek(struct file *file,  unsigned long offset, int whence);
+	 long write(fs_inode *inode, uint64_t offset, unsigned char *buff, unsigned long len);
+	 long read(fs_inode *inode, uint64_t offset,  unsigned char *buff, unsigned long len);
+	 long readDir(fs_inode *inode, struct dirEntry *dir_ptr, unsigned long dir_max, int *offset);
+	 int remove(fs_inode *inode);
+	 int stat(fs_inode *inode, struct fileStat *stat);
+	 int close(fs_inode *inodep);
+	 int fdatasync(fs_inode *inodep);
+	 int setattr(fs_inode *inode, uint64_t size);//TODO : currently used for truncate, later need to expand
+	 int unmount();
+	 void set_mount_pnt(unsigned char *mnt_pnt);
+	 void print_stat();
+};
+
 static int get_cmd(unsigned char *filename, struct procfs_cmd *cmd){
 	int i,j,k;
 	unsigned char token[100];
@@ -79,10 +97,10 @@ static int get_cmd(unsigned char *filename, struct procfs_cmd *cmd){
 	return JFAIL;
 
 }
-static int procfs_lseek(struct file *file, unsigned long offset, int whence) {
+int proc_fs::lseek(struct file *file, unsigned long offset, int whence) {
 
 }
-static long procfs_write(void *inode, uint64_t offset, unsigned char *buff, unsigned long len) {
+long proc_fs::write(fs_inode *inodep, uint64_t offset, unsigned char *buff, unsigned long len) {
 	return 0;
 }
 extern int Jcmd_maps(char *arg1, char *arg2);
@@ -296,13 +314,12 @@ extern int Jcmd_maps(char *arg1, char *arg2);
                           measured in clock ticks (divide by
                           sysconf(_SC_CLK_TCK)).
  */
-static long procfs_read(void *inodep_arg, uint64_t offset, unsigned char *buff, unsigned long len_arg) {
+long proc_fs::read(fs_inode *inodep, uint64_t offset, unsigned char *buff, unsigned long len_arg) {
 	struct procfs_cmd cmd;
 	int len=0;
 	struct task_struct *task;
 
 	//ut_printf(" procfs read \n");
-	fs_inode *inodep=(fs_inode *)inodep_arg;
 	if (get_cmd(inodep->filename,&cmd)== JSUCCESS){
 		if (cmd.cmd_type == PROC_MAP){
 			unsigned char pid[20];
@@ -344,14 +361,14 @@ static long procfs_read(void *inodep_arg, uint64_t offset, unsigned char *buff, 
 	if (offset > 0) return 0;
 	return len;
 }
-static long procfs_readDir(void *inodep_arg, struct dirEntry *dir_p, unsigned long dir_max, int *offset) {
+long proc_fs::readDir(fs_inode *inodep, struct dirEntry *dir_p, unsigned long dir_max, int *offset) {
 	struct procfs_cmd cmd;
 	int total_len,len,i;
 	unsigned char *p;
 
 	//ut_printf(" porcfs readdir\n");
 	total_len=0;
-	fs_inode *inodep=(fs_inode *)inodep_arg;
+
 	if (get_cmd(inodep->filename,&cmd)== JSUCCESS){
 		if (cmd.cmd_type == PROC_MAIN_DIR  ){
 			unsigned long flags;
@@ -389,14 +406,14 @@ static long procfs_readDir(void *inodep_arg, struct dirEntry *dir_p, unsigned lo
 	}
 	return total_len;
 }
-static int procfs_remove(void *inode) {
+int proc_fs::remove(fs_inode *inodep) {
 
 }
 
-static int procfs_stat(void *inodep_arg, struct fileStat *stat) {
+int proc_fs::stat(fs_inode *inodep, struct fileStat *stat) {
 	struct procfs_cmd cmd;
 	struct fileStat fs;
-	fs_inode *inodep=(fs_inode *)inodep_arg;
+
 	if (get_cmd(inodep->filename,&cmd)== JSUCCESS){
 		fs.inode_no = 1;
 		fs.type = REGULAR_FILE;
@@ -412,9 +429,8 @@ static int procfs_stat(void *inodep_arg, struct fileStat *stat) {
 	//ut_printf(" Inside procfs stat :%s: %d \n",inodep->filename,fs.type);
 	return 0;
 }
-static int procfs_open(void *inodep_arg) {
+int proc_fs::open(fs_inode *inodep,int flags, int mode) {
 	struct procfs_cmd cmd;
-	fs_inode *inodep=(fs_inode *)inodep_arg;
 
 	if (get_cmd(inodep->filename,&cmd)== JSUCCESS){
 		return JSUCCESS;
@@ -422,153 +438,30 @@ static int procfs_open(void *inodep_arg) {
 
 	return JFAIL;
 }
-static int procfs_close(void *inodep) {
+int proc_fs::close(fs_inode *inodep) {
 	return 0;
 }
-static int procfs_fdatasync(void *inodep) {
+int proc_fs::fdatasync(fs_inode *inodep) {
 	return 0;
 }
-static int procfs_setattr(void *inode, uint64_t size) { //TODO : currently used for truncate, later need to expand
+int proc_fs::setattr(fs_inode *inode, uint64_t size) { //TODO : currently used for truncate, later need to expand
 	return 0;
 }
-static int procfs_unmount() {
+int proc_fs::unmount() {
 	return 0;
+}
+void proc_fs::print_stat(){
+
+}
+void proc_fs::set_mount_pnt(unsigned char *mnt_pnt){
+/*TODO: nothing todo in procfs */
 }
 //struct filesystem proc_fs;
+static class proc_fs *proc_fs_obj;
 int init_procfs(unsigned long unused) {
-#if 0
-	proc_fs.open = procfs_open;
-	proc_fs.read = procfs_read;
-	proc_fs.write = procfs_write;
-	proc_fs.readDir = procfs_readDir;
-	proc_fs.close = procfs_close;
-
-	proc_fs.remove = procfs_remove;
-	proc_fs.stat = procfs_stat;
-	proc_fs.fdatasync = procfs_fdatasync;
-	proc_fs.lseek = procfs_lseek;
-	proc_fs.setattr = procfs_setattr;
-	proc_fs.unmount = procfs_unmount;
-	return fs_registerFileSystem(&proc_fs, "/proc/");
-#endif
+	proc_fs_obj = jnew_obj(proc_fs);
+	fs_registerFileSystem(proc_fs_obj,(unsigned char *)"proc");
 	return 1;
 }
-/*****************************************jiny fs ************************************/
-static long jinyfs_readDir(void *inodep_arg, struct dirEntry *dir_p,
-		unsigned long dir_max, int *offset) {
-	struct procfs_cmd cmd;
-	int total_len, len, i;
-	unsigned char *p;
-	fs_inode *inodep = (fs_inode *) inodep_arg;
-	ut_printf(" INSIDE... the jiny READDIR : %s %d:\n", inodep->filename,*offset);
-	if (*offset > 0)
-		return 0;
-	if (ut_strcmp(inodep->filename, (unsigned char *) "//jiny") != 0) {
-		return 0;
-	}
-	dir_p->inode_no = 0x22;
-	ut_sprintf(dir_p->filename, "%s", "busybox");
-	len = 2 * (sizeof(unsigned long)) + sizeof(unsigned short)
-			+ ut_strlen((unsigned char *) dir_p->filename) + 2;
-	dir_p->d_reclen = (len / 8) * 8;
-	if ((dir_p->d_reclen) < len)
-		dir_p->d_reclen = dir_p->d_reclen + 8;
-	if (offset) {
-		*offset = 2;
-	}
-	return dir_p->d_reclen;
-}
-static int jinyfs_lseek(struct file *file, unsigned long offset, int whence) {
-	return 0;
-}
-static long jinyfs_write(void *inode, uint64_t offset, unsigned char *buff, unsigned long len) {
-	return 0;
-}
-static int jinyfs_open(void *inodep_arg) {
-	struct procfs_cmd cmd;
-	fs_inode *inodep=(fs_inode *)inodep_arg;
-      ut_printf(" jintfs_open\n");
-	return JSUCCESS;
-}
-static int jinyfs_close(void *inodep) {
-	return 0;
-}
-static int jinyfs_remove(void *inode) {
-	return 0;
-}
-static int jinyfs_fdatasync(void *inodep) {
-	return 0;
-}
-static int jinyfs_setattr(void *inode, uint64_t size) { //TODO : currently used for truncate, later need to expand
-	return 0;
-}
-static int jinyfs_unmount() {
-	return 0;
-}
 
-static long jinyfs_read(void *inodep_arg, uint64_t offset, unsigned char *buff, unsigned long len_arg) {
-	int ret_len=0;
-	int tmp_ret;
-
-	ut_printf(" inside the jiny read: offset:%d len_arg:%d\n",offset,len_arg);
-	if (disk_drivers[0] == 0) return 0;
-
-	tmp_ret=1;
-	while (tmp_ret > 0 && (len_arg-ret_len)>0){
-		tmp_ret= disk_drivers[0]->read(buff+ret_len,(len_arg-ret_len),offset+ret_len);
-		ut_printf(" tmp read from jinyfs read: %d tmp_ret:%d\n",ret_len,tmp_ret);
-		if (tmp_ret > 0){
-			ret_len = ret_len + tmp_ret;
-		}else{
-			break;
-		}
-	}
-
-	ut_printf(" read from jinyfs read: %d \n",ret_len);
-	return ret_len;
-}
-static int jinyfs_stat(void *inodep_arg, struct fileStat *stat) {
-	struct fileStat fs;
-	fs.atime =0x0;
-	fs.mtime =0x0;
-	fs.mode =0x0;
-	fs.blk_size =0x0;
-	fs_inode *inodep=(fs_inode *)inodep_arg;
-	if (inodep->filename) {
-		if (ut_strcmp(inodep->filename, (unsigned char *) "//jiny") == 0) {
-			fs.type = DIRECTORY_FILE;
-			fs.inode_no = 1;
-		} else {
-			fs.inode_no = 1;
-			fs.type = REGULAR_FILE;
-			fs.st_size = disk_drivers[0]->ioctl(IOCTL_DISK_SIZE,0);
-		}
-	}
-
-	ut_memcpy((unsigned char *) fs_get_stat(inodep, fs.type),
-			(unsigned char *) &fs, sizeof(struct fileStat));
-
-	ut_printf(" Inside jiny stat :%s: :%d \n",inodep->filename,fs.type);
-	return 0;
-}
-//struct filesystem jiny_fs;
-
-int init_jinyfs(unsigned long mnt_pnt) {
-	if (disk_drivers[0] == 0) return JFAIL;
-#if 0
-	jiny_fs.open = jinyfs_open;
-	jiny_fs.read = jinyfs_read;
-	jiny_fs.write = jinyfs_write;
-	jiny_fs.readDir = jinyfs_readDir;
-	jiny_fs.close = jinyfs_close;
-	jiny_fs.remove = jinyfs_remove;
-	jiny_fs.stat = jinyfs_stat;
-	jiny_fs.fdatasync = jinyfs_fdatasync;
-	jiny_fs.lseek = jinyfs_lseek;
-	jiny_fs.setattr = jinyfs_setattr;
-	jiny_fs.unmount = jinyfs_unmount;
-	return fs_registerFileSystem(&jiny_fs, (unsigned char *)mnt_pnt);
-#endif
-	return 1;
-}
 }

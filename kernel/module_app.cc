@@ -28,6 +28,7 @@ class module_t {
 	int update_symboltable(Elf64_Sym *symb, int total_symb);
 public:
 	void sort_symbols();
+	void rank_symbols_by_hits(int max_ranks);
 	unsigned long _get_symbol_addr(unsigned char *name);
 	void free_module();
 	char* do_relocation(struct file *file, Elf64_Sym *symb, int total_symbols, Elf64_Shdr *sec_rel,int sec_type);
@@ -53,6 +54,38 @@ public:
 	int (*clean_module)(unsigned char *arg1, unsigned char *arg2);
 	int (*highpriority_app_main)(int argc, unsigned char *argv);
 };
+void module_t::rank_symbols_by_hits(int max_ranks) {
+	unsigned long hits;
+	int rank,i,j,k,max_symbols=0;
+
+	for (i = 0; symbol_table[i].name != 0; i++) {/* reset all the temp variable, caluculate hit */
+		hits=0;
+		for (k = 0; k < MAX_CPUS; k++) {
+			hits = hits + symbol_table[i].stats[k].hits;
+		}
+		symbol_table[i].total_hits = hits;
+		symbol_table[i].hit_rank = 0;
+		max_symbols++;
+	}
+	for (rank = 1; rank <max_ranks && rank<max_symbols; rank++) { /* sort top max_ranks */
+		int max_hits =0;
+		int max_i=-1;
+
+		for (i = 0; symbol_table[i].name != 0; i++) {
+			if (symbol_table[i].hit_rank != 0) continue;
+			if (symbol_table[i].total_hits > max_hits){
+				max_hits=symbol_table[i].total_hits;
+				max_i =i;
+			}
+		}
+		if (max_i > -1){
+			symbol_table[max_i].hit_rank = rank;
+		}else{
+			break;
+		}
+	}
+	return;
+}
 void module_t::sort_symbols() {
 	int i, j;
 
@@ -799,6 +832,8 @@ void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
 		option = 1;
 	} else if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "stat") == 0) {
 		option = 2;
+	}else if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "clear") == 0) {
+		option = 3;
 	}
 	cpu=-1;
 	if (arg2 != 0){
@@ -815,29 +850,42 @@ void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
 					modulep->secs[j].addr + modulep->secs[j].length);
 			SYS_fs_write(1, buf, ut_strlen(buf));
 		}
-		if (option != 0) {
-			for (j = 0; modulep->symbol_table[j].name != 0; j++) {
-				unsigned long hits = 0;
+		if (option == 2) {
+			int max_ranks=20;
 
-				if (option == 2) {
-					if (cpu == -1) {
-						for (k = 0; k < MAX_CPUS; k++) {
-							hits = hits + modulep->symbol_table[j].stats[k].hits;
-						}
-					}else if (cpu < MAX_CPUS){
-						hits =  modulep->symbol_table[j].stats[cpu].hits;
-					}
-					if (hits == 0) {
-						continue;
+			modulep->rank_symbols_by_hits(max_ranks);
+
+			for (k=1; k<max_ranks; k++) {
+				for (j = 0; modulep->symbol_table[j].name != 0; j++){
+					if (modulep->symbol_table[j].hit_rank == k){
+						break;
 					}
 				}
+				if (modulep->symbol_table[j].name == 0){
+					ut_printf(" No hits for rank :%d \n",k);
+					continue;
+				}
 
-				ut_snprintf(buf, bsize, "	%3d:t:%2d s_idx:%2d hits:%4d (rip=%p) %s -> %p (%d) \n", j,
-						modulep->symbol_table[j].type, modulep->symbol_table[j].sec_index, hits,
+				ut_snprintf(buf, bsize, "  %3d:t:%2d hits:%4d(%d:%d) (rip=%p) %s -> %p (%d) \n", k,
+						modulep->symbol_table[j].type, modulep->symbol_table[j].total_hits,modulep->symbol_table[j].stats[0].hits,modulep->symbol_table[j].stats[1].hits,
 						modulep->symbol_table[j].stats[0].rip, modulep->symbol_table[j].name, modulep->symbol_table[j].address,
 						modulep->symbol_table[j].len);
 				SYS_fs_write(1, buf, ut_strlen(buf));
-				total_hits = total_hits + hits;
+				//total_hits = total_hits + hits;
+			}
+		}else if (option == 1){
+			for (j = 0; modulep->symbol_table[j].name != 0; j++){
+				ut_snprintf(buf, bsize, "  %3d:t:%2d s_idx:%2d hits:%4d (rip=%p) %s -> %p (%d) \n", j,
+									modulep->symbol_table[j].type, modulep->symbol_table[j].sec_index, modulep->symbol_table[j].total_hits,
+									modulep->symbol_table[j].stats[0].rip, modulep->symbol_table[j].name, modulep->symbol_table[j].address,
+									modulep->symbol_table[j].len);
+				SYS_fs_write(1, buf, ut_strlen(buf));
+			}
+		}else if (option == 3){
+			for (j = 0; modulep->symbol_table[j].name != 0; j++){
+				for (k=0; k<MAX_CPUS; k++){
+					modulep->symbol_table[j].stats[k].hits =0;
+				}
 			}
 		}
 		modulep->use_count--;

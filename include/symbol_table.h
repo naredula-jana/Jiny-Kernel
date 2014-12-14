@@ -28,6 +28,8 @@ typedef struct {
 		unsigned long hits;
 		unsigned long rip;
 	}stats[MAX_CPUS];
+	unsigned long total_hits; /* temporary variable while sorting */
+	unsigned hit_rank; /* temporary variable while sorting */
 }symb_table_t;
 extern unsigned long g_multiboot_mod1_addr;
 extern unsigned long g_multiboot_mod1_len;

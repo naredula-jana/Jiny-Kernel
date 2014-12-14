@@ -70,7 +70,7 @@ static int lapic_dummy = 0;
 
 volatile int imps_release_cpus = 0;
 int imps_enabled = 0;
-int imps_num_cpus = 1;
+int g_imps_num_cpus = 1;
 unsigned long imps_lapic_addr = ((unsigned long) (&lapic_dummy)) - LAPIC_ID;
 unsigned long imps_ioapic_addr = 0;
 unsigned char imps_cpu_apic_map[IMPS_MAX_CPUS];
@@ -106,35 +106,33 @@ static int send_ipi(unsigned int dst, unsigned int v) {
 }
 static int apic_getcpuid() {
 	int id;
-	if (imps_num_cpus == 1)
+	if (g_imps_num_cpus == 1)
 		return 0;
 
 	id= APIC_ID(IMPS_LAPIC_READ(LAPIC_ID)); /* id is 0 based */
 
-	if (id >= MAX_CPUS || id < 0 || id >= imps_num_cpus)
+	if (id >= MAX_CPUS || id < 0 || id >= g_imps_num_cpus)
 		return 0;
 
 	return id;
 }
+#if 0
 inline int getcpuid() {
 	unsigned long cpuid;
-#if 0
-	if (imps_num_cpus == 1)
-		return 0;
-#endif
+
 	asm volatile("movq %%gs:0x48,%0" : "=r" (cpuid)); // TODO : Hardcoded 48 need to replace with define symbol
-#if 1
-	if (cpuid >= MAX_CPUS || cpuid < 0 || cpuid >= imps_num_cpus){
+
+	if (cpuid >= MAX_CPUS || cpuid < 0 || cpuid >= g_imps_num_cpus){
 		BUG();
 		return 0;
 	}
-#endif
 
 	return cpuid;
 }
 int getmaxcpus() {
-	return imps_num_cpus;
+	return g_imps_num_cpus;
 }
+#endif
 
 static inline unsigned long interrupts_enable(void) {
 	unsigned long o;
@@ -285,7 +283,7 @@ static int boot_cpu(imps_processor *proc) {
 		KERNEL_PRINT("SMP: CPU Not Responding, DISABLED");
 		success = 0;
 	} else {
-		KERNEL_PRINT("SMP: #%d  Application Processor (AP)", imps_num_cpus);
+		KERNEL_PRINT("SMP: #%d  Application Processor (AP)", g_imps_num_cpus);
 	}
 
 	/*
@@ -322,9 +320,9 @@ static void add_processor(imps_processor *proc) {
 	}
 	if (boot_cpu(proc)) {
 		/*  XXXXX  add OS-specific setup for secondary CPUs here */
-		imps_cpu_apic_map[imps_num_cpus] = apicid;
-		imps_apic_cpu_map[apicid] = imps_num_cpus;
-		imps_num_cpus++;
+		imps_cpu_apic_map[g_imps_num_cpus] = apicid;
+		imps_apic_cpu_map[apicid] = g_imps_num_cpus;
+		g_imps_num_cpus++;
 	}
 }
 
@@ -378,8 +376,8 @@ ut_log(" imps:smp : before the bsp_witch\n");  // TODO : uncommeting this line  
 
 	wait_non_bootcpus = 0; /* from this point onwards  all non-boot cpus starts */
 
-	KERNEL_PRINT("	NEW SMP: completed, ret:%d maxcpus: %d \n",imps_num_cpus,getmaxcpus());
-	KERNEL_PRINT("	SECOND SMP: completed, ret:%d maxcpus: %d \n",imps_num_cpus,getmaxcpus());
+	KERNEL_PRINT("	NEW SMP: completed, ret:%d maxcpus: %d \n",g_imps_num_cpus,getmaxcpus());
+	KERNEL_PRINT("	SECOND SMP: completed, ret:%d maxcpus: %d \n",g_imps_num_cpus,getmaxcpus());
 	cli();
 	return JSUCCESS;
 }

@@ -193,7 +193,7 @@ static int netdriver_xmit(unsigned char* data, unsigned int len, void *private_d
 	virtio_net_jdriver *net_driver = (virtio_net_jdriver *) private_data;
 	return net_driver->write(data, len, 0);
 }
-
+int g_conf_netbh_enable = 1;
 static int virtio_net_recv_interrupt(void *private_data) {
 	jdevice *dev;
 	virtio_net_jdriver *driver = (virtio_net_jdriver *) private_data;
@@ -205,11 +205,11 @@ static int virtio_net_recv_interrupt(void *private_data) {
 	driver->stat_recv_interrupts++;
 	//virtio_disable_cb(driver->vq[0]); /* disabling interrupts have Big negative impact on packet recived when smp enabled */
 
-#if 1  /* handing over the packets to net bx thread  */
-	net_sched.netif_rx_enable_polling(private_data, virtio_net_poll_device);
-#else /* without net bx  */
-	virtio_net_poll_device(private_data,1,1000);
- #endif
+    if (g_conf_netbh_enable == 1){  /* handing over the packets to net bx thread  */
+    	net_sched.netif_rx_enable_polling(private_data, virtio_net_poll_device);
+    }else{ /* without net bx  */
+    	virtio_net_poll_device(private_data,1,1000);
+    }
 	return 0;
 
 }
@@ -424,7 +424,7 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 		stat_frees++;
 	}
 	if (g_conf_net_sendbuf_delay == 1) {
-		if ((stat_sends % 50) == 0) {
+		if ((stat_sends % 10) == 0) {
 			virtio_queue_kick(this->vq[1]);
 			stat_send_kicks++;
 		} else {
@@ -432,6 +432,7 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 		}
 	} else {
 		virtio_queue_kick(this->vq[1]);
+		stat_send_kicks++;
 	}
 	spin_unlock_irqrestore(&virtionet_lock, flags);
 
@@ -740,7 +741,14 @@ int virtio_disk_jdriver::disk_attach_device(class jdevice *jdev) {
 	features = inl(addr);
 	ut_log("	Virtio disk: Initializing VIRTIO PCI hostfeatures :%x: status :%x :\n", features,  virtio_get_pcistatus(pci_ioaddr));
 
-	this->virtio_create_queue(0, 2);
+	if (jdev->pci_device.pci_header.device_id != VIRTIO_PCI_SCSI_DEVICE_ID) {
+		this->virtio_create_queue(0, 2);
+	}else{
+		this->virtio_create_queue(0,2);
+		this->virtio_create_queue(1,1);
+		this->virtio_create_queue(2,2);
+	}
+
 	if (jdev->pci_device.msix_cfg.isr_vector > 0) {
 #if 0
 		outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR,0);
@@ -787,7 +795,7 @@ int virtio_disk_jdriver::disk_attach_device(class jdevice *jdev) {
 		 virtio_stw_p(vdev, &scsiconf->max_target, VIRTIO_SCSI_MAX_TARGET);
 		 virtio_stl_p(vdev, &scsiconf->max_lun, VIRTIO_SCSI_MAX_LUN)
 		 */
-		ut_log(" SCSI Num Queues: %d \n", virtio_config32(pci_ioaddr + 0));
+		ut_log(" SCSI Num of Reques Queues: %d \n", virtio_config32(pci_ioaddr + 0));
 		ut_log(" SCSI seg max: %d \n", virtio_config32(pci_ioaddr + 4));
 		ut_log(" SCSI max sector: %d \n", virtio_config32(pci_ioaddr + 8));
 		ut_log(" SCSI cmd_per_lun: %d \n", virtio_config32(pci_ioaddr + 12));

@@ -16,21 +16,22 @@
 extern "C" {
 #include "common.h"
 #include "descriptor_tables.h"
-
+extern int net_bh();
 unsigned char g_idle_stack[MAX_CPUS + 2][TASK_SIZE] __attribute__ ((aligned (4096)));
 struct mm_struct *g_kernel_mm = 0;
 task_queue_t g_task_queue;
 spinlock_t g_global_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"global");
 unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles per second  */
 unsigned long g_jiffie_errors = 0;
-unsigned long g_jiffie_tick = 0;
+//unsigned long g_jiffie_tick = 0;
 
 static int curr_cpu_assigned = 0;
 //static struct fs_struct *fs_kernel;
 static unsigned long free_pid_no = 1; // TODO need to make unique when  wrap around
 static wait_queue *timer_queue;
-static int g_conf_cpu_stats = 1;
-static int g_conf_dynamic_assign_cpu = 0; /* minimizes the IPI interrupt by reassigning the the task to running cpu */
+int g_conf_cpu_stats = 1;
+int g_conf_idle_cpuspin = 0;
+int g_conf_dynamic_assign_cpu = 0; /* minimizes the IPI interrupt by reassigning the the task to running cpu */
 static int stat_dynamic_assign_errors = 1;
 
 extern kmem_cache_t *g_slab_filep;
@@ -51,10 +52,15 @@ static struct task_struct *alloc_task_struct(void) {
 		BUG();
 	}
 	ut_memset((unsigned char *) p, MAGIC_CHAR, TASK_SIZE);
+
 	return p;
 }
 
 static void free_task_struct(struct task_struct *p) {
+	if (p->stats.syscalls != 0){
+		mm_free(p->stats.syscalls);
+		p->stats.syscalls =0;
+	}
 	mm_putFreePages((unsigned long) p, 2);
 	return;
 }
@@ -309,6 +315,8 @@ static void init_task_struct(struct task_struct *p, struct mm_struct *mm, struct
 	if (free_pid_no == 0)
 		free_pid_no++;
 	p->pid = free_pid_no;
+	p->stats.syscalls = mm_malloc(sizeof(struct syscall_stat)*MAX_SYSCALL, MEM_CLEAR);
+	p->stats.start_time = g_jiffies;
 }
 
 static int release_resources(struct task_struct *child_task, int attach_to_parent) {
@@ -323,10 +331,12 @@ static int release_resources(struct task_struct *child_task, int attach_to_paren
 
 	if (child_task->fs->count.counter == 1) {
 		for (i = 0; i < child_task->fs->total; i++) {
-			DEBUG("FREEing the files :%d \n", i);
 			fs_close(child_task->fs->filep[i]);
 		}
+		//ut_log("%s: FREEing the files :%d \n",child_task->name,child_task->fs->total);
 		child_task->fs->total = 0;
+	}else{
+		atomic_dec(&child_task->fs->count);
 	}
 	if (mm->count.counter > 1){
 		return 0;
@@ -337,7 +347,7 @@ static int release_resources(struct task_struct *child_task, int attach_to_paren
 
 	mm->exec_fp = 0;
 
-	/* 2. relase locks */
+	/* 2. release locks */
 	if (child_task->locks_sleepable > 0) { // TODO : need to check the mutex held
 		ut_log("ERROR:  lock held by the process: %s \n", child_task->name);
 		ipc_release_resources(child_task);
@@ -476,14 +486,16 @@ int init_tasking(unsigned long unused) {
 		g_cpu_state[i].idle_task->state = TASK_RUNNING;
 		g_cpu_state[i].idle_task->current_cpu = i;
 		g_cpu_state[i].current_task = g_cpu_state[i].idle_task;
-		g_cpu_state[i].stat_total_contexts = 0;
-		g_cpu_state[i].stat_nonidle_contexts = 0;
-		g_cpu_state[i].stat_idleticks = 0;
+		g_cpu_state[i].stats.total_contexts = 0;
+		g_cpu_state[i].stats.nonidle_contexts = 0;
+		g_cpu_state[i].stats.idleticks = 0;
+		g_cpu_state[i].stats.netbh = 0;
 		g_cpu_state[i].active = 1; /* by default when the system starts all the cpu are in active state */
 		g_cpu_state[i].intr_disabled = 0; /* interrupts are active */
 		g_cpu_state[i].cpu_priority = 0;
 		g_cpu_state[i].intr_nested_level = 0;
 		g_cpu_state[i].run_queue_length = 0;
+		g_cpu_state[i].cpu_spinstate.hits = 0;
 		ut_strncpy(g_cpu_state[i].idle_task->name, (unsigned char *) "idle", MAX_TASK_NAME);
 	}
 	g_current_task->current_cpu = 0;
@@ -572,16 +584,28 @@ static void schedule_kernelSecondHalf() { /* kernel thread second half:_schedule
 	spin_unlock_irqrestore(&g_global_lock, g_current_task->flags);
 	g_current_task->thread.real_ip(g_current_task->thread.argv, 0);
 }
+
 /* NOT do not add any extra code in this function, if any register is used syscalls will not function properly */
 void sc_before_syscall() {
 	g_current_task->curr_syscall_id = g_cpu_state[getcpuid()].md_state.syscall_id;
 	g_current_task->callstack_top = 0;
 	g_current_task->stats.syscall_count++;
+#if 1
+	if (g_current_task->curr_syscall_id < MAX_SYSCALL && g_current_task->stats.syscalls!=0){
+		g_current_task->stats.syscalls[g_current_task->curr_syscall_id].count++;
+	}
+#endif
 }
 
 void sc_after_syscall() {
 	/* Handle any pending signal */
 	//SYSCALL_DEBUG("syscall ret  state:%x\n",g_current_task->state);
+	net_bh();
+#if 0
+	if (g_cpu_state[getcpuid()].net_BH != 0) {
+		sc_schedule();
+	}
+#endif
 	if (g_current_task->pending_signals == 0) {
 		return;
 	}
@@ -625,6 +649,9 @@ void sc_remove_dead_tasks() {
 
 	if (g_cpu_state[getcpuid()].idle_task == g_current_task){
 		return;
+	}
+	if (deadlist_size == 0){
+		return ;
 	}
 	while (1) {
 		spin_lock_irqsave(&g_global_lock, intr_flags);
@@ -729,7 +756,7 @@ unsigned long _schedule(unsigned long flags) {
 		return flags;
 	} else {
 		if (next != g_cpu_state[cpuid].idle_task) {
-			g_cpu_state[cpuid].stat_nonidle_contexts++;
+			g_cpu_state[cpuid].stats.nonidle_contexts++;
 		}
 		apic_set_task_priority(g_cpu_state[cpuid].cpu_priority);
 	}
@@ -752,7 +779,7 @@ unsigned long _schedule(unsigned long flags) {
 	//next->cpu_contexts++;
 	next->stats.total_contexts++;
 	g_cpu_state[cpuid].current_task = next;
-	g_cpu_state[cpuid].stat_total_contexts++;
+	g_cpu_state[cpuid].stats.total_contexts++;
 	arch_spinlock_transfer(&g_global_lock, prev, next);
 	/* update the cpu state  and tss state for system calls */
 	ar_updateCpuState(next, prev);
@@ -772,12 +799,12 @@ int do_softirq() {
 	int cpuid=getcpuid();
 
 	house_keeper_count++;
-	g_cpu_state[cpuid].stat_idleticks++;
+	g_cpu_state[cpuid].stats.idleticks++;
 
 	/* collect cpu stats */
 	//if (cpuid == 0 && g_conf_cpu_stats != 0) {
 	if (g_conf_cpu_stats != 0) {
-		perf_stat_rip_hit(g_cpu_state[cpuid].stat_rip);
+		perf_stat_rip_hit(g_cpu_state[cpuid].stats.rip);
 	}
 
 	/* 2. Test of wait queues for any expiry. time queue is one of the wait queue  */
@@ -789,7 +816,7 @@ int do_softirq() {
 	if (cpuid == 0  && (house_keeper_count%100)==0){
 		for (i=1; i< getmaxcpus(); i++){
 			if (g_cpu_state[i].active == 0 || g_cpu_state[i].run_queue_length==0 ) continue;
-			if (g_cpu_state[i].last_total_contexts == g_cpu_state[i].stat_total_contexts){
+			if (g_cpu_state[i].last_total_contexts == g_cpu_state[i].stats.total_contexts){
 				struct task_struct *next;
 				do {
 					unsigned long intr_flags;
@@ -805,7 +832,7 @@ int do_softirq() {
 				g_cpu_state[i].active = 0;
 				ut_log(" ERROR: deactive the cpu because cpu %d  is stuck \n",i);
 			}
-			g_cpu_state[i].last_total_contexts = g_cpu_state[i].stat_total_contexts;
+			g_cpu_state[i].last_total_contexts = g_cpu_state[i].stats.total_contexts;
 		}
 	}
 #endif
@@ -818,18 +845,18 @@ int do_softirq() {
 #endif
 //unsigned long kvm_ticks=0;
 void timer_callback(void *unused_args) {
-	int jiff_incremented = 0;
 
 	/* 1. increment timestamp */
 	if (getcpuid() == 0) {
 		unsigned long kvm_ticks = get_kvm_time_fromboot();
-		if ((kvm_ticks != 0) && (g_jiffie_tick > (kvm_ticks + 10))) {
-			g_jiffie_errors++;
-			g_jiffies++;
+		if (kvm_ticks != 0)  {
+			if (kvm_ticks > g_jiffies){
+				g_jiffies++;
+			}else{
+				g_jiffie_errors++;
+			}
 		} else {
-			g_jiffie_tick++;
 			g_jiffies++;
-			jiff_incremented = 1;
 		}
 	}
 
@@ -915,6 +942,7 @@ int Jcmd_kill(uint8_t *arg1, uint8_t *arg2) {
 	SYS_sc_kill(pid, 9);
 	return 1;
 }
+extern void print_syscall_stat(struct task_struct *task, int output);
 int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	unsigned long flags;
 	struct list_head *pos;
@@ -927,6 +955,8 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 
 	if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "all") == 0) {
 		all = 1;
+	} else if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "syscall") == 0) {
+		all =2;
 	}
 	len = PAGE_SIZE * 100;
 	max_len = len;
@@ -960,6 +990,8 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 							- ut_snprintf(buf + max_len - len, len, "          %d: %9s - %x \n", i, temp_bt.entries[i].name,
 									temp_bt.entries[i].ret_addr);
 				}
+			}else if (all == 2){
+				print_syscall_stat(task,0);
 			}
 		}
 
@@ -970,7 +1002,7 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	for (i = 0; i < getmaxcpus(); i++) {
 		len = len
 				- ut_snprintf(buf + max_len - len, len, "%2d:(%4d/%4d) <%d-%d> %7s(%d)\n", i,
-						g_cpu_state[i].stat_nonidle_contexts, g_cpu_state[i].stat_total_contexts, g_cpu_state[i].active,
+						g_cpu_state[i].stats.nonidle_contexts, g_cpu_state[i].stats.total_contexts, g_cpu_state[i].active,
 						g_cpu_state[i].intr_disabled, g_cpu_state[i].current_task->name, g_cpu_state[i].current_task->pid);
 	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
@@ -1020,7 +1052,7 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	unsigned long ret_pid = 0;
 	int i;
 
-	SYSCALL_DEBUG("clone ctid:%x child_stack:%x flags:%x args:%x \n", fn, child_stack, clone_flags, args);
+	//ut_log("clone ctid:%x child_stack:%x flags:%x args:%x \n", fn, child_stack, clone_flags, args);
 
 	/* Initialize the stack  */
 	p = alloc_task_struct();
@@ -1125,6 +1157,11 @@ int SYS_sc_exit(int status) {
 
 	if (g_current_task->clone_flags & CLONE_VFORK){
 		continue_parent_task(g_current_task->ppid);
+	}
+
+	if (g_conf_syscall_debug > 0){
+		ut_log(" pid:%d: %s : start_time:%d end_time:%d duration:%d\n",g_current_task->pid,g_current_task->name,g_current_task->stats.start_time,g_jiffies,g_jiffies-g_current_task->stats.start_time);
+		print_syscall_stat(g_current_task, 1);
 	}
 
 	spin_lock_irqsave(&g_global_lock, flags);
@@ -1270,8 +1307,38 @@ int SYS_sc_kill(unsigned long pid, unsigned long signal) {
 }
 extern int init_code_readonly(unsigned long arg1);
 extern int g_fault_stop_allcpu;
+
+int cpuspin_before_halt(){
+/*
+ * spin for some time, this to avoid waking to recv interrupts, time to take interrupt is slow if it is in idle state
+ */
+ /* initialize */
+	int cpuid=getcpuid();
+	if (g_conf_idle_cpuspin == 0){
+		return 0;
+	}
+	if (g_cpu_state[cpuid].cpu_spinstate.nonclock_interrupts == 0){
+		return 0;
+	}
+repeat:
+	int prev_ints=0;
+ 	 g_cpu_state[cpuid].cpu_spinstate.clock_interrupts = 0;
+ 	 g_cpu_state[cpuid].cpu_spinstate.nonclock_interrupts = 0;
+ 	 while(g_cpu_state[cpuid].cpu_spinstate.clock_interrupts < 10){ /* cpuspin for 100ms before going to sleep */
+ 		 if (g_cpu_state[cpuid].cpu_spinstate.nonclock_interrupts != 0){
+ 			g_cpu_state[cpuid].cpu_spinstate.hits++;
+ 			 goto repeat;
+ 		 }
+ 		 if (prev_ints != g_cpu_state[cpuid].cpu_spinstate.clock_interrupts){
+ 			sc_schedule();
+ 		 }
+ 		prev_ints = g_cpu_state[cpuid].cpu_spinstate.clock_interrupts;
+ 	 }
+ 	 return 1;
+}
 void idleTask_func() {
 	int k = 0;
+	int cpu;
 
 	/* wait till initilization completed */
 	while (g_boot_completed == 0)
@@ -1279,11 +1346,24 @@ void idleTask_func() {
 	//init_code_readonly(0); /* TODO:HARDCODED */
 
 	ut_log("Idle Thread Started cpuid: %d stack addrss:%x \n", getcpuid(), &k);
+	cpu = getcpuid();
 	while (1) {
 		if (g_fault_stop_allcpu ==1){
 			asm volatile (" cli; hlt" : : : "memory");
 		}
+		if (cpu != 0){
+			net_bh();
+		}
+		cpuspin_before_halt();
+
+		g_cpu_state[cpu].idle_state = 1;
 		arch::sti_hlt();
+		g_cpu_state[cpu].idle_state = 0;
+
+		if (cpu != 0){
+			net_bh();
+		}
+
 		sc_schedule();
 	}
 }

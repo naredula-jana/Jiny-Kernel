@@ -301,6 +301,18 @@ unsigned long SYS_fs_unlink(uint8_t *path) {
 		return -1;
 	}
 }
+
+unsigned long SYS_fs_mkdir(uint8_t *file_name, int mode) {
+	struct file *fp;
+	int ret = -2; /* no such file exists */
+
+	fp = (struct file *) fs_open((uint8_t *) file_name, 0, O_CREAT|O_DIRECTORY);
+	if (fp == 0) {
+		return ret;
+	}
+	fs_close(fp);
+	return 0;
+}
 unsigned long SYS_fs_readlink(uint8_t *path, uint8_t *buf, int bufsiz) {
 	struct file *fp;
 	int ret = -2; /* no such file exists */

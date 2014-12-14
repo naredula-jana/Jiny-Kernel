@@ -132,6 +132,15 @@ uip_arp_init(void)
     memset(arp_table[i].ipaddr, 0, 4);
   }
 }
+void
+Jcmd_arp_print(void)
+{
+  ut_printf(" Arp Table: \n");
+  for(i = 0; i < UIP_ARPTAB_SIZE; ++i) {
+	  if (arp_table[i].ipaddr[0]==0 && arp_table[i].ipaddr[1]==0) continue;
+      ut_printf("%d ipaddr: %x:%x time:%x mac:%x \n",i,arp_table[i].ipaddr[0],arp_table[i].ipaddr[1],arp_table[i].time,arp_table[i].ethaddr.addr[5]);
+  }
+}
 /*-----------------------------------------------------------------------------------*/
 /**
  * Periodic ARP processing function.

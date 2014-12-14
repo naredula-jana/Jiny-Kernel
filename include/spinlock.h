@@ -45,12 +45,15 @@ static inline void arch_spinlock_transfer(spinlock_t *lock,
 	prev->locks_nonsleepable--;
 	next->locks_nonsleepable++;
 	lock->pid = next->pid;
+#ifdef SPINLOCK_DEBUG
+#ifdef SPINLOCK_DEBUG_LOG
 	if (lock->log_length >= MAX_SPIN_LOG) lock->log_length=0;
 	lock->log[lock->log_length].line = 99999;
 	lock->log[lock->log_length].pid = prev->pid;
 	lock->log[lock->log_length].cpuid = next->current_cpu;
 	lock->log_length++;
-
+#endif
+#endif
 }
 
 static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
@@ -96,10 +99,9 @@ static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 	lock->log[lock->log_length].cpuid = g_current_task->current_cpu;
 	lock->log[lock->log_length].name = g_current_task->name;
 	lock->log[lock->log_length].spins = 1 + (lock->stat_count/10);
-#endif
 	//lock->log[lock->log_length].line = line;
-
 	lock->log_length++;
+#endif
 	lock->pid = g_current_task->pid;
 	g_current_task->locks_nonsleepable++;
 
@@ -135,7 +137,7 @@ static inline void arch_spinlock_unlock(spinlock_t *lock, int line) {
 #endif
 	if (1){
 		lock->stat_unlocks++;
-#if SPINLOCK_DEBUG_LOG
+#ifdef SPINLOCK_DEBUG_LOG
 		if (lock->log_length >= MAX_SPIN_LOG) lock->log_length=0;
 		lock->log[lock->log_length].line = line;
 		lock->log[lock->log_length].pid = g_current_task->pid;

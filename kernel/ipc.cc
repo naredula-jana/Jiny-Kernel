@@ -378,6 +378,9 @@ int wait_queue::wakeup() {
 	int assigned_to_running_cpu;
 	unsigned long irq_flags;
 
+	if (head.next == &head ){
+		return ret;
+	}
 	spin_lock_irqsave(&g_global_lock, irq_flags);
 	while (head.next != &head) {
 		task = list_entry(head.next, struct task_struct, wait_queue);
@@ -397,9 +400,9 @@ int wait_queue::wakeup() {
 	}
 gotit:
 	spin_unlock_irqrestore(&g_global_lock, irq_flags);
-	if (ret > 0 && assigned_to_running_cpu==0)
+	if (ret > 0 && assigned_to_running_cpu==0){
 		wakeup_cpus(wakeup_cpu);
-
+	}
 	return ret;
 }
 /* ticks in terms of 10 ms */

@@ -54,6 +54,7 @@ int SYS_fs_dup2(int fd1, int fd2);
 int SYS_fs_dup(int fd1);
 unsigned long SYS_fs_unlink(uint8_t *path);
 unsigned long SYS_fs_readlink(uint8_t *path, char *buf, int bufsiz);
+unsigned long SYS_fs_mkdir(unsigned char *name, int mode);
 int SYS_getsockname(int sockfd, struct sockaddr *addr, int *addrlen);
 
 unsigned long SYS_rt_sigaction();
@@ -284,14 +285,7 @@ unsigned long SYS_futex(unsigned long *a) {//TODO
 	*a = 0;
 	return -1;
 }
-void Jcmd_sys(unsigned char *arg1,unsigned char *arg2){
-	if (g_conf_syscall_debug ==1)
-		g_conf_syscall_debug=0;
-	else
-		g_conf_syscall_debug=1;
-	ut_printf(" syscall_debud :%d \n",g_conf_syscall_debug);
-	return;
-}
+
 extern task_queue_t g_task_queue;
 void Jcmd_pt(unsigned char *arg1,unsigned char *arg2){
 	unsigned long pt=0x101000;
@@ -354,7 +348,6 @@ unsigned long SYS_sysctl(struct __sysctl_args *args) {
 	}
 	if (carg[0] != 0 && ut_strcmp(carg[0], (uint8_t *)"set") == 0) {
 		ut_symbol_execute(SYMBOL_CONF, carg[1], carg[2],0);
-
 	} else {
 		if (carg[0] == 0) {
 			ut_printf("Conf variables:\n");
@@ -366,18 +359,8 @@ unsigned long SYS_sysctl(struct __sysctl_args *args) {
 			if (ret ==0){
 				ut_printf(" Command Failed\n");
 			}
-#if 0
-			for (k=0; k<jcmds[k].name!=0; k++){
-				if (ut_strcmp(carg[0],jcmds[k].name)==0){
-					jcmds[k].jcmd(carg[1],carg[2]);
-					return;
-				}
-			}
-#endif
-
 		}
 	}
-
 	return SYSCALL_SUCCESS; /* success */
 }
 
@@ -463,6 +446,11 @@ int SYS_select(int nfds, int *readfds, int *writefds, int *exceptfds, struct tim
 	int *p;
 	int i;
 	SYSCALL_DEBUG("select (TODO)  nfds:%x readfds:%x write:%x execpt:%x timeout:%d  \n", nfds, readfds,writefds,exceptfds,timeout);
+	int duration =0 ;/* interms of 10 ms */
+	if (timeout> 0){
+		duration = timeout->tv_sec * 100;
+		duration = duration + (timeout->tv_usec/10000);
+	}
 
 	//if (readfds != 0 && timeout == 0) {
 	if (readfds != 0 ) {
@@ -478,8 +466,11 @@ int SYS_select(int nfds, int *readfds, int *writefds, int *exceptfds, struct tim
 		while (1) {
 			struct file *file = fd_to_file(i);
 			if (file && file->type == NETWORK_FILE){
-				if (wait_for_sock_data(file->vinode, 100) >0) {
+
+				if (wait_for_sock_data(file->vinode, duration) >0) {
 					return 1;
+				}else{
+					return 0;
 				}
 			}else {
 				int ret = SYS_fs_read(i,0,0);
@@ -487,10 +478,14 @@ int SYS_select(int nfds, int *readfds, int *writefds, int *exceptfds, struct tim
 				sc_sleep(100);
 			}
 		}
+	}else {
+		if (duration > 0){
+			sc_sleep(duration);
+		}
 	}
 	SYSCALL_DEBUG("select readval :%x \n",*p);
 
-	return SYSCALL_SUCCESS;
+	return 0;
 }
 unsigned long SYS_poll(struct pollfd *fds, int nfds, struct timeval *timeout) {
 	int i,fd;
@@ -625,7 +620,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 70 */
 { snull }, { SYS_fs_fcntl }, { snull }, { snull }, { SYS_fs_fdatasync }, /* 75 */
 { snull }, { snull }, { SYS_getdents }, { SYS_getcwd }, { SYS_chdir }, /* 80 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 85 */
+{ snull }, { snull }, { SYS_fs_mkdir }, { snull }, { snull }, /* 85 */
 { snull }, { SYS_fs_unlink }, { snull }, { SYS_fs_readlink }, { snull }, /* 90 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 95 */
 { SYS_gettimeofday }, { SYS_getrlimit }, { snull }, { snull }, { snull }, /* 100 */
@@ -661,7 +656,21 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { snull }, { snull }, };
 /****************************************** syscall debug *********************************************/
 
-
+void print_syscall_stat(struct task_struct *task, int output){
+	int i;
+	int count=0;
+	if (task->stats.syscalls==0) return;
+	for (i=0; i<MAX_SYSCALL; i++){
+		if ( task->stats.syscalls[i].count > 0){
+			if (output ==0 ){
+				ut_printf("%d-%d: %s: %s -> %d\n",count,task->pid,task->name,ut_get_symbol(syscalltable[i].func),task->stats.syscalls[i].count);
+			}else{
+				ut_log("%d-%d: %s: %s -> %d\n",count,task->pid,task->name,ut_get_symbol(syscalltable[i].func),task->stats.syscalls[i].count);
+			}
+			count++;
+		}
+	}
+}
 static int strace_progress_id=0;
 static uint8_t strace_thread_name[100]="";
 static unsigned int strace_syscall_id=0;

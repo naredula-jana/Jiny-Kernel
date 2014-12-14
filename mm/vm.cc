@@ -338,7 +338,7 @@ void * SYS_vm_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
 	file = fd_to_file(fd);
 	ret = vm_mmap(file, addr, len, prot, flags, pgoff,"syscall");
 	SYSCALL_DEBUG("mmap ret :%x \n",ret);
-	if (g_conf_syscall_debug){
+	if (g_conf_syscall_debug == 1){
 		Jcmd_maps(0,0);
 	}
 	return ret;
@@ -364,8 +364,8 @@ unsigned long vm_setupBrk(unsigned long addr, unsigned long len) {
 
 
 int SYS_vm_mprotect(const void *addr, int len, int prot) { /* TODO */
-	SYSCALL_DEBUG("protect TODO :%x \n",addr);
-	return 1;
+	SYSCALL_DEBUG("protect TODO :%x return success\n",addr);
+	return 0;
 }
 
 unsigned long SYS_vm_brk(unsigned long addr) {
@@ -400,7 +400,7 @@ unsigned long SYS_vm_brk(unsigned long addr) {
 		next_vma = vm_find_vma_ovrlap(g_current_task->mm, vma);
 		if (next_vma!=0){
 			vma->vm_end = org_vm_end;
-			if (g_conf_syscall_debug){
+			if (g_conf_syscall_debug == 1){
 				Jcmd_maps(0,0);
 			}
 			SYSCALL_DEBUG("brk  Fails because of collision :%x \n",addr);

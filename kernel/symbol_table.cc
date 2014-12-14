@@ -328,14 +328,20 @@ int ut_symbol_execute(int type, unsigned char *name, uint8_t *argv1, uint8_t *ar
 				*confint = (int) ut_atoi((unsigned char *) argv1, FORMAT_DECIMAL);
 				ut_log(" Setting conf variable %s->:%d: (%s)  \n", g_symbol_table[i].name, *confint, argv1,
 						g_symbol_table[i].address);
+				ut_printf(" Setting conf variable %s->:%d: (%s)  \n", g_symbol_table[i].name, *confint, argv1,
+						g_symbol_table[i].address);
 			} else if (g_symbol_table[i].len == 8) {
 				conflong = (unsigned long *) g_symbol_table[i].address;
 				*conflong = (int) ut_atol((unsigned char *) argv1, FORMAT_DECIMAL);
 				ut_log(" Setting conf variable %s->:%d: (%s)  \n", g_symbol_table[i].name, *conflong, argv1,
 						g_symbol_table[i].address);
+				ut_printf(" Setting conf variable %s->:%d: (%s)  \n", g_symbol_table[i].name, *conflong, argv1,
+										g_symbol_table[i].address);
 			} else if (g_symbol_table[i].len > 8) {
 				ut_strcpy(g_symbol_table[i].address, argv1);
 				ut_log(" Setting conf variable %s->:%s  \n", g_symbol_table[i].name, argv1, g_symbol_table[i].address);
+			} else{
+				ut_printf(" Error in setting the variable: %s\n",new_name);
 			}
 
 			return 1;

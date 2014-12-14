@@ -40,23 +40,27 @@ static int kvm_clock_available = 0;
 static uint64_t start_time, curr_system_time = 0; /* updated by the boot cpu */
 static int test_count = 0;
 unsigned long get_kvm_time_fromboot(){ /* return 10ms units */
-	long diff;
+	unsigned long diff,ticks;
 
 	if (kvm_clock_available == 0)
 		return 0;
 	if (getcpuid() != 0) {
 		BUG();
 	}
-	test_count++;
+	ticks = vcpu_time[0].system_time / 10000000 ;
+
+#if 1
 	diff = vcpu_time[0].system_time - start_time;
 	if (diff < 0) {
 		curr_system_time = -diff;
 	} else {
 		curr_system_time = diff;
 	}
-	return curr_system_time / 10000000;
+	//return curr_system_time / 10000000;
+#endif
+	return ticks;
 }
-extern unsigned long g_jiffie_tick, g_jiffie_errors;
+extern unsigned long  g_jiffie_errors;
 
 static void init_vpcutime(){
 	msr_write(MSR_KVM_SYSTEM_TIME_NEW, __pa(&vcpu_time[0]) | 1);
@@ -85,35 +89,47 @@ static inline int kvm_para_available(void) {
 	msr_write(MSR_KVM_WALL_CLOCK_NEW, __pa(&wall_clock));
 	init_vpcutime();
 
-	start_time = vcpu_time[getcpuid()].system_time;
-	g_jiffie_tick = get_kvm_time_fromboot();
+	start_time = wall_clock.sec;
+	//g_jiffie_tick = get_kvm_time_fromboot();
 
 	ut_log("	Succeded: KVM Clock Signature :%s: cpuid: %x \n", signature, cpuid_ret[0]);
 	return JSUCCESS;
 
 }
+int g_conf_wall_clock=0;
 int ut_get_wallclock(unsigned long *sec, unsigned long *usec) {
 	unsigned long tmp_usec;
 
 	if (kvm_clock_available == 1) {
-		uint32_t version = wall_clock.version;
-		msr_write(MSR_KVM_WALL_CLOCK_NEW, __pa(&wall_clock));
-		if (sec != 0) {
-			tmp_usec = curr_system_time / 1000; /* so many usec from start */
-			*sec = wall_clock.sec + tmp_usec / 1000000;
-
-//			ut_printf("%d: %x :%d \n",getcpuid(),vcpu_time[getcpuid()].system_time,vcpu_time[getcpuid()].system_time);
-//			ut_printf("%d: sec :%d    :%x   %d:%x pa:%x oldver:%x :%x curr:%x:%d\n", test_count, *sec, *sec, wall_clock.sec,
-//					wall_clock.sec, __pa(&wall_clock), version, wall_clock.version, curr_system_time, curr_system_time);
+		if (g_conf_wall_clock == 1) {
+			uint32_t version = wall_clock.version;
+			msr_write(MSR_KVM_WALL_CLOCK_NEW, __pa(&wall_clock));
+			if (sec != 0) {
+				tmp_usec = curr_system_time / 1000; /* so many usec from start */
+				*sec = wall_clock.sec +( tmp_usec / 1000000);
+			}
+			if (usec != 0) {
+				*usec = tmp_usec % 1000000;
+			}
+		} else {
+			uint32_t version;
+			do {
+				version = vcpu_time[0].version;
+				if (sec != 0) {
+					*sec = (vcpu_time[0].system_time / 1000000000) + start_time;
+				}
+				if (usec != 0) {
+					*usec = (vcpu_time[0].system_time % 1000000) / 1000;
+				}
+			} while ((vcpu_time[0].version & 0x1)
+					|| (version != vcpu_time[0].version));
 		}
-		if (usec != 0)
-			*usec = tmp_usec % 1000000;
 	} else {
 		if (sec != 0) {
 			*sec = g_jiffies / 100;
 		}
 		if (usec != 0) {
-			usec = (g_jiffies % 100) * 1000; /* actuall resoultion at the best is 10 ms*/
+			*usec = g_jiffies * 10000 ; /* actuall resoultion at the best is 10 ms*/
 		}
 	}
 	return 1;
@@ -121,14 +137,18 @@ int ut_get_wallclock(unsigned long *sec, unsigned long *usec) {
 int Jcmd_clock() {
 	unsigned long sec, usec, msec;
 
-	msr_write(MSR_KVM_SYSTEM_TIME_NEW, __pa(&vcpu_time[getcpuid()]) | 1);
+	msr_write(MSR_KVM_WALL_CLOCK_NEW, __pa(&wall_clock));
+	ut_printf("msr write  clock: %d nsec:%d \n",wall_clock.sec,wall_clock.nsec);
 	ut_get_wallclock(&sec, &usec);
 	msec = sec * 1000 + (usec / 1000);
-	ut_printf(" msec: %d sec:%d usec:%d\n", msec, sec, usec);
+	ut_printf("Wall clock:  sec: %d(%x) msec:%d(%x) usec:%d(%x)\n", sec,sec, msec,msec, usec,usec);
 
-	ut_printf("system time  ts :%x system time :%x:%d  jiffies :%d sec version:%x errors:%d \n", vcpu_time[getcpuid()].tsc_timestamp,
-			vcpu_time[getcpuid()].system_time, vcpu_time[getcpuid()].system_time / 1000000000, g_jiffies / 100, vcpu_time[getcpuid()].version);
-	ut_printf(" jiifies :%d  clock:%d errors:%d \n", g_jiffie_tick, get_kvm_time_fromboot(), g_jiffie_errors);
+	sec = (vcpu_time[0].system_time / 1000000000) ;
+	msec =  (vcpu_time[0].system_time % 1000000000)/1000000;
+	usec =  (vcpu_time[0].system_time % 1000000) / 1000 ;
+	ut_printf("System clock: version:%x(%d) start:%d sec sec: %d(%x) msec:%d(%x) usec:%d(%x) \n",vcpu_time[0].version,vcpu_time[0].version,start_time, sec,sec, msec,msec, usec,usec);
+	ut_printf("jiffies :%d errors:%d \n", g_jiffies/100,  g_jiffie_errors);
+//
 	return 1;
 }
 int g_conf_kvmclock_enable = 1;

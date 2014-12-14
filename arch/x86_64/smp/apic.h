@@ -25,16 +25,6 @@
 #ifndef __ARCH_APIC_H__
 #define __ARCH_APIC_H__
 
-
-#if 0
-typedef unsigned char uint8_t;
-typedef unsigned short uint16_t;
-typedef unsigned int uint32_t;
-typedef unsigned long uint64_t;
-typedef int int32_t;
-typedef unsigned long ulong_t;
-typedef unsigned long uintptr_t;
-#endif
 #include "types.h"
 typedef unsigned long ulong_t;
 

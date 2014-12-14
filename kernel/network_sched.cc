@@ -31,7 +31,7 @@
 
 extern "C" {
 #include "common.h"
-
+extern int net_bh();
 unsigned char g_mac[7];
 }
 #include "jdevice.h"
@@ -41,17 +41,15 @@ unsigned char g_mac[7];
 network_scheduler net_sched;
 static int stat_from_driver = 0;
 static int stat_to_driver = 0;
+static int net_bh_active = 0;
 
 extern int g_conf_net_sendbuf_delay;
 /*   Release the buffer after calling the callback */
-int network_scheduler::netRx_BH(void *arg, void *arg2) {
-	int qret;
-
-	while (1) {
-		if (poll_devices() > 0) {
-			continue;
-		}
-#if 1
+int network_scheduler::netRx_thread(void *arg, void *arg2) {
+	while(1){
+		net_bh();
+		netrx_cpuid = getcpuid();
+		g_cpu_state[netrx_cpuid].net_BH = 0;
 		if (g_conf_net_sendbuf_delay != 0) { /* if sendbuf_delay is enabled, smp is having negative impact and rate of recving falls down */
 			if (device != 0) {
 				device->ioctl(NETDEV_IOCTL_FLUSH_SENDBUF, 0);
@@ -60,7 +58,11 @@ int network_scheduler::netRx_BH(void *arg, void *arg2) {
 		} else {
 			waitq->wait(10000);
 		}
-#endif
+	}
+}
+int network_scheduler::netRx_BH() {
+	while (poll_devices() > 0) {
+
 	}
 	return 1;
 }
@@ -110,7 +112,12 @@ int network_scheduler::netif_rx_enable_polling(void *private_data,
 			device_under_poll[i].private_data = private_data;
 			device_under_poll[i].poll_func = poll_func;
 			device_under_poll[i].active = 1;
-			waitq->wakeup();
+		//	g_cpu_state[netrx_cpuid].net_BH = 1;
+			net_bh_active =1;
+		//	waitq->wakeup();
+			if (g_cpu_state[1].idle_state == 1){
+				apic_send_ipi_vector(1, IPI_INTERRUPT);
+			}
 			return 1;
 		}
 	}
@@ -142,14 +149,40 @@ int register_netdevice(jdevice *device) {
 extern "C" {
 extern int init_udpstack();
 extern int init_netmod_uipstack();
+spinlock_t netbh_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"netbh_lock");
+int net_bh(){
+	unsigned long flags;
+	static int netbh_in_progress=0;
+
+//	if (getcpuid() ==0) return 0;
+	if (netbh_in_progress == 1 ||  (net_bh_active != 1)) return 0;
+
+	spin_lock_irqsave(&netbh_lock, flags);
+	if (netbh_in_progress == 0){
+		netbh_in_progress = 1;
+		spin_unlock_irqrestore(&netbh_lock, flags);
+	}else{
+		spin_unlock_irqrestore(&netbh_lock, flags);
+		return 0;
+	}
+
+	do {
+		net_bh_active = 0;
+		net_sched.netRx_BH();
+	}while (net_bh_active == 1);
+
+	netbh_in_progress = 0;
+	g_cpu_state[getcpuid()].stats.netbh++;
+	return 1;
+}
 int netif_thread(void *arg1, void *arg2) {
-	return net_sched.netRx_BH(arg1, arg2);
+	return net_sched.netRx_thread(arg1, arg2);
 }
 
 int init_networking() {
 	int pid;
 	net_sched.init();
-	pid = sc_createKernelThread(netif_thread, 0, (unsigned char *) "netRx_BH_1", 0);
+	//pid = sc_createKernelThread(netif_thread, 0, (unsigned char *) "netRx_BH_1", 0);
 	socket::init_socket_layer();
 	return JSUCCESS;
 }
@@ -184,7 +217,7 @@ void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
 
 		net_sched.device->print_stats(0,0);
 		net_sched.device->ioctl(NETDEV_IOCTL_GETMAC, (unsigned long) &mac);
-		ut_printf(" mac: %x:%x:%x:%x:%x:%x  \n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+		ut_printf(" Mac: %x:%x:%x:%x:%x:%x  \n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 	}
 	socket::print_all_stats();
 

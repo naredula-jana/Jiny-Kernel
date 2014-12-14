@@ -245,6 +245,7 @@ int ut_count_obj_add(unsigned char *name);
 int ut_count_obj_free(int id);
 int ut_strlen(const uint8_t * s);
 int ut_mod_symbol_execute(int type, char *name, char *argv1, char *argv2);
+unsigned char *ut_get_symbol(addr_t addr);
 unsigned long ut_mod_get_symbol_addr(unsigned char *name);
 enum{
 	FORMAT_HEX=1,
@@ -281,6 +282,9 @@ int ipc_mutex_destroy(void *p);
 #define mutexLock(p)      do { ipc_mutex_lock((void *)p,__LINE__); } while (0)
 #define mutexUnLock(p)      do { ipc_mutex_unlock((void *)p,__LINE__); } while (0)
 #define mutexDestroy ipc_mutex_destroy
+
+
+
 
 #endif
 

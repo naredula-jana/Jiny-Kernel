@@ -144,7 +144,7 @@ static void fill_fault_context(struct fault_ctx *fctx, void *rsp, int fault_num,
 	fctx->old_rsp = p;
 	cpu_ctx.gprs = fctx->gprs;
 	cpu_ctx.istack_frame = fctx->istack_frame;
-	g_cpu_state[getcpuid()].stat_rip = fctx->istack_frame->rip;  // TODO: done only for cpu=0
+	g_cpu_state[getcpuid()].stats.rip = fctx->istack_frame->rip;  // TODO: done only for cpu=0
 //	g_cpu_state[0].stat_rip = fctx->istack_frame->rip; // TODO: done only for cpu=0
 }
 static int stack_depth = 0;
@@ -214,6 +214,12 @@ void ar_irqHandler(void *p, unsigned int int_no) {
 		struct fault_ctx ctx;
 
 		fill_fault_context(&ctx, p, int_no, 1);
+		if (int_no == LOCAL_TIMER_CPU_IRQ_VEC){
+			g_cpu_state[getcpuid()].cpu_spinstate.clock_interrupts++;
+		}else{
+			g_cpu_state[getcpuid()].cpu_spinstate.nonclock_interrupts++;
+		}
+
 		isr_t handler = g_interrupt_handlers[int_no].action;
 		handler(g_interrupt_handlers[int_no].private_data);
 		g_interrupt_handlers[int_no].stat[getcpuid()].num_irqs++;
@@ -235,8 +241,11 @@ void ar_irqHandler(void *p, unsigned int int_no) {
 
 extern int stat_ipi_send_count;
 int Jcmd_cpu(char *arg1, char *arg2) {
-	int i, j;
+	int i, j,clear=0;
 
+	if (arg1!=0 && ut_strcmp(arg1,"clear")==0){
+		clear =1 ;
+	}
 	ut_printf("         ");
 	for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
 		ut_printf("  CPU%d        ", j);
@@ -260,14 +269,14 @@ int Jcmd_cpu(char *arg1, char *arg2) {
 	}
 	ut_printf("       ");
 	for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
-		if (g_cpu_state[j].stat_total_contexts > 10000)
-			ut_printf("[%dk/%dk:%d] ", g_cpu_state[j].stat_nonidle_contexts / 1000, g_cpu_state[j].stat_total_contexts / 1000,
-					g_cpu_state[j].stat_idleticks);
+		if (g_cpu_state[j].stats.total_contexts > 10000)
+			ut_printf("[%d/%dk/%dk]:%d/%d ", g_cpu_state[j].stats.idleticks,g_cpu_state[j].stats.nonidle_contexts / 1000, g_cpu_state[j].stats.total_contexts / 1000,
+					g_cpu_state[j].cpu_spinstate.hits,g_cpu_state[j].stats.netbh);
 		else
-			ut_printf("[%d/%d:%d] ", g_cpu_state[j].stat_nonidle_contexts, g_cpu_state[j].stat_total_contexts,
-					g_cpu_state[j].stat_idleticks);
+			ut_printf("[%d/%d/%d]:%d/%d ",g_cpu_state[j].stats.idleticks, g_cpu_state[j].stats.nonidle_contexts, g_cpu_state[j].stats.total_contexts,
+					g_cpu_state[j].cpu_spinstate.hits,g_cpu_state[j].stats.netbh);
 	}
-	ut_printf(":context switches(nonidle/total:idleticks) \n");
+	ut_printf(":context switches([ idle/nonidle/total ]cpuspinhit:Netbh) \n");
 
 	ut_printf("       ");
 	for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
@@ -275,6 +284,15 @@ int Jcmd_cpu(char *arg1, char *arg2) {
 	}
 	ut_printf(":priority/runqueue \n");
 	ut_printf(" ipi send: %d\n", stat_ipi_send_count);
+	if (clear){
+		for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
+			g_cpu_state[j].stats.nonidle_contexts = 0;
+			g_cpu_state[j].stats.idleticks = 0;
+			g_cpu_state[j].stats.total_contexts = 0;
+			g_cpu_state[j].stats.netbh = 0;
+		}
+		ut_printf("STATS CLEARED \n");
+	}
 
 	return 1;
 }
