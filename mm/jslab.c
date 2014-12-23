@@ -500,7 +500,7 @@ struct page_bucket{
 	int top;
 	struct page_bucket *next;
 };
-#define MAX_BUCKETS 8
+#define MAX_BUCKETS 16
 static struct page_bucket *empty_buckets,*full_buckets;
 
 struct percpu_pagecache {

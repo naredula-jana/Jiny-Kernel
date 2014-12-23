@@ -17,6 +17,7 @@ extern "C" {
 #include "common.h"
 #include "descriptor_tables.h"
 extern int net_bh();
+extern int clock_test();
 unsigned char g_idle_stack[MAX_CPUS + 2][TASK_SIZE] __attribute__ ((aligned (4096)));
 struct mm_struct *g_kernel_mm = 0;
 task_queue_t g_task_queue;
@@ -601,11 +602,8 @@ void sc_after_syscall() {
 	/* Handle any pending signal */
 	//SYSCALL_DEBUG("syscall ret  state:%x\n",g_current_task->state);
 	net_bh();
-#if 0
-	if (g_cpu_state[getcpuid()].net_BH != 0) {
-		sc_schedule();
-	}
-#endif
+	g_cpu_state[getcpuid()].stats.syscalls++;
+
 	if (g_current_task->pending_signals == 0) {
 		return;
 	}
@@ -674,6 +672,8 @@ void sc_remove_dead_tasks() {
 void sc_schedule() { /* _schedule function task can land here. */
 	unsigned long intr_flags;
 	int cpuid = getcpuid();
+
+	net_bh();
 
 	/*  Safe checks */
 	if (!g_current_task) {
@@ -844,10 +844,12 @@ int do_softirq() {
 }
 #endif
 //unsigned long kvm_ticks=0;
+
 void timer_callback(void *unused_args) {
 
 	/* 1. increment timestamp */
 	if (getcpuid() == 0) {
+
 		unsigned long kvm_ticks = get_kvm_time_fromboot();
 		if (kvm_ticks != 0)  {
 			if (kvm_ticks > g_jiffies){
@@ -1336,6 +1338,7 @@ repeat:
  	 }
  	 return 1;
 }
+extern int init_vcputime(int cpu_id);
 void idleTask_func() {
 	int k = 0;
 	int cpu;
@@ -1347,21 +1350,23 @@ void idleTask_func() {
 
 	ut_log("Idle Thread Started cpuid: %d stack addrss:%x \n", getcpuid(), &k);
 	cpu = getcpuid();
+	if (cpu != 0){
+		init_vcputime(cpu);
+	}
 	while (1) {
 		if (g_fault_stop_allcpu ==1){
 			asm volatile (" cli; hlt" : : : "memory");
 		}
-		if (cpu != 0){
-			net_bh();
-		}
-		cpuspin_before_halt();
 
-		g_cpu_state[cpu].idle_state = 1;
-		arch::sti_hlt();
-		g_cpu_state[cpu].idle_state = 0;
+		net_bh();
+		//cpuspin_before_halt();
 
-		if (cpu != 0){
-			net_bh();
+		if (0) {
+			/* TODO:  we are making tight loop, here we want to sleep for just 100usec not for 10msec */
+		} else {
+			g_cpu_state[cpu].idle_state = 1;
+			arch::sti_hlt();
+			g_cpu_state[cpu].idle_state = 0;
 		}
 
 		sc_schedule();

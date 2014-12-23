@@ -270,13 +270,13 @@ int Jcmd_cpu(char *arg1, char *arg2) {
 	ut_printf("       ");
 	for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
 		if (g_cpu_state[j].stats.total_contexts > 10000)
-			ut_printf("[%d/%dk/%dk]:%d/%d ", g_cpu_state[j].stats.idleticks,g_cpu_state[j].stats.nonidle_contexts / 1000, g_cpu_state[j].stats.total_contexts / 1000,
-					g_cpu_state[j].cpu_spinstate.hits,g_cpu_state[j].stats.netbh);
+			ut_printf("[%d/%dk/%dk/%d]:%d ", g_cpu_state[j].stats.idleticks,g_cpu_state[j].stats.nonidle_contexts / 1000, g_cpu_state[j].stats.total_contexts / 1000,
+					g_cpu_state[j].stats.syscalls ,g_cpu_state[j].stats.netbh);
 		else
-			ut_printf("[%d/%d/%d]:%d/%d ",g_cpu_state[j].stats.idleticks, g_cpu_state[j].stats.nonidle_contexts, g_cpu_state[j].stats.total_contexts,
-					g_cpu_state[j].cpu_spinstate.hits,g_cpu_state[j].stats.netbh);
+			ut_printf("[%d/%d/%d/%d]:%d ",g_cpu_state[j].stats.idleticks, g_cpu_state[j].stats.nonidle_contexts, g_cpu_state[j].stats.total_contexts,
+					g_cpu_state[j].stats.syscalls,g_cpu_state[j].stats.netbh);
 	}
-	ut_printf(":context switches([ idle/nonidle/total ]cpuspinhit:Netbh) \n");
+	ut_printf(":ctx switches([ idle/nonidle/total/syscalls]Netbbhh) \n");
 
 	ut_printf("       ");
 	for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {

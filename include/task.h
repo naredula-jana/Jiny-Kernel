@@ -215,6 +215,7 @@ struct cpu_state {
 		unsigned long total_contexts;
 		unsigned long nonidle_contexts;
 		unsigned long idleticks; /* in idle function when the timer arrives */
+		unsigned long syscalls;
 		unsigned long rip;
 		unsigned long netbh;
 	} stats;

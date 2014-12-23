@@ -107,7 +107,7 @@ int addBufToNetQueue(struct virtqueue *vq, unsigned char *buf, unsigned long len
 
 void virtio_jdriver::print_stats(unsigned char *arg1,unsigned char *arg2) {
 
-	ut_printf("%s: Send(P,K,I): %d,%d,%d  Recv(P,K,I):%d,%d,%d allocs:%d free:%d err:%d\n", this->name, this->stat_sends,
+	ut_printf("%s: Send(P,K,I): %d,%d,%d  Recv(P,K,I):%d,%d,%d allocs:%d free:%d err(send no space):%d\n", this->name, this->stat_sends,
 			this->stat_send_kicks, this->stat_send_interrupts, this->stat_recvs, this->stat_recv_kicks, this->stat_recv_interrupts, this->stat_allocs,
 			this->stat_frees, this->stat_err_nospace);
 	print_vq(vq[0]);
@@ -181,8 +181,10 @@ static int virtio_net_poll_device(void *private_data, int enable_interrupt, int 
 		driver->stat_recv_kicks++;
 		virtio_queue_kick(driver->vq[0]);
 	}
-	if (enable_interrupt) {
+	if (enable_interrupt && driver->recv_interrupt_disabled==0) {
 		virtio_enable_cb(driver->vq[0]);
+	}else{
+		//virtio_disable_cb(driver->vq[0]);
 	}
 	return ret;
 }
@@ -203,7 +205,10 @@ static int virtio_net_recv_interrupt(void *private_data) {
 		inb(dev->pci_device.pci_ioaddr + VIRTIO_PCI_ISR);
 
 	driver->stat_recv_interrupts++;
-	//virtio_disable_cb(driver->vq[0]); /* disabling interrupts have Big negative impact on packet recived when smp enabled */
+
+	if (driver->recv_interrupt_disabled == 0){
+	  virtio_disable_cb(driver->vq[0]); /* disabling interrupts have Big negative impact on packet recived when smp enabled */
+	}
 
     if (g_conf_netbh_enable == 1){  /* handing over the packets to net bx thread  */
     	net_sched.netif_rx_enable_polling(private_data, virtio_net_poll_device);
@@ -327,6 +332,7 @@ int virtio_net_jdriver::net_attach_device(class jdevice *jdev) {
 //	virtio_queue_kick(this->vq[1]);
 
 	pending_kick_onsend =0;
+	recv_interrupt_disabled = 0;
 
 	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER_OK);
 	ut_log("VirtioNet:  Initilization Completed status:%x\n", virtio_get_pcistatus(pci_ioaddr));
@@ -409,22 +415,24 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 		if (ret == -ERROR_VIRTIO_ENOSPC){
 			stat_err_nospace++;
 			virtio_queue_kick(this->vq[1]);
-			virtio_enable_cb(this->vq[1]);
+			stat_send_kicks++;
+			//virtio_enable_cb(this->vq[1]);
 		}
 	}
 #else
 	ret = addBufToNetQueue(this->vq[1], (unsigned char *) addr, len + 10);
 #endif
 
-	stat_sends++;
 
 	if (ret == -ERROR_VIRTIO_ENOSPC) {
 		free_page((unsigned long) addr);
 		stat_err_nospace++;
 		stat_frees++;
+	}else{
+		stat_sends++;
 	}
 	if (g_conf_net_sendbuf_delay == 1) {
-		if ((stat_sends % 10) == 0) {
+		if ((stat_sends % 30) == 0) {
 			virtio_queue_kick(this->vq[1]);
 			stat_send_kicks++;
 		} else {
@@ -461,6 +469,12 @@ int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 		}else{
 			return JFAIL;
 		}
+	} else if (arg1 == NETDEV_IOCTL_DISABLE_RECV_INTERRUPTS){
+		virtio_disable_cb(vq[0]);
+		recv_interrupt_disabled = 1;
+	} else if (arg1 == NETDEV_IOCTL_ENABLE_RECV_INTERRUPTS){
+		virtio_enable_cb(vq[0]);
+		recv_interrupt_disabled = 0;
 	}
 }
 /*****************************  Virtio Disk ********************************************/

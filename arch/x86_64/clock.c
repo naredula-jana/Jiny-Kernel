@@ -25,7 +25,7 @@ struct pvclock_vcpu_time_info {
 	signed char tsc_shift;
 	unsigned char flags;
 	unsigned char pad[2];
-}__attribute__((__packed__));
+}__attribute__((__packed__)) __attribute__ ((aligned (4096)));;
 /* 32 bytes */
 
 struct pvclock_wall_clock {
@@ -34,11 +34,13 @@ struct pvclock_wall_clock {
 	uint32_t nsec;
 }__attribute__((__packed__));
 
+static unsigned long get_systemtime();
 static struct pvclock_wall_clock wall_clock;
-static struct pvclock_vcpu_time_info vcpu_time[MAX_CPUS];
+static volatile struct pvclock_vcpu_time_info vcpu_time[MAX_CPUS];
 static int kvm_clock_available = 0;
 static uint64_t start_time, curr_system_time = 0; /* updated by the boot cpu */
 static int test_count = 0;
+static unsigned long stored_system_times[MAX_CPUS]; /* this is used if the old system is more then current*/
 unsigned long get_kvm_time_fromboot(){ /* return 10ms units */
 	unsigned long diff,ticks;
 
@@ -62,10 +64,14 @@ unsigned long get_kvm_time_fromboot(){ /* return 10ms units */
 }
 extern unsigned long  g_jiffie_errors;
 
-static void init_vpcutime(){
-	msr_write(MSR_KVM_SYSTEM_TIME_NEW, __pa(&vcpu_time[0]) | 1);
+void init_vcputime(int cpu){
+	if (kvm_clock_available == 1){
+		msr_write(MSR_KVM_SYSTEM_TIME_NEW, __pa(&vcpu_time[cpu]) | 1);
+	}
+	stored_system_times[cpu]=0;
 }
-static inline int kvm_para_available(void) {
+
+static inline int kvm_para_available(int cpu_id) {
 
 	uint32_t cpuid_ret[4], *p;
 	char signature[13];
@@ -87,7 +93,8 @@ static inline int kvm_para_available(void) {
 	do_cpuid(KVM_CPUID_FEATURES, &cpuid_ret[0]);
 
 	msr_write(MSR_KVM_WALL_CLOCK_NEW, __pa(&wall_clock));
-	init_vpcutime();
+	kvm_clock_available = 1;
+	init_vcputime(cpu_id);
 
 	start_time = wall_clock.sec;
 	//g_jiffie_tick = get_kvm_time_fromboot();
@@ -112,17 +119,13 @@ int ut_get_wallclock(unsigned long *sec, unsigned long *usec) {
 				*usec = tmp_usec % 1000000;
 			}
 		} else {
-			uint32_t version;
-			do {
-				version = vcpu_time[0].version;
-				if (sec != 0) {
-					*sec = (vcpu_time[0].system_time / 1000000000) + start_time;
-				}
-				if (usec != 0) {
-					*usec = (vcpu_time[0].system_time % 1000000) / 1000;
-				}
-			} while ((vcpu_time[0].version & 0x1)
-					|| (version != vcpu_time[0].version));
+			unsigned long sys_time = get_systemtime();
+			if (sec != 0) {
+				*sec = (sys_time / 1000000000) + start_time;
+			}
+			if (usec != 0) {
+				*usec = (sys_time % 1000000) / 1000;
+			}
 		}
 	} else {
 		if (sec != 0) {
@@ -134,6 +137,92 @@ int ut_get_wallclock(unsigned long *sec, unsigned long *usec) {
 	}
 	return 1;
 }
+
+#define DECLARE_ARGS(val, low, high)    unsigned low, high
+#define EAX_EDX_RET(val, low, high)     "=a" (low), "=d" (high)
+#define EAX_EDX_VAL(val, low, high)     ((low) | ((uint64_t)(high) << 32))
+static  unsigned long __native_read_tsc(void)
+ {
+         DECLARE_ARGS(val, low, high);
+         asm volatile("rdtsc" : EAX_EDX_RET(val, low, high));
+         return EAX_EDX_VAL(val, low, high);
+}
+
+static unsigned long get_systemtime() /* returns nano seconds */
+{
+	unsigned long time;
+	uint32_t version;
+	int cpu =0;
+
+	asm volatile("mfence":::"memory");
+	asm volatile("lfence":::"memory");
+
+	do {
+		version = vcpu_time[cpu].version;
+		time = (__native_read_tsc() - vcpu_time[cpu].tsc_timestamp);
+		if (vcpu_time[cpu].tsc_shift >= 0) {
+			time <<= vcpu_time[cpu].tsc_shift;
+		} else {
+			time >>= -vcpu_time[cpu].tsc_shift;
+		}
+		time = (time * vcpu_time[cpu].tsc_to_system_mul) >> 32;
+		time = time + vcpu_time[cpu].system_time;
+	} while ((vcpu_time[cpu].version & 0x1) || (version != vcpu_time[cpu].version));
+#if 1
+	if (time < stored_system_times[cpu]){
+		time = stored_system_times[cpu];
+	}else{
+		stored_system_times[cpu]=time;
+	}
+#endif
+	return time;
+}
+unsigned long get_100usec(){ /*  return in units of 100 useconds */
+	return get_systemtime()/100000;
+}
+void clock_test(){
+	unsigned long curr_u,start_j,start_t,end_t;
+	unsigned long incrs=0;
+	unsigned long err=0;
+	unsigned long sec,usec;
+
+	ut_printf(" first elme: %x  second elem:%x \n",&vcpu_time[0],&vcpu_time[1]);
+	curr_u=get_100usec();
+	start_j=g_jiffies;
+	start_t=curr_u;
+	while ((start_j+3000)>g_jiffies){
+		unsigned long t = get_100usec();
+		if (curr_u < t){
+			incrs++;
+			curr_u = t;
+		}else if (curr_u > t){
+			err++;
+			curr_u = t;
+		}
+	}
+	end_t=curr_u;
+	ut_printf("TEST with new clock result  start: %d end:%d  incrs:%d err:%d  cpuid:%d version:%d time:%d newtime:%d elapsed time:%d\n",start_j,g_jiffies,incrs,err,getcpuid(),vcpu_time[0].version,vcpu_time[0].system_time,get_systemtime(),(end_t-start_t));
+
+	ut_get_wallclock(&sec, &usec);
+	curr_u=(sec*30000) + (usec/100);
+	start_j=g_jiffies;
+	start_t=curr_u;
+	err =0;
+	incrs=0;
+	while ((start_j+1000)>g_jiffies){
+		unsigned long t = 	ut_get_wallclock(&sec, &usec);
+		t=(sec*10000) + (usec/100);
+		if (curr_u < t){
+			incrs++;
+			curr_u = t;
+		}else if (curr_u > t){
+			err++;
+			curr_u = t;
+		}
+	}
+	end_t=curr_u;
+	ut_printf("TEST using gettime of day result  start: %d end:%d  incrs:%d err:%d  cpuid:%d version:%d time:%d newtime:%d elapsed time:%d\n",start_j,g_jiffies,incrs,err,getcpuid(),vcpu_time[0].version,vcpu_time[0].system_time,get_systemtime(),(end_t-start_t));
+}
 int Jcmd_clock() {
 	unsigned long sec, usec, msec;
 
@@ -144,18 +233,18 @@ int Jcmd_clock() {
 	ut_printf("Wall clock:  sec: %d(%x) msec:%d(%x) usec:%d(%x)\n", sec,sec, msec,msec, usec,usec);
 
 	sec = (vcpu_time[0].system_time / 1000000000) ;
-	msec =  (vcpu_time[0].system_time % 1000000000)/1000000;
+	msec =  (vcpu_time[0].system_time % 1000000000)/1000000 ;
 	usec =  (vcpu_time[0].system_time % 1000000) / 1000 ;
 	ut_printf("System clock: version:%x(%d) start:%d sec sec: %d(%x) msec:%d(%x) usec:%d(%x) \n",vcpu_time[0].version,vcpu_time[0].version,start_time, sec,sec, msec,msec, usec,usec);
-	ut_printf("jiffies :%d errors:%d \n", g_jiffies/100,  g_jiffie_errors);
-//
+	ut_printf("jiffies :%d errors:%d  sec:%d get100Usec:%d\n", g_jiffies,  g_jiffie_errors,sec,get_100usec());
+   clock_test();
 	return 1;
 }
 int g_conf_kvmclock_enable = 1;
-int init_clock() {
+int init_clock(int cpu_id) {
 
 	vcpu_time[0].system_time = 0;
-	if (kvm_para_available() == JFAIL) {
+	if (kvm_para_available(cpu_id) == JFAIL) {
 		ut_log("ERROR:  Kvm clock is diabled by Jiny config\n");
 		return JFAIL;
 	}
@@ -163,6 +252,6 @@ int init_clock() {
 		ut_log(" ERROR : Kvm clock is diabled by Jiny config\n");
 		return JFAIL;
 	}
-	kvm_clock_available = 1;
+
 	return JSUCCESS;
 }

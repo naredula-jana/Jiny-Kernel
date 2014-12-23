@@ -75,7 +75,7 @@ public:
 
 	wait_queue *send_waitq;
 	unsigned char mac[7];
-	static int test_k;
+	int recv_interrupt_disabled;
 };
 
 #define IOCTL_DISK_SIZE 1

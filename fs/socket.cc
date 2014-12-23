@@ -20,6 +20,7 @@ extern "C"{
 #include "network.hh"
 
 extern "C"{
+int g_conf_eat_udp=0;
 int default_sock_queue_len=0;
 int g_conf_socket_wakeup=1;
 static spinlock_t _netstack_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"netstack");
@@ -49,6 +50,9 @@ int socket::attach_rawpkt(unsigned char *buff, unsigned int len) {
 
 	struct ether_pkt *pkt = (struct ether_pkt *) (buff + 10);
 	if (pkt->iphdr.protocol == IPPROTO_UDP) {
+		if (g_conf_eat_udp == 1){
+			goto last;
+		}
 		for (i=0; i<udp_list.size; i++) {
 			sock = udp_list.list[i];
 			if (sock == 0) continue;
@@ -82,6 +86,12 @@ int socket::attach_rawpkt(unsigned char *buff, unsigned int len) {
 	default_socket->add_to_queue(buff, len);
 	stat_raw_default++;
 	return JSUCCESS;
+#if 1
+last:
+	jfree_page(buff);
+	stat_raw_drop++;
+	return JSUCCESS;
+#endif
 }
 int socket::add_to_queue(unsigned char *buf, int len) {
 	unsigned long flags;

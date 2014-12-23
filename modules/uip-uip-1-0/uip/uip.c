@@ -335,6 +335,7 @@ chksum(u16_t sum, const u8_t *data, u16_t len)
 
   /* Return sum in host byte order. */
   return sum;
+
 }
 /*---------------------------------------------------------------------------*/
 u16_t
