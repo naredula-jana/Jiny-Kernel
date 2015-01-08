@@ -285,7 +285,7 @@ int ut_symbol_show(int type) {
 	return count;
 }
 
-static int Jcmd_sset(unsigned char *arg1, unsigned char *arg2) {
+static int display_conf_values() {
 	int i, len, count;
 
 	count = 0;
@@ -318,8 +318,10 @@ int ut_symbol_execute(int type, unsigned char *name, uint8_t *argv1, uint8_t *ar
 		if (g_symbol_table[i].type != type)
 			continue;
 		if (type == SYMBOL_CONF) {
-			if (argv1 == 0)
+			if (argv1 == 0){
+				display_conf_values();
 				return 0;
+			}
 			ut_snprintf(new_name, 200, "g_conf_%s", name);
 			if (ut_strcmp((unsigned char *) g_symbol_table[i].name, (unsigned char *) new_name) != 0)
 				continue;

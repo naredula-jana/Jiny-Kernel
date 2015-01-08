@@ -109,19 +109,39 @@ static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 #endif
 	  }/* toplevel if */
 }
+#if 0
 static inline void arch_spinlock_unregister(spinlock_t *lock){
-
-#ifdef SPINLOCK_DEBUG
 	int i;
 
 	for (i=0; i<MAX_SPINLOCKS; i++) {
 		if (g_spinlocks[i]==lock) {
 			g_spinlocks[i]=0;
+		}
+	}
+	return;
+}
+#endif
+static inline void arch_spinlock_free(spinlock_t *lock){
+	int i;
+
+	for (i=0; i<MAX_SPINLOCKS; i++) {
+		if (g_spinlocks[i]==lock) {
+			g_spinlocks[i]=0;
+		}
+	}
+	return;
+}
+static inline void arch_spinlock_init(spinlock_t *lock, unsigned char *name){
+	int i;
+
+	*lock = SPIN_LOCK_UNLOCKED(name);
+	for (i=0; i<MAX_SPINLOCKS; i++) {
+		if (g_spinlocks[i]==0) {
+			g_spinlocks[i]=lock;
+			lock->linked = 0;
 			return;
 		}
 	}
-#endif
-
 }
 static inline void arch_spinlock_unlock(spinlock_t *lock, int line) {
 #ifdef SPINLOCK_DEBUG

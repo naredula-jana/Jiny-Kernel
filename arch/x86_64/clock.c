@@ -124,7 +124,7 @@ int ut_get_wallclock(unsigned long *sec, unsigned long *usec) {
 				*sec = (sys_time / 1000000000) + start_time;
 			}
 			if (usec != 0) {
-				*usec = (sys_time % 1000000) / 1000;
+				*usec = (sys_time / 1000) % 1000000;
 			}
 		}
 	} else {
@@ -152,7 +152,7 @@ static unsigned long get_systemtime() /* returns nano seconds */
 {
 	unsigned long time;
 	uint32_t version;
-	int cpu =0;
+	int cpu =0; /* this is also make sure all cpu's see same time */
 
 	asm volatile("mfence":::"memory");
 	asm volatile("lfence":::"memory");

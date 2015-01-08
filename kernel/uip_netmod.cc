@@ -169,6 +169,7 @@ int network_stack::write(network_connection *conn, uint8_t *app_data, int app_le
 	unsigned char *buf=0;
 	uint16_t port;
 	uint32_t ip;
+
 	netstack_lock();
 	if (uip_buf!=0){
 		while(1);
@@ -185,6 +186,9 @@ int network_stack::write(network_connection *conn, uint8_t *app_data, int app_le
 		ut_memset(buf,0,10);
 	}
 	if (conn->protocol == IPPROTO_UDP) {
+		unsigned char *send_buf;
+		unsigned int send_len;
+
 		uip_udp_conn = conn->proto_connection;
 		ip = conn->dest_ip;
 		port = conn->dest_port;
@@ -200,15 +204,28 @@ int network_stack::write(network_connection *conn, uint8_t *app_data, int app_le
 		uip_process(UIP_UDP_SEND_CONN);
 		ut_memcpy(uip_appdata, app_data, app_len);
 
+		send_buf = uip_buf;
+		send_len = 0;
 		if (uip_len > 0) {
 			uip_arp_out();
 			DEBUG("FROM WRITE ... - uip SENDTO pkt: buf: %x  %d applen :%d \n", uip_buf, uip_len, app_len);
-			ret = net_send_eth_frame(uip_buf, uip_len,WRITE_BUF_CREATED);
+			send_len = uip_len;
+			//ret = net_send_eth_frame(uip_buf, uip_len,WRITE_BUF_CREATED);
 		}
 		uip_len = 0;
 		uip_slen = 0;
 		uip_conn = 0;
 		uip_udp_conn = 0;
+		if (send_len > 0){
+			uip_buf=0;
+			netstack_unlock();
+			ret = net_send_eth_frame(send_buf, send_len,WRITE_BUF_CREATED | WRITE_SLEEP_TILL_SEND);
+			//ret = net_send_eth_frame(send_buf, send_len,WRITE_BUF_CREATED);
+			if ((ret == JFAIL) && send_buf){
+					jfree_page(send_buf);
+			}
+			return ret;
+		}
 	}else if (conn->protocol == IPPROTO_TCP){
 
 	}

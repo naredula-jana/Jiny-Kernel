@@ -248,12 +248,20 @@ int Jcmd_cpu(char *arg1, char *arg2) {
 	}
 	ut_printf("         ");
 	for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
-		ut_printf("  CPU%d        ", j);
+		ut_printf("  Cpu%d        ", j);
 	}
 	ut_printf("\n");
 	for (i = 0; i < MAX_IRQS; i++) {
-		if (g_interrupt_handlers[i].action == 0 && g_interrupt_handlers[i].stat[j].num_error == 0)
+		unsigned long err_count=0;
+		for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
+			if (g_interrupt_handlers[i].stat[j].num_error == 0){
+				continue;
+			}
+			err_count = err_count + g_interrupt_handlers[i].stat[j].num_error;
+		}
+		if (g_interrupt_handlers[i].action == 0 && err_count == 0){
 			continue;
+		}
 
 		if (i < 32 && g_interrupt_handlers[i].action == gpFault) {
 			continue;
@@ -263,7 +271,7 @@ int Jcmd_cpu(char *arg1, char *arg2) {
 		for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
 			ut_printf("[%6d ] ", g_interrupt_handlers[i].stat[j].num_irqs);
 			if (g_interrupt_handlers[i].stat[j].num_error > 0)
-				ut_printf(" -%3d ", g_interrupt_handlers[i].stat[j].num_error);
+				ut_printf(" -%6d ", g_interrupt_handlers[i].stat[j].num_error);
 		}
 		ut_printf(":%s \n", g_interrupt_handlers[i].name);
 	}

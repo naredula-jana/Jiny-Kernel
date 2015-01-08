@@ -24,6 +24,7 @@ extern "C" {
 extern int p9_initFs(void *p);
 extern void print_vq(struct virtqueue *_vq);
 extern int init_tarfs(jdriver *driver_arg);
+int g_conf_net_send_int_disable = 1;
 }
 #include "jdevice.h"
 extern int register_netdevice(jdevice *device);
@@ -242,6 +243,7 @@ int virtio_net_jdriver::probe_device(class jdevice *jdev) {
 	return JFAIL;
 }
 static int net_devices=0;
+
 int virtio_net_jdriver::net_attach_device(class jdevice *jdev) {
 	unsigned long addr;
 	unsigned long features=0;
@@ -301,9 +303,9 @@ int virtio_net_jdriver::net_attach_device(class jdevice *jdev) {
 	//	outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 0xffff);
 	}
 
-#if 0
-	virtio_disable_cb(this->vq[1]); /* disable interrupts on sending side */
-#endif
+	if (g_conf_net_send_int_disable == 1){
+		virtio_disable_cb(this->vq[1]); /* disable interrupts on sending side */
+	}
 
 	if (msi_vector > 0) {
 		for (i = 0; i < 3; i++){
@@ -385,14 +387,15 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 
 	dev = (jdevice *) this->device;
 	if (dev == 0 || data == 0)
-		return 0;
+		return JFAIL;
 
-	if (wr_flags == WRITE_BUF_CREATED) {
+	if (wr_flags & WRITE_BUF_CREATED) {
 		addr = data-10;
 	} else {
 		addr = (unsigned long) alloc_page(0);
-		if (addr == 0)
+		if (addr == 0){
 			return JFAIL;
+		}
 		stat_allocs++;
 		ut_memset((unsigned char *) addr, 0, 10);
 		ut_memcpy((unsigned char *) addr + 10, data, len);
@@ -425,11 +428,15 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 
 
 	if (ret == -ERROR_VIRTIO_ENOSPC) {
-		free_page((unsigned long) addr);
 		stat_err_nospace++;
-		stat_frees++;
+		if ((wr_flags & WRITE_SLEEP_TILL_SEND) == 0){
+			free_page((unsigned long) addr);
+			stat_frees++;
+			ret = JSUCCESS;
+		}
 	}else{
 		stat_sends++;
+		ret = JSUCCESS;
 	}
 	if (g_conf_net_sendbuf_delay == 1) {
 		if ((stat_sends % 30) == 0) {
@@ -445,7 +452,7 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 	spin_unlock_irqrestore(&virtionet_lock, flags);
 
 	free_send_bufs();
-	return JSUCCESS;  /* Here Sucess indicates the buffer is freed or consumed */
+	return ret;  /* Here Sucess indicates the buffer is freed or consumed */
 }
 //static int virtio_net_jdriver::test_k=2; // TEST purpose
 int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {

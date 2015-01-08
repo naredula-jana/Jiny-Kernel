@@ -324,6 +324,7 @@ static int delete_sock_from_list(sock_list_t *listp,socket *sock){
 int socket::delete_sock(socket *sock) {
 	int i;
 
+	arch_spinlock_free(&sock->queue.spin_lock);
 	if (delete_sock_from_list(&socket::tcp_listner_list,sock)==JSUCCESS){
 		return JSUCCESS;
 	}
@@ -336,7 +337,9 @@ int socket::delete_sock(socket *sock) {
 	return JFAIL;
 }
 void socket::init_socket(int type){
-	queue.spin_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"socketnetq_lock");
+	//queue.spin_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"socketnetq_lock");
+	arch_spinlock_init(&queue.spin_lock, (unsigned char *)"socketnetq_lock" );
+
 	queue.waitq = jnew_obj(wait_queue, "socket_waitq", 0);
 	net_stack = net_stack_list[0];
 	network_conn.family = AF_INET;

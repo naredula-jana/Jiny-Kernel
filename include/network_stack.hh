@@ -6,6 +6,7 @@ extern void netstack_lock();
 extern void netstack_unlock();
 }
 #define WRITE_BUF_CREATED 0x100
+#define WRITE_SLEEP_TILL_SEND 0x1
 enum _socket_type
 {
   SOCK_STREAM = 1,      /* Sequenced,reliable andconnection-based byte streams.  */

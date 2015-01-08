@@ -53,6 +53,9 @@ int init_ipc(){
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
 		wait_queue::wait_queues[i] = 0;
 	}
+	for (i = 0; i < MAX_SPINLOCKS; i++) {
+		g_spinlocks[i]=0;
+	}
 	ipc_init_done =1;
 	return 1;
 }
@@ -185,12 +188,16 @@ int Jcmd_locks(char *arg1, char *arg2) {
 	unsigned char *buf;
 
 	ut_printf("SPIN LOCKS:  Name  pid count contention(rate) recursive# \n");
-	for (i = 0; i < g_spinlock_count; i++) {
+	for (i = 0; i < MAX_SPINLOCKS; i++) {
+		unsigned long rate=0;
 		if (g_spinlocks[i]==0) continue;
+		if (g_spinlocks[i]->stat_locks !=0){
+			rate = g_spinlocks[i]->contention / g_spinlocks[i]->stat_locks;
+		}
 		ut_printf(" %9s %3x %5d %5d(%d) %3d\n", g_spinlocks[i]->name,
 				g_spinlocks[i]->pid, g_spinlocks[i]->stat_locks,
 				g_spinlocks[i]->contention,
-				g_spinlocks[i]->contention / g_spinlocks[i]->stat_locks,
+				rate,
 				g_spinlocks[i]->stat_recursive_locks);
 	}
 
@@ -441,7 +448,7 @@ semaphore::semaphore(uint8_t arg_count, char *arg_name) {
 	}
 	owner_pid = 0;
 	count = arg_count;
-	sem_lock = SPIN_LOCK_UNLOCKED(name);
+	arch_spinlock_init(&sem_lock, (unsigned char *)name);
 	valid_entry = 1;
 	waitqueue = jnew_obj(wait_queue, "semaphore" ,WAIT_QUEUE_WAKEUP_ONE);
 }
@@ -531,7 +538,7 @@ int semaphore::unlock(int line) {
 }
 /* Deallocates a semaphore. */
 void semaphore::free() {
-	arch_spinlock_unregister(&(sem_lock));
+	arch_spinlock_free(&(sem_lock));
 	waitqueue->unregister();
     jfree_obj((unsigned long)this);
 }

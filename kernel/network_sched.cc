@@ -221,11 +221,27 @@ int init_network_stack() { /* this should be initilised once the devices are up 
 }
 
 int net_send_eth_frame(unsigned char *buf, int len, int write_flags) {
+	int ret = JFAIL;
+	int try_again;
+	int iters=0;
 	if (socket::net_dev != 0) {
-		return socket::net_dev->write(0, buf, len, write_flags);
-	} else {
-		return JFAIL;
+		do {
+			try_again = 0;
+			ret = socket::net_dev->write(0, buf, len, write_flags);
+			if ((write_flags & WRITE_SLEEP_TILL_SEND) && (write_flags & WRITE_BUF_CREATED)
+					&& (ret < 0)) {
+			//	sc_sleep(1);
+				//sc_yeild();
+				try_again = 1;
+				iters++;
+			}
+		} while (try_again == 1 && iters<30);
 	}
+
+	if (ret < 0){
+		ret = JFAIL;
+	}
+	return ret;
 }
 extern struct Socket_API *socket_api;
 void net_get_mac(unsigned char *mac) {

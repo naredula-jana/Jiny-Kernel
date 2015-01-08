@@ -1180,10 +1180,15 @@ uip_process(u8_t flag)
 	uip_appdata = &uip_buf[UIP_LLH_LEN + UIP_IPUDPH_LEN]; // JANA fixed
 
 #if UIP_UDP_CHECKSUMS
-	/* Calculate UDP checksum. */UDPBUF->udpchksum = ~(uip_udpchksum());
+	/* Calculate UDP checksum. */
+#if 0  /* TODO:  checksum is getting wrong */
+	UDPBUF->udpchksum = ~(uip_udpchksum());
 	if (UDPBUF->udpchksum == 0) {
 		UDPBUF->udpchksum = 0xffff;
 	}
+#endif
+	UDPBUF->udpchksum = 0;
+
 #endif /* UIP_UDP_CHECKSUMS */
 
 	goto ip_send_nolen;
