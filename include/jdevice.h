@@ -46,12 +46,14 @@ public:
 
 class virtio_jdriver: public jdriver {
 public:
-	unsigned long stat_send_kicks;
-	unsigned long stat_recv_kicks;
+	atomic_t stat_send_kicks;
+	atomic_t stat_recv_kicks;
+	atomic_t stat_kicks;
 	unsigned char pending_kick_onsend;
 
 	int virtio_create_queue(uint16_t index, int qType);
 	void print_stats(unsigned char *arg1,unsigned char *arg2);
+	void queue_kick(int qno);
 
 	struct virtqueue *vq[5];
 	unsigned long stat_allocs,stat_frees,stat_err_nospace;

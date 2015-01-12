@@ -158,9 +158,12 @@ int net_bh(){
 	static unsigned long last_timestamp=0; /* 100usec units */
 	unsigned long curr_time; /* interms of 100usec*/
 
+#if 0
 	if (getcpuid()!=0) {
 		return 0;
 	}
+#endif
+
 	if (g_conf_nic_intr_off == 1) {  /* only in the poll mode */
 		curr_time = get_100usec(); /* interms of 100 usec units*/
 		if (last_timestamp < curr_time) {
@@ -193,6 +196,7 @@ int net_bh(){
 	if (g_conf_nic_intr_off == 0 && net_sched.device){
 		net_bh_active =0;
 		net_sched.device->ioctl(NETDEV_IOCTL_ENABLE_RECV_INTERRUPTS, 0);
+		net_sched.netRx_BH();
 	}
 	netbh_in_progress = 0;
 
@@ -254,7 +258,7 @@ void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
 	if (net_sched.device) {
 		unsigned char mac[10];
 
-		net_sched.device->print_stats(0,0);
+		net_sched.device->print_stats("all",0);
 		net_sched.device->ioctl(NETDEV_IOCTL_GETMAC, (unsigned long) &mac);
 		ut_printf(" Mac: %x:%x:%x:%x:%x:%x  \n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 	}

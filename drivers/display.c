@@ -311,7 +311,7 @@ static void format_string(struct writer_struct *writer, const char *format, va_l
 			case 'i':
 				if (c == 'i') {
 					val = va_arg(vl,unsigned int);
-					c = 'x';
+					c = 'd';
 				} else
 					val = va_arg(vl,unsigned long);
 

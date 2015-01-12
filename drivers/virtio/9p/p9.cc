@@ -266,7 +266,7 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 	}
 	virtio_enable_cb(vq);
 	virtio_add_buf_to_queue(vq, sg, out, in, sg[0].page_link, 0);
-	virtio_queue_kick(vq);
+	virtio_queuekick(vq);
 #endif
 	p9_waitq->wait(50);
 	unsigned int len;

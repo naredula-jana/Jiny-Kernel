@@ -1,3 +1,13 @@
+/*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+*   udp_ping/udp_server.c
+*   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
+*
+*/
 #include<netinet/in.h> 
 #include <sys/types.h> 
 #include <sys/socket.h> 

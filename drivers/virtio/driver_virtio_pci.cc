@@ -25,6 +25,8 @@ extern int p9_initFs(void *p);
 extern void print_vq(struct virtqueue *_vq);
 extern int init_tarfs(jdriver *driver_arg);
 int g_conf_net_send_int_disable = 1;
+
+atomic_t  g_conf_stat_pio = ATOMIC_INIT(0);
 }
 #include "jdevice.h"
 extern int register_netdevice(jdevice *device);
@@ -57,6 +59,7 @@ static void virtio_set_pcistatus(unsigned long pci_ioaddr, unsigned char status)
 }
 /* the notify function used when creating a virt queue */
 static void notify(struct virtqueue *vq) {
+	atomic_inc(&g_conf_stat_pio);
 	outw(vq->pci_ioaddr + VIRTIO_PCI_QUEUE_NOTIFY, vq->queue_number);
 }
 static void callback(struct virtqueue *vq) {
@@ -107,13 +110,25 @@ int addBufToNetQueue(struct virtqueue *vq, unsigned char *buf, unsigned long len
 /*******************************  virtio_jdriver ********************************/
 
 void virtio_jdriver::print_stats(unsigned char *arg1,unsigned char *arg2) {
-
-	ut_printf("%s: Send(P,K,I): %d,%d,%d  Recv(P,K,I):%d,%d,%d allocs:%d free:%d err(send no space):%d\n", this->name, this->stat_sends,
+	ut_printf("%s: Send(P,K,I): %d,%i,%d  Recv(P,K,I):%d,%i,%d allocs:%d free:%d ERR(send no space):%d TotalKick:%i\n", this->name, this->stat_sends,
 			this->stat_send_kicks, this->stat_send_interrupts, this->stat_recvs, this->stat_recv_kicks, this->stat_recv_interrupts, this->stat_allocs,
-			this->stat_frees, this->stat_err_nospace);
+			this->stat_frees, this->stat_err_nospace,this->stat_kicks);
 	print_vq(vq[0]);
 	print_vq(vq[1]);
 	//return JSUCCESS;
+}
+void virtio_jdriver::queue_kick(int qno){
+	if (qno == 0){
+		atomic_inc(&stat_recv_kicks);
+	}else if (qno == 1){
+		atomic_inc(&stat_send_kicks);
+	}
+
+	if (virtio_queuekick(this->vq[qno]) == 1){
+		atomic_inc(&stat_kicks);
+	}
+
+
 }
 int virtio_jdriver::virtio_create_queue(uint16_t index, int qType) {
 	int size;
@@ -179,8 +194,7 @@ static int virtio_net_poll_device(void *private_data, int enable_interrupt, int 
 		}
 	}
 	if (ret > 0) {
-		driver->stat_recv_kicks++;
-		virtio_queue_kick(driver->vq[0]);
+		driver->queue_kick(0);
 	}
 	if (enable_interrupt && driver->recv_interrupt_disabled==0) {
 		virtio_enable_cb(driver->vq[0]);
@@ -202,8 +216,9 @@ static int virtio_net_recv_interrupt(void *private_data) {
 	virtio_net_jdriver *driver = (virtio_net_jdriver *) private_data;
 
 	dev = (jdevice *) driver->device;
-	if (dev->pci_device.msi == 0)
+	if (dev->pci_device.msi_enabled == 0){
 		inb(dev->pci_device.pci_ioaddr + VIRTIO_PCI_ISR);
+	}
 
 	driver->stat_recv_interrupts++;
 
@@ -224,8 +239,9 @@ static int virtio_net_send_interrupt(void *private_data) {
 	virtio_net_jdriver *driver = (virtio_net_jdriver *) private_data;
 
 	dev = (jdevice *) driver->device;
-	if (dev->pci_device.msi == 0)
+	if (dev->pci_device.msi_enabled == 0){
 		inb(dev->pci_device.pci_ioaddr + VIRTIO_PCI_ISR);
+	}
 
 	driver->stat_send_interrupts++;
 	virtio_disable_cb(driver->vq[1]);
@@ -283,8 +299,10 @@ int virtio_net_jdriver::net_attach_device(class jdevice *jdev) {
 	}
 
 	if (msi_vector == 0) {
+		jdev->pci_device.msi_enabled = 0;
 		addr = pci_ioaddr + 20;
 	} else {
+		jdev->pci_device.msi_enabled = 1;
 		addr = pci_ioaddr + 24;
 	}
 	for (i = 0; i < 6; i++)
@@ -330,8 +348,8 @@ int virtio_net_jdriver::net_attach_device(class jdevice *jdev) {
 		addBufToNetQueue(this->vq[0], 0, 4096);
 
 	inb(pci_ioaddr + VIRTIO_PCI_ISR);
-	virtio_queue_kick(this->vq[0]);
-//	virtio_queue_kick(this->vq[1]);
+	queue_kick(0);
+//	queue_kick(1);
 
 	pending_kick_onsend =0;
 	recv_interrupt_disabled = 0;
@@ -417,8 +435,7 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 		}
 		if (ret == -ERROR_VIRTIO_ENOSPC){
 			stat_err_nospace++;
-			virtio_queue_kick(this->vq[1]);
-			stat_send_kicks++;
+			queue_kick(1);
 			//virtio_enable_cb(this->vq[1]);
 		}
 	}
@@ -440,14 +457,12 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 	}
 	if (g_conf_net_sendbuf_delay == 1) {
 		if ((stat_sends % 30) == 0) {
-			virtio_queue_kick(this->vq[1]);
-			stat_send_kicks++;
+			queue_kick(1);
 		} else {
 			pending_kick_onsend = 1;
 		}
 	} else {
-		virtio_queue_kick(this->vq[1]);
-		stat_send_kicks++;
+		queue_kick(1);
 	}
 	spin_unlock_irqrestore(&virtionet_lock, flags);
 
@@ -469,7 +484,7 @@ int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 			unsigned long flags;
 
 			spin_lock_irqsave(&virtionet_lock, flags);
-			virtio_queue_kick(this->vq[1]);
+			queue_kick(1);
 			pending_kick_onsend=0;
 			spin_unlock_irqrestore(&virtionet_lock, flags);
 			return JSUCCESS;
@@ -517,7 +532,7 @@ static int virtio_disk_interrupt(void *private_data) {
 	virtio_disk_jdriver *driver = (virtio_disk_jdriver *) private_data;
 
 	dev = (jdevice *) driver->device;
-	if (dev->pci_device.msi == 0){
+	if (dev->pci_device.msi_enabled == 0){
 		inb(dev->pci_device.pci_ioaddr + VIRTIO_PCI_ISR);
 	}
 
@@ -668,7 +683,7 @@ ut_printf("Sending the SCSI request sector:%x len:%d  :%d \n",sector,len,data_le
 
 	virtio_disable_cb(tmp_vq);
 	ret = virtio_add_buf_to_queue(tmp_vq, sg, out, in, (void *) sg[0].page_link, 0);/* send q */
-	virtio_queue_kick(tmp_vq);
+	queue_kick(0);
 
 	virtio_enable_cb(tmp_vq);
 sc_sleep(2000);
@@ -730,7 +745,7 @@ void *virtio_disk_jdriver::addBufToQueue(int type, unsigned char *buf_arg, uint6
 
 	virtio_disable_cb(tmp_vq);
 	ret = virtio_add_buf_to_queue(tmp_vq, sg, out, in, (void *) sg[0].page_link, 0);/* send q */
-	virtio_queue_kick(tmp_vq);
+	queue_kick(0);
 
 	virtio_enable_cb(tmp_vq);
 
@@ -987,7 +1002,7 @@ extern wait_queue *p9_waitq;
 static int virtio_9p_interrupt(void *private_data) { // TODO: handling similar  type of interrupt generating while serving P9 interrupt.
 	virtio_p9_jdriver *driver = (virtio_p9_jdriver *) private_data;
 
-	if (driver->device->pci_device.msi == 0)
+	if (driver->device->pci_device.msi_enabled == 0)
 		inb(driver->device->pci_device.pci_ioaddr + VIRTIO_PCI_ISR);
 
 	p9_waitq->wakeup(); /* wake all the waiting processes */

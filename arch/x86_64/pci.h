@@ -167,7 +167,7 @@ typedef struct pci_device {
 	unsigned long pci_mmio;
 	unsigned long pci_mmiolen;
 	struct pcicfg_msix msix_cfg;
-	int msi;
+	int msi_enabled;
 	unsigned char *description;
 }pci_device_t;
 int read_pci_info_new(pci_device_t *dev);

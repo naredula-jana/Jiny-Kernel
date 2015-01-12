@@ -51,6 +51,7 @@ unsigned long get_kvm_time_fromboot(){ /* return 10ms units */
 	}
 	ticks = vcpu_time[0].system_time / 10000000 ;
 
+//	get_systemtime(); /* this function is called to store the time */
 #if 1
 	diff = vcpu_time[0].system_time - start_time;
 	if (diff < 0) {
@@ -120,6 +121,7 @@ int ut_get_wallclock(unsigned long *sec, unsigned long *usec) {
 			}
 		} else {
 			unsigned long sys_time = get_systemtime();
+		//	unsigned long sys_time = stored_system_times[0];
 			if (sec != 0) {
 				*sec = (sys_time / 1000000000) + start_time;
 			}

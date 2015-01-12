@@ -1,0 +1,2 @@
+gcc -g  -static udp_client.c -lpthread -o udp_client
+gcc -g  -static udp_server.c -lpthread -o udp_server

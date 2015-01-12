@@ -1,12 +1,12 @@
-## Optimizations, Performance and Benchmarks.
+## Optimizations and Performance improvements .
 
-This paper provides [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel) performance comparision  with  Linux on different workloads like cpu,network,storage,memory etc:
-In the below benchmarks/tests, Jiny as performed better then linux in the below specific workloads, one of the reason is linux is  generic kernel designed to run on the metal  when compare to Jiny. It is relatively easy to improve the througput for the specific workloads instead of generic. 
+This paper provides performance comparision of [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel)   with  Linux on different workloads like cpu,network,storage,memory etc:
+In the below benchmarks, Jiny as performed better then linux in the below specific workloads, one of the reason is linux is  generic kernel designed to run on the metal  when compare to Jiny. It is relatively easy to improve the througput for the specific workloads instead of generic. 
   
 - Benchmark-1(CPU centric): Comparisions of cpu centric app running in linux vm versus same app running in Jiny vm. There is big improvement when the same app run in Jiny vm as High priority app. 
-- Benchmark-2(Network centric): Comparisions of network throughput in linux vm versus Jiny vm. There is 50% improvement in network throughput in Jiny Vm when compare to linux vm on the same hardware.
+- Benchmark-2(Network centric): Comparisions of network throughput in linux vm versus Jiny vm. There is 20%-50% improvement in network throughput in Jiny Vm when compare to linux vm on the same hardware.
 - Benchmark-3(Storage centric): In progress.
-- Benchmark-4(PageCache): Comparisions of Read/write throughput for Hadoop workload. Improvement of 20% in read/write throughput of hdfs/hadoop.
+- Benchmark-4(PageCache): Comparisions of Read/write throughput for Hadoop workload. Improvement of 20% in read/write throughput of hdfs/hadoop workloads.
 - Benchmark-5(Malloc): Memory  improvements with zero page accumulation and other related techiniques: In progress
 
 ----------------------------------------------------------------------------------
@@ -42,20 +42,30 @@ In the below benchmarks/tests, Jiny as performed better then linux in the below 
 ###Benchmark-2(Network centric): Completed
 This benchmark concentrates on the networking speed between linux and Jiny OS. Networking in Jiny is based on the  [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). Udp client and server are used to test the maxumum throughput of the networking stack in the os. udp client on the host sends the packet to the udp server inside the vm, udp server responds back the packet, In this way the amount of bytes/packets processes in the vm will be calculated. The below test results shows the network thoughput(in terms of bytes processed) in Jiny  and linux:
 
-1. **Test-1**: ubuntu-14(linux vm) :  able to transfer 94 Mbytes between two linux vm's.
-2. **Test-2**: Jiny os : able to transfer 155 Mbytes between two jiny vm's.
-3. **Test-3**: Jiny os with delay in send door bell : able to transfer 170 Mbytes between two jiny vm's.  
-
 **Test Environment**:  
 **Network Driver** : Virtio+vhost.  
- **Packet size** used by udp client: 200 bytes. 
+**Packet size** used by udp client: 200 bytes. 
 Number of cpu cores in the linux and Jiny Vm are 2.  
-**Hypervisor**: kvm/qemu-2.0
+**Hypervisor**: kvm/qemu-2.x
+
+vm to vm: on a low end Hardware
+
+1. **Test-1**: ubuntu-14(linux vm) :  able to transfer 94 Mbytes between two linux vm's.
+2. **Test-2**: Jiny os : able to transfer 155 Mbytes between two jiny vm's.
+3. **Test-3**: Jiny os with delay in send door bell : able to transfer 170 Mbytes between two jiny vm's. 
+
+Host to vm: on a high end hardware.
+
+4. **Test-4**:  udp_client on linux host and udp_server on linux vm : 180MBytes.
+5. **Test-5**:  udp_client on linux host and udp_server on jiny vm : 260MBytes.
 
 
 ##### summary
  1. Difference between Test-1 and Test-2: Processing the packet in Linux and Jiny are completely different. In Jiny , most of the cpu cycles are spend in the application context as mentioned in  [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). whereas in linux, cpu cycles are split between the app and Network bottom half making packet to process by different cores. This may be one of the reason why Jiny performance better then linux.
- 2. Difference between Test-2(155M) and Test-3(170M):  For every packet send on the NIC, issuing the door bell in virtio driver cost extra MMIO operation, that is causing the vm exits in kvm hypervisor, this was the reason test-3 got some 15Mbytes extra processing. postponing doorbell for few packets/for a duration of time as improved the throughput at load, but this cause extra delay in holding the send packet when the system is under load. 
+ 2. Difference between Test-2(155M) and Test-3(170M):  For every packet send on the NIC, issuing the door bell in virtio driver cost extra MMIO operation, that is causing the vm exits in kvm hypervisor, this was the reason test-3 got some 15Mbytes extra processing. postponing doorbell for few packets/for a duration of time as improved the throughput at load, but this cause extra delay in holding the send packet when the system is under load. This can be turned on/off depending on the load just like imterrupts.
+ 3. Test-4 and Test-5 :  Here udp_client is resource intensive when compare to udp_server. In this tests, vm is mainly used for network thoughput. Here Jiny as performed better by 30%. 
+ 
+ 
 
 ---------------------------------------------------------------------------------- 
 ###Benchmark-3(Storage centric): In Progress:

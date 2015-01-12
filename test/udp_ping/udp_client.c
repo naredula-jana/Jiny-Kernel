@@ -1,3 +1,15 @@
+/*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+*   udp_ping/udp_client.c
+*   Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
+*
+*/
+
+
 #include<netinet/in.h> 
 #include <sys/types.h> 
 #include <sys/socket.h> 
@@ -29,6 +41,10 @@ void recv_func(int total_pkts) {
 		FD_SET(sfd, &readSet);
 		timeout.tv_sec = 1;
 		timeout.tv_usec = 0;
+
+
+//		rc = select(sfd + 1, 0 , NULL, NULL, &timeout);
+//		continue;
 
 		rc = select(sfd + 1, &readSet, NULL, NULL, &timeout);
 		if (rc != 0) {
@@ -136,7 +152,7 @@ main(int argc, char *argv[]) {
 	server.sin_family = AF_INET;
 	server.sin_port = htons(1300);
 	if (argc != 4) {
-		printf("./a.out <ip> <pkt_size> <total_pkts>\n");
+		printf("./udp_client <server_ip> <pkt_size> <total_pkts>\n");
 		return 1;
 	}
 	inet_aton(argv[1], &server.sin_addr);

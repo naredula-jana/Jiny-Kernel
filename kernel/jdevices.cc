@@ -99,8 +99,9 @@ void jdevice::print_stats(unsigned char *arg1,unsigned char *arg2) {
 	}
 
 	if (ut_strcmp(name, (unsigned char *) "pci") != 0) {
-		ut_printf("%s: ", name);
-	} else {
+		ut_printf("Non-PCI %s: ", name);
+	}
+     if (1){
 		unsigned char *drv_name="-NA-";
 		if (driver != 0){
 			drv_name=driver->name;

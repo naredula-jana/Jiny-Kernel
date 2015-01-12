@@ -179,7 +179,7 @@ static inline int virtqueue_add_buf(struct virtqueue *vq,
 	return virtio_add_buf_to_queue(vq, sg, out_num, in_num, data, GFP_ATOMIC);
 }
 
-void virtio_queue_kick(struct virtqueue *vq);
+int virtio_queuekick(struct virtqueue *vq);
 
 void *virtio_removeFromQueue(struct virtqueue *vq, unsigned int *len);
 

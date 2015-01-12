@@ -231,8 +231,9 @@ int virtio_add_buf_to_queue(struct virtqueue *_vq,
 		/* FIXME: for historical reasons, we force a notify here if
 		 * there are outgoing parts to the buffer.  Presumably the
 		 * host should service the ring ASAP. */
-		if (out)
-			vq->notify(&vq->vq);
+		if (out){
+		//	vq->notify(&vq->vq);  /* this is commented out since , notify is called seperately */
+		}
 		END_USE(vq);
 		return -ERROR_VIRTIO_ENOSPC;
 	}else{
@@ -284,40 +285,23 @@ add_head:
 }
 
 
-void virtio_queue_kick(struct virtqueue *_vq)
+int virtio_queuekick(struct virtqueue *_vq)
 {
+	int ret =0;
 	struct vring_virtqueue *vq = to_vvq(_vq);
 	u16 new, old;
+
 	START_USE(vq);
-#if 0
-	/* Descriptors and available array need to be set before we expose the
-	 * new available array entries. */
-	virtio_wmb();
 
-	old = vq->vring.avail->idx;
-	new = vq->vring.avail->idx = old + vq->num_added;
-	vq->num_added = 0;
-
-	/* Need to update avail index before checking if we should notify */
-	virtio_mb();
-#else
 	sync_avial_idx(vq);
-#endif
-#if 0
-	vq->notify(&vq->vq); // TODO : JANA extra to fix virtqueue
-	if (vq->event ?
-	    vring_need_event(vring_avail_event(&vq->vring), new, old) :
-	    !(vq->vring.used->flags & VRING_USED_F_NO_NOTIFY)){
-		/* Prod other side to tell it about changes. */
-		vq->notify(&vq->vq);
-	}
-#else
+
 	if (!(vq->vring.used->flags & VRING_USED_F_NO_NOTIFY)){
 		vq->notify(&vq->vq);
+		ret =1;
 	}
-#endif
 
 	END_USE(vq);
+	return ret;
 }
 
 static void detach_buf(struct vring_virtqueue *vq, unsigned int head)
