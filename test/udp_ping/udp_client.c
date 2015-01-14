@@ -185,7 +185,7 @@ main(int argc, char *argv[]) {
 	sbps = (send_pkts * pkt_size * 8) / (duration * 1000000);
 	rbps = (recv_pkts * pkt_size * 8) / (duration * 1000000);
 	printf(
-			"udp_client pktsize:%d send:%d recved:%d  loss:%d SBit rate:%d Mbps Rbir rate:%d\n",
+			"udp_client pktsize:%d send:%d recved:%d  loss:%d SBit rate:%d Mbps Rbir rate:%d duration:%d\n",
 			pkt_size, send_pkts, recv_pkts, (send_pkts - recv_pkts), sbps,
-			rbps);
+			rbps,duration);
 }

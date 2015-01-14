@@ -50,20 +50,28 @@ Number of cpu cores in the linux and Jiny Vm are 2.
 
 vm to vm: on a low end Hardware
 
-1. **Test-1**: ubuntu-14(linux vm) :  able to transfer 94 Mbytes between two linux vm's.
-2. **Test-2**: Jiny os : able to transfer 155 Mbytes between two jiny vm's.
-3. **Test-3**: Jiny os with delay in send door bell : able to transfer 170 Mbytes between two jiny vm's. 
+1. **Test-1**: ubuntu-14(linux vm) :  able to transfer 94 Mbps between two linux vm's.
+2. **Test-2**: Jiny os : able to transfer 155 Mbps between two jiny vm's.
+3. **Test-3**: Jiny os with delay in send door bell : able to transfer 170 Mbps between two jiny vm's. 
 
-Host to vm: on a high end hardware.
+Host to vm: on a highend hardware.
 
-4. **Test-4**:  udp_client on linux host and udp_server on linux vm : 180MBytes.
-5. **Test-5**:  udp_client on linux host and udp_server on jiny vm : 260MBytes.
+4. **Test-4**:  udp_client on linux host and udp_server on linux vm : 180Mbps.
+5. **Test-5**:  udp_client on linux host and udp_server on jiny vm : 260Mbps.
 
 
-##### summary
+##### summary of results
  1. Difference between Test-1 and Test-2: Processing the packet in Linux and Jiny are completely different. In Jiny , most of the cpu cycles are spend in the application context as mentioned in  [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). whereas in linux, cpu cycles are split between the app and Network bottom half making packet to process by different cores. This may be one of the reason why Jiny performance better then linux.
  2. Difference between Test-2(155M) and Test-3(170M):  For every packet send on the NIC, issuing the door bell in virtio driver cost extra MMIO operation, that is causing the vm exits in kvm hypervisor, this was the reason test-3 got some 15Mbytes extra processing. postponing doorbell for few packets/for a duration of time as improved the throughput at load, but this cause extra delay in holding the send packet when the system is under load. This can be turned on/off depending on the load just like imterrupts.
- 3. Test-4 and Test-5 :  Here udp_client is resource intensive when compare to udp_server. In this tests, vm is mainly used for network thoughput. Here Jiny as performed better by 30%. 
+ 3. Test-4 and Test-5 :  Here udp_client is resource intensive when compare to udp_server. In this tests, vm is mainly used for network thoughput. Here Jiny as performed better by 30% when compare to linux. Test-4 and 5 uses powerful cpu when compare to Test1-3 
+
+ 
+ 
+##### Reasons for Better throuhput in Jiny
+1. network bottom half is very thin , and entire computation of send/recv packet is done in the application context, this makes packet processing always happens on the same core and avoid locking. The implementaion of network frame work is similar to [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). 
+2. lockless implementation of memory management in acquiring and releasing the memory buffers.
+3. Minimising the virtio kicks in send path and interrupts in recv path.
+4. **Area to Improve**: mem copy and checksum computation takes large amount of cpu cycles, need to improve further in this area.
  
  
 

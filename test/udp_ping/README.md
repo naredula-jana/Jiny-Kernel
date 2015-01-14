@@ -7,4 +7,10 @@ udp_client does all the hard work. It sends n number of packets in a duration of
  udp_client sends packets for 30 seconds, the spacing between the packets is determined by the number of packets. 
 
  ** ./udp_server ** 
+ 
+ 
+ TODO in udp_client:
+  
+ 1.  Calculating average jitter time between the packet send and recv.
+ 2.  Calculating average roundtrip time.
   
