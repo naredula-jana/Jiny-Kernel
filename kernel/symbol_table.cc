@@ -243,6 +243,15 @@ static int add_symbol_types(unsigned long unused) {
 		}
 
 		ut_strcpy(sym, g_symbol_table[i].name);
+		sym[7] = '\0'; /* g_conf_ */
+		ut_strcpy(dst, (unsigned char *) "g_stat_");
+		if (ut_strcmp(sym, dst) == 0) {
+			g_symbol_table[i].type = SYMBOL_STAT;
+			confs++;
+			continue;
+		}
+
+		ut_strcpy(sym, g_symbol_table[i].name);
 		sym[5] = '\0'; /* Jcmd_ */
 		ut_strcpy(dst, (unsigned char *) "Jcmd_");
 		if (ut_strcmp(sym, dst) == 0) {
@@ -285,12 +294,13 @@ int ut_symbol_show(int type) {
 	return count;
 }
 
-static int display_conf_values() {
+
+static void display_values(int type) {
 	int i, len, count;
 
 	count = 0;
 	for (i = 0; i < g_total_symbols; i++) {
-		if (g_symbol_table[i].type == SYMBOL_CONF) {
+		if (g_symbol_table[i].type == type) {
 			//len = g_symbol_table[i+1].address - g_symbol_table[i].address;
 			len = g_symbol_table[i].len;
 			if (len > 8) {
@@ -303,9 +313,38 @@ static int display_conf_values() {
 				unsigned long *val = g_symbol_table[i].address;
 				ut_printf("%d: %s -> %d\n", count, g_symbol_table[i].name, *val);
 			}
+			count++;
 		}
 	}
-	return 1;
+
+
+	return;
+}
+void symbol_clear_stats(){
+	int i, len, count;
+
+	count = 0;
+	for (i = 0; i < g_total_symbols; i++) {
+		if (g_symbol_table[i].type == SYMBOL_STAT) {
+			//len = g_symbol_table[i+1].address - g_symbol_table[i].address;
+			len = g_symbol_table[i].len;
+			if (len > 8) {
+				unsigned char *val = g_symbol_table[i].address;
+				ut_printf("clearing %d: %s -> %s\n", count, g_symbol_table[i].name, val);
+				*val=0;
+			} else if (len == 4) {
+				unsigned int *val = g_symbol_table[i].address;
+				ut_printf("clearing %d: %s -> %d\n", count, g_symbol_table[i].name, *val);
+				*val=0;
+			} else {
+				unsigned long *val = g_symbol_table[i].address;
+				ut_printf("clearing %d: %s -> %d\n", count, g_symbol_table[i].name, *val);
+				*val=0;
+			}
+			count++;
+		}
+	}
+	display_values(SYMBOL_STAT);
 }
 extern int g_conf_func_debug;
 int ut_symbol_execute(int type, unsigned char *name, uint8_t *argv1, uint8_t *argv2) {
@@ -314,14 +353,15 @@ int ut_symbol_execute(int type, unsigned char *name, uint8_t *argv1, uint8_t *ar
 	unsigned char new_name[200];
 	int (*func)(char *argv1, char *argv2);
 
+	if (argv1 ==0 && (type == SYMBOL_CONF || type == SYMBOL_STAT)){
+		display_values(type);
+		return 0;
+	}
 	for (i = 0; i < g_total_symbols; i++) {
 		if (g_symbol_table[i].type != type)
 			continue;
+
 		if (type == SYMBOL_CONF) {
-			if (argv1 == 0){
-				display_conf_values();
-				return 0;
-			}
 			ut_snprintf(new_name, 200, "g_conf_%s", name);
 			if (ut_strcmp((unsigned char *) g_symbol_table[i].name, (unsigned char *) new_name) != 0)
 				continue;

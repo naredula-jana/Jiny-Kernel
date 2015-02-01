@@ -11,12 +11,122 @@
 #include "file.hh"
 #include "ipc.hh"
 
+
+enum {
+FUTEX_WAIT = 0,
+FUTEX_WAKE = 1,
+FUTEX_PRIVATE_FLAG = 128,
+FUTEX_CLOCK_REALTIME = 256,
+FUTEX_CMD_MASK = ~(FUTEX_PRIVATE_FLAG|FUTEX_CLOCK_REALTIME),
+};
+
+
+#define MAX_FUTEXS 100
+int total_futexs=0;
+class futex *futex_list[MAX_FUTEXS];
+
+futex::futex(int *uaddr_arg){
+	mutex = ipc_mutex_create("futex");
+	uaddr = uaddr_arg;
+	mm = g_current_task->mm;
+	type =0;
+	stat_waits=0;
+	stat_wakeups=0;
+}
+void futex::print_stats(unsigned char *arg1,unsigned char *arg2){
+
+}
+void futex::lock(){
+	mutexLock(mutex);
+}
+void futex::unlock(){
+	mutexUnLock(mutex);
+}
+void futex::destroy(){
+	ipc_mutex_destroy(mutex);
+	mutex=0;
+	mm=0;
+	ut_log(" futex waits: %d wakeups:%d uaddr:%x pid:%d\n",stat_waits,stat_wakeups,uaddr,g_current_task->pid);
+	jfree_obj((unsigned long)this);
+}
+
 extern "C"{
 #include "interface.h"
 static int ipc_init_done=0;
 extern int _sc_task_assign_to_cpu(struct task_struct *task);
 unsigned long _schedule(unsigned long flags);
 void sc_remove_dead_tasks();
+
+int find_futex(int *uaddr){
+	int i;
+
+	for (i=0; (i<MAX_FUTEXS) && (i<total_futexs); i++){
+		if (i<total_futexs && futex_list[i]!=0 &&  futex_list[i]->mm==g_current_task->mm && futex_list[i]->uaddr==uaddr){
+			return i;
+		}
+	}
+	return -1;
+}
+static futex *get_futex(int *uaddr){ /* find the futex if not found create it */
+	futex *p;
+	int i;
+
+	i = find_futex(uaddr);
+	if (i != -1) {
+		return futex_list[i];
+	}
+	p = jnew_obj(futex, uaddr);
+	for (i=0; i<MAX_FUTEXS && (i<total_futexs); i++){
+		if (i<total_futexs && futex_list[i]==0){
+			break;
+		}
+	}
+	if (i<MAX_FUTEXS){
+		futex_list[i]=p;
+		if (i>=total_futexs )
+			total_futexs = i+1;
+		return p;
+	}
+	return 0;
+}
+int destroy_futex(struct mm_struct *mm) {
+	int i;
+	for (i = 0; i < MAX_FUTEXS && (i<total_futexs); i++) {
+		if (i < total_futexs && futex_list[i] != 0 && futex_list[i]->mm == mm) {
+			futex_list[i]->destroy();
+			futex_list[i] = 0;
+		}
+	}
+}
+/* TODO: other op need to implement
+ *
+ */
+int SYS_futex(int *uaddr, int op, int val, unsigned long timeout,
+		unsigned long addr2, int val2) {
+	futex *futex_p;
+	SYSCALL_DEBUG("futex uaddr: %x op:%x val:%x\n", uaddr, op, val);
+
+	if ((op & FUTEX_CMD_MASK) ==0){
+
+	}
+	futex_p = get_futex(uaddr);
+	//ut_printf("futex uaddr: %x op:%x val:%x waits:%d wakeups:%d\n", uaddr, op, val,futex_p->stat_waits,futex_p->stat_wakeups);
+	switch (op & FUTEX_CMD_MASK) {
+	case FUTEX_WAIT:
+		assert(timeout == 0);
+		futex_p->stat_waits++;
+		futex_p->lock();
+		return 0;
+	case FUTEX_WAKE:
+		futex_p->stat_wakeups++;
+		futex_p->unlock();
+		return 0;
+	default:
+		ut_printf("ERROR : Unimplemented futex() OP %x\n", op);
+	}
+	return -1;
+}
+
 void *ipc_mutex_create(char *name) {
 	semaphore *sem ;
 	assert (ipc_init_done !=0);
@@ -26,7 +136,13 @@ void *ipc_mutex_create(char *name) {
 	sem->stat_acquired_start_time =0;
 	return sem;
 }
-
+int ipc_mutex_destroy(void *p) {
+	semaphore *sem = p;
+	if (p == 0)
+		return 0;
+	sem->free();
+	return 1;
+}
 int ipc_mutex_lock(void *p, int line) {
 	semaphore *sem = p;
 	int ret;
@@ -37,15 +153,6 @@ int ipc_mutex_unlock(void *p, int line) {
 	semaphore *sem = p;
 	sem->unlock(line);
 }
-
-int ipc_mutex_destroy(void *p) {
-	semaphore *sem = p;
-	if (p == 0)
-		return 0;
-	sem->free();
-	return 1;
-}
-
 
 int init_ipc(){
 	int i;
@@ -89,19 +196,20 @@ static int wakeup_cpus(int wakeup_cpu) {
 	return ret;
 }
 
-void ipc_del_from_waitqueues(struct task_struct *task) {
+void _ipc_delete_from_waitqueues(struct task_struct *task) {
 	int i;
 	unsigned long flags;
 	int assigned_to_running_cpu;
 
 	if (task ==0) return;
-	spin_lock_irqsave(&g_global_lock, flags);
+//	spin_lock_irqsave(&g_global_lock, flags);
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
 		if (wait_queue::wait_queues[i] == 0)
 			continue;
 		if (wait_queue::wait_queues[i]->_del_from_me(task)==JFAIL){
 			continue;
 		}
+#if 0
 		assigned_to_running_cpu = 0;
 		if (task->run_queue.next == 0)
 			assigned_to_running_cpu = _sc_task_assign_to_cpu(task);
@@ -112,9 +220,10 @@ void ipc_del_from_waitqueues(struct task_struct *task) {
 			wakeup_cpus(task->allocated_cpu);
 			spin_lock_irqsave(&g_global_lock, flags);
 		}
+#endif
 		break;
 	}
-	spin_unlock_irqrestore(&g_global_lock, flags);
+//	spin_unlock_irqrestore(&g_global_lock, flags);
 }
 
 void ipc_check_waitqueues() {

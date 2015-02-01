@@ -146,7 +146,9 @@ int register_netdevice(jdevice *device) {
 	ut_log(" register netdev : %x \n", g_mac[5]);
 	return JSUCCESS;
 }
+
 extern "C" {
+static int process_send_queue();
 extern int init_udpstack();
 extern int init_netmod_uipstack();
 spinlock_t netbh_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"netbh_lock");
@@ -158,11 +160,7 @@ int net_bh(){
 	static unsigned long last_timestamp=0; /* 100usec units */
 	unsigned long curr_time; /* interms of 100usec*/
 
-#if 0
-	if (getcpuid()!=0) {
-		return 0;
-	}
-#endif
+	process_send_queue();
 
 	if (g_conf_nic_intr_off == 1) {  /* only in the poll mode */
 		curr_time = get_100usec(); /* interms of 100 usec units*/
@@ -224,25 +222,97 @@ int init_network_stack() { /* this should be initilised once the devices are up 
 	return JSUCCESS;
 }
 
-int net_send_eth_frame(unsigned char *buf, int len, int write_flags) {
+#define MAX_QUEUE_LEN 500
+static unsigned int from_q=0;
+static unsigned int to_q=0;
+static unsigned long send_qlen=0;
+struct {
+	unsigned char *buf;
+	int len;
+	int write_flags;
+}queue[MAX_QUEUE_LEN+1];
+
+static int put_to_send_queue(unsigned char *buf, int len, int write_flags){
+	unsigned long flags;
 	int ret = JFAIL;
-	int try_again;
-	int iters=0;
-	if (socket::net_dev != 0) {
-		do {
-			try_again = 0;
-			ret = socket::net_dev->write(0, buf, len, write_flags);
-			if ((write_flags & WRITE_SLEEP_TILL_SEND) && (write_flags & WRITE_BUF_CREATED)
-					&& (ret < 0)) {
-			//	sc_sleep(1);
-				//sc_yeild();
-				try_again = 1;
-				iters++;
-			}
-		} while (try_again == 1 && iters<30);
+
+	spin_lock_irqsave(&netbh_lock, flags);
+	if (send_qlen < MAX_QUEUE_LEN) {
+		queue[from_q].buf = buf;
+		queue[from_q].len = len;
+		queue[from_q].write_flags = write_flags;
+		from_q++;
+		send_qlen++;
+		if (from_q >= MAX_QUEUE_LEN) {
+			from_q = 0;
+		}
+		ret = JSUCCESS;
+	}
+	spin_unlock_irqrestore(&netbh_lock, flags);
+	return ret;
+}
+static int remove_from_send_queue() {
+	unsigned long flags;
+	int ret;
+	if (send_qlen == 0) {
+		return 0;
+	}
+	ret = socket::net_dev->write(0, queue[to_q].buf, queue[to_q].len,
+			queue[to_q].write_flags);
+	if (ret == JSUCCESS) {
+		spin_lock_irqsave(&netbh_lock, flags);
+		to_q++;
+		send_qlen--;
+		if (to_q >= MAX_QUEUE_LEN) {
+			to_q = 0;
+		}
+		spin_unlock_irqrestore(&netbh_lock, flags);
+	}
+	return ret;
+}
+static int process_send_queue() {
+	unsigned long flags;
+	int ret = JFAIL;
+	int pkt_send = 0;
+	static int in_progress = 0;
+
+	spin_lock_irqsave(&netbh_lock, flags);
+	if (in_progress == 0) {
+		in_progress = 1;
+		ret = JSUCCESS;
+	}
+	spin_unlock_irqrestore(&netbh_lock, flags);
+	if (ret == JFAIL) {
+		return ret;
 	}
 
-	if (ret < 0){
+	while (remove_from_send_queue() == JSUCCESS) {
+		pkt_send++;
+	}
+	if (pkt_send > 0) {
+		/* send the kick */
+	}
+	in_progress = 0;
+	if (socket::net_dev != 0){
+		socket::net_dev->ioctl(NETDEV_IOCTL_FLUSH_SENDBUF, 0);
+	}
+	return ret;
+}
+int net_send_eth_frame(unsigned char *buf, int len, int write_flags) {
+	int ret = JFAIL;
+
+	if (socket::net_dev != 0) {
+		if ((write_flags & WRITE_SLEEP_TILL_SEND)
+				&& (write_flags & WRITE_BUF_CREATED)) {
+			ret = put_to_send_queue(buf, len, write_flags);
+			process_send_queue();
+			goto last;
+		} else {
+			ret = socket::net_dev->write(0, buf, len, write_flags);
+			socket::net_dev->ioctl(NETDEV_IOCTL_FLUSH_SENDBUF, 0);
+		}
+	}
+	last: if (ret < 0) {
 		ret = JFAIL;
 	}
 	return ret;
@@ -260,7 +330,7 @@ void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
 
 		net_sched.device->print_stats("all",0);
 		net_sched.device->ioctl(NETDEV_IOCTL_GETMAC, (unsigned long) &mac);
-		ut_printf(" Mac: %x:%x:%x:%x:%x:%x  \n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+		ut_printf(" Mac: %x:%x:%x:%x:%x:%x  sendqlen :%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],send_qlen);
 	}
 	socket::print_all_stats();
 

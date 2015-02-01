@@ -45,7 +45,7 @@ unsigned long _schedule(unsigned long flags);
 static void schedule_kernelSecondHalf();
 static void schedule_userSecondHalf();
 static int release_resources(struct task_struct *task, int attach_to_parent);
-
+static void _add_to_deadlist(struct task_struct *task);
 static struct task_struct *alloc_task_struct(void) {
 	task_struct *p;
 	p = (struct task_struct *) mm_getFreePages(0, 2); /*WARNING: do not change the size it is related TASK_SIZE, 4*4k=16k page size */
@@ -224,6 +224,7 @@ static int free_fs(struct fs_struct *fs){
 	atomic_dec(&fs->count);
 	return 1;
 }
+extern int destroy_futex(struct mm_struct *mm);
 static int free_mm(struct mm_struct *mm) {
 	int ret;
 	DEBUG("freeing the mm :%x counter:%x \n", mm, mm->count.counter);
@@ -244,6 +245,7 @@ static int free_mm(struct mm_struct *mm) {
 		ut_printf("ERROR : clear the pagetables :%d: \n", ret);
 	}
 
+	destroy_futex(mm);
 //	ut_log(" mm_free alloc_pages: %d free_pages:%d \n", mm->stat_page_allocs, mm->stat_page_free);
 	mm_slab_cache_free(mm_cachep, mm);
 	return 1;
@@ -324,7 +326,7 @@ static int release_resources(struct task_struct *child_task, int attach_to_paren
 	int i;
 	struct mm_struct *mm;
 	struct list_head *pos;
-	struct task_struct *task, *parent;
+	struct task_struct *task, *parent=0;
 	unsigned long flags;
 
 	/* 1. release files */
@@ -340,49 +342,55 @@ static int release_resources(struct task_struct *child_task, int attach_to_paren
 		atomic_dec(&child_task->fs->count);
 	}
 	if (mm->count.counter > 1){
-		return 0;
+		//return 0;
+	} else {
+		if (mm->exec_fp != 0) {
+			fs_close(mm->exec_fp);
+		}
+		mm->exec_fp = 0;
 	}
-	if (mm->exec_fp != 0) {
-		fs_close(mm->exec_fp);
-	}
-
-	mm->exec_fp = 0;
 
 	/* 2. release locks */
 	if (child_task->locks_sleepable > 0) { // TODO : need to check the mutex held
-		ut_log("ERROR:  lock held by the process: %s \n", child_task->name);
+		ut_log("ERROR:  lock held by the process: %s pid:%d(%x)\n", child_task->name,child_task->pid,child_task->pid); // TODO : hitting and the process hangs during exit.
 		ipc_release_resources(child_task);
 	}
 
-	if (attach_to_parent == 0)
+	if (attach_to_parent == 0){
 		return 1;
+	}
 
 	spin_lock_irqsave(&g_global_lock, flags);
-	child_task->state = TASK_DEAD;
 	list_for_each(pos, &g_task_queue.head) {
 		task = list_entry(pos, struct task_struct, task_queue);
 		if (task->pid == child_task->ppid && task->state != TASK_DEAD) {
 			atomic_inc(&child_task->count);
+			_ipc_delete_from_waitqueues(child_task);
 			list_del(&child_task->wait_queue);
-			list_add_tail(&child_task->wait_queue, &(task->dead_tasks.head)); /* wait queue is overloaded, queue yourself to your parent */
-
-			while (1) {
-				if (list_empty((child_task->dead_tasks.head.next))) {
-					break;
-				} else {
-					list_move(&(child_task->dead_tasks.head), &(task->dead_tasks.head));
-				}
-			}
+			list_add_tail(&child_task->wait_queue, &(task->dead_tasks.head)); /*TODO: wait queue is overloaded, queue yourself to your parent */
+			child_task->state = TASK_DEAD;
 			parent = task;
+
+			if (list_empty((child_task->dead_tasks.head.next))) {
+				goto last;
+			} else {
+					//list_move(&(child_task->dead_tasks.head), &(task->dead_tasks.head));
+			}
 			goto last;
 		}
 	}
-	last:
+last:
 	spin_unlock_irqrestore(&g_global_lock, flags);
+
+
 	if (parent != 0){
-		ipc_del_from_waitqueues(parent);
+	//	ipc_delete_from_waitqueues(parent);
+	}else{ /* no parent */
+		spin_lock_irqsave(&g_global_lock, flags);
+		_add_to_deadlist(child_task);
+		spin_unlock_irqrestore(&g_global_lock, flags);
 	}
-	DEBUG("dead child attached to parent\n");
+	DEBUG("Attaching to dead queue: %d(%x) count:%d parent:%x ch:%x \n",child_task->pid,child_task->pid,child_task->count.counter,parent,child_task);
 	return 1;
 }
 
@@ -536,7 +544,7 @@ void sc_delete_task(struct task_struct *task) {
 		return;
 	atomic_dec(&task->count);
 	if (task->count.counter != 0) {
-		DEBUG("Not deleted Task :%d\n", task->pid);
+		ut_log("Not deleted Task :%d count:%d task:%x\n", task->pid,task->count.counter,task);
 		return;
 	}
 
@@ -556,8 +564,10 @@ void sc_delete_task(struct task_struct *task) {
 			break;
 		} else {
 			child_task = list_entry(node,struct task_struct, wait_queue);
-			if (child_task == 0)
+			if (child_task == 0){
 				BUG();
+			}
+			atomic_dec(&child_task->count);
 			list_del(&child_task->wait_queue);
 		}
 
@@ -569,8 +579,12 @@ void sc_delete_task(struct task_struct *task) {
 			BUG();
 		}
 	}
-
 	spin_unlock_irqrestore(&g_global_lock, intr_flags);
+
+	if (1){
+		unsigned long life_length = g_jiffies - task->stats.start_time;
+		ut_log("DELETING TASK :%d(%x) st:%d dur:%d cont:%d tick:%d\n", task->pid,task->pid,task->stats.start_time,life_length,task->stats.total_contexts,task->stats.ticks_consumed);
+	}
 
 	free_mm(task->mm);
 	free_task_struct(task);
@@ -628,6 +642,7 @@ static void _add_to_deadlist(struct task_struct *task) {
 	if (deadlist_size >= MAX_DEADTASKLIST_SIZE) {
 		BUG();
 	}
+	task->state = TASK_DEAD;
 	deadtask_list[deadlist_size] = task;
 	deadlist_size++;
 	return;
@@ -767,7 +782,7 @@ unsigned long _schedule(unsigned long flags) {
 		flush_tlb(next->mm->pgd);
 	}
 	if (prev->state == TASK_DEAD) {
-		_add_to_deadlist(prev);
+		//_add_to_deadlist(prev);
 	} else if (prev != g_cpu_state[cpuid].idle_task && prev->state == TASK_RUNNING) { /* some other cpu  can pickup this task , running task and idle task should not be in a run equeue even though there state is running */
 		if (prev->run_queue.next != 0) { /* Prev should not be on the runqueue */
 			BUG();
@@ -1054,7 +1069,7 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	unsigned long ret_pid = 0;
 	int i;
 
-	//ut_log("clone ctid:%x child_stack:%x flags:%x args:%x \n", fn, child_stack, clone_flags, args);
+	SYSCALL_DEBUG("clone ctid:%x child_stack:%x flags:%x args:%x \n", fn, child_stack, clone_flags, args);
 
 	/* Initialize the stack  */
 	p = alloc_task_struct();
@@ -1167,7 +1182,7 @@ int SYS_sc_exit(int status) {
 	}
 
 	spin_lock_irqsave(&g_global_lock, flags);
-	g_current_task->state = TASK_DEAD; /* this should be last statement before schedule */
+//	g_current_task->state = TASK_DEAD; /* this should be last statement before schedule */
 	g_current_task->exit_code = status;
 	spin_unlock_irqrestore(&g_global_lock, flags);
 
@@ -1263,7 +1278,8 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 		SYS_sc_exit(703);
 		return;
 	}
-ut_log(" execve : %s  pid :%d \n",g_current_task->name,g_current_task->pid);
+	ut_log(" execve : %s  pid :%d(%x) \n",g_current_task->name,g_current_task->pid,g_current_task->pid);
+
 	g_current_task->thread.userland.ip = main_func;
 	g_current_task->thread.userland.sp = t_argv;
 	g_current_task->thread.userland.argc = t_argc;

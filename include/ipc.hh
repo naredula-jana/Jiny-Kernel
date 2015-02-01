@@ -60,8 +60,22 @@ public:
 	void print_stats(unsigned char *arg1,unsigned char *arg2);
 	void free(); /* TODO : this should be  merged with destructor */
 };
-extern "C"{
+class futex: public jobject{
+	semaphore *mutex;
+	int type;
+public:
+	int *uaddr;
+	struct mm_struct *mm;
 
+	int stat_waits,stat_wakeups;
+
+	futex(int *uaddr);
+	void lock();
+	void unlock();
+	void destroy();
+	void print_stats(unsigned char *arg1,unsigned char *arg2);
+};
+extern "C"{
 
 }
 #endif

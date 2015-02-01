@@ -181,7 +181,7 @@ read_again:
 		if (ret > 0) {
 			stat_in++;
 			stat_in_bytes = stat_in_bytes + ret;
-		} else{ /* when tcp contraol packets are consumed, need to look for the data packets */
+		} else{ /* when tcp control packets are consumed, need to look for the data packets */
 
 			stat_in++;
 			stat_err++;

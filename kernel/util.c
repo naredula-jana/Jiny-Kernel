@@ -62,6 +62,8 @@ int ut_min(int a, int b){
 	if (a<b) return a;
 	else return b;
 }
+unsigned long g_stat_memcpy_bytes = 0;
+unsigned long g_stat_memcpy_reqs = 0;
 // Copy len bytes from src to dest.
 void ut_memcpy(uint8_t *dest, uint8_t *src, long len)
 {
@@ -74,14 +76,9 @@ void ut_memcpy(uint8_t *dest, uint8_t *src, long len)
 		BUG();
 	}
 	DEBUG(" src:%x dest:%x len:%x \n",src,dest,len);
-#if 0
-	for(i=len; i>0; i--) 
-	{
-		*dp = *sp;
-		dp++;
-		sp++;
-	}
-#else
+
+	g_stat_memcpy_bytes = g_stat_memcpy_bytes + len;
+	g_stat_memcpy_reqs++;
 //	if ((((unsigned long)dp & 0x7) == 0) && (((unsigned long)sp & 0x7)==0)) {
 	if (1){
 		unsigned long *dst_p = dp;
@@ -101,8 +98,6 @@ void ut_memcpy(uint8_t *dest, uint8_t *src, long len)
 		sp++;
 		len--;
 	}
-
-#endif
 
 	return;
 }

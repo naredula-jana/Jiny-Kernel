@@ -71,7 +71,8 @@ Host to vm: on a highend hardware.
 1. network bottom half is very thin , and entire computation of send/recv packet is done in the application context, this makes packet processing always happens on the same core and avoid locking. The implementaion of network frame work is similar to [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). 
 2. lockless implementation of memory management in acquiring and releasing the memory buffers.
 3. Minimising the virtio kicks in send path and interrupts in recv path.
-4. **Area to Improve**: mem copy and checksum computation takes large amount of cpu cycles, need to improve further in this area.
+4. **Area to Improve**: a) checksum computation takes large amount of cpu cycles, need to improve further in this area. b) avoiding/minimizing the spin locks.
+5. Making zero copy: show 3% improvement by avoiding one copy from  user to kernel and viceversa, but the improvement is not big
  
  
 

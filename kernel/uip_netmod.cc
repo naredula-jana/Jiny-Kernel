@@ -18,6 +18,7 @@ void ut_memset(uint8_t *dest, uint8_t val, long len);
 extern int net_send_eth_frame(unsigned char *buf, int len, int write_flags);
 extern unsigned char *jalloc_page(int flags);
 extern int jfree_page(unsigned char *p);
+int g_conf_zerocopy=0;  /* TODO: temporary variable : need to remove later */
 }
 
 #include "network_stack.hh"
@@ -51,6 +52,10 @@ int network_stack::close(network_connection *conn) {
 #define BUF ((struct uip_eth_hdr *)&uip_buf[0])
 #define UDPBUF ((struct uip_udpip_hdr *)&uip_buf[UIP_LLH_LEN])
 #define EXTRA_INITIAL_BYTES 10
+/*
+ *  raw_data  : raw packet recvied
+ *  app_data  : app data
+ */
 int network_stack::read(network_connection *conn, uint8_t *raw_data, int raw_len, uint8_t *app_data, int app_maxlen) {
 	int ret = JFAIL;
 	int pkt_len;
@@ -63,6 +68,32 @@ int network_stack::read(network_connection *conn, uint8_t *raw_data, int raw_len
 	if (uip_buf!=0){
 		while(1);
 	}
+
+	uip_appdata = 0;
+	jiny_uip_data = 0;
+	jiny_uip_callback_flags = 0;
+	if (conn != 0 && conn->protocol == IPPROTO_UDP) {
+		uip_buf = raw_data+EXTRA_INITIAL_BYTES;
+		uip_input();
+		if (uip_appdata) {
+			ret = pkt_len - (UIP_LLH_LEN + UIP_IPUDPH_LEN);
+			if (g_conf_zerocopy == 0){
+				ut_memcpy(app_data, uip_appdata, ret);
+			}
+			conn->dest_port = UDPBUF->srcport;
+			ut_memcpy((unsigned char *)&(conn->src_ip), (unsigned char *)&(UDPBUF->destipaddr[0]),4);
+			ut_memcpy((unsigned char *)&(conn->dest_ip), (unsigned char *)&(UDPBUF->srcipaddr[0]),4);
+			if (jbuf != 0){
+				jfree_page(jbuf);
+				jbuf =0;
+			}
+		} else {
+			ret = JFAIL;
+		}
+		uip_len = 0;
+		goto last;
+	}
+
 	jbuf = (unsigned char *) jalloc_page(0);
 	if (jbuf ==0) {
 		goto last;
@@ -70,28 +101,9 @@ int network_stack::read(network_connection *conn, uint8_t *raw_data, int raw_len
 		uip_buf = jbuf+EXTRA_INITIAL_BYTES;
 		ut_memset(jbuf,0,EXTRA_INITIAL_BYTES);
 	}
-
 	ut_memcpy(jbuf, raw_data , uip_len+EXTRA_INITIAL_BYTES);
 
-	uip_appdata = 0;
-	jiny_uip_data = 0;
-	jiny_uip_callback_flags = 0;
-	if (conn != 0 && conn->protocol == IPPROTO_UDP) {
-		uip_input();
-		if (uip_appdata) {
-			ret = pkt_len - (UIP_LLH_LEN + UIP_IPUDPH_LEN);
-			ut_memcpy(app_data, uip_appdata, ret);
-			conn->dest_port = UDPBUF->srcport;
-			ut_memcpy((unsigned char *)&(conn->src_ip), (unsigned char *)&(UDPBUF->destipaddr[0]),4);
-			ut_memcpy((unsigned char *)&(conn->dest_ip), (unsigned char *)&(UDPBUF->srcipaddr[0]),4);
-			jfree_page(jbuf);
-			jbuf =0 ;
-		} else {
-			ret = JFAIL;
-		}
-		uip_len = 0;
-		goto last;
-	}else if (conn != 0 && conn->protocol == IPPROTO_TCP){
+	if (conn != 0 && conn->protocol == IPPROTO_TCP){
 		ret = JFAIL;
 		uip_input();
 		if (jiny_uip_data != 0 ) {
@@ -202,7 +214,9 @@ int network_stack::write(network_connection *conn, uint8_t *app_data, int app_le
 
 		uip_slen = app_len;
 		uip_process(UIP_UDP_SEND_CONN);
-		ut_memcpy(uip_appdata, app_data, app_len);
+		if (g_conf_zerocopy == 0){
+			ut_memcpy(uip_appdata, app_data, app_len);
+		}
 
 		send_buf = uip_buf;
 		send_len = 0;

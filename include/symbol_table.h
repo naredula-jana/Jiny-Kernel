@@ -13,7 +13,8 @@ enum {
   SYMBOL_LTEXT = 0x3, /* local text */
   SYMBOL_CMD = 0x4,
   SYMBOL_CONF = 0x5,
-  SYMBOL_TYPE_UNRESOLVED=0x6
+  SYMBOL_STAT = 0x6,
+  SYMBOL_TYPE_UNRESOLVED=0x7
 };
 
 typedef struct {

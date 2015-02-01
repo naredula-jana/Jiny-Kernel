@@ -280,11 +280,6 @@ unsigned long SYS_set_tid_address(unsigned long tid_address){
 	g_current_task->child_tid_address = tid_address;
 	return g_current_task->pid;
 }
-unsigned long SYS_futex(unsigned long *a) {//TODO
-	SYSCALL_DEBUG("futex  addr:%x \n", a);
-	*a = 0;
-	return -1;
-}
 
 extern task_queue_t g_task_queue;
 void Jcmd_pt(unsigned char *arg1,unsigned char *arg2){
@@ -322,7 +317,7 @@ void Jcmd_pt(unsigned char *arg1,unsigned char *arg2){
 	pagetable_walk(4,pt,1);
 	return;
 }
-
+extern void symbol_clear_stats();
 unsigned long SYS_sysctl(struct __sysctl_args *args) {
 	SYSCALL_DEBUG("sysctl  args:%x: \n", args);
 	unsigned long *name;
@@ -348,7 +343,11 @@ unsigned long SYS_sysctl(struct __sysctl_args *args) {
 	}
 	if (carg[0] != 0 && ut_strcmp(carg[0], (uint8_t *)"set") == 0) {
 		ut_symbol_execute(SYMBOL_CONF, carg[1], carg[2],0);
-	} else {
+	} else if (carg[0] != 0 && ut_strcmp(carg[0], (uint8_t *)"stat") == 0){
+		ut_symbol_execute(SYMBOL_STAT, carg[1], carg[2],0);
+	}else if (carg[0] != 0 && ut_strcmp(carg[0], (uint8_t *)"clearstat") == 0){
+		symbol_clear_stats();
+	}else{
 		if (carg[0] == 0) {
 			ut_printf("Conf variables:\n");
 			ut_symbol_show(SYMBOL_CONF);
@@ -364,8 +363,7 @@ unsigned long SYS_sysctl(struct __sysctl_args *args) {
 	return SYSCALL_SUCCESS; /* success */
 }
 
-unsigned long SYS_wait4(int pid, void *status, unsigned long option,
-		void *rusage) {
+unsigned long SYS_wait4(int pid, void *status, unsigned long option, void *rusage) {
 	//SYSCALL_DEBUG("wait4(Dummy)  pid:%x status:%x option:%x rusage:%x\n",pid,status,option,rusage);
 	unsigned long child_id;
 	unsigned long flags;
@@ -391,9 +389,11 @@ unsigned long SYS_wait4(int pid, void *status, unsigned long option,
 
 	if (child_task != 0) {
 		child_id = child_task->pid;
+		atomic_dec(&child_task->count);
 	//	ut_log("wait child exited :%s: exitcode:%d \n",child_task->name,child_task->exit_code);
 		sc_delete_task(child_task);
 		SYSCALL_DEBUG(" wait returning the child id :%d(%x) \n", child_id, child_id);
+		DEBUG(" WAIT returning the child id :%d(%x) \n", child_id, child_id);
 		return child_id;
 	} else {
 		return 0;

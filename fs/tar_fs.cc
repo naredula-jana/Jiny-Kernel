@@ -827,7 +827,7 @@ int tar_fs::open(fs_inode *inodep, int flags, int mode) {
 		}
 	}
 	if (ret == JFAIL){
-		ut_printf("ERROR tarfs open Fail :%s: \n", inodep->filename);
+		//ut_printf("ERROR tarfs open Fail :%s: \n", inodep->filename);
 	}
 	return ret;
 }

@@ -147,7 +147,7 @@ struct task_struct {
 	int current_cpu;
 	int stick_to_cpu; /* by default run on any cpu */
 
-	int counter;  /* ticks for evry 1 context switch*/
+	int counter;  /* ticks for every 1 context switch*/
 	long sleep_ticks;
 
 	struct thread_struct thread;

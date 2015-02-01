@@ -146,7 +146,7 @@ unsigned long get_kvm_time_fromboot();
 void apic_set_task_priority(uint8_t prio);
 void apic_reenable();
 void *get_keyboard_device(int device_type,int file_type);
-void ipc_del_from_waitqueues(struct task_struct *task);
+void _ipc_delete_from_waitqueues(struct task_struct *task);
 
 /* architecture depended */
 void ar_registerInterrupt(uint8_t n, isr_t handler,char *name, void *private_data);

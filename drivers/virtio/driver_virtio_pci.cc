@@ -423,7 +423,7 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 //ut_printf(" VIRTIO addr----------------------------------------- :%x \n",addr);
 	spin_lock_irqsave(&virtionet_lock, flags);
 
-#if 1
+#if 0
 	for (i=0; i<2 && ret == -ERROR_VIRTIO_ENOSPC; i++){
 		ret = addBufToNetQueue(this->vq[1], (unsigned char *) addr, len + 10);
 		if (ret == -ERROR_VIRTIO_ENOSPC){
@@ -455,6 +455,7 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 		stat_sends++;
 		ret = JSUCCESS;
 	}
+#if 0
 	if (g_conf_net_sendbuf_delay == 1) {
 		if ((stat_sends % 30) == 0) {
 			queue_kick(1);
@@ -464,12 +465,14 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 	} else {
 		queue_kick(1);
 	}
+#endif
+	pending_kick_onsend = 1;
 	spin_unlock_irqrestore(&virtionet_lock, flags);
 
 	free_send_bufs();
 	return ret;  /* Here Sucess indicates the buffer is freed or consumed */
 }
-//static int virtio_net_jdriver::test_k=2; // TEST purpose
+
 int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 	unsigned char *arg_mac = (unsigned char *) arg2;
 	if (arg1 == NETDEV_IOCTL_GETMAC) {
