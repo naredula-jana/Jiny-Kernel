@@ -61,13 +61,14 @@ public:
 	void free(); /* TODO : this should be  merged with destructor */
 };
 class futex: public jobject{
-	semaphore *mutex;
+	//semaphore *mutex;
+	wait_queue *waitq;
 	int type;
 public:
 	int *uaddr;
 	struct mm_struct *mm;
 
-	int stat_waits,stat_wakeups;
+	int stat_waits,stat_nowaits,stat_wakeups;
 
 	futex(int *uaddr);
 	void lock();

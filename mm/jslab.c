@@ -759,6 +759,7 @@ int Jcmd_jslab(unsigned char *arg1, unsigned char *arg2) {
 	jcache_t *cachep;
 	struct list_head *c;
 	int i;
+	int allocs,frees;
 
 	list_for_each(c, &(cache_list)) {
 		cachep = list_entry(c, jcache_t , cache_list);
@@ -773,9 +774,14 @@ int Jcmd_jslab(unsigned char *arg1, unsigned char *arg2) {
 	ut_printf("malloc :%d frees:%d  pagefault_write:%d\n",stat_mallocs,stat_frees,g_stat_pagefaults_write);
 	ut_printf("single page allocs(zero_alloc):%d(%d) page frees:%d zeropagecache dirty/clean: %d/%d\n",stat_page_allocs,
 			stat_page_alloc_zero,stat_page_frees,zeropage_cache.max_dirtypage_index,zeropage_cache.max_cleanpage_index);
+	allocs=0;
+	frees=0;
 	for (i=0; i <MAX_CPUS; i++){
 		ut_printf(" Alloc: %d Frees:%d missalloc:%d  missfrees:%d \n",page_cache[i].stat_allocs,page_cache[i].stat_frees,page_cache[i].stat_miss_alloc,page_cache[i].stat_miss_free);
+		allocs=allocs+page_cache[i].stat_allocs;
+		frees=frees+page_cache[i].stat_frees;
 	}
+	ut_printf(" total pages in cpu caches: %d (%dM)\n",(frees-allocs),((frees-allocs)*4096)/(1024*1024));
 	return 1;
 }
 

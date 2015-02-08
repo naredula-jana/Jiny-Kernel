@@ -194,9 +194,11 @@ struct cpu_state {
 
 	struct task_struct *current_task;
 	struct task_struct *idle_task;
+	spinlock_t lock; /* currently this a) protect run queue, since it is updated globally b) before schedule this is taken to disable interrupts */
 	task_queue_t run_queue;
 	int run_queue_length;
 	int net_BH; /* enable if the net_RX BH need to be kept on the cpu on a priority basis */
+	spinlock_t *sched_lock; /* lock to relase after schedule, it is filled before the schedule */
 
 	unsigned char cpu_priority;
 	int active; /* only active cpu will pickup the tasks , otherwise they can only run idle threads */
@@ -218,6 +220,12 @@ struct cpu_state {
 		unsigned long syscalls;
 		unsigned long rip;
 		unsigned long netbh;
+#if 1  /* TODO (high priority ): there is bug here if the below unused struct is removed, user level program crashes at mmap*/
+		struct {
+			unsigned long prev,next;
+			int state;
+		}task[100];
+#endif
 	} stats;
 } __attribute__ ((aligned (64))) ;
 

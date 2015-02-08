@@ -10,7 +10,9 @@
 int out_max,in_max;
 #define MAX 10                                  /* maximum iterations */
 
-int number;                                     /* the resource */
+int prod_number=0;
+int cons_number=0;
+/* the resource */
 
 /* Mutex to protect the resource. */
 pthread_mutex_t mu= PTHREAD_MUTEX_INITIALIZER;  /* to protect the resource*/
@@ -35,6 +37,7 @@ void cpu_eat(){
 loop = loop+3;
 	    }
 }
+long com_counter=10;
 /**
   @func consumer
   This function is responsible for consuming (printing) the incremented
@@ -43,6 +46,7 @@ loop = loop+3;
 void *consumer(void *dummy)
 {
   int printed= 0;
+  int consumes=0;
 
   printf("Consumer : \"Hello I am consumer #%ld. Ready to consume numbers"
          " now\"\n", pthread_self());
@@ -51,15 +55,20 @@ void *consumer(void *dummy)
   {
     pthread_mutex_lock(&mu);
     cpu_eat();
+    consumes++;
+    if (cons_number< prod_number){
+    	cons_number++;
+    	com_counter = com_counter - 2;
+    }
     pthread_mutex_unlock(&mu);
 
     /*
       If the MAX number was the last consumed number, the consumer should
       stop.
     */
-    if (number == out_max)
+    if (cons_number == out_max)
     {
-      printf("Consumer done.. !!  :%d\n",out_max);
+      printf("Consumer done!  :%d  consumes:%d  cons_number:%d cc:%d\n",out_max,consumes,cons_number,com_counter);
       break;
     }
   }
@@ -74,19 +83,23 @@ void *producer(void *dummy)
 {
   printf("Producer : \"Hello I am producer #%ld. Ready to produce numbers"
          " now\"\n", pthread_self());
-
+int number =0;
   while (1)
   {
 
     pthread_mutex_lock(&mu);
+    if (cons_number == prod_number){
+    	prod_number++;
+    	com_counter = com_counter +2;
+    }
     number ++;
 cpu_eat();
     pthread_mutex_unlock(&mu);
 
     /* Stop if MAX has been produced. */
-    if (number == out_max)
+    if (prod_number == out_max)
     {
-      printf("Producer done.. :%d !!\n",out_max);
+      printf("Producer done.. :%d  produced:%d  prod_number:%d cc:%d\n",out_max,number,prod_number,com_counter);
       break;
     }
   }
@@ -108,7 +121,7 @@ void main(int argc, char *argv[] )
 		in_max = LOOP_SIZE;
 	}
 
-  number= 0;
+
 #if 0
   /* Create consumer & producer threads. */
   if ((rc= pthread_create(&t[0], NULL, consumer, NULL)))

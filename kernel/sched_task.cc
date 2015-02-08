@@ -18,6 +18,7 @@ extern "C" {
 #include "descriptor_tables.h"
 extern int net_bh();
 extern int clock_test();
+static int get_free_cpu();
 unsigned char g_idle_stack[MAX_CPUS + 2][TASK_SIZE] __attribute__ ((aligned (4096)));
 struct mm_struct *g_kernel_mm = 0;
 task_queue_t g_task_queue;
@@ -26,7 +27,7 @@ unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles pe
 unsigned long g_jiffie_errors = 0;
 //unsigned long g_jiffie_tick = 0;
 
-static int curr_cpu_assigned = 0;
+//static int curr_cpu_assigned = 0;
 //static struct fs_struct *fs_kernel;
 static unsigned long free_pid_no = 1; // TODO need to make unique when  wrap around
 static wait_queue *timer_queue;
@@ -41,7 +42,7 @@ extern void *g_print_lock;
 
 static int free_mm(struct mm_struct *mm);
 static unsigned long push_to_userland();
-unsigned long _schedule(unsigned long flags);
+static unsigned long _schedule(unsigned long flags);
 static void schedule_kernelSecondHalf();
 static void schedule_userSecondHalf();
 static int release_resources(struct task_struct *task, int attach_to_parent);
@@ -68,17 +69,22 @@ static void free_task_struct(struct task_struct *p) {
 /************************************************
  All the below function should be called with holding lock
  ************************************************/
-static inline int _add_to_runqueue(struct task_struct * p, int arg_cpuid) /* Add at the first */
-{
+static inline int _add_to_runqueue(struct task_struct *p, int arg_cpuid){ /* Add at the first */
+	int ret = 0;
 	int cpuid;
+	int my_cpuid=getcpuid();
+	unsigned long intr_flags;
+
 	if (arg_cpuid == -1) {
 		cpuid = p->allocated_cpu;
 		if (g_cpu_state[cpuid].active == 0){
 			p->allocated_cpu =0;
 			cpuid=0;
 		}
-	} else {
-		cpuid = arg_cpuid;
+	} else if (arg_cpuid == -99){
+		cpuid = my_cpuid;
+	}else {
+		BUG();
 	}
 
 	if (p->magic_numbers[0] != MAGIC_LONG || p->magic_numbers[1] != MAGIC_LONG || (p->run_queue.next != 0)) /* safety check */
@@ -86,33 +92,51 @@ static inline int _add_to_runqueue(struct task_struct * p, int arg_cpuid) /* Add
 		ut_printf(" Task Stack Got CORRUPTED task:%x :%x :%x \n", p, p->magic_numbers[0], p->magic_numbers[1]);
 		BUG();
 	}
+
+	spin_lock_irqsave(&g_cpu_state[cpuid].lock, intr_flags);
 	if (p->current_cpu == 0xffff) { /* Avoid adding self adding in to runqueue */
 		list_add_tail(&p->run_queue, &g_cpu_state[cpuid].run_queue.head);
 		g_cpu_state[cpuid].run_queue_length++;
 		p->state = TASK_RUNNING;
-		return (g_cpu_state[cpuid].run_queue_length - 1);
+		ret = (g_cpu_state[cpuid].run_queue_length - 1);
 	} else {
 		BUG();
 	}
+	spin_unlock_irqrestore(&g_cpu_state[cpuid].lock, intr_flags);
 
-	return 0;
+	return ret;
 }
 
-static inline struct task_struct *_del_from_runqueue(struct task_struct *p, int cpuid) {
+static inline struct task_struct *_del_from_runqueue(struct task_struct *p, int arg_cpuid) {
+	int my_cpuid=getcpuid();
+	int cpuid = arg_cpuid;
+	unsigned long intr_flags;
+
+	if (arg_cpuid == -99){
+		cpuid = my_cpuid;
+	}
+	if (g_cpu_state[cpuid].run_queue_length == 0){
+		return 0;
+	}
+	spin_lock_irqsave(&g_cpu_state[cpuid].lock, intr_flags);
 	if (p == 0) {
 		struct list_head *node;
 
 		node = g_cpu_state[cpuid].run_queue.head.next;
 		if (g_cpu_state[cpuid].run_queue.head.next == &(g_cpu_state[cpuid].run_queue.head)) {
-			return 0;
+			p = 0;
+			goto last;
 		}
-
 		p = list_entry(node,struct task_struct, run_queue);
 		if (p == 0)
 			BUG();
 	}
 	list_del(&p->run_queue);
 	g_cpu_state[cpuid].run_queue_length--;
+last:
+
+	spin_unlock_irqrestore(&g_cpu_state[cpuid].lock, intr_flags);
+
 	return p;
 }
 
@@ -121,7 +145,7 @@ int _sc_task_assign_to_cpu(struct task_struct *task) {
 	int i;
 	int min_length = 99999;
 	int min_cpuid = -1;
-
+#if 0
 	if (g_conf_dynamic_assign_cpu == 1) {
 		for (i = 0; i < getmaxcpus(); i++) {
 			if (g_cpu_state[i].current_task != g_cpu_state[i].idle_task && g_cpu_state[i].run_queue_length < min_length) {
@@ -133,8 +157,9 @@ int _sc_task_assign_to_cpu(struct task_struct *task) {
 			min_cpuid = getcpuid();
 		}
 	}
-	_add_to_runqueue(task, min_cpuid);
-	if (min_cpuid == -1) {
+#endif
+	_add_to_runqueue(task, -1);
+	if (task->allocated_cpu != getcpuid()) {
 		return 0;
 	} else {
 		return 1;
@@ -302,11 +327,7 @@ static void init_task_struct(struct task_struct *p, struct mm_struct *mm, struct
 //	p->cpu = getcpuid();
 
 	/* TODO : this is very simple round robin allocation, need to change dynamically with advanced algo */
-	p->allocated_cpu = curr_cpu_assigned;
-	curr_cpu_assigned++;
-	if (curr_cpu_assigned >= getmaxcpus()) {
-		curr_cpu_assigned = 0;
-	}
+	p->allocated_cpu = get_free_cpu();
 
 	p->current_cpu = 0xffff;
 	p->stick_to_cpu = 0xffff;
@@ -446,7 +467,7 @@ int init_tasking(unsigned long unused) {
 	unsigned long task_addr;
 	struct fs_struct *fs;
 
-	g_global_lock.recursion_allowed = 0; /* this lock ownership will be transfer while task scheduling */
+	g_global_lock.recursion_allowed = 1;
 	g_current_task->pid = 1;/* hardcoded pid to make g_global _lock work */
 	vm_area_cachep = (kmem_cache_t *) kmem_cache_create((const unsigned char *) "vm_area_struct", sizeof(struct vm_area_struct),
 			0, 0, 0, 0);
@@ -483,28 +504,21 @@ int init_tasking(unsigned long unused) {
 #define G_IDLE_TASK  &g_idle_stack[0][0]
 	// task_addr=(unsigned long )((unsigned char *)G_IDLE_TASK+TASK_SIZE);
 	task_addr = g_current_task;
-	ut_log("	Task Addr start :%x  stack:%x current:%x\n", task_addr, &task_addr, g_current_task);
+	ut_log("	Task Addr start :%x  stack:%x current:%x maxcpus:%d\n", task_addr, &task_addr, g_current_task,MAX_CPUS);
 	for (i = 0; i < MAX_CPUS; i++) {
+		ut_memset((unsigned char *) &g_cpu_state[i],0,sizeof(struct cpu_state));
 		g_cpu_state[i].md_state.cpu_id = i;
 		g_cpu_state[i].idle_task = (struct task_struct *) ((unsigned char *) (task_addr) + i * TASK_SIZE);
 		ut_memset((unsigned char *) g_cpu_state[i].idle_task, MAGIC_CHAR, TASK_SIZE - PAGE_SIZE / 2);
 		init_task_struct(g_cpu_state[i].idle_task, g_kernel_mm, fs);
 		INIT_LIST_HEAD(&(g_cpu_state[i].run_queue.head));
 
+		arch_spinlock_init(&g_cpu_state[i].lock, (unsigned char *)"CPU_lock");
 		g_cpu_state[i].idle_task->allocated_cpu = i;
 		g_cpu_state[i].idle_task->state = TASK_RUNNING;
 		g_cpu_state[i].idle_task->current_cpu = i;
 		g_cpu_state[i].current_task = g_cpu_state[i].idle_task;
-		g_cpu_state[i].stats.total_contexts = 0;
-		g_cpu_state[i].stats.nonidle_contexts = 0;
-		g_cpu_state[i].stats.idleticks = 0;
-		g_cpu_state[i].stats.netbh = 0;
 		g_cpu_state[i].active = 1; /* by default when the system starts all the cpu are in active state */
-		g_cpu_state[i].intr_disabled = 0; /* interrupts are active */
-		g_cpu_state[i].cpu_priority = 0;
-		g_cpu_state[i].intr_nested_level = 0;
-		g_cpu_state[i].run_queue_length = 0;
-		g_cpu_state[i].cpu_spinstate.hits = 0;
 		ut_strncpy(g_cpu_state[i].idle_task->name, (unsigned char *) "idle", MAX_TASK_NAME);
 	}
 	g_current_task->current_cpu = 0;
@@ -591,12 +605,14 @@ void sc_delete_task(struct task_struct *task) {
 }
 
 static void schedule_userSecondHalf() { /* user thread second Half: _schedule function function land here. */
-	spin_unlock_irqrestore(&g_global_lock, g_current_task->flags);
+	//spin_unlock_irqrestore(&g_cpu_state[getcpuid()].lock, g_current_task->flags);
+	restore_flags(g_current_task->flags);
 	ar_updateCpuState(g_current_task, 0);
 	clone_push_to_userland();
 }
 static void schedule_kernelSecondHalf() { /* kernel thread second half:_schedule function task can lands here. */
-	spin_unlock_irqrestore(&g_global_lock, g_current_task->flags);
+	//spin_unlock_irqrestore(&g_cpu_state[getcpuid()].lock, g_current_task->flags);
+	restore_flags(g_current_task->flags);
 	g_current_task->thread.real_ip(g_current_task->thread.argv, 0);
 }
 
@@ -615,7 +631,7 @@ void sc_before_syscall() {
 void sc_after_syscall() {
 	/* Handle any pending signal */
 	//SYSCALL_DEBUG("syscall ret  state:%x\n",g_current_task->state);
-	net_bh();
+//	net_bh();
 	g_cpu_state[getcpuid()].stats.syscalls++;
 
 	if (g_current_task->pending_signals == 0) {
@@ -688,8 +704,6 @@ void sc_schedule() { /* _schedule function task can land here. */
 	unsigned long intr_flags;
 	int cpuid = getcpuid();
 
-	net_bh();
-
 	/*  Safe checks */
 	if (!g_current_task) {
 		BUG();
@@ -702,15 +716,15 @@ void sc_schedule() { /* _schedule function task can land here. */
     }
 
 	/* schedule */
-	spin_lock_irqsave(&g_global_lock, intr_flags);
+//	local_irq_save(intr_flags);
 	intr_flags = _schedule(intr_flags);
-	spin_unlock_irqrestore(&g_global_lock, intr_flags);
+//	local_irq_restore(intr_flags);
 
 	/* remove dead tasks */
 	sc_remove_dead_tasks();
 }
 
-unsigned long _schedule(unsigned long flags) {
+static unsigned long _schedule(unsigned long flags) {
 	struct task_struct *prev, *next;
 	int cpuid = getcpuid();
 
@@ -726,11 +740,11 @@ unsigned long _schedule(unsigned long flags) {
 		apic_disable_partially();
 		g_cpu_state[cpuid].intr_disabled = 1;
 	} else {
-		next = _del_from_runqueue(0, cpuid);
+		next = _del_from_runqueue(0, -99);
 #if 1
 		if (next != 0 && next->stick_to_cpu != 0xffff && next->stick_to_cpu != cpuid) {
 			next->allocated_cpu = next->stick_to_cpu;
-			_add_to_runqueue(next, -1);
+			_add_to_runqueue(next, -99);
 			next = 0;
 		}
 		if ((g_cpu_state[cpuid].intr_disabled == 1) && (cpuid != 0) && (g_cpu_state[cpuid].active == 1)) {
@@ -748,11 +762,7 @@ unsigned long _schedule(unsigned long flags) {
 	if (next == 0) { /* by this point , we will always have some next */
 		next = prev;
 	}
-#if 1 // SAFE Check
-	if (next == g_cpu_state[cpuid].idle_task && g_cpu_state[cpuid].run_queue_length > 0) {
-		BUG();
-	}
-#endif
+
 #ifdef SMP   // SAFE Check
 	if (g_cpu_state[0].idle_task==g_cpu_state[1].current_task || g_cpu_state[0].current_task==g_cpu_state[1].idle_task) {
 		ut_printf("ERROR  cpuid :%d  %d\n",cpuid,getcpuid());
@@ -788,20 +798,25 @@ unsigned long _schedule(unsigned long flags) {
 			BUG();
 		}
 		prev->current_cpu = 0xffff;
-		_add_to_runqueue(prev, -1);
+		_add_to_runqueue(prev, -99);
 	}
 	next->current_cpu = cpuid; /* get cpuid based on this */
 	//next->cpu_contexts++;
 	next->stats.total_contexts++;
 	g_cpu_state[cpuid].current_task = next;
 	g_cpu_state[cpuid].stats.total_contexts++;
-	arch_spinlock_transfer(&g_global_lock, prev, next);
+
+	//arch_spinlock_transfer(&g_cpu_state[cpuid].lock, prev, next);
 	/* update the cpu state  and tss state for system calls */
 	ar_updateCpuState(next, prev);
 	ar_setupTssStack((unsigned long) next + TASK_SIZE);
 
 	prev->flags = flags;
 	prev->current_cpu = 0xffff;
+	if (g_cpu_state[cpuid].sched_lock != 0){
+		spin_unlock(g_cpu_state[cpuid].sched_lock);
+		g_cpu_state[cpuid].sched_lock = 0;
+	}
 	/* finally switch the task */
 	arch::switch_to(prev, next, prev);
 	/* from the next statement onwards should not use any stack variables, new threads launched will not able see next statements*/
@@ -840,7 +855,7 @@ int do_softirq() {
 					next = _del_from_runqueue(0, i);
 					if (next != 0){
 						next->allocated_cpu = 0;
-						_add_to_runqueue(next, 0);
+						_add_to_runqueue(next, -1);
 					}
 					spin_unlock_irqrestore(&g_global_lock, intr_flags);
 				} while (next != 0);
@@ -1135,7 +1150,6 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	p->thread.sp = (void *) ((addr_t) p + (addr_t) TASK_SIZE - (addr_t) 160); /* 160 bytes are left at the bottom of the stack */
 	p->state = TASK_RUNNING;
 
-	p->allocated_cpu = get_free_cpu();
 	ut_strncpy(p->name, g_current_task->name, MAX_TASK_NAME);
 
 //	ut_log(" New thread is created:%d %s on %d\n",p->pid,p->name,p->allocated_cpu);
@@ -1335,20 +1349,26 @@ int cpuspin_before_halt(){
 	if (g_conf_idle_cpuspin == 0){
 		return 0;
 	}
+#if 0
 	if (g_cpu_state[cpuid].cpu_spinstate.nonclock_interrupts == 0){
 		return 0;
 	}
+#endif
+
 repeat:
 	int prev_ints=0;
  	 g_cpu_state[cpuid].cpu_spinstate.clock_interrupts = 0;
  	 g_cpu_state[cpuid].cpu_spinstate.nonclock_interrupts = 0;
- 	 while(g_cpu_state[cpuid].cpu_spinstate.clock_interrupts < 10){ /* cpuspin for 100ms before going to sleep */
- 		 if (g_cpu_state[cpuid].cpu_spinstate.nonclock_interrupts != 0){
- 			g_cpu_state[cpuid].cpu_spinstate.hits++;
- 			 goto repeat;
- 		 }
- 		 if (prev_ints != g_cpu_state[cpuid].cpu_spinstate.clock_interrupts){
+ 	 while(g_cpu_state[cpuid].cpu_spinstate.clock_interrupts < 5){
+ 		 /* cpuspin for 100ms before going to sleep
+ 		  * TODO: doing some useful housekeeping work before going to sleep */
+ 	//	 if (g_cpu_state[cpuid].cpu_spinstate.nonclock_interrupts != 0){
+ 	//		g_cpu_state[cpuid].cpu_spinstate.hits++;
+ 	//		 goto repeat;
+ 	//	 }
+ 		 if (g_cpu_state[cpuid].run_queue_length > 0){
  			sc_schedule();
+ 			goto repeat;
  		 }
  		prev_ints = g_cpu_state[cpuid].cpu_spinstate.clock_interrupts;
  	 }
@@ -1375,11 +1395,11 @@ void idleTask_func() {
 		}
 
 		net_bh();
-		//cpuspin_before_halt();
+		cpuspin_before_halt();
 
 		if (0) {
 			/* TODO:  we are making tight loop, here we want to sleep for just 100usec not for 10msec */
-		} else {
+		} else if (g_cpu_state[cpu].run_queue_length == 0) {/* TODO: there is a chance that someone insert in to runqueue */
 			g_cpu_state[cpu].idle_state = 1;
 			arch::sti_hlt();
 			g_cpu_state[cpu].idle_state = 0;

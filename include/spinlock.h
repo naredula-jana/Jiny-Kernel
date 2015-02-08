@@ -36,6 +36,7 @@ extern int g_spinlock_count;
 #define SPIN_LOCK_UNLOCKED (spinlock_t) { __SPINLOCK_UNLOCKED }
 #endif
 
+#if 0
 static inline void arch_spinlock_transfer(spinlock_t *lock,
 		struct task_struct *prev, struct task_struct *next) {
 	if (lock->recursion_allowed == 1) SPIN_BUG();
@@ -55,6 +56,7 @@ static inline void arch_spinlock_transfer(spinlock_t *lock,
 #endif
 #endif
 }
+#endif
 
 static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 #ifdef SPINLOCK_DEBUG
@@ -139,6 +141,9 @@ static inline void arch_spinlock_init(spinlock_t *lock, unsigned char *name){
 		if (g_spinlocks[i]==0) {
 			g_spinlocks[i]=lock;
 			lock->linked = 0;
+			if (i>g_spinlock_count){
+				g_spinlock_count = i+1;
+			}
 			return;
 		}
 	}

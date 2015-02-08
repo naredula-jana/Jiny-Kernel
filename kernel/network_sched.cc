@@ -34,6 +34,7 @@ extern "C" {
 extern int net_bh();
 unsigned char g_mac[7];
 int g_conf_nic_intr_off=0;
+int g_conf_send_alltime=1;
 }
 #include "jdevice.h"
 #include "file.hh"
@@ -276,6 +277,13 @@ static int process_send_queue() {
 	int pkt_send = 0;
 	static int in_progress = 0;
 
+#if 1
+	if (g_conf_send_alltime == 0) {
+		if (send_qlen == 0) {
+			return JFAIL;
+		}
+	}
+#endif
 	spin_lock_irqsave(&netbh_lock, flags);
 	if (in_progress == 0) {
 		in_progress = 1;
