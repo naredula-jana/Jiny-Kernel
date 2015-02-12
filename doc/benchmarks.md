@@ -86,7 +86,13 @@ Host to vm: on a highend hardware.
    
 ----------------------------------------------------------------------------------
 ###Benchmark-5(Malloc): In Progress
-  Memory allocation improvements like zero page accumulation and other related techiniques: Based on this technique one round of testing is done but it as not given the substantial improvements as expected, need to redo.
+  Memory allocation improvements like zero page accumulation and other related techiniques: Based on this technique one round of testing is done but it as not given the substantial improvements as expected, need to improve and redo.
+   
+----------------------------------------------------------------------------------
+###Benchmark-6(Lock free or avoiding spinlocks  and minimizing the interrupts): In Progress
+  - spin locks are well suited for SMP not for virtual machines because of lock-holder preemption. Avoiding spin locks and writing the lock free code.
+  - Avoid the following: hitting "hlt" instruction by a CPU and getting waken up by other cpu using IPI(inter processor insr) interrupt within short period of time is not good for virtual machines.
+  - Minimising the regular timer Ticks for every 10ms.
    
 ----------------------------------------------------------------------------------
 ##Papers:

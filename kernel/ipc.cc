@@ -26,7 +26,6 @@ int total_futexs=0;
 class futex *futex_list[MAX_FUTEXS];
 
 futex::futex(int *uaddr_arg){
-	//mutex = ipc_mutex_create("futex");
 	waitq = jnew_obj(wait_queue,"futex", 0);
 	uaddr = uaddr_arg;
 	mm = g_current_task->mm;
@@ -39,18 +38,16 @@ void futex::print_stats(unsigned char *arg1,unsigned char *arg2){
 
 }
 void futex::lock(){
-	//mutexLock(mutex);
 	if (waitq ==0){
 		return;
 	}
-	waitq->wait(10000);
+	waitq->wait(10);
 }
 void futex::unlock(){
 	if (waitq ==0){
 		return;
 	}
 	waitq->wakeup();
-	//mutexUnLock(mutex);
 }
 void futex::destroy(){
 	wait_queue *tmp_waitq=0;
@@ -60,7 +57,7 @@ void futex::destroy(){
 	waitq=0;
 	if (tmp_waitq!= 0){
 		tmp_waitq->wakeup();
-		jfree_obj(tmp_waitq);
+		tmp_waitq->unregister();
 	}
 	mm=0;
 	jfree_obj((unsigned long)this);
@@ -132,6 +129,7 @@ int destroy_futex(struct mm_struct *mm) {
 int SYS_futex(int *uaddr, int op, int val, unsigned long timeout,
 		unsigned long addr2, int val2) {
 	unsigned long irq_flags;
+	int retries=0;
 	futex *futex_p;
 	SYSCALL_DEBUG("futex uaddr: %x op:%x val:%x\n", uaddr, op, val);
 
@@ -143,14 +141,18 @@ int SYS_futex(int *uaddr, int op, int val, unsigned long timeout,
 	switch (op & FUTEX_CMD_MASK) {
 	case FUTEX_WAIT:
 		assert(timeout == 0);
-		spin_lock_irqsave(&g_global_lock, irq_flags);
-		if (*uaddr == val){
-			futex_p->stat_waits++;
-			spin_unlock_irqrestore(&g_global_lock, irq_flags);
-			futex_p->lock();
-		}else{
-			spin_unlock_irqrestore(&g_global_lock, irq_flags);
-			futex_p->stat_nowaits++;
+		retries=0;
+		while (retries < 1000) {
+			spin_lock_irqsave(&g_global_lock, irq_flags);
+			if (*uaddr == val) {
+				futex_p->stat_waits++;
+				spin_unlock_irqrestore(&g_global_lock, irq_flags);
+				futex_p->lock();
+			} else {
+				spin_unlock_irqrestore(&g_global_lock, irq_flags);
+				futex_p->stat_nowaits++;
+			}
+			retries++;
 		}
 		return 0;
 	case FUTEX_WAKE:
@@ -240,28 +242,16 @@ void _ipc_delete_from_waitqueues(struct task_struct *task) {
 	int assigned_to_running_cpu;
 
 	if (task ==0) return;
-//	spin_lock_irqsave(&g_global_lock, flags);
+	spin_lock_irqsave(&g_global_lock, flags);
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
 		if (wait_queue::wait_queues[i] == 0)
 			continue;
 		if (wait_queue::wait_queues[i]->_del_from_me(task)==JFAIL){
 			continue;
 		}
-#if 0
-		assigned_to_running_cpu = 0;
-		if (task->run_queue.next == 0)
-			assigned_to_running_cpu = _sc_task_assign_to_cpu(task);
-		else
-			BUG();
-		if (assigned_to_running_cpu == 0) {
-			spin_unlock_irqrestore(&g_global_lock, flags);
-			wakeup_cpus(task->allocated_cpu);
-			spin_lock_irqsave(&g_global_lock, flags);
-		}
-#endif
 		break;
 	}
-//	spin_unlock_irqrestore(&g_global_lock, flags);
+	spin_unlock_irqrestore(&g_global_lock, flags);
 }
 
 void ipc_check_waitqueues() {

@@ -27,8 +27,6 @@ unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles pe
 unsigned long g_jiffie_errors = 0;
 //unsigned long g_jiffie_tick = 0;
 
-//static int curr_cpu_assigned = 0;
-//static struct fs_struct *fs_kernel;
 static unsigned long free_pid_no = 1; // TODO need to make unique when  wrap around
 static wait_queue *timer_queue;
 int g_conf_cpu_stats = 1;
@@ -1360,12 +1358,6 @@ repeat:
  	 g_cpu_state[cpuid].cpu_spinstate.clock_interrupts = 0;
  	 g_cpu_state[cpuid].cpu_spinstate.nonclock_interrupts = 0;
  	 while(g_cpu_state[cpuid].cpu_spinstate.clock_interrupts < 5){
- 		 /* cpuspin for 100ms before going to sleep
- 		  * TODO: doing some useful housekeeping work before going to sleep */
- 	//	 if (g_cpu_state[cpuid].cpu_spinstate.nonclock_interrupts != 0){
- 	//		g_cpu_state[cpuid].cpu_spinstate.hits++;
- 	//		 goto repeat;
- 	//	 }
  		 if (g_cpu_state[cpuid].run_queue_length > 0){
  			sc_schedule();
  			goto repeat;

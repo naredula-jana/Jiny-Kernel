@@ -329,17 +329,24 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, 
 		return vma->vm_start;
 	}
 }
-
+spinlock_t vmm_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"vmm");
 void * SYS_vm_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff) {
 	struct file *file;
 	void *ret;
+	unsigned long irq_flags;
 
 	SYSCALL_DEBUG("mmap fd:%x addr:%x len:%x prot:%x flags:%x pgpff:%x \n",fd,addr,len,prot,flags,pgoff);
 	file = fd_to_file(fd);
+
+	//spin_lock_irqsave(&vmm_lock, irq_flags);
 	ret = vm_mmap(file, addr, len, prot, flags, pgoff,"syscall");
+	//spin_unlock_irqrestore(&vmm_lock, irq_flags);
+
 	SYSCALL_DEBUG("mmap ret :%x \n",ret);
 	if (g_conf_syscall_debug == 1){
+		//spin_lock_irqsave(&vmm_lock, irq_flags);
 		Jcmd_maps(0,0);
+		//spin_unlock_irqrestore(&vmm_lock, irq_flags);
 	}
 	return ret;
 }
@@ -485,12 +492,14 @@ int Jcmd_maps(char *arg1, char *arg2) {
 	unsigned char *error=0;
 
 	max_len=len;
+	spin_lock_irqsave(&g_global_lock, flags);
 	buf = (unsigned char *) vmalloc(len,0);
 	if (buf == 0) {
+		spin_unlock_irqrestore(&g_global_lock, flags);
 		ut_printf(" Unable to get vmalloc memory \n");
 		return 0;
 	}
-	spin_lock_irqsave(&g_global_lock, flags);
+	//spin_lock_irqsave(&g_global_lock, flags);
 
 	if (arg1 == 0) {
 		found=1;
@@ -556,12 +565,13 @@ int Jcmd_maps(char *arg1, char *arg2) {
 		vma = vma->vm_next;
 	}
 last:
-	spin_unlock_irqrestore(&g_global_lock, flags);
+//	spin_unlock_irqrestore(&g_global_lock, flags);
 	if (error){
 		ut_printf(" %s\n",error);
 	}
     ut_printf(buf);
 	vfree(buf);
+	spin_unlock_irqrestore(&g_global_lock, flags);
 	return 1;
 }
 }

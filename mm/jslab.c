@@ -682,11 +682,16 @@ int init_jslab_vmalloc(){
 	vmalloc_initiated = 1;
 	return JSUCCESS;
 }
-void *vmalloc(int size, int flags){
+spinlock_t vmalloc_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"vmalloc");
+void *vmalloc(int size, int flags){ /* TODO locks need to be addedd */
 	int i,j;
+	unsigned long ret=0;
+	unsigned long intr_flags;
 
 	if (vmalloc_initiated ==0) return 0;
 	int total_blocks = g_vmalloc_size/vblock_size;
+
+	spin_lock_irqsave(&vmalloc_lock, intr_flags);
 	for (i=0; i<MAX_VBLOCKS && i<total_blocks; i++){
 		if (vblocks[i].vaddr == 0 ) return 0;
 		if (vblocks[i].size > size && vblocks[i].is_free == 1){
@@ -700,26 +705,36 @@ void *vmalloc(int size, int flags){
 			if (flags & MEM_CLEAR){
 				ut_memset(vblocks[i].vaddr,0,size);
 			}
-			return vblocks[i].vaddr;
+			ret = vblocks[i].vaddr;
+			goto last;
 		}
 	}
 
-	return 0;
+last:
+	spin_unlock_irqrestore(&vmalloc_lock, intr_flags);
+	return ret;;
 }
 int  vfree(addr_t addr){
 	int i;
+	int ret=JFAIL;
+	unsigned long intr_flags;
 
-	if (vmalloc_initiated ==0) return;
-	if (addr==0) return;
+	if (vmalloc_initiated ==0) return ret;
+	if (addr==0) return ret;
 	int total_blocks = g_vmalloc_size/vblock_size;
+
+	spin_lock_irqsave(&vmalloc_lock, intr_flags);
 	for (i=0; i<MAX_VBLOCKS && i<total_blocks; i++){
 		if (vblocks[i].vaddr ==(addr_t *)addr){
 			vblocks[i].is_free = 1;
-			return JSUCCESS;
+			ret = JSUCCESS;
+			goto last;
 		}
 	}
 	ut_log(" ERROR: vfree failed : %x \n",addr);
-	return JFAIL;
+last:
+	spin_unlock_irqrestore(&vmalloc_lock, intr_flags);
+	return ret;
 }
 #endif
 /********************************* jcmd's ******************************************************************************/

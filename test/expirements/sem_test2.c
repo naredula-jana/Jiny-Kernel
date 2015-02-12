@@ -29,12 +29,12 @@ pthread_cond_t sig_consumer= PTHREAD_COND_INITIALIZER;
 */
 pthread_cond_t sig_producer= PTHREAD_COND_INITIALIZER;
 #define LOOP_SIZE 200000
-void cpu_eat(){
+void cpu_eat(int count){
 	  unsigned long loop;
 	  int k;
 	  loop=1;
-	    for (k=0; k<in_max; k++){
-loop = loop+3;
+	    for (k=0; k<count; k++){
+	    	loop = loop+3;
 	    }
 }
 long com_counter=10;
@@ -48,27 +48,28 @@ void *consumer(void *dummy)
   int printed= 0;
   int consumes=0;
 
-  printf("Consumer : \"Hello I am consumer #%ld. Ready to consume numbers"
+  printf("New Consumer : \"Hello I am consumer #%ld. Ready to consume numbers"
          " now\"\n", pthread_self());
 
   while (1)
   {
     pthread_mutex_lock(&mu);
-    cpu_eat();
+    cpu_eat(in_max);
     consumes++;
     if (cons_number< prod_number){
     	cons_number++;
     	com_counter = com_counter - 2;
     }
     pthread_mutex_unlock(&mu);
-
+    cpu_eat(in_max/2);
     /*
       If the MAX number was the last consumed number, the consumer should
       stop.
     */
     if (cons_number == out_max)
     {
-      printf("Consumer done!  :%d  consumes:%d  cons_number:%d cc:%d\n",out_max,consumes,cons_number,com_counter);
+      printf("New Consumer done!  :%d  consumes:%d  cons_number:%d cc:%d\n",out_max,consumes,cons_number,com_counter);
+      cpu_eat(in_max*10);
       break;
     }
   }
@@ -81,7 +82,7 @@ void *consumer(void *dummy)
 */
 void *producer(void *dummy)
 {
-  printf("Producer : \"Hello I am producer #%ld. Ready to produce numbers"
+  printf("New Producer : \"Hello I am producer #%ld. Ready to produce numbers"
          " now\"\n", pthread_self());
 int number =0;
   while (1)
@@ -93,13 +94,14 @@ int number =0;
     	com_counter = com_counter +2;
     }
     number ++;
-cpu_eat();
+    cpu_eat(in_max);
     pthread_mutex_unlock(&mu);
-
+    cpu_eat(in_max/2);
     /* Stop if MAX has been produced. */
     if (prod_number == out_max)
     {
-      printf("Producer done.. :%d  produced:%d  prod_number:%d cc:%d\n",out_max,number,prod_number,com_counter);
+      printf("New Producer done.. :%d  produced:%d  prod_number:%d cc:%d\n",out_max,number,prod_number,com_counter);
+      cpu_eat(in_max*10);
       break;
     }
   }
