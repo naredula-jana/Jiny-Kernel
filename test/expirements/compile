@@ -1,0 +1,4 @@
+gcc -g -static sem_test1.c -lpthread -o sem1
+gcc -g -static sem_test2.c -lpthread -o sem2
+gcc -g -static sem_test3.c -lpthread -o sem3
+gcc -g -static sem_test4.c -lpthread -o sem4 

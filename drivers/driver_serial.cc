@@ -193,6 +193,7 @@ void init_serial_jdriver() {
 
 	serial_driver = jnew_obj(serial_jdriver);
 	serial_driver->name = (unsigned char *) "serial_driver";
+	arch_spinlock_link(&serial_lock);
 	register_jdriver(serial_driver);
 }
 

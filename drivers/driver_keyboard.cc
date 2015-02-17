@@ -109,7 +109,7 @@ unsigned char dr_kbGetchar(int input_id, int peek_data) {
 		}
 	}
 	while (input_devices[i].current_pos == 0) {
-		input_devices[i].kb_waitq->wait(100);
+		input_devices[i].kb_waitq->wait(500);
 	}
 //TODO: the below code need to be protected by spin lock if multiple reader are there
 	if (input_devices[i].read_pos < input_devices[i].current_pos) {

@@ -189,7 +189,7 @@ void housekeeper_thread(void *arg){
 	sc_sleep(30);  /* TODO : need to wait some part of initilization*/
 	init_log_file(0);
 	while(1){
-		sc_sleep(10);
+		sc_sleep(100);
 		housekeep_zeropage_cache();
 		pc_housekeep();
 	}
@@ -233,6 +233,7 @@ void cmain() {  /* This is the first c function to be executed */
 
 	g_cpu_state[0].current_task = g_current_task;
 
+
 //	while(1);
 	ut_log(" Before g_conf_func_debug-> :%x(%d)\n",g_conf_func_debug,g_conf_func_debug);
 	for (i=0; inittable[i].func != 0; i++){
@@ -249,6 +250,9 @@ void cmain() {  /* This is the first c function to be executed */
 	do_cpuid(1,val);
 	ut_log("	cpuid result %x : %x :%x :%x \n",val[0],val[1],val[2],val[3]);
 	g_cpu_features=val[3]; /* edx */
+
+	/* link global locks for debugging purpose */
+	arch_spinlock_link(&g_global_lock);
 
 	g_boot_completed=1;
 	sti(); /* start the interrupts finally */

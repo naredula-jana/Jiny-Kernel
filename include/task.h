@@ -39,7 +39,7 @@ typedef struct {  /* Do not change the order , initilization will break */
             unsigned char *name;
         }log[MAX_SPIN_LOG];
 #endif
-} spinlock_t;
+} spinlock_t __attribute__ ((aligned (64)));
 
 
 
@@ -203,7 +203,8 @@ struct cpu_state {
 	unsigned char cpu_priority;
 	int active; /* only active cpu will pickup the tasks , otherwise they can only run idle threads */
 	int intr_disabled; /* interrupts disabled except apic timer */
-	int idle_state; /* if the cpu is in idle state set it to 1 */
+	volatile int idle_state; /* if the cpu is in idle state set it to 1 */
+	int task_on_wait; /* set if a task if this cpu is on wait and can wakeup any time */
 
 	int intr_nested_level;
 	unsigned long last_total_contexts; /* used for house keeping */

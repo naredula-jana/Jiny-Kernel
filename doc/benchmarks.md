@@ -1,13 +1,14 @@
 ## Optimizations and Performance improvements .
 
-This paper provides performance comparision of [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel)   with  Linux on different workloads like cpu,network,storage,memory etc:
-In the below benchmarks, Jiny as performed better then linux in the below specific workloads, one of the reason is linux is  generic kernel designed to run on the metal  when compare to Jiny. It is relatively easy to improve the througput for the specific workloads instead of generic. 
+[Jiny kernel](https://github.com/naredula-jana/Jiny-Kernel) is designed from ground up for virtual environment. This paper provides performance comparision [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel)   with  Linux on different workloads like cpu,network,storage,memory,IPC etc on the virtual platform  like kvm/qemu.
+The below benchmarks show Jiny as performed better then linux, one of the reason is linux is generic kernel designed to run on the metal  when compare to Jiny designed for virtual platform. The following are performance enhancments and techniques used in different work loads:
   
 - Benchmark-1(CPU centric): Comparisions of cpu centric app running in linux vm versus same app running in Jiny vm. There is big improvement when the same app run in Jiny vm as High priority app. 
 - Benchmark-2(Network centric): Comparisions of network throughput in linux vm versus Jiny vm. There is 20%-50% improvement in network throughput in Jiny Vm when compare to linux vm on the same hardware.
 - Benchmark-3(Storage centric): In progress.
 - Benchmark-4(PageCache): Comparisions of Read/write throughput for Hadoop workload. Improvement of 20% in read/write throughput of hdfs/hadoop workloads.
 - Benchmark-5(Malloc): Memory  improvements with zero page accumulation and other related techiniques: In progress
+- Benchmark-6(IPC, locks and interrupts): locks and interrutpts improvement: more then 100% improvement : Partially completed.
 
 ----------------------------------------------------------------------------------
 
@@ -89,11 +90,24 @@ Host to vm: on a highend hardware.
   Memory allocation improvements like zero page accumulation and other related techiniques: Based on this technique one round of testing is done but it as not given the substantial improvements as expected, need to improve and redo.
    
 ----------------------------------------------------------------------------------
-###Benchmark-6(Lock free or avoiding spinlocks  and minimizing the interrupts): In Progress
+###Benchmark-6(Lock free or avoiding spinlocks  and minimizing the interrupts): Partially completed
   - spin locks are well suited for SMP not for virtual machines because of lock-holder preemption. Avoiding spin locks and writing the lock free code.
   - Avoid the following: hitting "hlt" instruction by a CPU and getting waken up by other cpu using IPI(inter processor insr) interrupt within short period of time is not good for virtual machines.
   - Minimising the regular timer Ticks for every 10ms.
-   
+  
+   **Test Environment**: 
+     This is a Producer and consumer code using the semaphores. Producer and consumer runs in two seperate threads. Producer is more cpu intesive when compare to consumer, this make consumer waits for producer at the end of each loop. producer wakes consumer once it produced. In this way consumer get context switched at the end of every loop. This emulates  producer and consumer with unequal cpu cycles to process every item, this will be a common case. The [source code available here.](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/experiments/sem_test4.c).
+     **Hypervisor**: kvm/qemu-2.x
+     ** arguments to the test**:  "sem 400k 2000"  :  Here 400k represents the number of items produced and consumed, producer loops 2000 times in tght loop to emulate cpu cycles consumption for every item.
+     
+   1. **Test-1**: ubuntu-14(linux vm) with 2 cpu :  able to complete the test in 22 seconds. cpu consumption is 150% noticed on host with top utility. large number of interruots close to 400k are generated inside te guestos.
+   2. **Test-2**: Jiny os with 2 cpu as vm : able to complete in 9 seconds. cpu consumption is 200% noticed on host with top utility. No additional interrupts are generated in this test.
+   3. **Test-3**: ubuntu-14 on metal: almost same as Test-2, for large loops metal takes 97sec whereas Test-2 takes 93 seconds, means on the metal it takes almost 3% to 4% more, this may be because of interrupts on the metal.
+     
+##### Reasons for Better throuhput in Jiny os
+1. Producer and consumer thread will be running on seperate cpu's. when consumer thread goes to sleep, the cpu instead of hitting the hlt instruction, it checks if there is any threads waiting then it loops for a short duration then it goes to sleep using "hlt" instruction, In this short duration if the thread got woken up then cpu need not wakenup by other cpu using IPI(interrupts). In this way it saves around 400k interrupts for 400k loop in Test-2. Interrupts are costly in virtual environment when compare to metal. every interrupt causes exist and entry in the hypervisor. THe "hlt" instruction casues context switch.   
+2. swithing off the timer interrupts on the non-boot cpu (not tested or not included) MAY save somemore cpu cycles and can speedup further.
+
 ----------------------------------------------------------------------------------
 ##Papers:
  -   [Page cache optimizations for Hadoop, published and presented in open cirrus-2011 summit](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/PageCache-Open-Cirrus.pdf) .

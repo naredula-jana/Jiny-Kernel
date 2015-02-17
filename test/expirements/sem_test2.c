@@ -106,7 +106,7 @@ int number =0;
     }
   }
 }
-unsigned char stack[9000];
+unsigned char stack[4001];
 void main(int argc, char *argv[] )
 {
   int rc, i;

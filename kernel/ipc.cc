@@ -11,7 +11,6 @@
 #include "file.hh"
 #include "ipc.hh"
 
-
 enum {
 FUTEX_WAIT = 0,
 FUTEX_WAKE = 1,
@@ -26,32 +25,21 @@ int total_futexs=0;
 class futex *futex_list[MAX_FUTEXS];
 
 futex::futex(int *uaddr_arg){
+	arch_spinlock_init(&spin_lock,"futexlock");
 	waitq = jnew_obj(wait_queue,"futex", 0);
 	uaddr = uaddr_arg;
 	mm = g_current_task->mm;
+
 	type =0;
 	stat_waits=0;
 	stat_nowaits=0;
-	stat_wakeups=0;
-}
-void futex::print_stats(unsigned char *arg1,unsigned char *arg2){
-
-}
-void futex::lock(){
-	if (waitq ==0){
-		return;
-	}
-	waitq->wait(10);
-}
-void futex::unlock(){
-	if (waitq ==0){
-		return;
-	}
-	waitq->wakeup();
+	stat_lnowaits=0;
+	stat_wakeup_sucess=0;
+	stat_wakeups_reqs=0;
 }
 void futex::destroy(){
 	wait_queue *tmp_waitq=0;
-	ut_log(" %x: futex waits: %d wakeups:%d nowaits:%d  uaddr:%x mm:%x \n",this,stat_waits,stat_wakeups,stat_nowaits,uaddr,mm);
+	ut_log(" %x: futex waits: %d wakeups_req/succ:%d / %d nowaits:%d lnowaits:%d  uaddr:%x mm:%x wakedups:%d wakeonsame:%d count:%d\n",this,stat_waits,stat_wakeups_reqs,stat_wakeup_sucess,stat_nowaits,stat_lnowaits,uaddr,mm,waitq->stat_wakeups,waitq->stat_wakeon_samecpu,stat_count);
 
 	tmp_waitq=waitq;
 	waitq=0;
@@ -60,17 +48,38 @@ void futex::destroy(){
 		tmp_waitq->unregister();
 	}
 	mm=0;
+	arch_spinlock_free(&spin_lock);
 	jfree_obj((unsigned long)this);
 }
+void futex::print_stats(unsigned char *arg1,unsigned char *arg2){
+
+}
+void futex::lock(spinlock_t *spin_lock){
+	if (waitq ==0){
+		return;
+	}
+	waitq->wait_with_lock(50,spin_lock);
+}
+int futex::unlock(){
+	int ret;
+	if (waitq ==0){
+		return 0;
+	}
+	ret =  waitq->wakeup();
+	stat_wakeup_sucess = stat_wakeup_sucess +ret;
+	return ret;
+}
+
 
 extern "C"{
 #include "interface.h"
 static int ipc_init_done=0;
+int g_stat_idle_busy=0;
 extern int _sc_task_assign_to_cpu(struct task_struct *task);
 unsigned long _schedule(unsigned long flags);
 void sc_remove_dead_tasks();
 
-int find_futex(int *uaddr){
+static int find_futex(int *uaddr){
 	int i;
 
 	for (i=0; (i<MAX_FUTEXS) && (i<total_futexs); i++){
@@ -88,6 +97,7 @@ static futex *get_futex(int *uaddr){ /* find the futex if not found create it */
 
 	i = find_futex(uaddr);
 	if (i != -1) {
+		futex_list[i]->stat_count++;
 		return futex_list[i];
 	}
 
@@ -130,6 +140,7 @@ int SYS_futex(int *uaddr, int op, int val, unsigned long timeout,
 		unsigned long addr2, int val2) {
 	unsigned long irq_flags;
 	int retries=0;
+	int ret=0;
 	futex *futex_p;
 	SYSCALL_DEBUG("futex uaddr: %x op:%x val:%x\n", uaddr, op, val);
 
@@ -143,31 +154,35 @@ int SYS_futex(int *uaddr, int op, int val, unsigned long timeout,
 		assert(timeout == 0);
 		retries=0;
 		while (retries < 1000) {
-			spin_lock_irqsave(&g_global_lock, irq_flags);
+			if (*uaddr != val) {
+				futex_p->stat_nowaits++;
+				return 0;
+			}
+			spin_lock(&futex_p->spin_lock);
 			if (*uaddr == val) {
 				futex_p->stat_waits++;
-				spin_unlock_irqrestore(&g_global_lock, irq_flags);
-				futex_p->lock();
+				futex_p->lock(&futex_p->spin_lock);
 			} else {
-				spin_unlock_irqrestore(&g_global_lock, irq_flags);
-				futex_p->stat_nowaits++;
+				spin_unlock(&futex_p->spin_lock);
+				futex_p->stat_lnowaits++;
+				return 0;
 			}
 			retries++;
 		}
 		return 0;
 	case FUTEX_WAKE:
-		spin_lock_irqsave(&g_global_lock, irq_flags);
-		futex_p->stat_wakeups++;
-		futex_p->unlock();
+		spin_lock(&futex_p->spin_lock);
+		futex_p->stat_wakeups_reqs++;
+		ret = futex_p->unlock();
 		/* wake up all the threads and reset to 1 */
-		spin_unlock_irqrestore(&g_global_lock, irq_flags);
-		return 0;
+		spin_unlock(&futex_p->spin_lock);
+		return ret;
 	default:
 		ut_printf("ERROR : Unimplemented futex() OP %x\n", op);
 	}
 	return -1;
 }
-
+/************************************  end of futex ******************************/
 void *ipc_mutex_create(char *name) {
 	semaphore *sem ;
 	assert (ipc_init_done !=0);
@@ -220,6 +235,9 @@ static int wakeup_cpus(int wakeup_cpu) {
 			apic_send_ipi_vector(wakeup_cpu, IPI_INTERRUPT);
 			return 1;
 		} else {
+			if (g_cpu_state[wakeup_cpu].current_task == g_cpu_state[wakeup_cpu].idle_task) {
+				g_stat_idle_busy++;
+			}
 			return 0;
 		}
 	}
@@ -259,10 +277,12 @@ void ipc_check_waitqueues() {
 	unsigned long flags;
 	int assigned_to_running_cpu;
 
-	spin_lock_irqsave(&g_global_lock, flags);
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
-		if (wait_queue::wait_queues[i] == 0)
+		if (wait_queue::wait_queues[i] == 0){
 			continue;
+		}
+
+		spin_lock_irqsave(&g_global_lock, flags);
 		if (wait_queue::wait_queues[i]->head.next != &(wait_queue::wait_queues[i]->head)) {
 			struct task_struct *task;
 			task =list_entry(wait_queue::wait_queues[i]->head.next, struct task_struct, wait_queue);
@@ -283,11 +303,14 @@ void ipc_check_waitqueues() {
 					spin_unlock_irqrestore(&g_global_lock, flags);
 					wakeup_cpus(task->allocated_cpu);
 					spin_lock_irqsave(&g_global_lock, flags);
+				}else{
+					wait_queue::wait_queues[i]->stat_wakeon_samecpu++;
 				}
 			}
 		}
+		spin_unlock_irqrestore(&g_global_lock, flags);
 	}
-	spin_unlock_irqrestore(&g_global_lock, flags);
+
 }
 
 void ipc_release_resources(struct task_struct *task){
@@ -310,7 +333,6 @@ void ipc_release_resources(struct task_struct *task){
 
 }
 /*********************************  end of Wait queue ***********************************/
-
 
 #ifdef SPINLOCK_DEBUG
 spinlock_t *g_spinlocks[MAX_SPINLOCKS];
@@ -515,6 +537,7 @@ int wait_queue::_del_from_me( struct task_struct *p) {
 
 	return ret;
 }
+/* return the number of tasks dequeued */
 int wait_queue::wakeup() {
 	int ret = 0;
 	struct task_struct *task;
@@ -537,7 +560,9 @@ int wait_queue::wakeup() {
 				BUG();
 			}
 			if (assigned_to_running_cpu == 0){
-				wakeup_cpus(task->allocated_cpu);
+				int wk_ret;
+				wk_ret = wakeup_cpus(task->allocated_cpu);
+				stat_wakeups  = stat_wakeups + wk_ret;
 			}
 			ret++;
 		}
@@ -549,7 +574,7 @@ int wait_queue::wakeup() {
 	return ret;
 }
 /* ticks in terms of 10 ms */
-int wait_queue::wait(unsigned long ticks) {
+int wait_queue::wait_internal(unsigned long ticks, spinlock_t *spin_lock) {
 	unsigned long intr_flags;
 
 	local_irq_save(intr_flags);
@@ -563,8 +588,10 @@ int wait_queue::wait(unsigned long ticks) {
 	g_current_task->stats.wait_start_tick_no = g_jiffies ;
 	stat_wait_count++;
 	_add_to_me(g_current_task, ticks);
-
-
+	g_cpu_state[getcpuid()].task_on_wait = 1;
+	if (spin_lock != 0){
+		spin_unlock(spin_lock);
+	}
 	sc_schedule();
 	local_irq_restore(intr_flags);
 
@@ -574,6 +601,12 @@ int wait_queue::wait(unsigned long ticks) {
 		return 0;
 	else
 		return g_current_task->sleep_ticks;
+}
+int wait_queue::wait(unsigned long ticks) {
+	return wait_internal(ticks,0);
+}
+int wait_queue::wait_with_lock(unsigned long ticks, spinlock_t *spin_lock) {
+	return wait_internal(ticks,spin_lock);
 }
 void wait_queue::print_stats(unsigned char *arg1,unsigned char *arg2){
 

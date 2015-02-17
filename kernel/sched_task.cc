@@ -25,12 +25,13 @@ task_queue_t g_task_queue;
 spinlock_t g_global_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"global");
 unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles per second  */
 unsigned long g_jiffie_errors = 0;
+unsigned long g_stat_idle_avoided = 0;
 //unsigned long g_jiffie_tick = 0;
 
 static unsigned long free_pid_no = 1; // TODO need to make unique when  wrap around
 static wait_queue *timer_queue;
 int g_conf_cpu_stats = 1;
-int g_conf_idle_cpuspin = 0;
+int g_conf_idle_cpuspin = 1;
 int g_conf_dynamic_assign_cpu = 0; /* minimizes the IPI interrupt by reassigning the the task to running cpu */
 static int stat_dynamic_assign_errors = 1;
 
@@ -143,19 +144,7 @@ int _sc_task_assign_to_cpu(struct task_struct *task) {
 	int i;
 	int min_length = 99999;
 	int min_cpuid = -1;
-#if 0
-	if (g_conf_dynamic_assign_cpu == 1) {
-		for (i = 0; i < getmaxcpus(); i++) {
-			if (g_cpu_state[i].current_task != g_cpu_state[i].idle_task && g_cpu_state[i].run_queue_length < min_length) {
-				min_length = g_cpu_state[i].run_queue_length;
-				min_cpuid = i;
-			}
-		}
-		if (min_cpuid == -1) {
-			min_cpuid = getcpuid();
-		}
-	}
-#endif
+
 	_add_to_runqueue(task, -1);
 	if (task->allocated_cpu != getcpuid()) {
 		return 0;
@@ -595,7 +584,7 @@ void sc_delete_task(struct task_struct *task) {
 
 	if (1){
 		unsigned long life_length = g_jiffies - task->stats.start_time;
-		ut_log("DELETING TASK :%d(%x) st:%d dur:%d cont:%d tick:%d\n", task->pid,task->pid,task->stats.start_time,life_length,task->stats.total_contexts,task->stats.ticks_consumed);
+		ut_log("DELETING TASK :%d(%x) st:%d dur:%d cont:%d tick:%d cpu:%i\n", task->pid,task->pid,task->stats.start_time,life_length,task->stats.total_contexts,task->stats.ticks_consumed,task->allocated_cpu);
 	}
 
 	free_mm(task->mm);
@@ -1159,12 +1148,15 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	spin_unlock_irqrestore(&g_global_lock, flags);
 
 	p->clone_flags = clone_flags;
+	ut_log(" clone : %s  pid :%d(%x) task:%x \n",p->name,p->pid,p->pid, p);
+
 	if (clone_flags & CLONE_VFORK) { //TODO : sys-vfork partially done, need to use to signals suspend and continue the parent process
 		g_current_task->state = TASK_STOPPED;
 		sc_schedule();
 	}
 
 	SYSCALL_DEBUG("clone return pid :%d \n", ret_pid);
+
 	return ret_pid;
 }
 unsigned long SYS_sc_fork() {
@@ -1290,7 +1282,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 		SYS_sc_exit(703);
 		return;
 	}
-	ut_log(" execve : %s  pid :%d(%x) \n",g_current_task->name,g_current_task->pid,g_current_task->pid);
+	ut_log(" execve : %s  pid :%d(%x) task:%x \n",g_current_task->name,g_current_task->pid,g_current_task->pid, g_current_task);
 
 	g_current_task->thread.userland.ip = main_func;
 	g_current_task->thread.userland.sp = t_argv;
@@ -1354,16 +1346,23 @@ int cpuspin_before_halt(){
 #endif
 
 repeat:
+	if (g_cpu_state[cpuid].task_on_wait == 0){
+		return 0;
+	}
 	int prev_ints=0;
  	 g_cpu_state[cpuid].cpu_spinstate.clock_interrupts = 0;
  	 g_cpu_state[cpuid].cpu_spinstate.nonclock_interrupts = 0;
- 	 while(g_cpu_state[cpuid].cpu_spinstate.clock_interrupts < 5){
+ 	 while(g_cpu_state[cpuid].cpu_spinstate.clock_interrupts < 3){
+ 		 net_bh();
  		 if (g_cpu_state[cpuid].run_queue_length > 0){
+ 			g_cpu_state[cpuid].task_on_wait = 0;
  			sc_schedule();
+ 			g_stat_idle_avoided++;
  			goto repeat;
  		 }
  		prev_ints = g_cpu_state[cpuid].cpu_spinstate.clock_interrupts;
  	 }
+ 	 g_cpu_state[cpuid].task_on_wait = 0;
  	 return 1;
 }
 extern int init_vcputime(int cpu_id);
@@ -1382,19 +1381,20 @@ void idleTask_func() {
 		init_vcputime(cpu);
 	}
 	while (1) {
+#if 0
 		if (g_fault_stop_allcpu ==1){
 			asm volatile (" cli; hlt" : : : "memory");
 		}
-
+#endif
 		net_bh();
 		cpuspin_before_halt();
 
-		if (0) {
-			/* TODO:  we are making tight loop, here we want to sleep for just 100usec not for 10msec */
-		} else if (g_cpu_state[cpu].run_queue_length == 0) {/* TODO: there is a chance that someone insert in to runqueue */
+		if (g_cpu_state[cpu].run_queue_length == 0) {/* TODO: there is a chance that someone insert in to runqueue */
 			g_cpu_state[cpu].idle_state = 1;
 			arch::sti_hlt();
 			g_cpu_state[cpu].idle_state = 0;
+		}else{
+			g_stat_idle_avoided++;
 		}
 
 		sc_schedule();

@@ -339,6 +339,7 @@ int socket::delete_sock(socket *sock) {
 void socket::init_socket(int type){
 	//queue.spin_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"socketnetq_lock");
 	arch_spinlock_init(&queue.spin_lock, (unsigned char *)"socketnetq_lock" );
+	arch_spinlock_link(&_netstack_lock);
 
 	queue.waitq = jnew_obj(wait_queue, "socket_waitq", 0);
 	net_stack = net_stack_list[0];

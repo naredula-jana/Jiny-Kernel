@@ -14,14 +14,17 @@
 #define MAX_WAIT_QUEUES 500
 
 class wait_queue: public jobject {
+	int wait_internal(unsigned long ticks,spinlock_t *spin_lock);
 public:
 	struct list_head head;
 	char *name;
 	void *used_for; /* it can be used for semaphore/mutex  or raw waitqueue */
 	unsigned long flags;
 
-	int stat_wait_count;
-	int stat_wait_ticks;
+	unsigned long stat_wait_count;
+	unsigned long stat_wait_ticks;
+	unsigned long stat_wakeups;
+	unsigned long stat_wakeon_samecpu;
 
 	int _del_from_me(struct task_struct *p);
 	void _add_to_me(struct task_struct * p, long ticks);
@@ -29,6 +32,7 @@ public:
 	wait_queue(char *name, unsigned long flags);
 	int wakeup();
 	int wait(unsigned long ticks);
+	int wait_with_lock(unsigned long ticks, spinlock_t *spin_lock);
 	void print_stats(unsigned char *arg1,unsigned char *arg2);
 	int unregister();  /* TODO : this should be  merged with destructor */
 
@@ -61,18 +65,19 @@ public:
 	void free(); /* TODO : this should be  merged with destructor */
 };
 class futex: public jobject{
-	//semaphore *mutex;
 	wait_queue *waitq;
 	int type;
 public:
 	int *uaddr;
 	struct mm_struct *mm;
+	spinlock_t spin_lock;
 
-	int stat_waits,stat_nowaits,stat_wakeups;
+	unsigned long stat_count,stat_waits,stat_nowaits,stat_lnowaits,stat_wakeups_reqs;
+	unsigned long stat_wakeup_sucess;
 
 	futex(int *uaddr);
-	void lock();
-	void unlock();
+	void lock(spinlock_t *spin_lock);
+	int unlock();
 	void destroy();
 	void print_stats(unsigned char *arg1,unsigned char *arg2);
 };

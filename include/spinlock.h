@@ -87,12 +87,13 @@ static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 			: "%rax","%rbx", "memory" );
 #ifdef SPINLOCK_DEBUG
 	lock->stat_locks++;
-
+#if 0
 	if (lock->name!=0 && lock->linked == -1 && g_spinlock_count<MAX_SPINLOCKS) {
 		lock->linked = 0;
 		g_spinlocks[g_spinlock_count]=lock;
 		g_spinlock_count++;
 	}
+#endif
 
 #ifdef SPINLOCK_DEBUG_LOG
 	if (lock->log_length >= MAX_SPIN_LOG) lock->log_length=0;
@@ -111,18 +112,7 @@ static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 #endif
 	  }/* toplevel if */
 }
-#if 0
-static inline void arch_spinlock_unregister(spinlock_t *lock){
-	int i;
 
-	for (i=0; i<MAX_SPINLOCKS; i++) {
-		if (g_spinlocks[i]==lock) {
-			g_spinlocks[i]=0;
-		}
-	}
-	return;
-}
-#endif
 static inline void arch_spinlock_free(spinlock_t *lock){
 	int i;
 
@@ -133,20 +123,24 @@ static inline void arch_spinlock_free(spinlock_t *lock){
 	}
 	return;
 }
+static inline void arch_spinlock_link(spinlock_t *lock){ /* this is for logging and debugging purpose */
+	int i;
+	for (i=0; i<MAX_SPINLOCKS; i++) {
+			if (g_spinlocks[i]==0) {
+				g_spinlocks[i]=lock;
+				lock->linked = 0;
+				if (i>g_spinlock_count){
+					g_spinlock_count = i+1;
+				}
+				return;
+			}
+		}
+}
 static inline void arch_spinlock_init(spinlock_t *lock, unsigned char *name){
 	int i;
 
 	*lock = SPIN_LOCK_UNLOCKED(name);
-	for (i=0; i<MAX_SPINLOCKS; i++) {
-		if (g_spinlocks[i]==0) {
-			g_spinlocks[i]=lock;
-			lock->linked = 0;
-			if (i>g_spinlock_count){
-				g_spinlock_count = i+1;
-			}
-			return;
-		}
-	}
+	arch_spinlock_link(lock);
 }
 static inline void arch_spinlock_unlock(spinlock_t *lock, int line) {
 #ifdef SPINLOCK_DEBUG

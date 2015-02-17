@@ -512,10 +512,14 @@ struct percpu_pagecache {
 static struct percpu_pagecache page_cache[MAX_CPUS];
 static struct page_bucket raw_buckets[MAX_BUCKETS];
 static spinlock_t jslab_cache_lock = SPIN_LOCK_UNLOCKED("jslab_cache");
+static spinlock_t vmalloc_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"vmalloc");
 void init_percpu_page_cache(){
 	int i;
-	ut_memset(page_cache,0,MAX_CPUS*sizeof(struct percpu_pagecache));
 
+	arch_spinlock_link(&jslab_cache_lock);
+	arch_spinlock_link(&vmalloc_lock);
+
+	ut_memset(page_cache,0,MAX_CPUS*sizeof(struct percpu_pagecache));
 	ut_memset(&raw_buckets[0],0,MAX_BUCKETS*sizeof(struct page_bucket));
 	empty_buckets =0;
 	full_buckets = 0;
@@ -682,7 +686,7 @@ int init_jslab_vmalloc(){
 	vmalloc_initiated = 1;
 	return JSUCCESS;
 }
-spinlock_t vmalloc_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"vmalloc");
+
 void *vmalloc(int size, int flags){ /* TODO locks need to be addedd */
 	int i,j;
 	unsigned long ret=0;
