@@ -1,4 +1,4 @@
-/* prodcons2.c */
+/* sem_test4.c */
 
 /*
  * A solution to the producer consumer using semaphores
@@ -46,7 +46,7 @@ void main(int argc, char *argv[]) {
 	pthread_t t[2];
 
 	if (argc != 3) {
-		printf("./sem <out_loop> <in_loop> \n");
+		printf("./sem4 <out_loop> <in_loop> \n");
 		return 1;
 	}
 	out_max = atoi(argv[1]);
@@ -57,6 +57,7 @@ void main(int argc, char *argv[]) {
 
 	 sem_init(&prod_sem, 0, 0);
 	 sem_init(&cons_sem, 0, 1);
+	 /* using clone instead of clone , jiny as compatablty issue, need FIX in jiny to use pthread_create */
 	clone((void *) &consumer, &stack[4000], 9000, 0, 0);
 	producer();
 }
@@ -103,7 +104,7 @@ void *consumer() {
 		sem_post(&cons_sem);
 	}
 
-	printf(" Consumer light completed.. : %d \n", max_loop);
+	printf(" Consumer completed.. : %d \n", max_loop);
 	fflush(stdout);
 	exit_done = 1;
 	sem_post(&cons_sem);

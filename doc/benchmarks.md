@@ -90,23 +90,40 @@ Host to vm: on a highend hardware.
   Memory allocation improvements like zero page accumulation and other related techiniques: Based on this technique one round of testing is done but it as not given the substantial improvements as expected, need to improve and redo.
    
 ----------------------------------------------------------------------------------
-###Benchmark-6(Lock free or avoiding spinlocks  and minimizing the interrupts): Partially completed
+###Benchmark-6(Speeding IPC): Partially completed
+This Benchmark main focus on performance gaps in InterProcess Communication(mutex,semphore,messages etc).The gaps are mainly from the angle of locks and interrupts(especially IPI and timer interrupts) inside the kernel. 
+
   - spin locks are well suited for SMP not for virtual machines because of lock-holder preemption. Avoiding spin locks and writing the lock free code.
-  - Avoid the following: hitting "hlt" instruction by a CPU and getting waken up by other cpu using IPI(inter processor insr) interrupt within short period of time is not good for virtual machines.
-  - Minimising the regular timer Ticks for every 10ms.
+  -  Hitting "hlt" instruction by a CPU and getting awaken up by other cpu using IPI(Inter Processor Interrupt) within short period of time is not good for virtual machines.
+  - Minimising/Avoiding the regular timer Ticks used in many kernels.
   
-   **Test Environment**: 
-     This is a Producer and consumer code using the semaphores. Producer and consumer runs in two seperate threads. Producer is more cpu intesive when compare to consumer, this make consumer waits for producer at the end of each loop. producer wakes consumer once it produced. In this way consumer get context switched at the end of every loop. This emulates  producer and consumer with unequal cpu cycles to process every item, this will be a common case. The [source code available here.](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/experiments/sem_test4.c).
+   **Test Environment and Results**: 
+     This is a Producer and consumer test using semaphores. Producer and consumer runs in two seperate threads. Producer is more cpu intesive when compare to consumer, this make consumer waits for producer at the end of each loop. producer wakes consumer once item is produced. In this way consumer get context switched at the end of every loop. This emulates  producer and consumer with unequal cpu computation to process every item, this will be a common case. The [source code for test available here.] (https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/expirements/sem_test4.c). If the amount of computation for producer and consumer is same then there will be not be any lock contention then it will run at full speed without entreing in to kernel. This test emulates the non-good case.
      **Hypervisor**: kvm/qemu-2.x
-     ** arguments to the test**:  "sem 400k 2000"  :  Here 400k represents the number of items produced and consumed, producer loops 2000 times in tght loop to emulate cpu cycles consumption for every item.
+     **host kernel version**:3.13.0-32
+     **command and arguments to run the test**:  "sem 800k 2000"  :  Here 800k represents the number of items produced and consumed, producer loops 2000 times in tight loop to emulate cpu consumption after every item, the more this value the more will be the consumer wait time.
      
-   1. **Test-1**: ubuntu-14(linux vm) with 2 cpu :  able to complete the test in 22 seconds. cpu consumption is 150% noticed on host with top utility. large number of interruots close to 400k are generated inside te guestos.
-   2. **Test-2**: Jiny os with 2 cpu as vm : able to complete in 9 seconds. cpu consumption is 200% noticed on host with top utility. No additional interrupts are generated in this test.
-   3. **Test-3**: ubuntu-14 on metal: almost same as Test-2, for large loops metal takes 97sec whereas Test-2 takes 93 seconds, means on the metal it takes almost 3% to 4% more, this may be because of interrupts on the metal.
-     
-##### Reasons for Better throuhput in Jiny os
-1. Producer and consumer thread will be running on seperate cpu's. when consumer thread goes to sleep, the cpu instead of hitting the hlt instruction, it checks if there is any threads waiting then it loops for a short duration then it goes to sleep using "hlt" instruction, In this short duration if the thread got woken up then cpu need not wakenup by other cpu using IPI(interrupts). In this way it saves around 400k interrupts for 400k loop in Test-2. Interrupts are costly in virtual environment when compare to metal. every interrupt causes exist and entry in the hypervisor. THe "hlt" instruction casues context switch.   
-2. swithing off the timer interrupts on the non-boot cpu (not tested or not included) MAY save somemore cpu cycles and can speedup further.
+   1. **Test-1**: with ubuntu-14(linux vm - kernel 3.0.x) on 2 cpu :  able to complete the test in 22 seconds. host cpu consumption is 150%(1.5 cpu's) noticed on host with top utility. large number of IPI interrupts close to 280k are generated inside the guestos.
+   2. **Test-2**: Jiny os with 2 cpu as vm(version 2.x): able to complete in 9 seconds(more then 140% improvement). host cpu consumption is 200%(2 cpu's) noticed with top utility. No additional IPI interrupts are generated in the quest OS.
+   3. **Test-3**: ubuntu-14(linux os) on metal: almost same as Test-2, with large loops metal takes 97sec whereas Test-2 takes 93 seconds, means on the metal it takes almost 3% to 4% more, this may be because of IPI interrupts on the metal.
+          
+##### Reasons for Better throughput of IPC in Jiny OS
+1. Producer and consumer thread will be running on seperate cpu's. when consumer thread goes to sleep and control goes to idle thread, before hitting the "hlt" instruction idle thread checks if there is any threads belonging to the cpu is waiting, if there is any threads under wait then it spin the cpus or does a small house keeping tasks for a short duration(10ms or 1 tick) then it goes to sleep using "hlt" instruction, In this short duration if the consumer thread got woken up then it saves IPI(interrupts) generation and exit/entry of the vcpu. In this way it saves around 800k interrupts for 800k loop in Test-2. Interrupts are costly in virtual environment when compare to metal. every interrupt causes exist and entry in the hypervisor. The "hlt" instruction casues context switch at host.        
+2. switching off the timer interrupts on the non-boot cpu (not tested or not included) MAY save somemore cpu cycles and can speedup further.
+
+##### Summary of Tests:
+1. Test-1 versus Teset-2 : Jiny-vm as performed 140% better when compare to linux vm with same test setup, this is mainly interrupts are not generated because cpu avoids hitting "hlt" instruction when the thread is under wait for a short period.
+2. Test-2 versus Test-3 :linux on baremetal is very close to that of jiny vm. 3% to 4% degredation is due to the IPI interrupts are generated on the metal when compare to jiny.
+3. Test-1 versus Test-3 :linux kernel on the metal and on hypervisor(i,e test-1 and test-3) shows a gap of 140%. this is mainly the interrupts speed on hypervisor and hitting hlt instruction frequently.
+
+Issue-1: In IPC, if there is a contention in mutext or semop or other IPC, then one of the thread will be active and other thread goes to sleep. In this situation, It will be costly to wakeup a thread under sleep in virtual environment with linux  when compare to the metal or jinyos. 
+
+##### When IPC based apps in linux vm can under perform due to Issue-1
+1. linux as vm and with multicore(more then one cpu). The issue will not be present in single core or on metal(present but very minumum as shown it is only 3 to 4% as against 140%).
+2. The issue will be more when the cpu's are idle and only one task is on the cpu. example: only producer,consumer threads running on different cpu's.  If other app's are running/active on the same vcpu as waiting thread then vcpu will not go to sleep and issue-1 will not popup.
+3. The issue CAN  popup if the critical section's in the app's are small and there is contention among the threads. If the critical section are large then waiter thread goes to a long sleep then receving IPI interrupts is better when compare to tight cpu spin.
+
+ Monitoring Issue-1: Watch out  the number of [Rescheduling Interrupts](https://help.ubuntu.com/community/ReschedulingInterrupts) in /proc/interrupts, Rescheduling interrupts are implemented using Inter Processor Interrupt(IPI). 
 
 ----------------------------------------------------------------------------------
 ##Papers:
