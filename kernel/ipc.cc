@@ -58,6 +58,7 @@ void futex::lock(spinlock_t *spin_lock){
 	if (waitq ==0){
 		return;
 	}
+	g_cpu_state[getcpuid()].task_on_wait = 1;
 	waitq->wait_with_lock(50,spin_lock);
 }
 int futex::unlock(){
@@ -588,7 +589,7 @@ int wait_queue::wait_internal(unsigned long ticks, spinlock_t *spin_lock) {
 	g_current_task->stats.wait_start_tick_no = g_jiffies ;
 	stat_wait_count++;
 	_add_to_me(g_current_task, ticks);
-	g_cpu_state[getcpuid()].task_on_wait = 1;
+
 	if (spin_lock != 0){
 		spin_unlock(spin_lock);
 	}
