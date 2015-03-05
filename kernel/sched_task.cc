@@ -698,7 +698,7 @@ void sc_schedule() { /* _schedule function task can land here. */
 	}
 	if (g_current_task->current_cpu
 			!= cpuid|| g_current_task->magic_numbers[0] != MAGIC_LONG || g_current_task->magic_numbers[1] != MAGIC_LONG){ /* safety check */
-		DEBUG(" Task Stack got CORRUPTED task:%x :%x :%x \n",g_current_task,g_current_task->magic_numbers[0],g_current_task->magic_numbers[1]);
+		ut_log(" Task Stack got CORRUPTED task:%x :%x :%x \n",g_current_task,g_current_task->magic_numbers[0],g_current_task->magic_numbers[1]);
 	    BUG();
     }
 
@@ -829,7 +829,7 @@ int do_softirq() {
 		ipc_check_waitqueues();
 	}
 
-#if 1
+#if 0
 	if (cpuid == 0  && (house_keeper_count%100)==0){
 		for (i=1; i< getmaxcpus(); i++){
 			if (g_cpu_state[i].active == 0 || g_cpu_state[i].run_queue_length==0 ) continue;
