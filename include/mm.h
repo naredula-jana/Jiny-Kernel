@@ -75,6 +75,7 @@ typedef struct kmem_cache_s kmem_cache_t;
 
 #define MEM_CLEAR      0x8000000
 #define MEM_FOR_CACHE  0x4000000
+#define MEM_NETBUF     0x0200000
 //#define MEM_FOR_GLOBAL 0x2000000  /* pages for global , not allocated from task context */
 
 /* protection flags matches to that elf flags */

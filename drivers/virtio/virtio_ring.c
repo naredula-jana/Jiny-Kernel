@@ -177,7 +177,7 @@ void print_vq(struct virtqueue *_vq) {
 	diff = vq->vring.used->idx - vq->vring.avail->idx;
 	if (diff < 0)
 		diff = diff * (-1);
-	ut_printf("		vq:%x size:%i num_free:%i  free_head:%d used:%x(%d) avail:%x(%d) diff:%d last_use_idx:%d alloc:%d free:%d\n", vq,vq->vring.num,  vq->num_free, vq->free_head,
+	ut_printf("		vq:%x size:%i num_free:%i  free_head:%d used:%x(%i) avail:%x(%i) diff:%d last_use_idx:%d alloc:%d free:%d\n", vq,vq->vring.num,  vq->num_free, vq->free_head,
 			vq->vring.used->idx, vq->vring.used->idx, vq->vring.avail->idx, vq->vring.avail->idx, diff, vq->last_used_idx,vq->stat_alloc,vq->stat_free);
 
 }
@@ -519,6 +519,7 @@ struct virtqueue *vring_new_virtqueue(unsigned int num,
 		return NULL;
 
 	vring_init(&vq->vring, num, pages, vring_align);
+	ut_log("		vring  desc:%x avail:%x used:%x \n",vq->vring.desc,vq->vring.avail,vq->vring.used);
 	vq->vq.callback = callback;
 #if 1
 	vq->vq.pci_ioaddr = pci_ioaddr;

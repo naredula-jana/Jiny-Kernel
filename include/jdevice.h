@@ -67,7 +67,11 @@ class virtio_net_jdriver: public virtio_jdriver {
 
 	int net_attach_device(jdevice *dev);
 	int free_send_bufs();
+
 public:
+	unsigned long remove_buf_from_vq(int qno,int *len);
+	int addBufToNetQueue(int qno, unsigned char *buf, unsigned long len);
+
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);
 	int dettach_device(jdevice *dev);

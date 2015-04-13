@@ -32,6 +32,7 @@ static unsigned long free_pid_no = 1; // TODO need to make unique when  wrap aro
 static wait_queue *timer_queue;
 int g_conf_cpu_stats = 1;
 int g_conf_idle_cpuspin = 1;
+int g_conf_netbh_tightloop=0;
 int g_conf_dynamic_assign_cpu = 0; /* minimizes the IPI interrupt by reassigning the the task to running cpu */
 static int stat_dynamic_assign_errors = 1;
 
@@ -65,10 +66,8 @@ static void free_task_struct(struct task_struct *p) {
 	mm_putFreePages((unsigned long) p, 2);
 	return;
 }
-/************************************************
- All the below function should be called with holding lock
- ************************************************/
-static inline int _add_to_runqueue(struct task_struct *p, int arg_cpuid){ /* Add at the first */
+
+static inline int add_to_runqueue(struct task_struct *p, int arg_cpuid){ /* Add at the first */
 	int ret = 0;
 	int cpuid;
 	int my_cpuid=getcpuid();
@@ -88,7 +87,7 @@ static inline int _add_to_runqueue(struct task_struct *p, int arg_cpuid){ /* Add
 
 	if (p->magic_numbers[0] != MAGIC_LONG || p->magic_numbers[1] != MAGIC_LONG || (p->run_queue.next != 0)) /* safety check */
 	{
-		ut_printf(" Task Stack Got CORRUPTED task:%x :%x :%x \n", p, p->magic_numbers[0], p->magic_numbers[1]);
+		ut_printf("in Runqueue Task Stack Got CORRUPTED task:%x :%x :%x :%x\n", p, p->magic_numbers[0], p->magic_numbers[1],p->run_queue.next);
 		BUG();
 	}
 
@@ -106,7 +105,7 @@ static inline int _add_to_runqueue(struct task_struct *p, int arg_cpuid){ /* Add
 	return ret;
 }
 
-static inline struct task_struct *_del_from_runqueue(struct task_struct *p, int arg_cpuid) {
+static inline struct task_struct *del_from_runqueue(struct task_struct *p, int arg_cpuid) {
 	int my_cpuid=getcpuid();
 	int cpuid = arg_cpuid;
 	unsigned long intr_flags;
@@ -140,12 +139,12 @@ last:
 }
 
 /* return 1 if it assigned to running cpu */
-int _sc_task_assign_to_cpu(struct task_struct *task) {
+int sc_task_assign_to_cpu(struct task_struct *task) {
 	int i;
 	int min_length = 99999;
 	int min_cpuid = -1;
 
-	_add_to_runqueue(task, -1);
+	add_to_runqueue(task, -1);
 	if (task->allocated_cpu != getcpuid()) {
 		return 0;
 	} else {
@@ -529,7 +528,7 @@ static int continue_parent_task(unsigned long ppid){
 		if (task->pid == ppid) {
 			if (task->state == TASK_STOPPED){
 				task->state == TASK_RUNNING;
-				_add_to_runqueue(task, -1);
+				add_to_runqueue(task, -1);
 			}
 			break;
 		}
@@ -698,14 +697,14 @@ void sc_schedule() { /* _schedule function task can land here. */
 	}
 	if (g_current_task->current_cpu
 			!= cpuid|| g_current_task->magic_numbers[0] != MAGIC_LONG || g_current_task->magic_numbers[1] != MAGIC_LONG){ /* safety check */
-		ut_log(" Task Stack got CORRUPTED task:%x :%x :%x \n",g_current_task,g_current_task->magic_numbers[0],g_current_task->magic_numbers[1]);
+		ut_log(" in Schedule : Task Stack got CORRUPTED task:%x :%x :%x cpu:%d \n",g_current_task,g_current_task->magic_numbers[0],g_current_task->magic_numbers[1],cpuid);
 	    BUG();
     }
 
 	/* schedule */
-//	local_irq_save(intr_flags);
+	local_irq_save(intr_flags);
 	intr_flags = _schedule(intr_flags);
-//	local_irq_restore(intr_flags);
+	local_irq_restore(intr_flags);
 
 	/* remove dead tasks */
 	sc_remove_dead_tasks();
@@ -716,7 +715,7 @@ static unsigned long _schedule(unsigned long flags) {
 	int cpuid = getcpuid();
 
 //	g_current_task->stats.ticks_consumed++;
-	if (g_current_task->state == TASK_NONPREEMPTIVE){
+	if (g_current_task->state & TASK_NONPREEMPTIVE){
 		return g_current_task->flags;
 	}
 	prev = g_current_task;
@@ -727,11 +726,11 @@ static unsigned long _schedule(unsigned long flags) {
 		apic_disable_partially();
 		g_cpu_state[cpuid].intr_disabled = 1;
 	} else {
-		next = _del_from_runqueue(0, -99);
+		next = del_from_runqueue(0, -99);
 #if 1
 		if (next != 0 && next->stick_to_cpu != 0xffff && next->stick_to_cpu != cpuid) {
 			next->allocated_cpu = next->stick_to_cpu;
-			_add_to_runqueue(next, -99);
+			add_to_runqueue(next, -99);
 			next = 0;
 		}
 		if ((g_cpu_state[cpuid].intr_disabled == 1) && (cpuid != 0) && (g_cpu_state[cpuid].active == 1)) {
@@ -785,7 +784,7 @@ static unsigned long _schedule(unsigned long flags) {
 			BUG();
 		}
 		prev->current_cpu = 0xffff;
-		_add_to_runqueue(prev, -99);
+		add_to_runqueue(prev, -99);
 	}
 	next->current_cpu = cpuid; /* get cpuid based on this */
 	//next->cpu_contexts++;
@@ -1050,16 +1049,17 @@ static int get_free_cpu() {
 
 }
 void sc_enable_nonpreemptive(){
-	if (g_current_task->state != TASK_RUNNING){
+	if (g_current_task->state & TASK_RUNNING){
 		BUG();
 	}
-	g_current_task->state = TASK_NONPREEMPTIVE;
+	g_current_task->state = g_current_task->state | TASK_NONPREEMPTIVE;
 }
 void sc_disable_nonpreemptive(){
-	if (g_current_task->state != TASK_NONPREEMPTIVE){
-		BUG();
+	if (!(g_current_task->state & TASK_NONPREEMPTIVE)){
+		//BUG();
+		ut_log(" ERROR: NONPREMPTIVE \n");
 	}
-	g_current_task->state = TASK_RUNNING;
+	g_current_task->state = g_current_task->state & (~TASK_NONPREEMPTIVE);
 
 }
 unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*fn)(void *, void *), void **args) {
@@ -1144,7 +1144,7 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 
 	spin_lock_irqsave(&g_global_lock, flags);
 	list_add_tail(&p->task_queue, &g_task_queue.head);
-	_add_to_runqueue(p, -1);
+	add_to_runqueue(p, -1);
 	spin_unlock_irqrestore(&g_global_lock, flags);
 
 	p->clone_flags = clone_flags;
@@ -1381,9 +1381,12 @@ void idleTask_func() {
 		init_vcputime(cpu);
 	}
 	while (1) {
-#if 0
-		if (g_fault_stop_allcpu ==1){
-			asm volatile (" cli; hlt" : : : "memory");
+#if 1
+		while(g_conf_netbh_tightloop==1){
+			net_bh();
+			if (g_cpu_state[cpu].run_queue_length != 0){
+				sc_schedule();
+			}
 		}
 #endif
 		net_bh();

@@ -565,37 +565,43 @@ static struct page_bucket *get_bucket(struct page_bucket *in){
 
 	return ret;
 }
+int g_conf_percpu_pagecache=1;
 unsigned long jalloc_page(int flags){
 	int cpu=getcpuid(); /* local for each cpu */
 
 	stat_page_allocs++;
 	if (flags&MEM_CLEAR){
 		stat_page_alloc_zero++;
-	}else{
-		if (page_cache[cpu].inuse == 0){
-			struct page_bucket *bucket;
-			page_cache[cpu].inuse=1;
+	}else if (g_conf_percpu_pagecache == 1) {
+		//if (flags&MEM_NETBUF) {
+		if (1) {
+			if (page_cache[cpu].inuse == 0) {
+				struct page_bucket *bucket;
+				page_cache[cpu].inuse = 1;
 
-			bucket = page_cache[cpu].buck1;
-			if (bucket && bucket->top == 0){
-				bucket = page_cache[cpu].buck2;
-				if (bucket && bucket->top == 0){
-					page_cache[cpu].buck1 = get_bucket(page_cache[cpu].buck1);
-					bucket = page_cache[cpu].buck1;
+				bucket = page_cache[cpu].buck1;
+				if (bucket && bucket->top == 0) {
+					bucket = page_cache[cpu].buck2;
+					if (bucket && bucket->top == 0) {
+						page_cache[cpu].buck1 = get_bucket(
+								page_cache[cpu].buck1);
+						bucket = page_cache[cpu].buck1;
+					}
 				}
-			}
 
-			if (bucket && bucket->top > 0){
-				unsigned long ret = bucket->stack[bucket->top -1];
-				bucket->top--;
-				page_cache[cpu].inuse=0;
-				page_cache[cpu].stat_allocs++;
-				return ret;
+				if (bucket && bucket->top > 0) {
+					unsigned long ret = bucket->stack[bucket->top - 1];
+					bucket->top--;
+					page_cache[cpu].inuse = 0;
+					page_cache[cpu].stat_allocs++;
+					return ret;
+				}
+				page_cache[cpu].inuse = 0;
 			}
-			page_cache[cpu].inuse=0;
+			page_cache[cpu].stat_miss_alloc++;
 		}
 	}
-	page_cache[cpu].stat_miss_alloc++;
+
 
 	if (g_conf_zeropage_cache==1){
 		unsigned long page;
@@ -609,35 +615,37 @@ int jfree_page(unsigned long p){
 
 	stat_page_frees++;
 	//ut_log(" jfree_page:%x \n",p);
-
-	if (page_cache[cpu].inuse == 0) {
-		struct page_bucket *bucket;
-		page_cache[cpu].inuse = 1;
-		if (page_cache[cpu].buck1 == 0){
-			page_cache[cpu].buck1 = get_bucket(0);
-			page_cache[cpu].buck2 = get_bucket(0);
-		}
-
-		bucket = page_cache[cpu].buck1;
-		if (bucket && bucket->top >= MAX_STACK_SIZE){
-			bucket  = page_cache[cpu].buck2;
-			if (bucket && bucket->top >= MAX_STACK_SIZE){
-				bucket = get_bucket(page_cache[cpu].buck1);
-				page_cache[cpu].buck1 = bucket;
+#if 1
+	if (g_conf_percpu_pagecache == 1) {/* TODO: we are adding the address without validation */
+		if (page_cache[cpu].inuse == 0) {
+			struct page_bucket *bucket;
+			page_cache[cpu].inuse = 1;
+			if (page_cache[cpu].buck1 == 0) {
+				page_cache[cpu].buck1 = get_bucket(0);
+				page_cache[cpu].buck2 = get_bucket(0);
 			}
-		}
 
-		if (bucket && bucket->top < MAX_STACK_SIZE) {
-			bucket->stack[bucket->top] = p;
-			bucket->top++;
+			bucket = page_cache[cpu].buck1;
+			if (bucket && bucket->top >= MAX_STACK_SIZE) {
+				bucket = page_cache[cpu].buck2;
+				if (bucket && bucket->top >= MAX_STACK_SIZE) {
+					bucket = get_bucket(page_cache[cpu].buck1);
+					page_cache[cpu].buck1 = bucket;
+				}
+			}
+
+			if (bucket && bucket->top < MAX_STACK_SIZE) {
+				bucket->stack[bucket->top] = p;
+				bucket->top++;
+				page_cache[cpu].inuse = 0;
+				page_cache[cpu].stat_frees++;
+				return 0;
+			}
 			page_cache[cpu].inuse = 0;
-			page_cache[cpu].stat_frees++;
-			return 0;
 		}
-		page_cache[cpu].inuse = 0;
+		page_cache[cpu].stat_miss_free++;
 	}
-	page_cache[cpu].stat_miss_free++;
-
+#endif
 	if (g_conf_zeropage_cache==1){
 		if (insert_into_zeropagecache(p,0) == JSUCCESS)
 			return 0;

@@ -603,6 +603,7 @@ unsigned long SYS_sendto(int sockfd, void *buf, size_t len, int flags, struct so
 	SYSCALL_DEBUG("SENDTO fd:%x buf:%x len:%d flags:%x dest_addr:%x addrlen:%d\n", sockfd, buf, len, flags, dest_addr, addrlen);
 	//ut_log("SENDTO fd:%x buf:%x len:%d flags:%x dest_addr:%x addrlen:%d\n", sockfd, buf, len, flags, dest_addr, addrlen);
 
+	//return len;
 	if (sock_check(sockfd) == JFAIL || g_current_task->fs->filep[sockfd] == 0)
 		return 0;
 	struct file *file = g_current_task->fs->filep[sockfd];
@@ -619,7 +620,10 @@ unsigned long SYS_sendto(int sockfd, void *buf, size_t len, int flags, struct so
 		}
 		sock->network_conn.dest_port = dest_addr->sin_port;
 	}
-
+	unsigned long *tmp_sock = (unsigned long *)sock;
+	if (*tmp_sock == 0){ /* TODO: safe check need to remove later, somehow the object data is getting corrupted */
+		BUG();
+	}
 	return sock->write(0, (unsigned char *) buf, len, 0);
 }
 int SYS_sendmsg(){

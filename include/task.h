@@ -131,6 +131,7 @@ struct syscall_stat{
 	int count;
 };
 struct task_struct {
+	unsigned long unused[4];
 	volatile long state;    /* -1 unrunnable, 0 runnable, >0 stopped */
 	unsigned long flags;    /* per process flags, defined below */
 	unsigned long pending_signals;	

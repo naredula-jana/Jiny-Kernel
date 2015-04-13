@@ -76,7 +76,7 @@ extern "C"{
 #include "interface.h"
 static int ipc_init_done=0;
 int g_stat_idle_busy=0;
-extern int _sc_task_assign_to_cpu(struct task_struct *task);
+extern int sc_task_assign_to_cpu(struct task_struct *task);
 unsigned long _schedule(unsigned long flags);
 void sc_remove_dead_tasks();
 
@@ -297,7 +297,7 @@ void ipc_check_waitqueues() {
 				wait_queue::wait_queues[i]->_del_from_me(task);
 				assigned_to_running_cpu = 0;
 				if (task->run_queue.next == 0)
-					assigned_to_running_cpu = _sc_task_assign_to_cpu(task);
+					assigned_to_running_cpu = sc_task_assign_to_cpu(task);
 				else
 					BUG();
 				if (assigned_to_running_cpu == 0) {
@@ -556,7 +556,7 @@ int wait_queue::wakeup() {
 		if (_del_from_me(task) == JSUCCESS) {
 			assigned_to_running_cpu = 0;
 			if (task->run_queue.next == 0 ){
-				assigned_to_running_cpu = _sc_task_assign_to_cpu(task);
+				assigned_to_running_cpu = sc_task_assign_to_cpu(task);
 			}else{
 				BUG();
 			}

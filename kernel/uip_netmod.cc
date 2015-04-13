@@ -18,6 +18,7 @@ void ut_memset(uint8_t *dest, uint8_t val, long len);
 extern int net_send_eth_frame(unsigned char *buf, int len, int write_flags);
 extern unsigned char *jalloc_page(int flags);
 extern int jfree_page(unsigned char *p);
+#define MEM_NETBUF     0x0200000  /* TODO : need to remove later */
 int g_conf_zerocopy=0;  /* TODO: temporary variable : need to remove later */
 }
 
@@ -94,7 +95,7 @@ int network_stack::read(network_connection *conn, uint8_t *raw_data, int raw_len
 		goto last;
 	}
 
-	jbuf = (unsigned char *) jalloc_page(0);
+	jbuf = (unsigned char *) jalloc_page(MEM_NETBUF);
 	if (jbuf ==0) {
 		goto last;
 	}else{
@@ -190,7 +191,7 @@ int network_stack::write(network_connection *conn, uint8_t *app_data, int app_le
 		goto last;
 	}
 
-	buf = (unsigned long) jalloc_page(0);
+	buf = (unsigned long) jalloc_page(MEM_NETBUF);
 	if (buf ==0) {
 		goto last;
 	}else{
