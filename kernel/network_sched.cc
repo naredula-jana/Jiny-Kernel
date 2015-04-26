@@ -340,7 +340,7 @@ void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
 	if (net_sched.device) {
 		unsigned char mac[10];
 
-		net_sched.device->print_stats("all",0);
+		net_sched.device->ioctl(NETDEV_IOCTL_PRINT_STAT, 0);
 		net_sched.device->ioctl(NETDEV_IOCTL_GETMAC, (unsigned long) &mac);
 		ut_printf(" Mac: %x:%x:%x:%x:%x:%x  sendqlen :%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],send_qlen);
 	}

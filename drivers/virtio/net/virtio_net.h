@@ -49,6 +49,7 @@
 #define VIRTIO_NET_F_CTRL_RX	18	/* Control channel RX mode support */
 #define VIRTIO_NET_F_CTRL_VLAN	19	/* Control channel VLAN filtering */
 #define VIRTIO_NET_F_CTRL_RX_EXTRA 20	/* Extra RX mode control support */
+#define VIRTIO_NET_F_MQ 22	/* Multi queue support */
 
 #define VIRTIO_NET_S_LINK_UP	1	/* Link is up */
 
@@ -57,6 +58,7 @@ struct virtio_net_config {
 	__u8 mac[6];
 	/* See VIRTIO_NET_F_STATUS and VIRTIO_NET_S_* above */
 	__u16 status;
+	__u16 max_vq_pairs;  /* max vq pairs */
 } __attribute__((packed));
 
 /* This is the first element of the scatter-gather list.  If you don't

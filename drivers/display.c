@@ -309,7 +309,10 @@ static void format_string(struct writer_struct *writer, const char *format, va_l
 			case 'u':
 			case 'x':
 			case 'i':
-				if (c == 'i') {
+				if (c == 'u') {
+					val = va_arg(vl,unsigned int) & 0xffff;
+					c = 'x';
+				}else if (c == 'i') {
 					val = va_arg(vl,unsigned int);
 					c = 'd';
 				} else

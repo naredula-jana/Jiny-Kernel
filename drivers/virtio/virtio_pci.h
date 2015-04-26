@@ -114,21 +114,6 @@
 /* The alignment to use between consumer and producer parts of vring.
  * x86 pagesize again. */
 #define VIRTIO_PCI_VRING_ALIGN		4096
-#if 0
-typedef struct {
-	int type;
-	unsigned long pci_ioaddr, pci_iolen;
-	unsigned long pci_mmio;
-	unsigned long pci_mmiolen;
-	int msi;
-	struct virtqueue *vq[5];
-	//unsigned char mac[7];
-	//void(*rx_func)(unsigned char* data, int len);
-	void (*isr)(registers_t regs);
-}virtio_dev_t;
 
-extern  struct virtio_feature_desc vtnet_feature_desc[];
-void display_virtiofeatures(unsigned long feature, struct virtio_feature_desc *desc);
-#endif
 
 #endif

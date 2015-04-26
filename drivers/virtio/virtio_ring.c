@@ -168,7 +168,7 @@ static int vring_add_indirect(struct vring_virtqueue *vq,
 }
 extern int netbh_state;
 void print_vq(struct virtqueue *_vq) {
-	long diff;
+	uint16_t diff;
 	if (_vq == 0) {
 		ut_printf("		vq Empty \n");
 		return;
@@ -177,7 +177,7 @@ void print_vq(struct virtqueue *_vq) {
 	diff = vq->vring.used->idx - vq->vring.avail->idx;
 	if (diff < 0)
 		diff = diff * (-1);
-	ut_printf("		vq:%x size:%i num_free:%i  free_head:%d used:%x(%i) avail:%x(%i) diff:%d last_use_idx:%d alloc:%d free:%d\n", vq,vq->vring.num,  vq->num_free, vq->free_head,
+	ut_printf("		vq:%x size:%i num_free:%i  free_head:%d used:%u(%i) avail:%u(%i) diff:%u last_use_idx:%u alloc:%i free:%i\n", vq,vq->vring.num,  vq->num_free, vq->free_head,
 			vq->vring.used->idx, vq->vring.used->idx, vq->vring.avail->idx, vq->vring.avail->idx, diff, vq->last_used_idx,vq->stat_alloc,vq->stat_free);
 
 }
@@ -392,6 +392,9 @@ void *virtio_removeFromQueue(struct virtqueue *_vq, unsigned int *len)
 
 void virtio_disable_cb(struct virtqueue *_vq)
 {
+	if (_vq == 0){
+		return;
+	}
 	struct vring_virtqueue *vq = to_vvq(_vq);
 
 	vq->vring.avail->flags |= VRING_AVAIL_F_NO_INTERRUPT;

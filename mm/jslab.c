@@ -616,7 +616,7 @@ int jfree_page(unsigned long p){
 	stat_page_frees++;
 	//ut_log(" jfree_page:%x \n",p);
 #if 1
-	if (g_conf_percpu_pagecache == 1) {/* TODO: we are adding the address without validation */
+	if (g_conf_percpu_pagecache == 1) {/* TODO:1)  we are adding the address without validation, 2) large page also into this cache which is wrong need to avoid. */
 		if (page_cache[cpu].inuse == 0) {
 			struct page_bucket *bucket;
 			page_cache[cpu].inuse = 1;
@@ -635,7 +635,7 @@ int jfree_page(unsigned long p){
 			}
 
 			if (bucket && bucket->top < MAX_STACK_SIZE) {
-				bucket->stack[bucket->top] = p;
+				bucket->stack[bucket->top] = p & PAGE_MASK;
 				bucket->top++;
 				page_cache[cpu].inuse = 0;
 				page_cache[cpu].stat_frees++;

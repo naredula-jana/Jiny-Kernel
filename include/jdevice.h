@@ -27,6 +27,9 @@ public:
 	void print_stats(unsigned char *arg1,unsigned char *arg2);
 };
 
+#define VQTYPE_RECV 1
+#define VQTYPE_SEND 2
+
 class jdriver: public jobject {
 public:
 	unsigned char *name;
@@ -51,11 +54,10 @@ public:
 	atomic_t stat_kicks;
 	unsigned char pending_kick_onsend;
 
-	int virtio_create_queue(uint16_t index, int qType);
+	struct virtqueue *virtio_create_queue(uint16_t index, int qType);
 	void print_stats(unsigned char *arg1,unsigned char *arg2);
-	void queue_kick(int qno);
+	void queue_kick(struct virtqueue *vq);
 
-	struct virtqueue *vq[5];
 	unsigned long stat_allocs,stat_frees,stat_err_nospace;
 };
 
@@ -69,8 +71,16 @@ class virtio_net_jdriver: public virtio_jdriver {
 	int free_send_bufs();
 
 public:
-	unsigned long remove_buf_from_vq(int qno,int *len);
-	int addBufToNetQueue(int qno, unsigned char *buf, unsigned long len);
+#define MAX_VIRT_QUEUES 10
+	struct virt_queue{
+		struct virtqueue *recv,*send;
+	}queues[MAX_VIRT_QUEUES];
+	struct virtqueue *control_q;
+	uint16_t max_vqs;
+	uint32_t current_send_q;
+
+	unsigned long remove_buf_from_vq(struct virtqueue *v_q,int *len);
+	int addBufToNetQueue(int qno, int type, unsigned char *buf, unsigned long len);
 
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);
@@ -94,6 +104,7 @@ class virtio_disk_jdriver: public virtio_jdriver {
 	void *scsi_addBufToQueue(int type, unsigned char *buf, uint64_t len, uint64_t sector,uint64_t data_len);
 	int disk_io(int type,unsigned char *buf, int len, int flags);
 public:
+	struct virtqueue *vq[5];
 	wait_queue *waitq;
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);
@@ -106,6 +117,7 @@ class virtio_p9_jdriver: public virtio_jdriver {
 	int p9_attach_device(jdevice *dev);
 
 public:
+	struct virtqueue *vq[5];
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);
 	int dettach_device(jdevice *dev);
