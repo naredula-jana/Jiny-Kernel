@@ -399,6 +399,12 @@ extern unsigned long _start,_end;
 extern addr_t end; // end of code and data region
 unsigned long 	g_pagecache_size = 0x10000000 /4 ;
 extern unsigned long symbols_end;
+
+#if 1
+unsigned long test_mem_start = 0;
+unsigned long test_mem_end = 0;
+#endif
+
 addr_t initialise_paging_new(addr_t physical_mem_size, unsigned long virt_image_end, unsigned long *virt_addr_start, unsigned long *virt_addr_end) ;
 int init_memory(unsigned long arg1){
 	unsigned long virt_real_start_addr,virt_start_addr,virt_end_addr;
@@ -411,7 +417,6 @@ int init_memory(unsigned long arg1){
 		current_end_memused = symbols_end;
 	}
 
-
 	virt_start_addr=initialise_paging_new(phy_end_addr, current_end_memused,&virt_real_start_addr,&virt_end_addr);
 	ut_log("	After Paging initialized Virtual start_addr: %x virtual endaddr: %x  current end:%x virtualreal_start:%x\n",virt_start_addr,virt_end_addr,current_end_memused,virt_real_start_addr);
 	ut_log("	code+data  : %x  -%x size:%dK",&_start,&_end);
@@ -423,6 +428,15 @@ int init_memory(unsigned long arg1){
 	ut_log("	pagecache  : %x - %x size:%dM",virt_start_addr,virt_start_addr+pc_size,pc_size/1000000);
 
 	virt_start_addr=virt_start_addr+pc_size;
+
+#if 1 /* reserve the test memory for testing */
+	if (virt_end_addr > (virt_start_addr + (600*1024*1024))){
+	test_mem_start = virt_start_addr;
+	test_mem_end  = virt_start_addr + 512 *1024 *1204 ; /* 512M */
+	virt_start_addr =  test_mem_end + 4096;
+	}
+#endif
+
 	init_mem(virt_start_addr, virt_end_addr, virt_real_start_addr);
 	ut_log("	buddy pages: %x - %x size:%dM\n",virt_start_addr, virt_end_addr,(virt_end_addr-virt_start_addr)/1000000);
 	return JSUCCESS;

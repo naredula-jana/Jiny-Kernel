@@ -58,40 +58,41 @@ typedef struct {
 	int (*func)(unsigned long arg);
 	unsigned long arg1;
 	char *comment;
+	int log_level;  /* 0-no print , 9-extensive */
 } inittable_t;
 
 static inittable_t inittable[] = {
-		{init_physical_memory,0,"PhysicalMemory and Symbol table"},
-		{init_descriptor_tables,0,"ISR and Descriptors"},
-		{init_memory,0,           "Main memory"},
-		{init_kernel_args,0, "Kernel Args"},
+		{init_physical_memory,0,"PhysicalMemory and Symbol table",0},
+		{init_descriptor_tables,0,"ISR and Descriptors",0},
+		{init_kernel_args,0, "Kernel Args",0},
+		{init_memory,0,           "Main memory",0},
 #ifndef JINY_SLAB
-		{init_kmem_cache,0,       "kmem cache"},
+		{init_kmem_cache,0,       "kmem cache",0},
 #endif
-		{init_jslab,0,"Jslab initialization"},
-		{init_syscall,0,       "syscalls"},
-		{init_vfs,0,       "vfs"},
-		{init_tasking,0,       "tasking"},
-		{init_clock,0,       "clock"},
-		{init_driver_keyboard,0,       "keyboard"},
-		{init_serial,0,       "serial"},
+		{init_jslab,0,"Jslab initialization",0},
+		{init_syscall,0,       "syscalls",0},
+		{init_vfs,0,       "vfs",0},
+		{init_tasking,0,       "tasking",0},
+		{init_clock,0,       "clock",0},
+		{init_driver_keyboard,0,       "keyboard",0},
+		{init_serial,0,       "serial",0},
 #ifdef MEMLEAK_TOOL
-		{init_kmemleak,0,       "kmemleak"},
+		{init_kmemleak,0,       "kmemleak",0},
 #endif
 #ifdef SMP
-		{init_smp_force,4,       "smp_init"},
+		{init_smp_force,4,       "smp_init",0},
 #endif
 #ifdef NETWORKING
-		{init_networking,0,       "network_sched"},
+		{init_networking,0,       "network_sched",0},
 #endif
 	//	{init_clock,0,       "clock"},
 //		{init_code_readonly,0,       "Making code readonly"},
-		{init_kernel_vmaps, 0, "Kernel Vmaps"},
-		{init_jdevices,0,       "devices in c++ "},
-		{init_procfs,0,"Procfs"},
-		{init_acpi,0,       "ACPI initialzed "},
+		{init_kernel_vmaps, 0, "Kernel Vmaps",0},
+		{init_jdevices,0,       "devices in c++ ",0},
+		{init_procfs,0,"Procfs",0},
+		{init_acpi,0,       "ACPI initialzed ",0},
 #ifdef NETWORKING
-		{init_network_stack,0,       "network stacks"},
+		{init_network_stack,0,       "network stacks",0},
 #endif
 //		{init_modules,0,       "modules"},
 //		{init_log_file,0, "log file "},
@@ -134,7 +135,6 @@ int init_physical_memory(unsigned long unused){
 					(unsigned) mmap->length_low, (unsigned) mmap->type);
 			if (mmap->base_addr_high == 0x0 && mmap->base_addr_low == 0x100000)
 				max_addr = 0x100000 + (unsigned long) mmap->length_low;
-
 		}
 	}
 
@@ -143,7 +143,7 @@ int init_physical_memory(unsigned long unused){
 	ut_log("  end of data :%x  image end:%x\n",&_edata, &end);
 	ut_memcpy(&kernel_args[0], __va(mbi->cmdline),1023);
 	init_symbol_table(&_edata, &end);
-	ut_log(" End of sybol provcessing \n");
+	ut_log(" End of smybol processing \n");
 	//while(1);
 	return JSUCCESS;
 }
@@ -228,6 +228,7 @@ int init_kernel_vmaps(unsigned long arg1){
 	return JSUCCESS;
 }
 extern int g_conf_func_debug;
+int g_init_loglevel=0;
 void cmain() {  /* This is the first c function to be executed */
 	int i,ret;
 
@@ -237,6 +238,7 @@ void cmain() {  /* This is the first c function to be executed */
 //	while(1);
 	ut_log(" Before g_conf_func_debug-> :%x(%d)\n",g_conf_func_debug,g_conf_func_debug);
 	for (i=0; inittable[i].func != 0; i++){
+		g_init_loglevel = inittable[i].log_level ;
 		ut_log("%d : INITIALIZING :%s  ...\n",i, inittable[i].comment);
 		ret = inittable[i].func(inittable[i].arg1);
 		if (ret==JSUCCESS){

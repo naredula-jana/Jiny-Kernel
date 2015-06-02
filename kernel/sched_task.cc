@@ -607,6 +607,7 @@ void sc_before_syscall() {
 	g_current_task->curr_syscall_id = g_cpu_state[getcpuid()].md_state.syscall_id;
 	g_current_task->callstack_top = 0;
 	g_current_task->stats.syscall_count++;
+
 #if 1
 	if (g_current_task->curr_syscall_id < MAX_SYSCALL && g_current_task->stats.syscalls!=0){
 		g_current_task->stats.syscalls[g_current_task->curr_syscall_id].count++;
@@ -617,7 +618,7 @@ void sc_before_syscall() {
 void sc_after_syscall() {
 	/* Handle any pending signal */
 	//SYSCALL_DEBUG("syscall ret  state:%x\n",g_current_task->state);
-//	net_bh();
+	net_bh();
 	g_cpu_state[getcpuid()].stats.syscalls++;
 
 	if (g_current_task->pending_signals == 0) {

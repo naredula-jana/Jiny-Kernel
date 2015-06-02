@@ -125,6 +125,12 @@ static inline void arch_spinlock_free(spinlock_t *lock){
 }
 static inline void arch_spinlock_link(spinlock_t *lock){ /* this is for logging and debugging purpose */
 	int i;
+
+	for (i=0; i<MAX_SPINLOCKS; i++) {
+			if (g_spinlocks[i]==lock) {
+				return;
+			}
+	}
 	for (i=0; i<MAX_SPINLOCKS; i++) {
 			if (g_spinlocks[i]==0) {
 				g_spinlocks[i]=lock;

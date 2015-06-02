@@ -5,7 +5,7 @@ The below benchmarks show Jiny as performed better then linux, one of the reason
   
 - Benchmark-1(CPU centric): Comparisions of cpu centric app running in linux vm versus same app running in Jiny vm. There is big improvement when the same app run in Jiny vm as High priority app. 
 - Benchmark-2.1(Network centric - virtio-vhost): Comparisions of network throughput in linux vm versus Jiny vm. There is 20%-50% improvement in network throughput in Jiny Vm when compare to linux vm on the same hardware.
-- Benchmark-2.2(Network centric - Virtio-user): Similar to the above(2.1), except the switch will located at the userspace instead of host kernel(linux brduge).
+- Benchmark-2.2(Network centric - Virtio-user): Similar to the above(2.1), except the switch will located at the userspace instead of host kernel(linux bridge/ovs-switch).
 - Benchmark-3(Storage centric): In progress.
 - Benchmark-4(PageCache): Comparisions of Read/write throughput for Hadoop workload. Improvement of 20% in read/write throughput of hdfs/hadoop workloads.
 - Benchmark-5(Malloc): Memory  improvements with zero page accumulation and other related techiniques: In progress
@@ -73,13 +73,13 @@ Host to vm: on a highend hardware.
 2. lockless implementation of memory management in acquiring and releasing the memory buffers.
 3. Minimising the virtio kicks in send path and interrupts in recv path.
 4. **Area to Improve**: a) checksum computation takes large amount of cpu cycles, need to improve further in this area. b) avoiding/minimizing the spin locks.
-5. Making zero copy: show 3% improvement by avoiding one copy from  user to kernel and viceversa, but the improvement is not big
+5. Making zero copy: show 3% improvement by avoiding one copy from  user to kernel and viceversa, but the improvement is not big.
 
 ---------------------------------------------------------------------------------- 
  
 ###Benchmark-2.2(Network centric - virtio-user): In Progress:
 
-   In the above Benchmark(2.1), switch is linux bridge located in host kernel. Performance can be improved by replacing the linux bridge(virtio-vhost) with the userspace bridge using qemu based vhost-user vnics, here there will not be any change from guest os, but some of the tunning may help. The packets from one vm to another vm goes through the shared memory in the user space instead of switching the packet through the linux host bridge/ovs. If the ethernet switch located at the userspace, it can save the following:
+   In the above Benchmark(2.1), switch is linux bridge located in host kernel. Performance can be improved by replacing the linux bridge(virtio-vhost) with the userspace bridge using qemu based vhost-user vnics, here there will not be any change from guest os, but some of the tunning may help(like multiqueue). The packets from one vm to another vm goes through the shared memory in the user space instead of switching the packet through the linux host kernel bridge/ovs. If the ethernet switch located at the userspace, it can save the following:
    
    - instead of two threads(kernel vhost threads) and linux bridge to handle the packet, it can be done by a single user levelthread.
    - one copy from virtio ring can be saved, it can be done by copying the packet from vitio ring to another directly.

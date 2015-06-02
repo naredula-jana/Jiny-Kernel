@@ -164,6 +164,7 @@ int net_bh(){
 	process_send_queue();
 
 	if (g_conf_nic_intr_off == 1) {  /* only in the poll mode */
+		net_bh_active = 1;
 		curr_time = get_100usec(); /* interms of 100 usec units*/
 		if (last_timestamp < curr_time) {
 			last_timestamp = curr_time;

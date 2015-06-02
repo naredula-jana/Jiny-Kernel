@@ -67,7 +67,7 @@ public:
 
 class virtio_net_jdriver: public virtio_jdriver {
 
-	int net_attach_device(jdevice *dev);
+	int net_attach_device();
 	int free_send_bufs();
 
 public:
@@ -77,7 +77,9 @@ public:
 	}queues[MAX_VIRT_QUEUES];
 	struct virtqueue *control_q;
 	uint16_t max_vqs;
+	uint32_t send_count;
 	uint32_t current_send_q;
+	spinlock_t virtionet_lock;
 
 	unsigned long remove_buf_from_vq(struct virtqueue *v_q,int *len);
 	int addBufToNetQueue(int qno, int type, unsigned char *buf, unsigned long len);

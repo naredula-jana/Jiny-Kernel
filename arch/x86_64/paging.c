@@ -5,7 +5,7 @@
 #include "isr.h"
 #include "interface.h"
 
-
+int g_conf_hugepages=0;
 // The kernel's page directory
 addr_t g_kernel_page_dir=0;
 
@@ -96,6 +96,8 @@ addr_t initialise_paging_new(addr_t physical_mem_size, unsigned long virt_image_
 	unsigned long curr_virt_end_addr; /* page tables are stored at the end of images */
 	addr_t i, j, fr, max_fr,level4_index,level3_index,level2_index,level2_table,level3_table;
 	unsigned long image_size;
+	unsigned long stat_ptes2m =0;
+	unsigned long stat_ptes4k =0;
 
 	curr_virt_end_addr = (virt_image_end + PAGE_SIZE) & (~0xfff);
 
@@ -109,7 +111,7 @@ addr_t initialise_paging_new(addr_t physical_mem_size, unsigned long virt_image_
 	fr = 0;
 	max_fr = physical_mem_size/(PAGE_SIZE); /* max pages */
 
-	ut_log("	max_fr :%x (%d) image_end :%x(%d)\n",max_fr,max_fr,virt_image_end,virt_image_end-KERNEL_CODE_START);
+	ut_log("		max_fr :%x (%d) image_end :%x(%d)\n",max_fr,max_fr,virt_image_end,virt_image_end-KERNEL_CODE_START);
 
 	level3_table = curr_virt_end_addr;
 	curr_virt_end_addr = curr_virt_end_addr + PAGE_SIZE;
@@ -126,12 +128,18 @@ addr_t initialise_paging_new(addr_t physical_mem_size, unsigned long virt_image_
 
 		curr_virt_end_addr = curr_virt_end_addr + PAGE_SIZE;
 		while (level2_index <512) {/* covers 2M for each iteration */
-			if (0) {/* use 2M size of pages */
+			if (g_conf_hugepages == 1) {/* use 2M size of pages */
+				if ((fr) > (max_fr+1)){
+					goto last;
+				}
 				mk_pde((level2_table), fr, 1, 1, 0);
+				stat_ptes2m++;
 			} else { /* use 4k  size pages */
 				mk_pde((level2_table), (__pa(curr_virt_end_addr)) >> PAGE_SHIFT, 0, 1, 0);
+
 				for (j = 0; j < 512; j++) {
 					if ((fr+j) <= (max_fr+1)){
+						stat_ptes4k++;
 						mk_pte(curr_virt_end_addr + j * 8, fr + j, 1, 0, 1);
 					}else{
 						goto last;
@@ -148,11 +156,11 @@ addr_t initialise_paging_new(addr_t physical_mem_size, unsigned long virt_image_
 		level3_index++;
 	}
 last:
-	ut_log("	paging init end :addr:%x ->  Lindex ( %x : %x : %x :%x )\n",curr_virt_end_addr,L4_INDEX(curr_virt_end_addr),L3_INDEX(curr_virt_end_addr),L2_INDEX(curr_virt_end_addr),L1_INDEX(curr_virt_end_addr));
+	ut_log("		paging init end :addr:%x ->  Lindex ( %x : %x : %x :%x )\n",curr_virt_end_addr,L4_INDEX(curr_virt_end_addr),L3_INDEX(curr_virt_end_addr),L2_INDEX(curr_virt_end_addr),L1_INDEX(curr_virt_end_addr));
 
 	curr_virt_end_addr = curr_virt_end_addr + PAGE_SIZE;
 	flush_tlb(0x101000);
-	ut_log("	END address :%x fr:%x j:%x level3:%x(%d) level2:%x(%d)\n",curr_virt_end_addr,fr,j,level2_index,level2_index,level3_index,level3_index);
+	ut_log("		END address :%x fr:%x j:%x level3:%x(%d) level2:%x(%d) 2mptes:%d 4kptes:%d\n",curr_virt_end_addr,fr,j,level2_index,level2_index,level3_index,level3_index,stat_ptes2m,stat_ptes4k);
 
 	g_kernel_address_space_starts = *virt_addr_start;
 	virt_addr = virt_addr + (curr_virt_end_addr-KERNEL_CODE_START);
@@ -165,7 +173,7 @@ last:
 	for (i=j; i<21; i++){
 		unsigned long *p;
 		p=level2_table;
-		ut_log("	%d: clearing the l2 entry :%x \n",i,p);
+		//ut_log("	%d: clearing the l2 entry :%x \n",i,p);
 		*p=0;
 		level2_table = level2_table + 8;
 	}
@@ -853,6 +861,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 
 /************************ house keeping thread related function ****************/
 
+
 unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,struct addr_list *page_access_list, struct addr_list *page_dirty_list)
 {
 	struct mm_struct *mm;
@@ -861,17 +870,21 @@ unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,stru
 	pde_t *pde;
 	unsigned long addr,total_pages_scan;
 	int i;
+	unsigned long stat_2m_pte=0;
+	unsigned long stat_4k_pte=0;
 
 	total_pages_scan=0;
 	mm=g_current_task->mm;
 	if (mm==0 || mm->pgd == 0) BUG();
 
 	addr=start_addr;
-	if (page_access_list != 0)
+	if (page_access_list != 0){
 	    page_access_list->total=0;
+	}
 
-	if (page_dirty_list != 0)
+	if (page_dirty_list != 0){
 	    page_dirty_list->total=0;
+	}
 	while (addr <end_addr)
 	{
 		pl4=(unsigned long *)mm->pgd;
@@ -897,16 +910,32 @@ unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,stru
 
 		if (pde->ps == 1)/* 2 MB page */
 		{
+			stat_2m_pte++;
 			if (pde->dirty==1){
-			   ut_printf(" Big page: start:%x  end:%x  dirty:%x \n",addr,(addr+PAGE_SIZE*512),pde->dirty);
+			   if (page_dirty_list != 0){
+				 page_dirty_list->total++;
+			   }
+			   //ut_printf(" Big page: start:%x  end:%x  dirty:%x \n",addr,(addr+PAGE_SIZE*512),pde->dirty);
 			}
 			addr=addr+PAGE_SIZE*512;
 			pde->dirty = 0;
+			if (pde->accessed == 1){
+				pde->accessed = 0;
+				if (page_access_list != 0){
+					page_access_list->total++;
+				}
+			}
 			continue;
 		}
-
+		stat_4k_pte++;
 		pte=__va(pl1+(L1_INDEX(addr)));
 
+		if (pl1 == 0 || pl2==0){
+			goto last;
+		}
+		if ((stat_4k_pte%1000) == 0){
+	//		ut_printf(" %d: pte : %x  pl2:%x pl1: %x \n",stat_4k_pte,pte,pl2,pl1);
+		}
 		if (pte->dirty == 1 && page_dirty_list!=0 && page_dirty_list->total<ADDR_LIST_MAX)
 		{
 			pte->dirty=0;
@@ -920,15 +949,15 @@ unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,stru
 			}
 		}
 
-		if (pte->accessed == 1 && page_access_list != 0 && page_access_list->total<ADDR_LIST_MAX)
+		if (pte->accessed == 1 && page_access_list != 0 )
 		{
 			pte->accessed=0;
 			i=page_access_list->total;
 			if (i<ADDR_LIST_MAX)
 			{
 				page_access_list->addr[i]=addr;
-				page_access_list->total++;
 			}
+			page_access_list->total++;
 		}
 		total_pages_scan=total_pages_scan+1;
 		addr=addr+PAGE_SIZE;
@@ -936,11 +965,61 @@ unsigned long  ar_scanPtes(unsigned long start_addr, unsigned long end_addr,stru
 last:
 	if ((page_access_list && page_access_list->total > 0 ) || (page_dirty_list && page_dirty_list->total > 0 ))
 	{
-		ut_printf("Flushing entire page table : pages scan:%d last addr:%x\n",total_pages_scan,addr);
+		if (page_access_list && page_dirty_list){
+			ut_printf("Flushing entire page table : pages scan:%d addr range:%x-%x  access_list_total: %d dirty_total:%d 2mpte:%d 4kptes: %d \n",total_pages_scan,start_addr,addr,page_access_list->total,page_dirty_list->total,stat_2m_pte,stat_4k_pte);
+		}
 		ar_flushTlbGlobal(); /* TODO : need not flush entire table, flush only specific tables*/
 	}
 	return addr;
 }
+
+static struct addr_list test_ac,test_dr;
+unsigned long  Jcmd_scanptes(){
+	unsigned long addr;
+	addr = ar_scanPtes(0xffffc90000000000,0xffffd00000000000,&test_ac,&test_dr);
+	addr = ar_scanPtes(0xffffc90000000000,0xffffd00000000000,&test_ac,&test_dr);
+	return addr;
+}
+extern unsigned long test_mem_start,test_mem_end;
+void Jcmd_memtest(unsigned char *arg1,unsigned char *arg2){
+	unsigned long start_addr,end_addr;
+	int k,loop,m;
+	unsigned long stime,etime;
+	unsigned long i,*p;
+	int cpu=getcpuid();
+	int write_test=0;
+
+	loop= ut_atoi(arg1,FORMAT_DECIMAL);
+	if (loop <= 0){
+		loop=2;
+	}
+	if (test_mem_end > test_mem_start){
+		start_addr = test_mem_start;
+		end_addr = test_mem_end;
+		write_test=1;
+		ut_printf(" WRITE TEST :  start:%x end:%x \n",start_addr,end_addr);
+	}else{
+		start_addr=0xffffc90000000000 + 4*1024*1024;
+		end_addr = Jcmd_scanptes() - 0x400000;
+	}
+	stime = g_jiffies;
+	while(k < loop){
+		for (i=start_addr; i<end_addr; i=i+0x1000){
+			p = i ;
+			m = *p;
+			if (write_test  != 0){
+				for (m=0; m<50; m++,p=p+4){
+				*p = i+k;
+				}
+			}
+		}
+		k++;
+	}
+	etime = g_jiffies;
+	ut_printf("CPU:%d TIME.. : %d loop=%d add diff:%x start:%x end:%x\n",cpu,etime-stime,loop,end_addr-start_addr,start_addr,end_addr);
+	//Jcmd_scanptes();
+}
+
 unsigned long  ar_modifypte(unsigned long addr, struct mm_struct *mm, unsigned char rw)
 {
 	addr_t *pl4,*pl3,*pl2,*pl1,*v;
