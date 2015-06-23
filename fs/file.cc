@@ -256,7 +256,7 @@ void fs_inode::print_stats(unsigned char *arg1,unsigned char *arg2){
 unsigned long fs_registerFileSystem(filesystem *fs,unsigned char *type) {
 	int i=0;
 	if (type == 0) return JFAIL;
-	ut_log("    Registering files system of type :%s: \n",type);
+	INIT_LOG("		Registering files system of type :%s: \n",type);
 
 	if (g_fs_list[0].fs == 0) {
 		if (g_conf_tarfs_as_root == 1) {
@@ -268,7 +268,7 @@ unsigned long fs_registerFileSystem(filesystem *fs,unsigned char *type) {
 	while(g_fs_list[i].type != 0){
 		if (g_fs_list[i].fs==0 &&  ut_strcmp(g_fs_list[i].type,type)==0){
 			g_fs_list[i].fs = fs;
-			ut_log("    file system %s  mounted @ %s\n",g_fs_list[i].type,g_fs_list[i].mount_pnt);
+			INIT_LOG("		file system %s  mounted @ %s\n",g_fs_list[i].type,g_fs_list[i].mount_pnt);
 			fs->set_mount_pnt(g_fs_list[i].mount_pnt);
 			return JSUCCESS;
 		}

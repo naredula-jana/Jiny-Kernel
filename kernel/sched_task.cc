@@ -490,7 +490,7 @@ int init_tasking(unsigned long unused) {
 #define G_IDLE_TASK  &g_idle_stack[0][0]
 	// task_addr=(unsigned long )((unsigned char *)G_IDLE_TASK+TASK_SIZE);
 	task_addr = g_current_task;
-	ut_log("	Task Addr start :%x  stack:%x current:%x maxcpus:%d\n", task_addr, &task_addr, g_current_task,MAX_CPUS);
+	ut_log("		Task Addr start :%x  stack:%x current:%x maxcpus:%d\n", task_addr, &task_addr, g_current_task,MAX_CPUS);
 	for (i = 0; i < MAX_CPUS; i++) {
 		ut_memset((unsigned char *) &g_cpu_state[i],0,sizeof(struct cpu_state));
 		g_cpu_state[i].md_state.cpu_id = i;
@@ -509,7 +509,7 @@ int init_tasking(unsigned long unused) {
 	}
 	g_current_task->current_cpu = 0;
 
-	ut_log("		Cpu Struct size: %d \n", sizeof(struct cpu_state));
+	INIT_LOG("		Cpu Struct size: %d \n", sizeof(struct cpu_state));
 
 	ar_archSetUserFS(0);
 //	init_timer(); //currently apic timer is in use

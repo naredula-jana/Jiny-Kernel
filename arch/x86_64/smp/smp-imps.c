@@ -60,7 +60,7 @@
 extern int local_ap_apic_init(void);
 extern int local_bsp_apic_init(void);
 extern void local_apic_bsp_switch(void);
-void init_ioapic();
+static void init_ioapic();
 
 static int lapic_dummy = 0;
 
@@ -235,7 +235,7 @@ static int boot_cpu(imps_processor *proc) {
 	stack = (stack + TASK_SIZE - 0x64);
 	p = (int *)((char *) __old_va(bootaddr) + 0x504);
 	*p = (int) stack;
-	KERNEL_PRINT(" SMP cpuid:%x stack:%x bootaddr:%x p:%x\n",cpuid,stack,bootaddr,p);
+	INIT_LOG("		SMP cpuid:%x stack:%x bootaddr:%x p:%x\n",cpuid,stack,bootaddr,p);
 	//while(1);
 	/*
 	 *  Generic CPU startup sequence starts here.
@@ -278,12 +278,12 @@ static int boot_cpu(imps_processor *proc) {
 	p = __va(bootaddr);
 	while (*p != 0xA5A5A5A5 && to++ < 100)
 		UDELAY(1000);
-	KERNEL_PRINT("SMP: boot addr: %x  cpuid:%d accept_status current_task:%x\n", *p,cpuid,accept_status,g_cpu_state[cpuid].current_task);
+	INIT_LOG("		SMP: boot addr: %x  cpuid:%d accept_status current_task:%x\n", *p,cpuid,accept_status,g_cpu_state[cpuid].current_task);
 	if (to >= 100) {
-		KERNEL_PRINT("SMP: CPU Not Responding, DISABLED");
+		INIT_LOG("		SMP: CPU Not Responding, DISABLED");
 		success = 0;
 	} else {
-		KERNEL_PRINT("SMP: #%d  Application Processor (AP)", g_imps_num_cpus);
+		INIT_LOG("		SMP: #%d  Application Processor (AP)", g_imps_num_cpus);
 	}
 
 	/*
@@ -297,7 +297,7 @@ static int boot_cpu(imps_processor *proc) {
 	/* clean up BIOS reset vector */CMOS_WRITE_BYTE(CMOS_RESET_CODE, 0);
 	*((volatile unsigned *) bios_reset_vector) = 0;
 
-	KERNEL_PRINT("\n");
+	INIT_LOG("\n");
 
 	return success;
 }
@@ -309,13 +309,13 @@ static int boot_cpu(imps_processor *proc) {
 static void add_processor(imps_processor *proc) {
 	int apicid = proc->apic_id;
 
-	KERNEL_PRINT("	SMP: Processor [APIC id %d ver %d]:  ", apicid, proc->apic_ver);
+	INIT_LOG("	SMP: Processor [APIC id %d ver %d]:  ", apicid, proc->apic_ver);
 	if (!(proc->flags & IMPS_FLAG_ENABLED)) {
-		KERNEL_PRINT(("ERROR: DISABLED\n"));
+		INIT_LOG(("ERROR: DISABLED\n"));
 		return ;
 	}
 	if (proc->flags & (IMPS_CPUFLAG_BOOT)) {
-		KERNEL_PRINT("SMP: #0  BootStrap Processor (BSP)\n");
+		INIT_LOG("SMP: #0  BootStrap Processor (BSP)\n");
 		return ;
 	}
 	if (boot_cpu(proc)) {
@@ -335,11 +335,11 @@ int init_smp_force(unsigned long ncpus) {
 	int apicid, i,ret;
 	imps_processor p;
 
-	KERNEL_PRINT(("	SMP: Intel MultiProcessor \"Force\" Support\n"));
+	ut_log(("		SMP: Intel MultiProcessor \"Force\" Support\n"));
 
 	imps_lapic_addr  = vm_create_kmap("smp_apic",0x100000,PROT_WRITE,MAP_FIXED,0xFee00000);
 	imps_ioapic_addr  = vm_create_kmap("io_apic",4096,PROT_WRITE,MAP_FIXED,0xFec00000);
-	ut_log(" APIC  virt addr :%x phy addr:%x \n",imps_lapic_addr,__pa(imps_lapic_addr));
+	ut_log("		APIC  virt addr :%x phy addr:%x \n",imps_lapic_addr,__pa(imps_lapic_addr));
 	/*
 	 *  Setup primary CPU.
 	 */
@@ -353,13 +353,13 @@ int init_smp_force(unsigned long ncpus) {
 	p.type = 0;
 	p.apic_ver = 0x10;
 	p.signature = p.features = 0;
-ut_log(" imps:smp : before the bsp_witch\n");  // TODO : uncommeting this line  looks like stuck with the interrupt-32
+ut_log("		imps:smp : before the bsp_switch\n");  // TODO : uncommeting this line  looks like stuck with the interrupt-32
 	local_apic_bsp_switch();
 	local_bsp_apic_init();
 	if (ncpus > MAX_CPUS)
 		ncpus = MAX_CPUS;
 
-	ut_log("imps_smp:  stack vert addr:%x  phy:%x \n",g_cpu_state[0].idle_task,__pa(g_cpu_state[0].idle_task));
+	INIT_LOG("		imps_smp:  stack vert addr:%x  phy:%x \n",g_cpu_state[0].idle_task,__pa(g_cpu_state[0].idle_task));
 	//return 0;
 
 	init_ioapic();
@@ -376,9 +376,9 @@ ut_log(" imps:smp : before the bsp_witch\n");  // TODO : uncommeting this line  
 
 	wait_non_bootcpus = 0; /* from this point onwards  all non-boot cpus starts */
 
-	KERNEL_PRINT("	NEW SMP: completed, ret:%d maxcpus: %d \n",g_imps_num_cpus,getmaxcpus());
-	KERNEL_PRINT("	SECOND SMP: completed, ret:%d maxcpus: %d \n",g_imps_num_cpus,getmaxcpus());
+	ut_log("	SMP: completed, ret:%d maxcpus: %d \n",g_imps_num_cpus,getmaxcpus());
 	cli();
+
 	return JSUCCESS;
 }
 /******************************   IO APIC code ********************/
@@ -437,13 +437,13 @@ static struct ioapic_pin ioapic_get_8259A_pin(void)
     return pic;
 }
 */
-void init_ioapic(){
+static void init_ioapic(){
 	int i;
 
 	ioapic_ver_t version = { .value = 0 };
 	ioapic_id_t id = { .value = 0 };
 	id.value = read_ioapic_register(imps_ioapic_addr, IOAPIC_ID);
-	ut_log("IOAPIC  id :%d \n",id.value);
+	INIT_LOG("		IOAPIC  id :%d \n",id.value);
 	if (id.value != 0){
 
 	}

@@ -256,6 +256,7 @@ unsigned int ut_atoi(uint8_t *p, int format);
 int ut_sprintf(uint8_t * buf, const uint8_t *fmt, ...);
 int ut_snprintf(uint8_t * buf, size_t size, const char *fmt, ...);
 void ut_log(const char *format, ...);
+
 unsigned long ut_get_symbol_addr(unsigned char *name);
 int ut_symbol_execute(int type, unsigned char *name, uint8_t *argv1,uint8_t *argv2);
 int ut_symbol_show(int type);

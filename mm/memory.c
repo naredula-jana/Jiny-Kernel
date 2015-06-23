@@ -152,7 +152,7 @@ static unsigned long init_free_area(unsigned long start_mem, unsigned long end_m
 	 * This is fairly arbitrary, but based on some behaviour
 	 * analysis.
 	 */
-	ut_log("	init_free_area start_mem: %x endmem:%x   \n",start_mem,end_mem);
+	INIT_LOG("	init_free_area start_mem: %x endmem:%x   \n",start_mem,end_mem);
 	i = (end_mem - start_addrspace) >> (PAGE_SHIFT+7);
 	if (i < 10)
 		i = 10;
@@ -162,11 +162,11 @@ static unsigned long init_free_area(unsigned long start_mem, unsigned long end_m
 	  freepages.low = i * 2;
 	  freepages.high = i * 3;*/
 	g_mem_map = (page_struct_t *) LONG_ALIGN(start_mem+8);
-	ut_log("	g_mem_map :%x  size:%x  \n",g_mem_map,MAP_NR(end_mem));
+	INIT_LOG("	g_mem_map :%x  size:%x  \n",g_mem_map,MAP_NR(end_mem));
 	p = g_mem_map + MAP_NR(end_mem);
 	start_mem = LONG_ALIGN((unsigned long) p);
 	size=(start_mem -(unsigned long) g_mem_map);
-	ut_log(" freearemap setup map: %x diff:%x(%dM)   \n",g_mem_map,(start_mem -(unsigned long) g_mem_map),size/(1024*1024));
+	INIT_LOG(" freearemap setup map: %x diff:%x(%dM)   \n",g_mem_map,(start_mem -(unsigned long) g_mem_map),size/(1024*1024));
 	//while(1);
 	ut_memset((unsigned char *)g_mem_map, 0, start_mem -(unsigned long) g_mem_map);
 	do {
@@ -186,7 +186,7 @@ static unsigned long init_free_area(unsigned long start_mem, unsigned long end_m
 		free_mem_area[i].map = (unsigned int *) start_mem;
 		ut_memset((void *) start_mem, 0, bitmap_size);
 		start_mem += bitmap_size;
-		ut_log(" %d : bitmapsize:%x end_mem:%x \n",i,bitmap_size,end_mem);
+		INIT_LOG("		%d : bitmapsize:%x end_mem:%x \n",i,bitmap_size,end_mem);
 	}
 	return start_mem;
 }
@@ -201,7 +201,7 @@ static void init_mem(unsigned long start_mem, unsigned long end_mem, unsigned lo
 	end_mem &= PAGE_MASK;
 	g_max_mapnr  = MAP_NR(end_mem);
 
-	ut_log("  first page : %x :%x :%x\n",MAP_NR(start_mem),MAP_NR(start_mem+PAGE_SIZE),MAP_NR(virt_start_addr));
+	INIT_LOG("	first page : %x :%x :%x\n",MAP_NR(start_mem),MAP_NR(start_mem+PAGE_SIZE),MAP_NR(virt_start_addr));
 	start_mem = PAGE_ALIGN(start_mem);
 	stat_mem_size = end_mem -start_mem;
 	while (start_mem < end_mem) {
@@ -221,9 +221,9 @@ static void init_mem(unsigned long start_mem, unsigned long end_mem, unsigned lo
 	}
 	stat_allocs=0;
 	stat_frees =0;
-	ut_log("	Reserved pages : %x(%d) \n",reservedpages,reservedpages);
+	INIT_LOG("	Reserved pages : %x(%d) \n",reservedpages,reservedpages);
 	init_done=1;
-	ut_printf(" Release to FREEMEM : %x \n",(end_mem - 0x2000));
+	INIT_LOG("	Release to FREEMEM : %x \n",(end_mem - 0x2000));
 	return;
 }
 /*****************************************************************  API functions */
@@ -418,14 +418,14 @@ int init_memory(unsigned long arg1){
 	}
 
 	virt_start_addr=initialise_paging_new(phy_end_addr, current_end_memused,&virt_real_start_addr,&virt_end_addr);
-	ut_log("	After Paging initialized Virtual start_addr: %x virtual endaddr: %x  current end:%x virtualreal_start:%x\n",virt_start_addr,virt_end_addr,current_end_memused,virt_real_start_addr);
-	ut_log("	code+data  : %x  -%x size:%dK",&_start,&_end);
-	ut_log("	free area  : %x - %x size:%dM\n",virt_start_addr,virt_end_addr,(virt_end_addr-virt_start_addr)/1000000);
+	INIT_LOG("	After Paging initialized Virtual start_addr: %x virtual endaddr: %x  current end:%x virtualreal_start:%x\n",virt_start_addr,virt_end_addr,current_end_memused,virt_real_start_addr);
+	INIT_LOG("	code+data  : %x  -%x size:%dK",&_start,&_end);
+	INIT_LOG("	free area  : %x - %x size:%dM\n",virt_start_addr,virt_end_addr,(virt_end_addr-virt_start_addr)/1000000);
 	virt_start_addr=init_free_area( virt_start_addr, virt_end_addr);
 
 	pc_size = g_pagecache_size ;
 	pc_init((unsigned char *)virt_start_addr,pc_size);
-	ut_log("	pagecache  : %x - %x size:%dM",virt_start_addr,virt_start_addr+pc_size,pc_size/1000000);
+	INIT_LOG("	pagecache  : %x - %x size:%dM",virt_start_addr,virt_start_addr+pc_size,pc_size/1000000);
 
 	virt_start_addr=virt_start_addr+pc_size;
 
@@ -438,7 +438,7 @@ int init_memory(unsigned long arg1){
 #endif
 
 	init_mem(virt_start_addr, virt_end_addr, virt_real_start_addr);
-	ut_log("	buddy pages: %x - %x size:%dM\n",virt_start_addr, virt_end_addr,(virt_end_addr-virt_start_addr)/1000000);
+	INIT_LOG("		buddy pages: %x - %x size:%dM\n",virt_start_addr, virt_end_addr,(virt_end_addr-virt_start_addr)/1000000);
 	return JSUCCESS;
 }
 /*

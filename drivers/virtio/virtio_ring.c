@@ -522,7 +522,7 @@ struct virtqueue *vring_new_virtqueue(unsigned int num,
 		return NULL;
 
 	vring_init(&vq->vring, num, pages, vring_align);
-	ut_log("		vring  desc:%x avail:%x used:%x \n",vq->vring.desc,vq->vring.avail,vq->vring.used);
+	INIT_LOG("		vring  desc:%x avail:%x used:%x \n",vq->vring.desc,vq->vring.avail,vq->vring.used);
 	vq->vq.callback = callback;
 #if 1
 	vq->vq.pci_ioaddr = pci_ioaddr;
@@ -559,7 +559,7 @@ struct virtqueue *vring_new_virtqueue(unsigned int num,
 		vq->data[i] = NULL;
 	}
 	vq->data[i] = NULL;
-	DEBUG(" virtqueue Initialized  \n");
+	INIT_LOG("		virtqueue Initialized  \n");
 	return &vq->vq;
 }
 

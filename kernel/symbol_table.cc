@@ -49,7 +49,7 @@ int init_kernel_args(unsigned long arg1) {
 	tmp_value[0] = 0;
 	flag_arg = 0;
 	//return ret;
-	ut_log(" kernel args :%s: \n", kernel_args);
+	ut_log("		kernel args :%s: \n", kernel_args);
 	for (i = 0; i < 1023 && j < 200; i++) {
 		//	ut_log(" args : %c : %x \n",kernel_args[i],kernel_args[i]);
 		//	continue;
@@ -83,7 +83,7 @@ int init_kernel_args(unsigned long arg1) {
 					tmp_value[j] = 0;
 				}
 			}
-			ut_log(" Appllying the kernel arg  %s=%s \n", tmp_arg, tmp_value);
+			ut_log("		Applying the kernel arg  %s=%s \n", tmp_arg, tmp_value);
 			ut_symbol_execute(SYMBOL_CONF, tmp_arg, tmp_value, 0);
 			j = -1;
 			tmp_arg[0] = 0;
@@ -93,6 +93,7 @@ int init_kernel_args(unsigned long arg1) {
 #endif
 		j++;
 	}
+	return JSUCCESS;
 }
 unsigned long init_symbol_table(unsigned long bss_start, unsigned long bss_end) {
 	int i = 0, k;
@@ -368,20 +369,20 @@ int ut_symbol_execute(int type, unsigned char *name, uint8_t *argv1, uint8_t *ar
 			if (g_symbol_table[i].len == 4) {
 				confint = (int *) g_symbol_table[i].address;
 				*confint = (int) ut_atoi((unsigned char *) argv1, FORMAT_DECIMAL);
-				ut_log(" Setting conf variable %s->:%d: (%s)  \n", g_symbol_table[i].name, *confint, argv1,
+				ut_log("		Setting conf variable %s->:%d: (%s)  \n", g_symbol_table[i].name, *confint, argv1,
 						g_symbol_table[i].address);
-				ut_printf(" Setting conf variable %s->:%d: (%s)  \n", g_symbol_table[i].name, *confint, argv1,
+				ut_printf("		Setting conf variable %s->:%d: (%s)  \n", g_symbol_table[i].name, *confint, argv1,
 						g_symbol_table[i].address);
 			} else if (g_symbol_table[i].len == 8) {
 				conflong = (unsigned long *) g_symbol_table[i].address;
 				*conflong = (int) ut_atol((unsigned char *) argv1, FORMAT_DECIMAL);
-				ut_log(" Setting conf variable %s->:%d: (%s)  \n", g_symbol_table[i].name, *conflong, argv1,
+				ut_log("		Setting conf variable %s->:%d: (%s)  \n", g_symbol_table[i].name, *conflong, argv1,
 						g_symbol_table[i].address);
-				ut_printf(" Setting conf variable %s->:%d: (%s)  \n", g_symbol_table[i].name, *conflong, argv1,
+				ut_printf("		Setting conf variable %s->:%d: (%s)  \n", g_symbol_table[i].name, *conflong, argv1,
 										g_symbol_table[i].address);
 			} else if (g_symbol_table[i].len > 8) {
 				ut_strcpy(g_symbol_table[i].address, argv1);
-				ut_log(" Setting conf variable %s->:%s  \n", g_symbol_table[i].name, argv1, g_symbol_table[i].address);
+				ut_log("	Setting conf variable %s->:%s  \n", g_symbol_table[i].name, argv1, g_symbol_table[i].address);
 			} else{
 				ut_printf(" Error in setting the variable: %s\n",new_name);
 			}

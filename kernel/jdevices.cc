@@ -63,20 +63,20 @@ int jdevice::init_pci(uint8_t bus, uint8_t device, uint8_t function) {
 			break;
 		}
 	}
-	ut_log("--------------------------\n	scan devices %d:%d:%d  %x:%x\n", bus, device, function, this->pci_device.pci_header.vendor_id,
+	INIT_LOG("			--------------------------\n		scan devices %d:%d:%d  %x:%x\n", bus, device, function, this->pci_device.pci_header.vendor_id,
 			this->pci_device.pci_header.device_id);
 
-	ut_log(" reading pci info : bus:dev:fuc : %x:%x:%x \n", pci_device.pci_addr.bus, pci_device.pci_addr.device,
+	INIT_LOG("		reading pci info : bus:dev:fuc : %x:%x:%x \n", pci_device.pci_addr.bus, pci_device.pci_addr.device,
 			pci_device.pci_addr.function);
 	if (read_pci_info_new(&pci_device) != JSUCCESS) {
-		ut_log("ERROR: reading pci device failed\n");
+		INIT_LOG("		ERROR: reading pci device failed\n");
 		return JFAIL;
 	}
 
 	pci_hdr = &pci_device.pci_header;
 	bars = &pci_device.pci_bars[0];
 	len = pci_device.pci_bar_count;
-	ut_log(" succeded reading pci info : bus:dev:fuc : %x:%x:%x barcount:%d\n",pci_device.pci_addr.bus,pci_device.pci_addr.device,pci_device.pci_addr.function,len);
+	INIT_LOG("		succeded reading pci info : bus:dev:fuc : %x:%x:%x barcount:%d\n",pci_device.pci_addr.bus,pci_device.pci_addr.device,pci_device.pci_addr.function,len);
 
 	//if (bars[0].addr != 0) {
 	if (len != 0){
@@ -85,7 +85,7 @@ int jdevice::init_pci(uint8_t bus, uint8_t device, uint8_t function) {
 		pci_device.pci_mmio = bars[1].addr;
 		pci_device.pci_mmiolen = bars[1].len;
 	} else {
-		ut_log(" ERROR in initializing PCI driver %x : %x \n", bars[0].addr,bars[1].addr);
+		INIT_LOG("		ERROR in initializing PCI driver %x : %x \n", bars[0].addr,bars[1].addr);
 		//return JFAIL;
 	}
 	return JSUCCESS;
@@ -260,7 +260,7 @@ int init_jdevices(unsigned long unused_arg1) {
 	}
 
 	scan_pci_devices();
-	ut_log("-------------\n");
+	INIT_LOG("		-------------\n");
 
 	return JSUCCESS;
 }

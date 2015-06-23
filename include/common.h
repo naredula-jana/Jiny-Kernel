@@ -51,6 +51,10 @@ extern spinlock_t g_global_lock;
 } while (0) 
 #endif
 
+extern int g_init_loglevel;
+#define INIT_LOG(x...) if (g_init_loglevel > 0){ ut_log(x); }
+
+
 extern int brk_pnt;
 #define BRK while(brk_pnt==0)
 

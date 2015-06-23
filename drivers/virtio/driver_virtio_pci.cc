@@ -108,7 +108,7 @@ struct virtqueue *virtio_jdriver::virtio_create_queue(uint16_t index, int qType)
 
 	num = inw(pci_ioaddr + VIRTIO_PCI_QUEUE_NUM);
 	//num = 1024;
-	ut_log("	New virtio create queue NUM-%d : num %x(%d)  :%x\n", index, num, num, vring_size(num, VIRTIO_PCI_VRING_ALIGN));
+	INIT_LOG("		New virtio create queue NUM-%d : num %x(%d)  :%x\n", index, num, num, vring_size(num, VIRTIO_PCI_VRING_ALIGN));
 	if (num == 0) {
 		return 0;
 	}
@@ -121,7 +121,7 @@ struct virtqueue *virtio_jdriver::virtio_create_queue(uint16_t index, int qType)
 	outl(pci_ioaddr + VIRTIO_PCI_QUEUE_PFN, __pa(ring_addr) >> VIRTIO_PCI_QUEUE_ADDR_SHIFT);
 
 	/* create the vring */
-	ut_log("	virtioqueue Creating queue:%x(pa:%x) size-order:%x  size:%x\n", ring_addr, __pa(ring_addr),get_order(size),size);
+	INIT_LOG("		virtioqueue Creating queue:%x(pa:%x) size-order:%x  size:%x\n", ring_addr, __pa(ring_addr),get_order(size),size);
 	virt_q = (struct virtqueue * )vring_new_virtqueue(num, VIRTIO_PCI_VRING_ALIGN, device->pci_device.pci_ioaddr, (void *) ring_addr, &notify,
 			&callback, "VIRTQUEUE", index);
 	virtqueue_enable_cb_delayed(virt_q);
@@ -308,7 +308,7 @@ int virtio_net_jdriver::net_attach_device() {
 
 	guest_features = guest_features & mask_features;
 
-	ut_log("	VirtioNet:  HOSTfeatures :%x:  capabilitie:%x guestfeatures:%x mask_features:%x\n", features, pci_hdr->capabilities_pointer,guest_features,mask_features);
+	INIT_LOG("	VirtioNet:  HOSTfeatures :%x:  capabilitie:%x guestfeatures:%x mask_features:%x\n", features, pci_hdr->capabilities_pointer,guest_features,mask_features);
 	display_virtiofeatures(features, vtnet_feature_desc);
 
 	 addr = pci_ioaddr + VIRTIO_PCI_GUEST_FEATURES;
@@ -338,10 +338,10 @@ int virtio_net_jdriver::net_attach_device() {
 	if ((features >> VIRTIO_NET_F_MQ) & 0x1){
 		this->max_vqs = inw(addr + 6+2);
 	}
-	ut_log("	VIRTIONET:  pioaddr:%x MAC address : %x :%x :%x :%x :%x :%x mis_vector:%x   : max_vqs:%x\n", addr, this->mac[0], this->mac[1],
+	INIT_LOG("	VIRTIONET:  pioaddr:%x MAC address : %x :%x :%x :%x :%x :%x mis_vector:%x   : max_vqs:%x\n", addr, this->mac[0], this->mac[1],
 			this->mac[2], this->mac[3], this->mac[4], this->mac[5], msi_vector,this->max_vqs);
 
-	ut_log("	VIRTIONET: initializing vqs:%d\n",max_vqs);
+	INIT_LOG("	VIRTIONET: initializing vqs:%d\n",max_vqs);
 	for (i=0; i<max_vqs; i++){
 		if (i==1){/* by default only 3 queues will be present , at this point already 2 queues are configured */
 			control_q = virtio_create_queue(2*i,VQTYPE_RECV);
@@ -412,7 +412,7 @@ int virtio_net_jdriver::net_attach_device() {
 
 
 	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER_OK);
-	ut_log("VirtioNet:  Initialization Completed status:%x\n", virtio_get_pcistatus(pci_ioaddr));
+	INIT_LOG("		VirtioNet:  Initialization Completed status:%x\n", virtio_get_pcistatus(pci_ioaddr));
 
 	return 1;
 }
@@ -910,7 +910,7 @@ int virtio_disk_jdriver::disk_attach_device(class jdevice *jdev) {
 	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER);
 	auto addr = pci_ioaddr + VIRTIO_PCI_HOST_FEATURES;
 	features = inl(addr);
-	ut_log("	Virtio disk: Initializing VIRTIO PCI hostfeatures :%x: status :%x :\n", features,  virtio_get_pcistatus(pci_ioaddr));
+	INIT_LOG("	Virtio disk: Initializing VIRTIO PCI hostfeatures :%x: status :%x :\n", features,  virtio_get_pcistatus(pci_ioaddr));
 
 	if (jdev->pci_device.pci_header.device_id != VIRTIO_PCI_SCSI_DEVICE_ID) {
 		this->vq[0] = this->virtio_create_queue(0, VQTYPE_SEND);
@@ -928,7 +928,7 @@ int virtio_disk_jdriver::disk_attach_device(class jdevice *jdev) {
 #endif
 	}
 	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER_OK);
-	ut_log("	Virtio disk:  VIRTIO PCI COMPLETED with driver ok :%x \n", virtio_get_pcistatus(pci_ioaddr));
+	INIT_LOG("	Virtio disk:  VIRTIO PCI COMPLETED with driver ok :%x \n", virtio_get_pcistatus(pci_ioaddr));
 	inb(pci_ioaddr + VIRTIO_PCI_ISR);
 	ar_registerInterrupt(32 + jdev->pci_device.pci_header.interrupt_line, virtio_disk_interrupt, "virt_disk_irq", (void *) this);
 
@@ -951,7 +951,7 @@ int virtio_disk_jdriver::disk_attach_device(class jdevice *jdev) {
 	if (jdev->pci_device.pci_header.device_id != VIRTIO_PCI_SCSI_DEVICE_ID) {
 		disk_size = virtio_config64(pci_ioaddr + 0) * 512;
 		blk_size = virtio_config32(pci_ioaddr + 20);
-		ut_log(" 	Virtio Disk size:%d(%x)  blk_size:%d\n", disk_size, disk_size,blk_size);
+		INIT_LOG(" 	Virtio Disk size:%d(%x)  blk_size:%d\n", disk_size, disk_size,blk_size);
 
 	} else {
 		/*
@@ -966,17 +966,17 @@ int virtio_disk_jdriver::disk_attach_device(class jdevice *jdev) {
 		 virtio_stw_p(vdev, &scsiconf->max_target, VIRTIO_SCSI_MAX_TARGET);
 		 virtio_stl_p(vdev, &scsiconf->max_lun, VIRTIO_SCSI_MAX_LUN)
 		 */
-		ut_log(" SCSI Num of Reques Queues: %d \n", virtio_config32(pci_ioaddr + 0));
-		ut_log(" SCSI seg max: %d \n", virtio_config32(pci_ioaddr + 4));
-		ut_log(" SCSI max sector: %d \n", virtio_config32(pci_ioaddr + 8));
-		ut_log(" SCSI cmd_per_lun: %d \n", virtio_config32(pci_ioaddr + 12));
-		ut_log(" SCSI event_info_size: %d \n", virtio_config32(pci_ioaddr + 16));
-		ut_log(" SCSI sense size: %d \n", virtio_config32(pci_ioaddr + 20));
-		ut_log(" SCSI cdb size: %d \n", virtio_config32(pci_ioaddr + 24));
+		INIT_LOG("	SCSI Num of Reques Queues: %d \n", virtio_config32(pci_ioaddr + 0));
+		INIT_LOG("	SCSI seg max: %d \n", virtio_config32(pci_ioaddr + 4));
+		INIT_LOG("	SCSI max sector: %d \n", virtio_config32(pci_ioaddr + 8));
+		INIT_LOG("	SCSI cmd_per_lun: %d \n", virtio_config32(pci_ioaddr + 12));
+		INIT_LOG("	SCSI event_info_size: %d \n", virtio_config32(pci_ioaddr + 16));
+		INIT_LOG("	SCSI sense size: %d \n", virtio_config32(pci_ioaddr + 20));
+		INIT_LOG("	SCSI cdb size: %d \n", virtio_config32(pci_ioaddr + 24));
 	}
-	ut_log("	driver status:  %x :\n",virtio_get_pcistatus(pci_ioaddr));
+	INIT_LOG("		driver status:  %x :\n",virtio_get_pcistatus(pci_ioaddr));
 	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER_OK);
-		ut_log("second time	Virtio disk:  VIRTIO PCI COMPLETED with driver ok :%x \n", virtio_get_pcistatus(pci_ioaddr));
+	INIT_LOG("		second time	Virtio disk:  VIRTIO PCI COMPLETED with driver ok :%x \n", virtio_get_pcistatus(pci_ioaddr));
 
 	return 1;
 }
@@ -985,7 +985,7 @@ int virtio_disk_jdriver::probe_device(class jdevice *jdev) {
 	if ((jdev->pci_device.pci_header.vendor_id == VIRTIO_PCI_VENDOR_ID)
 			&& ((jdev->pci_device.pci_header.device_id == VIRTIO_PCI_BLOCK_DEVICE_ID) ||
 		(jdev->pci_device.pci_header.device_id == VIRTIO_PCI_SCSI_DEVICE_ID))){
-		ut_log(" Matches the disk Probe :%d\n",jdev->pci_device.pci_header.device_id);
+		ut_log("		Matches the disk Probe :%d\n",jdev->pci_device.pci_header.device_id);
 		return JSUCCESS;
 	}
 	return JFAIL;

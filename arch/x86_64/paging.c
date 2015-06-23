@@ -105,13 +105,13 @@ addr_t initialise_paging_new(addr_t physical_mem_size, unsigned long virt_image_
 	g_kernel_page_dir=0x00101000;
 
 	level4_index = L4_INDEX(virt_addr);
-	ut_log("	paging init :addr:%x -> %x Lindex ( %x : %x : %x :%x )\n",virt_addr,L4_INDEX(virt_addr)*8,L4_INDEX(virt_addr),L3_INDEX(virt_addr),L2_INDEX(virt_addr),L1_INDEX(virt_addr));
+	INIT_LOG("	paging init :addr:%x -> %x Lindex ( %x : %x : %x :%x )\n",virt_addr,L4_INDEX(virt_addr)*8,L4_INDEX(virt_addr),L3_INDEX(virt_addr),L2_INDEX(virt_addr),L1_INDEX(virt_addr));
 	*virt_addr_start = virt_addr;
 	*virt_addr_end = virt_addr + physical_mem_size - (8*1024);
 	fr = 0;
 	max_fr = physical_mem_size/(PAGE_SIZE); /* max pages */
 
-	ut_log("		max_fr :%x (%d) image_end :%x(%d)\n",max_fr,max_fr,virt_image_end,virt_image_end-KERNEL_CODE_START);
+	INIT_LOG("		max_fr :%x (%d) image_end :%x(%d)\n",max_fr,max_fr,virt_image_end,virt_image_end-KERNEL_CODE_START);
 
 	level3_table = curr_virt_end_addr;
 	curr_virt_end_addr = curr_virt_end_addr + PAGE_SIZE;
@@ -156,11 +156,11 @@ addr_t initialise_paging_new(addr_t physical_mem_size, unsigned long virt_image_
 		level3_index++;
 	}
 last:
-	ut_log("		paging init end :addr:%x ->  Lindex ( %x : %x : %x :%x )\n",curr_virt_end_addr,L4_INDEX(curr_virt_end_addr),L3_INDEX(curr_virt_end_addr),L2_INDEX(curr_virt_end_addr),L1_INDEX(curr_virt_end_addr));
+	INIT_LOG("		paging init end :addr:%x ->  Lindex ( %x : %x : %x :%x )\n",curr_virt_end_addr,L4_INDEX(curr_virt_end_addr),L3_INDEX(curr_virt_end_addr),L2_INDEX(curr_virt_end_addr),L1_INDEX(curr_virt_end_addr));
 
 	curr_virt_end_addr = curr_virt_end_addr + PAGE_SIZE;
 	flush_tlb(0x101000);
-	ut_log("		END address :%x fr:%x j:%x level3:%x(%d) level2:%x(%d) 2mptes:%d 4kptes:%d\n",curr_virt_end_addr,fr,j,level2_index,level2_index,level3_index,level3_index,stat_ptes2m,stat_ptes4k);
+	INIT_LOG("		END address :%x fr:%x j:%x level3:%x(%d) level2:%x(%d) 2mptes:%d 4kptes:%d\n",curr_virt_end_addr,fr,j,level2_index,level2_index,level3_index,level3_index,stat_ptes2m,stat_ptes4k);
 
 	g_kernel_address_space_starts = *virt_addr_start;
 	virt_addr = virt_addr + (curr_virt_end_addr-KERNEL_CODE_START);
@@ -826,9 +826,9 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 				static int count=0;
 #if 1
 				count++;
-				ut_log("Kernel Adding to LEAF: private page paddr: %x vaddr: %x \n",p,addr);
-				ut_log("addr:%x ->  Lindex ( %x : %x : %x :%x )\n",addr,L4_INDEX(addr),L3_INDEX(addr),L2_INDEX(addr),L1_INDEX(addr));
-				ut_log("%d: addr:%x ->  Lindexloc ( %x : %x : %x :%x )\n",count,addr,L4_INDEX(addr)*8,L3_INDEX(addr)*8,L2_INDEX(addr)*8,L1_INDEX(addr)*8);
+				INIT_LOG("		Kernel Adding to LEAF: private page paddr: %x vaddr: %x \n",p,addr);
+				INIT_LOG("		addr:%x ->  Lindex ( %x : %x : %x :%x )\n",addr,L4_INDEX(addr),L3_INDEX(addr),L2_INDEX(addr),L1_INDEX(addr));
+				INIT_LOG("		%d: addr:%x ->  Lindexloc ( %x : %x : %x :%x )\n",count,addr,L4_INDEX(addr)*8,L3_INDEX(addr)*8,L2_INDEX(addr)*8,L1_INDEX(addr)*8);
 				if (count > 2){
 				 // BRK;
 				}

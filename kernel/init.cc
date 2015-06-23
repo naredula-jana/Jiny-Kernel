@@ -86,7 +86,7 @@ static inittable_t inittable[] = {
 		{init_networking,0,       "network_sched",0},
 #endif
 	//	{init_clock,0,       "clock"},
-//		{init_code_readonly,0,       "Making code readonly"},
+//		{init_code_readonly,0,       "Making code readonly",0},
 		{init_kernel_vmaps, 0, "Kernel Vmaps",0},
 		{init_jdevices,0,       "devices in c++ ",0},
 		{init_procfs,0,"Procfs",0},
@@ -94,8 +94,8 @@ static inittable_t inittable[] = {
 #ifdef NETWORKING
 		{init_network_stack,0,       "network stacks",0},
 #endif
-//		{init_modules,0,       "modules"},
-//		{init_log_file,0, "log file "},
+//		{init_modules,0,       "modules",0},
+//		{init_log_file,0, "log file ",0},
 		{0,0,0}
 };
 
@@ -120,17 +120,17 @@ int init_physical_memory(unsigned long unused){
 	}
 
 	/* Set MBI to the address of the Multiboot information structure.  */
-	ut_log("	mbi: %x mem_lower = %x(%d)KB , mem_upper=%x(%d)KB mod count:%d addr:%x mmaplen:%d mmpaddr:%x Flags:%x\n", mbi, mbi->mem_lower, mbi->mem_lower, mbi->mem_upper, mbi->mem_upper,
+	ut_log("		mbi: %x mem_lower = %x(%d)KB , mem_upper=%x(%d)KB mod count:%d addr:%x mmaplen:%d mmpaddr:%x Flags:%x\n", mbi, mbi->mem_lower, mbi->mem_lower, mbi->mem_upper, mbi->mem_upper,
 			mbi->mods_count, mbi->mods_addr, mbi->mmap_length, mbi->mmap_addr, mbi->flags);
-	ut_log("		mbi: syms[0]:%x syms[1]:%x  syms[2]:%x syms[3]:%x cmdline:%x\n",mbi->syms[0],mbi->syms[1],mbi->syms[2],mbi->syms[3],mbi->cmdline);
+	INIT_LOG("		mbi: syms[0]:%x syms[1]:%x  syms[2]:%x syms[3]:%x cmdline:%x\n",mbi->syms[0],mbi->syms[1],mbi->syms[2],mbi->syms[3],mbi->cmdline);
 
 	/* Are mmap_* valid?  */
 	if (CHECK_FLAG (mbi->flags, 6)) {
 		memory_map_t *mmap;
-		ut_log("	mmap_addr = 0x%x, mmap_length = 0x%x\n", (unsigned) mbi->mmap_addr, (unsigned) mbi->mmap_length);
+		INIT_LOG("		mmap_addr = 0x%x, mmap_length = 0x%x\n", (unsigned) mbi->mmap_addr, (unsigned) mbi->mmap_length);
 		for (mmap = (memory_map_t *) __va(mbi->mmap_addr); (unsigned long) mmap < __va(mbi->mmap_addr) + mbi->mmap_length; mmap = (memory_map_t *) ((unsigned long) mmap
 				+ mmap->size + sizeof(mmap->size))) {
-			ut_log("	mmap:%x size=0x%x, base_addr high=0x%x low=0x%x,"
+			INIT_LOG("		mmap:%x size=0x%x, base_addr high=0x%x low=0x%x,"
 				" length = %x %x, type = 0x%x\n", mmap, (unsigned) mmap->size, (unsigned) mmap->base_addr_high, (unsigned) mmap->base_addr_low, (unsigned) mmap->length_high,
 					(unsigned) mmap->length_low, (unsigned) mmap->type);
 			if (mmap->base_addr_high == 0x0 && mmap->base_addr_low == 0x100000)
@@ -139,11 +139,11 @@ int init_physical_memory(unsigned long unused){
 	}
 
 	g_phy_mem_size = max_addr;
-	ut_log("  Physical memory size :%x (%d)  magic_ptr :%x cmdline: %x :%s\n",g_phy_mem_size,g_phy_mem_size,magic_ptr,mbi->cmdline,__va(mbi->cmdline));
-	ut_log("  end of data :%x  image end:%x\n",&_edata, &end);
+	INIT_LOG("		Physical memory size :%x (%d)  magic_ptr :%x cmdline: %x :%s\n",g_phy_mem_size,g_phy_mem_size,magic_ptr,mbi->cmdline,__va(mbi->cmdline));
+	INIT_LOG("		end of data :%x  image end:%x\n",&_edata, &end);
 	ut_memcpy(&kernel_args[0], __va(mbi->cmdline),1023);
 	init_symbol_table(&_edata, &end);
-	ut_log(" End of smybol processing \n");
+	INIT_LOG("		End of smybol processing \n");
 	//while(1);
 	return JSUCCESS;
 }
@@ -234,7 +234,6 @@ void cmain() {  /* This is the first c function to be executed */
 
 	g_cpu_state[0].current_task = g_current_task;
 
-
 //	while(1);
 	ut_log(" Before g_conf_func_debug-> :%x(%d)\n",g_conf_func_debug,g_conf_func_debug);
 	for (i=0; inittable[i].func != 0; i++){
@@ -247,10 +246,10 @@ void cmain() {  /* This is the first c function to be executed */
 			ut_log("	%s : ....Failed error:%d\n",inittable[i].comment,ret);
 		}
 	}
-	ut_log(" After g_conf_func_debug-> :%x(%d)\n",g_conf_func_debug,g_conf_func_debug);
+	//ut_log(" After g_conf_func_debug-> :%x(%d)\n",g_conf_func_debug,g_conf_func_debug);
 	uint32_t val[5];
 	do_cpuid(1,val);
-	ut_log("	cpuid result %x : %x :%x :%x \n",val[0],val[1],val[2],val[3]);
+	//ut_log("	cpuid result %x : %x :%x :%x \n",val[0],val[1],val[2],val[3]);
 	g_cpu_features=val[3]; /* edx */
 
 	/* link global locks for debugging purpose */
@@ -263,7 +262,7 @@ void cmain() {  /* This is the first c function to be executed */
 	sc_createKernelThread(shell_main, 0, (unsigned char *)"shell_main",0);
 	sc_createKernelThread(housekeeper_thread, 0, (unsigned char *)"house_keeper",0);
 #endif
-	ut_log("	Initialization COMPLETED  time since boot:%d  ten_msecs\n",get_kvm_time_fromboot());
+	ut_log("	Initialization COMPLETED  time since boot:%d  ten_msecs\n-------------------\n",get_kvm_time_fromboot());
 
 	idleTask_func();
 	return;

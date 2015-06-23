@@ -216,10 +216,10 @@ unsigned long vm_create_kmap(unsigned char *name, unsigned long map_size, unsign
 	vaddr = 0xffffffffc0000000 +ksize;
 	ret = vm_mmap(0, (unsigned long)vaddr , map_size , prot, flags, pgoff,name);
 	if (ret == 0) {
-		ut_log("	ERROR: create kernel vmap Fails vaddr :%x(%d)\n",vaddr, ret);
+		ut_log("		ERROR: create kernel vmap Fails vaddr :%x(%d)\n",vaddr, ret);
 		vaddr=0;
 	}else{
-		ut_log("	create Kernel vmap: %s   :%x-%x size:%dM\n",name,vaddr,vaddr+map_size,map_size/1000000);
+		ut_log("		create Kernel vmap: %s   :%x-%x size:%dM\n",name,vaddr,vaddr+map_size,map_size/1000000);
 	}
 	ksize= ksize+hole_size+map_size;
 

@@ -76,12 +76,13 @@ static unsigned int *acpiCheckRSDPtr(unsigned int *ptr)
       // found valid rsdpd
       if (check == 0) {
 #if 1
-          if (rsdp->Revision == 0)
-            ut_printf("		acpi 1\n");
-         else
-            ut_printf("		acpi 2\n");
+          if (rsdp->Revision == 0){
+            INIT_LOG("		acpi revison 1\n");
+          }else{
+        	 INIT_LOG("		acpi revison 2\n");
+          }
 #endif
-    	  ut_printf("	found the acpi address: %x\n",rsdp);
+          INIT_LOG("	found the acpi address: %x\n",rsdp);
          return (unsigned int *) rsdp->RsdtAddress;
       }
    }
@@ -214,11 +215,11 @@ int init_acpi(unsigned long unused_arg1)
 	//return -1;
    unsigned int *ptr = acpiGetRSDPtr();
 
-   ut_printf(" first : phy %x \n",ptr);
+ //  ut_printf(" first : phy %x \n",ptr);
    unsigned char *p=__va(ptr);
    ptr=(unsigned int *)p;
 #ifdef DEBUG
-   ut_printf(" first :virt  %x \n",ptr);
+   //ut_printf(" first :virt  %x \n",ptr);
 #endif
    // check if address is correct  ( if acpi is available on this pc )
    if (ptr != NULL && acpiCheckHeader(ptr, "RSDT") == 0)
@@ -235,37 +236,37 @@ int init_acpi(unsigned long unused_arg1)
          if (acpiCheckHeader((unsigned int *) *ptr, "FACP") == 0)
          {
             entrys = -2;
-            ut_printf("   Found FACP: %x\n",ptr);
+            INIT_LOG("   Found FACP: %x\n",ptr);
             struct FACP *facp = (struct FACP *) __va(*ptr);
             if (acpiCheckHeader((unsigned int *) __va(facp->DSDT), "DSDT") == 0)
             {
                // search the \_S5 package in the DSDT
                char *S5Addr = (char *)( facp->DSDT +36); // skip header
-               ut_printf("   s5addr: %x\n",S5Addr);
+               INIT_LOG("   s5addr: %x\n",S5Addr);
                S5Addr=__va(S5Addr);
               // int dsdtLength = *(facp->DSDT+1) -36;
                int *p = __va(facp->DSDT+1);
                int dsdtLength = *(p)-36;
                int loop;
-               ut_printf("   lenght: %x  addr:%x\n",dsdtLength,p);
+               INIT_LOG("   lenght: %x  addr:%x\n",dsdtLength,p);
                //while (0 < dsdtLength--)
                loop=0;
             	   while(loop<0x1400)
                {
                   if ( ut_memcmp(S5Addr, "_S5_", 4) == 0){
-                	  ut_printf("	 found S5 in memcmp\n");
+                	  INIT_LOG("	 found S5 in memcmp\n");
                      break;
                   }
                   S5Addr++;
                   loop++;
                }
-               ut_printf("  	 after lenght: %x s5addr:%x\n",dsdtLength,S5Addr);
+            	   INIT_LOG("  	 after lenght: %x s5addr:%x\n",dsdtLength,S5Addr);
                // check if \_S5 was found
              //  if (dsdtLength > 0)
                if (1)
                {
                   // check for valid AML structure
-            	   ut_printf("	  check  s5addr: %x\n",S5Addr);
+            	   INIT_LOG("	  check  s5addr: %x\n",S5Addr);
                   if ( ( *(S5Addr-1) == 0x08 || ( *(S5Addr-2) == 0x08 && *(S5Addr-1) == '\\') ) && *(S5Addr+4) == 0x12 )
                   {
                      S5Addr += 5;
@@ -292,23 +293,23 @@ int init_acpi(unsigned long unused_arg1)
 
                      SLP_EN = 1<<13;
                      SCI_EN = 1;
-                     ut_log("	ACPI sucessfully Initialized\n");
+                     INIT_LOG("	ACPI sucessfully Initialized\n");
                      return JSUCCESS;
                   } else {
-                     ut_printf("\\_S5 parse error.\n");
+                	  INIT_LOG("\\_S5 parse error.\n");
                   }
                } else {
-                  ut_printf("\\_S5 not present.\n");
+            	   INIT_LOG("\\_S5 not present.\n");
                }
             } else {
-               ut_printf("DSDT invalid.\n");
+            	INIT_LOG("DSDT invalid.\n");
             }
          }
          ptr++;
       }
-      ut_printf("no valid FACP present.\n");
+      INIT_LOG("	no valid FACP present.\n");
    } else {
-      ut_printf("no acpi.\n");
+	   INIT_LOG("	no acpi.\n");
    }
 
    return JFAIL;
@@ -323,13 +324,13 @@ void acpi_shutdown(void)
 
    acpiEnable();
 
-   ut_printf(" sending the shutdown command \n");
+   ut_log(" sending the shutdown command \n");
 
    // send the shutdown command
    outw((unsigned int) PM1a_CNT, SLP_TYPa | SLP_EN );
    if ( PM1b_CNT != 0 )
       outw((unsigned int) PM1b_CNT, SLP_TYPb | SLP_EN );
 
-   ut_printf("acpi poweroff failed.\n");
+   ut_log("acpi poweroff failed.\n");
 }
 }
