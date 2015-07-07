@@ -105,8 +105,8 @@ void jdevice::print_stats(unsigned char *arg1,unsigned char *arg2) {
 		if (driver != 0){
 			drv_name=driver->name;
 		}
-		ut_printf("pci: %x:%x:%x ven/dev: %2x:%2x :%s: int:%x driver:%s\n", pci_device.pci_addr.bus, pci_device.pci_addr.device,
-				pci_device.pci_addr.function,pci_device.pci_header.vendor_id,pci_device.pci_header.device_id,pci_device.description,pci_device.pci_header.interrupt_line, drv_name);
+		ut_printf("pci: %x:%x:%x ven/dev: %2x:%2x :%s: int:%x(%d) driver:%s\n", pci_device.pci_addr.bus, pci_device.pci_addr.device,
+				pci_device.pci_addr.function,pci_device.pci_header.vendor_id,pci_device.pci_header.device_id,pci_device.description,pci_device.pci_header.interrupt_line,(32+pci_device.pci_header.interrupt_line), drv_name);
 		if (all==0){
 			return;
 		}
@@ -118,9 +118,9 @@ void jdevice::print_stats(unsigned char *arg1,unsigned char *arg2) {
 	}
 	ut_printf("\n");
 }
-int jdevice::read(unsigned long unused, unsigned char *buf, int len, int flags){
+int jdevice::read(unsigned long unused, unsigned char *buf, int len, int flags, int opt_flags){
 	if (driver != 0){
-		return driver->read(buf,len, flags);
+		return driver->read(buf,len, flags,  opt_flags);
 	}
 	return -1;
 }
@@ -161,7 +161,7 @@ void *operator new(int sz,const char *name) {
     	unsigned long tmp_p = obj;
     	tmp_p=tmp_p+8;
     	class jobject *jobj = tmp_p;
-    	jobj->jobject_id = ut_count_obj_add(name);
+    	jobj->jobject_id = ut_count_obj_add(name,sz);
     }
     return obj;
 }
@@ -214,9 +214,8 @@ static int scan_pci_devices() {
 	}
 	return JSUCCESS;
 }
-extern void init_virtio_p9_jdriver();
-extern void init_virtio_net_jdriver();
-extern void init_virtio_disk_jdriver();
+extern void init_virtio_drivers();
+
 extern void init_keyboard_jdriver();
 extern void init_serial_jdriver();
 static struct jdevice *keyboard_device,*serial1_device,*serial2_device;
@@ -230,9 +229,8 @@ int init_jdevices(unsigned long unused_arg1) {
 	for (i=0; i<MAX_DISK_DEVICES; i++){
 		disk_drivers[i]=0;
 	}
-	init_virtio_p9_jdriver();
-	init_virtio_net_jdriver();
-	init_virtio_disk_jdriver();
+	init_virtio_drivers();
+
 	init_keyboard_jdriver();
 	init_serial_jdriver();
 
@@ -292,7 +290,7 @@ void Jcmd_read() {
 	unsigned char buf[800];
 	int ret;
 	if (disk_drivers[0] != 0) {
-		ret = disk_drivers[0]->read(buf, 50, test_i);
+		ret = disk_drivers[0]->read(buf, 50, test_i,0);
 		test_i = test_i + 50;
 		buf[50] = 0;
 		ut_printf(" Read from disk ret:%d: :%s: \n", ret, buf);

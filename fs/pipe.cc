@@ -81,7 +81,7 @@ int pipe::init(int type) {
 	file_type = type;
 	return JSUCCESS;
 }
-int pipe::read(unsigned long unused, unsigned char *buf, int len, int read_flags){
+int pipe::read(unsigned long unused, unsigned char *buf, int len, int read_flags, int opt_flags){
 	int ret;
 	ret = fs_recv_from_pipe(this->pipe_index,buf,len);
 	update_stat_in(1,ret);

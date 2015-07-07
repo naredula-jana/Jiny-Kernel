@@ -156,7 +156,7 @@ int socket::remove_from_queue(unsigned char **buf, int *len) {
 	return ret;
 }
 
-int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int read_flags) {
+int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int read_flags, int unused_flags) {
 	int ret = 0;
 	unsigned char *buf = 0;
 	int buf_len;
@@ -209,7 +209,7 @@ int socket::peek(){
 		if (peeked_msg == 0){
 			peeked_msg = (unsigned long) alloc_page(0);
 		}
-		peeked_msg_len = read(0,peeked_msg,PAGE_SIZE,0);
+		peeked_msg_len = read(0,peeked_msg,PAGE_SIZE,0,0);
 	}
 	return peeked_msg_len;
 }
@@ -422,7 +422,7 @@ vinode* socket::create_new(int arg_type) {
 }
 int socket::default_pkt_thread(void *arg1, void *arg2){
 	while(1){
-		default_socket->read(0,0,0,0);
+		default_socket->read(0,0,0,0,0);
 		default_sock_queue_len = default_socket->queue.consumer;
 	}
 	return 1;
@@ -553,7 +553,7 @@ int SYS_accept(int fd) {
 
 	inode->network_conn.child_connection = &(new_inode->network_conn);
 
-	inode->read(0,0,0,0);
+	inode->read(0,0,0,0,0);
 
 	if (i > 0){
 		inode->stat_out++;
@@ -642,7 +642,7 @@ int SYS_recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *
 	struct file *file = g_current_task->fs->filep[sockfd];
 	struct socket *sock = (struct socket *) file->vinode;
 
-	ret = sock->read(0, (unsigned char *) buf, len, 0);
+	ret = sock->read(0, (unsigned char *) buf, len, 0,0);
 	SYSCALL_DEBUG(" Recv from ret  :%d\n",ret);
 	if (dest_addr > 0) {
 		dest_addr->addr = sock->network_conn.dest_ip;

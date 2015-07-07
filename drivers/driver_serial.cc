@@ -103,7 +103,7 @@ public:
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);
 	int dettach_device(jdevice *dev);
-	int read(unsigned char *buf, int len, int flags);
+	int read(unsigned char *buf, int len, int flags, int opt_flags);
 	int write(unsigned char *buf, int len, int flags);
 	void print_stats(unsigned char *arg1,unsigned char *arg2);
 	int ioctl(unsigned long arg1, unsigned long arg2);
@@ -130,7 +130,7 @@ jdriver *serial_jdriver::attach_device(class jdevice *jdev) {
 int serial_jdriver::dettach_device(class jdevice *jdev) {
 	return JSUCCESS;
 }
-int serial_jdriver::read(unsigned char *buff, int len, int read_flags) {
+int serial_jdriver::read(unsigned char *buff, int len, int read_flags, int opt_flags) {
 	int ret = 0;
 
 	if (len > 0 && buff != 0) {

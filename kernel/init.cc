@@ -52,6 +52,7 @@ int init_vfs(unsigned long arg);
 int init_smp_force(unsigned long ncpus);
 int init_syscall(unsigned long cpuid);
 int init_networking(unsigned long arg);
+extern int init_ipc(unsigned long arg);
 extern int init_procfs(unsigned long unused);
 
 typedef struct {
@@ -71,6 +72,7 @@ static inittable_t inittable[] = {
 #endif
 		{init_jslab,0,"Jslab initialization",0},
 		{init_syscall,0,       "syscalls",0},
+		{init_ipc,0,       "ipc",0},
 		{init_vfs,0,       "vfs",0},
 		{init_tasking,0,       "tasking",0},
 		{init_clock,0,       "clock",0},

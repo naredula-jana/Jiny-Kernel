@@ -202,12 +202,14 @@ void ar_irqHandler(void *p, unsigned int int_no) {
 	if (int_no > 100) { // APIC or MSI based interrupts
 		int isr_status = read_apic_isr(int_no); // TODO: make use of isr_status
 	} else {
+
 		if (int_no >= 40) {
 			// Send reset signal to slave.
 			outb(0xA0, 0x20);
 		}
 		// Send reset signal to master. (As well as slave, if necessary).
 		outb(0x20, 0x20);
+
 	}
 
 	if (g_interrupt_handlers[int_no].action != 0) {

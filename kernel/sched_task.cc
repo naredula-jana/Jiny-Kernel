@@ -425,7 +425,7 @@ int sc_task_stick_to_cpu(unsigned long pid, int cpu_id) {
 int ipi_interrupt(void *arg) { /* Do nothing, this is just wake up the core when it is executing HLT instruction  */
 	return 0;
 }
-extern int init_ipc();
+
 
 static struct fs_struct *create_fs() {
 	struct fs_struct *fs = (struct fs_struct *) ut_calloc(sizeof(struct fs_struct));
@@ -461,7 +461,7 @@ int init_tasking(unsigned long unused) {
 
 	g_kernel_mm = create_mm();
 	fs = create_fs();
-	init_ipc();
+///	init_ipc();
 
 	g_inode_lock = mutexCreate((char *) "mutex_vfs");
 	g_print_lock = mutexCreate((char *) "mutex_print");
@@ -916,6 +916,7 @@ void Jcmd_ipi(unsigned char *arg1, unsigned char *arg2) {
 	ret = apic_send_ipi_vector(i, IPI_CLEARPAGETABLE);
 	ut_printf(" return value of ipi :%d \n", ret);
 }
+
 void Jcmd_taskcpu(unsigned char *arg_pid, unsigned char *arg_cpuid) {
 	int cpuid, pid;
 
@@ -962,6 +963,8 @@ int Jcmd_kill(uint8_t *arg1, uint8_t *arg2) {
 	return 1;
 }
 extern void print_syscall_stat(struct task_struct *task, int output);
+void Jcmd_stat_diskio(unsigned char *,unsigned char *);
+void Jcmd_locks(unsigned char *,unsigned char *);
 int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	unsigned long flags;
 	struct list_head *pos;
@@ -1017,12 +1020,12 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	}
 	len = len
 			- ut_snprintf(buf + max_len - len, len,
-					" CPU Processors:  cpuid contexts(user/total) <state 0=idle, intr-disabled > name pid\n");
+					" CPU Processors:  cpuid contexts(user/total) <state 0=idle, intr-disabled > name pid runq_len\n");
 	for (i = 0; i < getmaxcpus(); i++) {
 		len = len
-				- ut_snprintf(buf + max_len - len, len, "%2d:(%4d/%4d) <%d-%d> %7s(%d)\n", i,
+				- ut_snprintf(buf + max_len - len, len, "%2d:(%4d/%4d) <%d-%d> %7s(%d) rlen:%d  runq:%x - %x\n", i,
 						g_cpu_state[i].stats.nonidle_contexts, g_cpu_state[i].stats.total_contexts, g_cpu_state[i].active,
-						g_cpu_state[i].intr_disabled, g_cpu_state[i].current_task->name, g_cpu_state[i].current_task->pid);
+						g_cpu_state[i].intr_disabled, g_cpu_state[i].current_task->name, g_cpu_state[i].current_task->pid,g_cpu_state[i].run_queue_length,&g_cpu_state[i].run_queue.head,g_cpu_state[i].run_queue.head.next);
 	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
 	if (g_current_task->mm == g_kernel_mm)
@@ -1031,7 +1034,16 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 		SYS_fs_write(1, buf, len);
 
 	vfree((unsigned long) buf);
+
+	if (all == 1){
+		Jcmd_stat_diskio(0,0);
+		Jcmd_locks(0,0);
+	}
 	return 1;
+}
+
+extern "C" {
+int g_conf_cpu_stick = 99; /* auto mode, */
 }
 static int get_free_cpu() {
 	static int i = 0;
@@ -1041,11 +1053,14 @@ static int get_free_cpu() {
 	if (k >= getmaxcpus()) {
 		k = 0;
 	}
-#if 1
+
+	if (g_conf_cpu_stick != 99 &&  g_conf_cpu_stick<getmaxcpus()){
+		return g_conf_cpu_stick;
+	}
 	if (g_cpu_state[k].active == 1) {
 		return k;
 	}
-#endif
+
 	return 0;
 
 }
@@ -1149,7 +1164,7 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	spin_unlock_irqrestore(&g_global_lock, flags);
 
 	p->clone_flags = clone_flags;
-	ut_log(" clone : %s  pid :%d(%x) task:%x \n",p->name,p->pid,p->pid, p);
+//	ut_log(" clone : %s  pid :%d(%x) task:%x \n",p->name,p->pid,p->pid, p);
 
 	if (clone_flags & CLONE_VFORK) { //TODO : sys-vfork partially done, need to use to signals suspend and continue the parent process
 		g_current_task->state = TASK_STOPPED;

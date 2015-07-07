@@ -197,7 +197,7 @@ struct cpu_state {
 	struct task_struct *idle_task;
 	spinlock_t lock; /* currently this a) protect run queue, since it is updated globally b) before schedule this is taken to disable interrupts */
 	task_queue_t run_queue;
-	int run_queue_length;
+	volatile int run_queue_length;
 	int net_BH; /* enable if the net_RX BH need to be kept on the cpu on a priority basis */
 	spinlock_t *sched_lock; /* lock to relase after schedule, it is filled before the schedule */
 

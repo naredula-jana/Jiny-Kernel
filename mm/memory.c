@@ -425,7 +425,7 @@ int init_memory(unsigned long arg1){
 
 	pc_size = g_pagecache_size ;
 	pc_init((unsigned char *)virt_start_addr,pc_size);
-	INIT_LOG("	pagecache  : %x - %x size:%dM",virt_start_addr,virt_start_addr+pc_size,pc_size/1000000);
+	ut_log("	pagecache  : %x - %x size:%dM",virt_start_addr,virt_start_addr+pc_size,pc_size/1000000);
 
 	virt_start_addr=virt_start_addr+pc_size;
 

@@ -64,7 +64,7 @@ inactive->free :
 /*********************** local function *************************/
 static int _pagelist_add(page_struct_t *page, page_list_t *list,int tail);
 
-static inline struct page *to_page(uint8_t *addr){ /* TODO remove me later the function is duplicated in fs/host_fs.c */
+static inline struct page *to_page(uint8_t *addr){ /* TODO remove me later the function is duplicated in fs/host_fs.c   */
 	unsigned long pn;
 	pn = (addr - pc_startaddr) / PC_PAGESIZE;
 	return pagecache_map + pn;
@@ -226,7 +226,7 @@ int pc_check_valid_addr(uint8_t *addr, int len){
 int pc_get_page(struct page *page){
 	struct fs_inode *inode;
 
-	mutexLock(g_inode_lock);
+//	mutexLock(g_inode_lock);
 	inode=(struct fs_inode *)page->fs_inode;
 	if (inode != 0) {
 		atomic_inc(&(inode->stat_locked_pages));
@@ -234,7 +234,7 @@ int pc_get_page(struct page *page){
 		BUG();
 	}
 	atomic_inc(&page->count);
-	mutexUnLock(g_inode_lock);
+//	mutexUnLock(g_inode_lock);
 
 	return JSUCCESS;
 }
@@ -242,7 +242,7 @@ int pc_put_page(struct page *page){
 	struct fs_inode *inode;
 	inode=(struct fs_inode *)page->fs_inode;
 
-	mutexLock(g_inode_lock);
+//	mutexLock(g_inode_lock);
 	if (inode != 0) {
 		atomic_dec(&(inode->stat_locked_pages));
 	}else{
@@ -250,9 +250,17 @@ int pc_put_page(struct page *page){
 	}
 
 	atomic_dec(&page->count);
-	mutexUnLock(g_inode_lock);
+//	mutexUnLock(g_inode_lock);
 
 	return JSUCCESS;
+}
+wait_queue *read_ahead_waitq;
+int pc_read_ahead_complete(unsigned long addr){
+	struct page *page = to_page(addr);
+
+	PageClearReadinProgress(page);
+	pc_put_page(page);
+	read_ahead_waitq->wakeup();
 }
 int page_inuse(struct page *page){
 	if (page->count.counter ==0 ){
@@ -261,6 +269,7 @@ int page_inuse(struct page *page){
 		return 1;
 	}
 }
+
 int pc_init(uint8_t *start_addr, unsigned long len) {
 	int total_pages, reserved_size;
 	page_struct_t *p;

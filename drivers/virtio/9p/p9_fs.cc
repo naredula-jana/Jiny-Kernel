@@ -560,7 +560,7 @@ public:
 	 int open(fs_inode *inode, int flags, int mode);
 	 int lseek(struct file *file,  unsigned long offset, int whence);
 	 long write(fs_inode *inode, uint64_t offset, unsigned char *buff, unsigned long len);
-	 long read(fs_inode *inode, uint64_t offset,  unsigned char *buff, unsigned long len);
+	 long read(fs_inode *inode, uint64_t offset,  unsigned char *buff, unsigned long len, int flags);
 	 long readDir(fs_inode *inode, struct dirEntry *dir_ptr, unsigned long dir_max, int *offset);
 	 int remove(fs_inode *inode);
 	 int stat(fs_inode *inode, struct fileStat *stat);
@@ -601,7 +601,7 @@ long p9_fs::write(fs_inode *inodep, uint64_t offset, unsigned char *data, unsign
     return ret;
 }
 
-long p9_fs::read(fs_inode *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len) {
+long p9_fs::read(fs_inode *inodep, uint64_t offset, unsigned char *data, unsigned long  data_len, int flags) {
 	if (p9ClientInit() == JFAIL) return JFAIL;
     return  (long)p9Request(REQUEST_READ, inodep, offset, data, data_len, 0, 0);
 }

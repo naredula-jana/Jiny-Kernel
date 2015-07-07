@@ -184,20 +184,42 @@ int SYS_futex(int *uaddr, int op, int val, unsigned long timeout,
 	return -1;
 }
 /************************************  end of futex ******************************/
+#define MAX_MUTEXS 100
+static semaphore *stat_semaphores[MAX_MUTEXS];
 void *ipc_mutex_create(char *name) {
+	unsigned long flags,i;
 	semaphore *sem ;
 	assert (ipc_init_done !=0);
 
 	sem = jnew_obj(semaphore, 1, name);
 	sem->waitqueue->used_for = sem;
 	sem->stat_acquired_start_time =0;
+
+	spin_lock_irqsave(&g_global_lock, flags);
+	for (i = 0; i < MAX_MUTEXS; i++) {
+		if (stat_semaphores[i] != 0 ) continue;
+		stat_semaphores[i] = sem;
+		break;
+	}
+	spin_unlock_irqrestore(&g_global_lock, flags);
+
 	return sem;
 }
 int ipc_mutex_destroy(void *p) {
+	unsigned long flags,i;
 	semaphore *sem = p;
 	if (p == 0)
 		return 0;
 	sem->free();
+
+	spin_lock_irqsave(&g_global_lock, flags);
+	for (i = 0; i < MAX_MUTEXS; i++) {
+		if (stat_semaphores[i] == sem ) {
+			stat_semaphores[i] = 0;
+			break;
+		}
+	}
+	spin_unlock_irqrestore(&g_global_lock, flags);
 	return 1;
 }
 int ipc_mutex_lock(void *p, int line) {
@@ -211,9 +233,12 @@ int ipc_mutex_unlock(void *p, int line) {
 	sem->unlock(line);
 }
 
-int init_ipc(){
+int init_ipc(unsigned long arg){
 	int i;
 
+	for (i = 0; i < MAX_MUTEXS; i++) {
+		stat_semaphores[i] = 0;
+	}
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
 		wait_queue::wait_queues[i] = 0;
 	}
@@ -265,9 +290,12 @@ void _ipc_delete_from_waitqueues(struct task_struct *task) {
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
 		if (wait_queue::wait_queues[i] == 0)
 			continue;
+		//spin_lock_irqsave(&wait_queue::wait_queues[i]->lock, flags);
 		if (wait_queue::wait_queues[i]->_del_from_me(task)==JFAIL){
+			//spin_unlock_irqrestore(&wait_queue::wait_queues[i]->lock, flags);
 			continue;
 		}
+		//spin_unlock_irqrestore(&wait_queue::wait_queues[i]->lock, flags);
 		break;
 	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
@@ -282,8 +310,12 @@ void ipc_check_waitqueues() {
 		if (wait_queue::wait_queues[i] == 0){
 			continue;
 		}
+		if (wait_queue::wait_queues[i]->head.next == &(wait_queue::wait_queues[i]->head)){/* empty queue */
+			continue;
+		}
 
 		spin_lock_irqsave(&g_global_lock, flags);
+
 		if (wait_queue::wait_queues[i]->head.next != &(wait_queue::wait_queues[i]->head)) {
 			struct task_struct *task;
 			task =list_entry(wait_queue::wait_queues[i]->head.next, struct task_struct, wait_queue);
@@ -304,12 +336,14 @@ void ipc_check_waitqueues() {
 					spin_unlock_irqrestore(&g_global_lock, flags);
 					wakeup_cpus(task->allocated_cpu);
 					spin_lock_irqsave(&g_global_lock, flags);
+
 				}else{
 					wait_queue::wait_queues[i]->stat_wakeon_samecpu++;
 				}
 			}
 		}
 		spin_unlock_irqrestore(&g_global_lock, flags);
+
 	}
 
 }
@@ -361,7 +395,7 @@ int Jcmd_locks(char *arg1, char *arg2) {
 				g_spinlocks[i]->stat_recursive_locks);
 	}
 
-	ut_printf("Wait queue: name: [owner pid] (wait_ticks/count:recursive_count) : waiting pid(name-line_no)\n");
+	ut_printf("WAIT QUEUES: name: [owner pid] (wait_ticks/count:recursive_count) : waiting pid(name-line_no)\n");
 
 	len = PAGE_SIZE*100;
 	max_len=len;
@@ -404,6 +438,13 @@ int Jcmd_locks(char *arg1, char *arg2) {
 	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
 
+	len = len - ut_snprintf(buf+max_len-len,len,"SEMAPORE name : locks  - contentions :- cont_time -[pid/recursivecount] \n");
+	for (i = 0; i < MAX_MUTEXS; i++) {
+		if (stat_semaphores[i] != 0 ) {
+			len = len - ut_snprintf(buf+max_len-len,len,"%s: %d - %d : %d  [%d:%d]\n",stat_semaphores[i]->name,stat_semaphores[i]->stat_lock,stat_semaphores[i]->stat_contention,stat_semaphores[i]->stat_cont_time,stat_semaphores[i]->owner_pid,stat_semaphores[i]->recursive_count );
+		}
+	}
+
 	ut_printf("%s",buf);
 	vfree((unsigned long)buf);
 	return 1;
@@ -440,6 +481,7 @@ wait_queue::wait_queue( char *arg_name, unsigned long arg_flags) {
 			INIT_LIST_HEAD(&(head));
 			name = arg_name;
 
+			//arch_spinlock_init(&lock, (unsigned char *)name);
 			wait_queue::wait_queues[i] = this;
 			used_for = 0;
 			flags = arg_flags;
@@ -562,12 +604,15 @@ int wait_queue::wakeup() {
 			}
 			if (assigned_to_running_cpu == 0){
 				int wk_ret;
+				spin_unlock_irqrestore(&g_global_lock, irq_flags);
 				wk_ret = wakeup_cpus(task->allocated_cpu);
+				spin_lock_irqsave(&g_global_lock, irq_flags);
 				stat_wakeups  = stat_wakeups + wk_ret;
 			}
 			ret++;
 		}
 		spin_unlock_irqrestore(&g_global_lock, irq_flags);
+
 		if ((ret > 0) && (flags & WAIT_QUEUE_WAKEUP_ONE)){
 			return ret;
 		}
@@ -581,6 +626,7 @@ int wait_queue::wait_internal(unsigned long ticks, spinlock_t *spin_lock) {
 	local_irq_save(intr_flags);
 	spin_lock(&g_global_lock);  /* this lock will be released in Schedule */
 	g_cpu_state[getcpuid()].sched_lock = &g_global_lock;
+
 	if (g_current_task->state == TASK_NONPREEMPTIVE){
 		BUG();
 	}
@@ -593,6 +639,7 @@ int wait_queue::wait_internal(unsigned long ticks, spinlock_t *spin_lock) {
 	if (spin_lock != 0){
 		spin_unlock(spin_lock);
 	}
+
 	sc_schedule();
 	local_irq_restore(intr_flags);
 
@@ -612,17 +659,16 @@ int wait_queue::wait_with_lock(unsigned long ticks, spinlock_t *spin_lock) {
 void wait_queue::print_stats(unsigned char *arg1,unsigned char *arg2){
 
 }
+/******************************************************************************************/
 /* this call consume system resources */
 semaphore::semaphore(uint8_t arg_count, char *arg_name) {
-	name=arg_name;
-	if (name==NULL){
-		name="mutex_semaphore";
-	}
+
+	ut_snprintf(name,IPC_NAME_MAX,"SEM:%s",arg_name);
 	owner_pid = 0;
 	count = arg_count;
 	arch_spinlock_init(&sem_lock, (unsigned char *)name);
 	valid_entry = 1;
-	waitqueue = jnew_obj(wait_queue, "semaphore" ,WAIT_QUEUE_WAKEUP_ONE);
+	waitqueue = jnew_obj(wait_queue, name ,WAIT_QUEUE_WAKEUP_ONE);
 }
 /* Signals a semaphore. */
 void semaphore::signal() {
@@ -641,6 +687,7 @@ uint32_t semaphore::wait(uint32_t timeout_arg){ /* timeout_arg in ms */
 	timeout = timeout_arg / 10;
 	while (1) {
 		if (count <= 0) {
+			stat_contention++;
 			timeout = waitqueue->wait(timeout);
 		}
 		if (timeout_arg == 0)
@@ -660,6 +707,7 @@ uint32_t semaphore::wait(uint32_t timeout_arg){ /* timeout_arg in ms */
 	if (count > 0) {
 		count--;
 		spin_unlock_irqrestore(&(sem_lock), flags);
+		stat_lock++;
 		return 1;
 	}
 
@@ -669,6 +717,7 @@ uint32_t semaphore::wait(uint32_t timeout_arg){ /* timeout_arg in ms */
 int semaphore::lock(int line) {
 
 	int ret;
+	unsigned long stat_arrive_time;
 	if ((owner_pid == g_current_task->pid) && recursive_count != 0){
 		//ut_log("mutex_lock Recursive mutex: thread:%s  count:%d line:%d \n",g_current_task->name,sem->recursive_count,line);
 		recursive_count++;
@@ -679,9 +728,12 @@ int semaphore::lock(int line) {
 
 	g_current_task->stats.wait_line_no = line;
 	ret = 0;
+	stat_arrive_time = g_jiffies;
 	while (ret != 1){
 		ret = wait(10000);
 	}
+	stat_cont_time = g_jiffies - stat_arrive_time;
+
 	g_current_task->status_info[0] = 0;
 	owner_pid = g_current_task->pid;
 	recursive_count =1;

@@ -67,6 +67,7 @@ fs_inode::fs_inode(uint8_t *arg_filename, unsigned long mode, struct filesystem 
 	fileStat.inode_no = 0;
 	fileStat_insync = 0;
 	stat_last_offset=0;
+	read_ahead_offset=0;
 	hard_links=0;
 	open_mode = mode;
 	vfs = arg_vfs;
@@ -82,9 +83,14 @@ fs_inode::fs_inode(uint8_t *arg_filename, unsigned long mode, struct filesystem 
 	list_add(&inode_link, &fs_inode_list);
 	mutexUnLock(g_inode_lock);
 }
-struct page *fs_inode::fs_genericRead(unsigned long offset) {
+extern wait_queue *read_ahead_waitq;
+extern "C" {
+unsigned long g_stat_readahead_miss=0;
+}
+struct page *fs_inode::fs_genericRead(unsigned long offset, int read_ahead) {
 	struct page *page;
 	int tret;
+	int len;
 	int err = 0;
 
 	retry_again: /* the purpose to retry is to get again from the page cache with page count incr */
@@ -98,11 +104,23 @@ struct page *fs_inode::fs_genericRead(unsigned long offset) {
 		}
 		page->offset = OFFSET_ALIGN(offset);
 		assert(page->magic_number == PAGE_MAGIC);
+		int len = PC_PAGESIZE;
+		if (read_ahead){
+			page->fs_inode = this;
+			pc_get_page(page);   /* this page will reside in driver for some time */
+			PageSetReadinProgress(page);
+			len=0;  /* for the fs that does not support read-ahead let it fail */
+		}
 		tret = this->vfs->read(this, page->offset, pcPageToPtr(page),
-				PC_PAGESIZE);
+				len,read_ahead);
 
 		if (tret > 0) {
 			if (pc_insertPage(this, page) == JFAIL) {
+				if (read_ahead){ /* wait till the page is released from reahead driver */
+					while(PageReadinProgress(page)){
+						sc_sleep(2);
+					}
+				}
 				pc_putFreePage(page);
 				err = -5;
 				page = pc_getInodePage(this, offset);
@@ -116,25 +134,48 @@ struct page *fs_inode::fs_genericRead(unsigned long offset) {
 				this->fileStat.st_size = offset + tret;
 			}
 		} else {
+			if (read_ahead){
+				pc_put_page(page);
+				PageClearReadinProgress(page);
+				pc_putFreePage(page);
+				return 0;
+			}
 			pc_putFreePage(page);
 			err = -4;
 			goto error;
 		}
 		goto retry_again;
+	}else{
+		//read_ahead=0;  /* got from the caceh no impact on readahead */
 	}
 
 	error: if (err < 0) {
-		ut_log(" Error in reading the file :%i :%x\n", -err,page);
+		ut_log(" Error in reading the file :%i :%x read_ahead:%d tret:%x offset:%d, roffset:%d\n", -err,page,read_ahead,tret,offset,read_ahead_offset);
 		page = 0;
 		//BUG();
 	}
+	if (page && PageReadinProgress(page)){
+		if (read_ahead == 0){
+			g_stat_readahead_miss++;
+			while(PageReadinProgress(page)){
+				read_ahead_waitq->wait(5);
+			}
+			return page;
+		}else{
+			pc_put_page(page);
+			return 0;
+		}
+	}
 	return page;
 }
-
-int fs_inode::read(unsigned long offset, unsigned char *data, int len, int read_flags) {
+extern "C" {
+int g_conf_read_ahead_pages =6;
+}
+int fs_inode::read(unsigned long offset, unsigned char *data, int len, int read_flags, int opt_flags) {
 	struct page *page;
+	int i;
 
-	page = this->fs_genericRead(offset);
+	page = this->fs_genericRead(offset,0);
 	if (page == 0) {
 		return 0;
 	}
@@ -155,7 +196,16 @@ int fs_inode::read(unsigned long offset, unsigned char *data, int len, int read_
 		DEBUG(" memcpy :%x %x  %d \n", buff, pcPageToPtr(page), ret);
 	}
 	pc_put_page(page);
-
+	if (ret > 0){ /* read some more pages a head asyncronously */
+		for (i=1; i<g_conf_read_ahead_pages; i++){
+			if (offset+(i*PC_PAGESIZE)  <  read_ahead_offset) continue;
+			page = this->fs_genericRead(offset+(i*PC_PAGESIZE),1);
+			if (page){
+				pc_put_page(page);
+			}
+			read_ahead_offset=offset+(i*PC_PAGESIZE);
+		}
+	}
 	return ret;
 }
 int fs_inode::write(unsigned long offset, unsigned char *data, int len, int wr_flags) {
@@ -555,6 +605,7 @@ struct file *fs_open(uint8_t *filename, int flags, int mode) {
 		goto error;
 
 	filep->vinode = inodep;
+	inodep->read_ahead_offset = 0;
 	if (flags & O_APPEND) {
 		filep->offset = inodep->fileStat.st_size;
 	} else {
@@ -600,7 +651,8 @@ long fs_read(struct file *filep, uint8_t *buff, unsigned long len) {
 	if (vinode == 0){
 		BUG();
 	}
-	ret = vinode->read(filep->offset, buff, len,0);
+	//ut_log("VFS: read len :  %d  \n",len);
+	ret = vinode->read(filep->offset, buff, len,0,0);
 	if (ret > 0) {
 		filep->offset = filep->offset + ret;
 	}
@@ -702,6 +754,7 @@ int init_vfs(unsigned long unused_arg) {
 	socket::udp_list.size =0;
 	socket::tcp_listner_list.size=0;
 	socket::tcp_connected_list.size=0;
+	read_ahead_waitq = jnew_obj(wait_queue, "read_ahead_waitq", 0); /* all thread waiting on read_ahead will wait on this */
 
 	return JSUCCESS;
 }
@@ -883,7 +936,7 @@ unsigned long fs_getVmaPage(struct vm_area_struct *vma, unsigned long offset) {
 	unsigned long ret;
 
 	inode = (fs_inode *) vma->vm_inode;
-	page = inode->fs_genericRead(offset);
+	page = inode->fs_genericRead(offset,0);
 	if (page == NULL)
 		return 0;
 	pc_put_page(page); /* The file will be marked as executable, the pages will be locked at the file level */

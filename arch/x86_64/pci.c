@@ -172,7 +172,7 @@ int read_pci_info_new(pci_device_t *dev)
 
 	if (header->vendor_id != 0xffff && header->vendor_id == dev->pci_header.vendor_id && header->device_id == dev->pci_header.device_id)
 	{
-		INIT_LOG(" 	PCI bus:%d devic:%d func:%d  vendor:%x devices:%x int:%x:%x baser:%i \n",bus,dev,func,header->vendor_id,header->device_id,header->interrupt_line,header->interrupt_pin,header->base_address_registers[0]);
+		ut_log(" 	PCI bus:%d devic:%d func:%d  vendor:%x devices:%x int:%d:%x baser:%i \n",bus,dev,func,header->vendor_id,header->device_id,(32+header->interrupt_line),header->interrupt_pin,header->base_address_registers[0]);
 		INIT_LOG("		base addr :%i :%i :%i :%i \n",header->base_address_registers[0],header->base_address_registers[1],header->base_address_registers[2],header->base_address_registers[3]);
 		for(i=0; i<5;i++)
 		{

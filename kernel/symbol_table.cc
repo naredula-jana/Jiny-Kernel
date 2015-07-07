@@ -178,17 +178,19 @@ struct class_types {
 	int count; /* currently active objects */
 	unsigned long use; /* so far the number of objects created */
 	unsigned char *name;
+	int sz;
 };
 #define CLASS_ID_START 0x5 /* this is to avoid 0 index */
 static struct class_types classtype_list[MAX_CLASSESS];
 static int class_count = 0;
-int ut_count_obj_add(unsigned char *name) {
+int ut_count_obj_add(unsigned char *name, int sz) {
 	int i;
 
 	for (i = 0; i < class_count; i++) {
 		if (ut_strstr(classtype_list[i].name, name) != 0) {
 			classtype_list[i].count++;
 			classtype_list[i].use++;
+			classtype_list[i].sz = sz;
 			//ut_log("   name:%s : %d \n",name,classtype_list[i].count);
 			return i + CLASS_ID_START;
 		}
@@ -209,9 +211,9 @@ int ut_count_obj_free(int id) {
 void Jcmd_obj_list() {
 	int i;
 
-	ut_printf("  ClassName           Count         used\n");
+	ut_printf("  ClassName           Count         used  size\n");
 	for (i = 0; i < class_count; i++) {
-		ut_printf("  %9s  -> %d  : %d\n", &classtype_list[i].name[5], classtype_list[i].count, classtype_list[i].use);
+		ut_printf("  %9s  -> %d  : %d  : %d\n", &classtype_list[i].name[5], classtype_list[i].count, classtype_list[i].use,classtype_list[i].sz);
 	}
 	return;
 }

@@ -15,7 +15,7 @@ public:
 	jdriver* driver;
 
 	jdevice(unsigned char *name, int type);
-	int read(unsigned long offset, unsigned char *data, int len, int flags);
+	int read(unsigned long offset, unsigned char *data, int len, int flags, int opt_flags);
 	int write(unsigned long offset, unsigned char *data, int len, int flags);
 	int close();
 	int ioctl(unsigned long arg1,unsigned long arg2);
@@ -41,7 +41,7 @@ public:
 	virtual int probe_device(jdevice *dev)=0;
 	virtual jdriver *attach_device(jdevice *dev)=0; /* attach the driver by creating a new driver if it is sucessfull*/
 	virtual int dettach_device(jdevice *dev)=0;
-	virtual int read(unsigned char *buf, int len, int flags)=0;
+	virtual int read(unsigned char *buf, int len, int flags, int opt_flags)=0;
 	virtual int write(unsigned char *buf, int len, int flags)=0;
 	virtual void print_stats(unsigned char *arg1,unsigned char *arg2)=0;
 	virtual int ioctl(unsigned long arg1,unsigned long arg2)=0;
@@ -87,7 +87,7 @@ public:
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);
 	int dettach_device(jdevice *dev);
-	int read(unsigned char *buf, int len, int flags);
+	int read(unsigned char *buf, int len, int flags, int opt_flags);
 	int write(unsigned char *buf, int len, int flags);
 	int ioctl(unsigned long arg1,unsigned long arg2);
 
@@ -96,22 +96,50 @@ public:
 	int recv_interrupt_disabled;
 };
 
+#define VIRTIO_BLK_DATA_SIZE (4096)
+struct virtio_blk_req {
+	uint32_t type;
+	uint32_t ioprio;
+	uint64_t sector;
+
+	uint8_t status;
+	uint8_t pad[3];
+	uint32_t len;
+
+	char *user_data; /* this memory block can be used directly to avoid the mem copy, this is if it from pagecache */
+
+	char data[2];  /* here data can be one byte or  1 page depending on the user_data */
+};
+
+
 #define IOCTL_DISK_SIZE 1
 class virtio_disk_jdriver: public virtio_jdriver {
 	unsigned long disk_size,blk_size;
-	spinlock_t io_lock;
-	unsigned char *unfreed_req;
+
 	int disk_attach_device(jdevice *dev);
-	void *addBufToQueue(int type, unsigned char *buf, uint64_t len, uint64_t sector,uint64_t data_len);
+	struct virtio_blk_req *createBuf(int type, unsigned char *buf,uint64_t sector,uint64_t data_len);
+	//int process_bufs(struct virtio_blk_req *req, int data_len);
+
+
 	void *scsi_addBufToQueue(int type, unsigned char *buf, uint64_t len, uint64_t sector,uint64_t data_len);
-	int disk_io(int type,unsigned char *buf, int len, int flags);
+	int disk_io(int type,unsigned char *buf, int len, int offset,int read_ahead);
 public:
-	struct virtqueue *vq[5];
+	struct virt_queue{
+		struct virtqueue *recv,*send;
+	}queues[MAX_VIRT_QUEUES];
+	struct virtqueue *control_q;
+	uint16_t max_vqs;
+
+	//spinlock_t io_lock;
+	unsigned char *unfreed_req;
+	void addBufToQueue(struct virtio_blk_req *req,int transfer_len);
+
+//	struct virtqueue *vq[5];
 	wait_queue *waitq;
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);
 	int dettach_device(jdevice *dev);
-	int read(unsigned char *buf, int len, int flags);
+	int read(unsigned char *buf, int len, int flags, int opt_flags);
 	int write(unsigned char *buf, int len, int flags);
 	int ioctl(unsigned long arg1,unsigned long arg2);
 };
@@ -123,7 +151,7 @@ public:
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);
 	int dettach_device(jdevice *dev);
-	int read(unsigned char *buf, int len, int flags);
+	int read(unsigned char *buf, int len, int flags, int opt_flags);
 	int write(unsigned char *buf, int len, int flags);
 	int ioctl(unsigned long arg1,unsigned long arg2);
 	void *virtio_dev; /* TODO : need to remove later */

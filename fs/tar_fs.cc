@@ -113,7 +113,7 @@ class tar_fs :public filesystem {
 
     struct tar_file *get_file(unsigned char *filename);
 
-	int read_from_device(int offset, unsigned char *buf, int len);
+	int read_from_device(int offset, unsigned char *buf, int len, int flags);
 	int write_to_device(int offset, unsigned char *buf, int len);
 	int scan_device_forfiles();
 	int create_new_file(unsigned char *filename_arg, int flags);
@@ -123,7 +123,7 @@ class tar_fs :public filesystem {
 	unsigned long ciel_length(unsigned long length);
 	int sync_file_metadata(struct tar_file *filep);
 	struct tar_file *get_dir_entry(unsigned char *dirname, struct tar_file *next);
-	int read_file_contents(unsigned char * filename, unsigned char *buf, int len, int offset);
+	int read_file_contents(unsigned char * filename, unsigned char *buf, int len, int offset, int flags);
 	int write_file_contents(unsigned char * filename, unsigned char *buf, int len, int offset);
 
 public:
@@ -131,7 +131,7 @@ public:
 	 int open(fs_inode *inode, int flags, int mode);
 	 int lseek(struct file *file,  unsigned long offset, int whence);
 	 long write(fs_inode *inode, uint64_t offset, unsigned char *buff, unsigned long len);
-	 long read(fs_inode *inode, uint64_t offset,  unsigned char *buff, unsigned long len);
+	 long read(fs_inode *inode, uint64_t offset,  unsigned char *buff, unsigned long len, int flags);
 	 long readDir(fs_inode *inode, struct dirEntry *dir_ptr, unsigned long dir_max, int *offset);
 	 int remove(fs_inode *inode);
 	 int stat(fs_inode *inode, struct fileStat *stat);
@@ -324,7 +324,7 @@ int tar_fs::scan_device_forfiles() {
 	}
 #endif
 	while (completed == 0) {
-		if (read_from_device(offset, (unsigned char *) &file,sizeof(struct header)) != sizeof(struct header)) {
+		if (read_from_device(offset, (unsigned char *) &file, sizeof(struct header),0) != sizeof(struct header)) {
 			completed = 1;
 			break;
 		}
@@ -605,13 +605,15 @@ struct tar_file *tar_fs::get_dir_entry(unsigned char *dirname_arg, struct tar_fi
 
 	return 0;
 }
-int tar_fs::read_from_device(int offset, unsigned char *buf, int len) {
+int tar_fs::read_from_device(int offset, unsigned char *buf, int len, int flags) {
 	int ret;
 
 	if (file_count == -1){
 		scan_device_forfiles();
 	}
-	ret = driver->read(buf,len,offset);
+
+	ret = driver->read(buf,len,offset,flags);
+
 
 	if (ret > 0){
 		stat_byte_reads = stat_byte_reads + ret;
@@ -637,11 +639,14 @@ int tar_fs::write_to_device(int offset, unsigned char *buf, int len) {
 	}
 	return ret;
 }
-int tar_fs::read_file_contents(unsigned char *filename, unsigned char *buf, int len_arg, int offset) {
+int tar_fs::read_file_contents(unsigned char *filename, unsigned char *buf, int len_arg, int offset, int read_ahead) {
 	int ret_len=0;
 	int tmp_ret;
 	struct tar_file *filep = get_file(filename);
 
+	if (read_ahead == 1){
+		len_arg=4096;
+	}
 	if (filep == NULL)
 		return 0;
 	if (filep->length <= offset)
@@ -651,10 +656,14 @@ int tar_fs::read_file_contents(unsigned char *filename, unsigned char *buf, int 
 
 	tmp_ret=1;
 	while (tmp_ret > 0 && (len_arg-ret_len)>0){
-		tmp_ret = read_from_device(filep->device_offset+offset+ret_len,buf+ret_len,(len_arg-ret_len));
+		//ut_log("tarfs: read len :  %d  \n",len_arg);
+		tmp_ret = read_from_device(filep->device_offset+offset+ret_len,buf+ret_len,(len_arg-ret_len), read_ahead);
 
 		if (tmp_ret > 0){
 			ret_len = ret_len + tmp_ret;
+			if (read_ahead){ /* should be only one iteration */
+				break;
+			}
 		}else{
 			break;
 		}
@@ -732,11 +741,11 @@ int tar_fs::write_file_contents(unsigned char *filename, unsigned char *buf, int
 }
 
 /* list of virtual functions */
-long tar_fs::read(fs_inode *inodep, uint64_t offset, unsigned char *buff, unsigned long len_arg) {
+long tar_fs::read(fs_inode *inodep, uint64_t offset, unsigned char *buff, unsigned long len_arg, int flags) {
 	int ret_len=0;
 
 	DEBUG(" inside the tarfs read: offset:%d len_arg:%d  filename:%s:\n", offset, len_arg,inodep->filename);
-	ret_len = read_file_contents(inodep->filename, buff, len_arg,  offset);
+	ret_len = read_file_contents(inodep->filename, buff, len_arg,offset,flags);
 	DEBUG(" read from tarfs ret: %d buff:%x \n", ret_len,buff);
 
 	return ret_len;

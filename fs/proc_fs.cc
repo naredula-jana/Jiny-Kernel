@@ -31,7 +31,7 @@ public:
 	 int open(fs_inode *inode, int flags, int mode);
 	 int lseek(struct file *file,  unsigned long offset, int whence);
 	 long write(fs_inode *inode, uint64_t offset, unsigned char *buff, unsigned long len);
-	 long read(fs_inode *inode, uint64_t offset,  unsigned char *buff, unsigned long len);
+	 long read(fs_inode *inode, uint64_t offset,  unsigned char *buff, unsigned long len, int flags);
 	 long readDir(fs_inode *inode, struct dirEntry *dir_ptr, unsigned long dir_max, int *offset);
 	 int remove(fs_inode *inode);
 	 int stat(fs_inode *inode, struct fileStat *stat);
@@ -314,7 +314,7 @@ extern int Jcmd_maps(char *arg1, char *arg2);
                           measured in clock ticks (divide by
                           sysconf(_SC_CLK_TCK)).
  */
-long proc_fs::read(fs_inode *inodep, uint64_t offset, unsigned char *buff, unsigned long len_arg) {
+long proc_fs::read(fs_inode *inodep, uint64_t offset, unsigned char *buff, unsigned long len_arg, int flags) {
 	struct procfs_cmd cmd;
 	int len=0;
 	struct task_struct *task;

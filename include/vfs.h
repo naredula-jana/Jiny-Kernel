@@ -130,7 +130,7 @@ struct fileStat {
 	uint32_t type;
 	uint32_t blk_size;
 };
-#define PAGELIST_HASH_SIZE 40
+#define PAGELIST_HASH_SIZE 512
 #define get_pagelist_index(offset)  ((offset/PAGE_SIZE)%PAGELIST_HASH_SIZE)
 
 struct dirEntry { /* Do not change the entries , the size of struct is caluclated */
@@ -141,21 +141,6 @@ struct dirEntry { /* Do not change the entries , the size of struct is caluclate
 };
 #if 1
 typedef struct fileStat fileStat_t;
-#if 0
-struct filesystem {
-	int (*open)(void *inode, int flags, int mode);
-	int (*lseek)(struct file *file,  unsigned long offset, int whence);
-	long (*write)(void *inode, uint64_t offset, unsigned char *buff, unsigned long len);
-	long (*read)(void *inode, uint64_t offset,  unsigned char *buff, unsigned long len);
-	long (*readDir)(void *inode, struct dirEntry *dir_ptr, unsigned long dir_max, int *offset);
-	int (*remove)(void *inode);
-	int (*stat)(void *inode, struct fileStat *stat);
-	int (*close)(void *inodep);
-	int (*fdatasync)(void *inodep);
-	int (*setattr)(void *inode, uint64_t size);//TODO : currently used for truncate, later need to expand
-	int (*unmount)();
-};
-#endif
 
 #endif
 #define fd_to_file(fd) (fd >= 0 && g_current_task->fs->total > fd) ? (g_current_task->fs->filep[fd]) : ((struct file *)0)

@@ -20,6 +20,7 @@ public:
 	char *name;
 	void *used_for; /* it can be used for semaphore/mutex  or raw waitqueue */
 	unsigned long flags;
+	//spinlock_t lock; /* this is to protect list */
 
 	unsigned long stat_wait_count;
 	unsigned long stat_wait_ticks;
@@ -41,13 +42,14 @@ public:
 };
 #define IPC_TIMEOUT 0xffffffffUL
 #define WAIT_QUEUE_WAKEUP_ONE 1
+#define IPC_NAME_MAX 100
 class semaphore: public jobject{
 public:
 	int count;
 	spinlock_t sem_lock; /* this is to protect count */
 	wait_queue *waitqueue;
 	int valid_entry;
-	char *name;
+	char name[IPC_NAME_MAX];
 	unsigned long owner_pid; /* pid that is owning */
 	int recursive_count;
 
@@ -55,6 +57,7 @@ public:
 	unsigned int stat_recursive_count;
 	unsigned long stat_acquired_start_time;
 	unsigned long stat_total_acquired_time;
+	unsigned long stat_lock,stat_contention,stat_cont_time;
 
 	semaphore(uint8_t arg_count, char *arg_name);
 	void signal();

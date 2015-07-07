@@ -60,7 +60,7 @@ public:
 	void update_stat_out(int out_req,int out_byte);
 
 	/* TODO : preserve the order, this is C++ fix  */
-	virtual int read(unsigned long offset, unsigned char *data, int len, int flags)=0;
+	virtual int read(unsigned long offset, unsigned char *data, int len, int flags, int opt_flags)=0;
 	virtual int write(unsigned long offset, unsigned char *data, int len, int flags)=0;
 	virtual int close()=0;
 	virtual int ioctl(unsigned long arg1,unsigned long arg2)=0;
@@ -113,7 +113,7 @@ public:
 	unsigned char *peeked_msg;
 	int peeked_msg_len;
 
-	int read(unsigned long offset, unsigned char *data, int len, int flags);
+	int read(unsigned long offset, unsigned char *data, int len, int flags, int unused_flags);
 	int write(unsigned long offset, unsigned char *data, int len, int flags);
 	int close();
 	int ioctl(unsigned long arg1,unsigned long arg2);
@@ -156,8 +156,9 @@ public:
 	struct filesystem *vfs;
 	unsigned long open_mode;
 	long stat_last_offset;
+	long read_ahead_offset;
 
-	struct page *fs_genericRead( unsigned long offset);
+	struct page *fs_genericRead( unsigned long offset, int opt_flags);
 
 	int nrpages;	/* total pages */
 	struct list_head vma_list;
@@ -172,7 +173,7 @@ public:
 
 	fs_inode(uint8_t *filename, unsigned long mode, struct filesystem *vfs);
 
-	int read(unsigned long offset, unsigned char *data, int len, int flags);
+	int read(unsigned long offset, unsigned char *data, int len, int flags, int opt_flags);
 	int write(unsigned long offset, unsigned char *data, int len, int flags);
 	int close();
 	int ioctl(unsigned long arg1,unsigned long arg2);
@@ -185,7 +186,7 @@ class pipe :public vinode {
 public:
 	long pipe_index;
 	int init(int type);
-	int read(unsigned long unsued, unsigned char *data, int len, int flags);
+	int read(unsigned long unsued, unsigned char *data, int len, int flags, int opt_flags);
 	int write(unsigned long unused, unsigned char *data, int len, int flags);
 	int close();
 	int ioctl(unsigned long arg1,unsigned long arg2);
@@ -195,7 +196,7 @@ public:
 /*******************************************************************************/
 #if 1
 class filesystem {
-
+#define FLAG_READAHEAD 4
 public:
 	unsigned long stat_byte_reads,stat_read_req,stat_read_errors;
 	unsigned long stat_byte_writes,stat_write_req,stat_write_errors;
@@ -207,7 +208,7 @@ public:
 	virtual int open(fs_inode *inode, int flags, int mode)=0;
 	virtual int lseek(struct file *file,  unsigned long offset, int whence)=0;
 	virtual long write(fs_inode *inode, uint64_t offset, unsigned char *buff, unsigned long len)=0;
-	virtual long read(fs_inode *inode, uint64_t offset,  unsigned char *buff, unsigned long len)=0;
+	virtual long read(fs_inode *inode, uint64_t offset,  unsigned char *buff, unsigned long len, int flags)=0;
 	virtual long readDir(fs_inode *inode, struct dirEntry *dir_ptr, unsigned long dir_max, int *offset)=0;
 	virtual int remove(fs_inode *inode)=0;
 	virtual int stat(fs_inode *inode, struct fileStat *stat)=0;
