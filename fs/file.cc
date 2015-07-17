@@ -97,7 +97,7 @@ struct page *fs_inode::fs_genericRead(unsigned long offset, int read_ahead) {
 	page = pc_getInodePage(this, offset);
 	if (page == NULL) {
 		//ut_log(" Trying to insert file: %x offset :%x pid:%x\n",this,offset,g_current_task->pid);
-		page = pc_getFreePage();
+		page = pc_getFreePage(0);
 		if (page == NULL) {
 			err = -3;
 			goto error;
@@ -128,6 +128,10 @@ struct page *fs_inode::fs_genericRead(unsigned long offset, int read_ahead) {
 					err=0;
 				}
 				goto error;
+			}else{
+				if ((tret >= 0) && (tret < PC_PAGESIZE)){
+					ut_memset(pcPageToPtr(page)+tret,0,PC_PAGESIZE-tret);
+				}
 			}
 			if ((tret + page->offset) > this->fileStat.st_size){
 				//ut_printf(" FILE size changed from  %d to %d ret:%d page offset:%d readoffset:%d\n",this->fileStat.st_size,(tret + offset),tret,page->offset,offset);
@@ -169,7 +173,7 @@ struct page *fs_inode::fs_genericRead(unsigned long offset, int read_ahead) {
 	return page;
 }
 extern "C" {
-int g_conf_read_ahead_pages =6;
+int g_conf_read_ahead_pages =20;
 }
 int fs_inode::read(unsigned long offset, unsigned char *data, int len, int read_flags, int opt_flags) {
 	struct page *page;
@@ -226,7 +230,7 @@ int fs_inode::write(unsigned long offset, unsigned char *data, int len, int wr_f
 	while (tmp_len < len) {
 		try_again: page = pc_getInodePage(this, offset);
 		if (page == NULL) {
-			page = pc_getFreePage();
+			page = pc_getFreePage(1);
 			if (page == NULL) {
 				ret = -3;
 				goto error;

@@ -290,7 +290,6 @@ int virtio_net_jdriver::net_attach_device() {
 	uint32_t msi_vector;
 	unsigned char name[MAX_DEVICE_NAME];
 
-
 	ut_snprintf(name,MAX_DEVICE_NAME,"net%d",net_devices);
 	ut_strcpy(device->name,name);
 	arch_spinlock_init(&virtionet_lock, device->name );
@@ -317,9 +316,11 @@ int virtio_net_jdriver::net_attach_device() {
 	if (pci_hdr->capabilities_pointer != 0) {
 		msi_vector = pci_read_msi(&device->pci_device.pci_addr, &device->pci_device.pci_header, &device->pci_device.pci_bars[0],
 				device->pci_device.pci_bar_count, &device->pci_device.msix_cfg);
+
 		if (msi_vector > 0)
 			pci_enable_msix(&device->pci_device.pci_addr, &device->pci_device.msix_cfg,
 					device->pci_device.pci_header.capabilities_pointer);
+
 	} else {
 		msi_vector = 0;
 	}
@@ -337,11 +338,22 @@ int virtio_net_jdriver::net_attach_device() {
 	this->max_vqs = 1;
 	if ((features >> VIRTIO_NET_F_MQ) & 0x1){
 		this->max_vqs = inw(addr + 6+2);
+		if (this->max_vqs > MAX_VIRT_QUEUES){
+			this->max_vqs = MAX_VIRT_QUEUES;
+		}
 	}
 	INIT_LOG("	VIRTIONET:  pioaddr:%x MAC address : %x :%x :%x :%x :%x :%x mis_vector:%x   : max_vqs:%x\n", addr, this->mac[0], this->mac[1],
 			this->mac[2], this->mac[3], this->mac[4], this->mac[5], msi_vector,this->max_vqs);
 
-	INIT_LOG("	VIRTIONET: initializing vqs:%d\n",max_vqs);
+
+#if 1
+	if (msi_vector > 0) {
+		outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 1);
+	//	outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 0xffff);
+	}
+#endif
+
+	INIT_LOG("	VIRTIONET: initializing MAX VQ's:%d\n",max_vqs);
 	for (i=0; i<max_vqs; i++){
 		if (i==1){/* by default only 3 queues will be present , at this point already 2 queues are configured */
 			control_q = virtio_create_queue(2*i,VQTYPE_RECV);
@@ -359,12 +371,7 @@ int virtio_net_jdriver::net_attach_device() {
 			outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, (2*i)+1);
 		}
 	}
-#if 0
-	if (msi_vector > 0) {
-		outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 1);
-	//	outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 0xffff);
-	}
-#endif
+
 	send_waitq = jnew_obj(wait_queue, "waitq_net", 0);
 
 	if (g_conf_net_send_int_disable == 1){
@@ -374,12 +381,12 @@ int virtio_net_jdriver::net_attach_device() {
 	}
 
 	if (msi_vector > 0) {
-		for (i = 0; i < 3; i++){
+		for (i = 0; i < max_vqs; i++){
 			char irq_name[MAX_DEVICE_NAME];
-			if (i==0){
+			//if (i==0){
 				ut_snprintf(irq_name,MAX_DEVICE_NAME,"%s_recv_msi",this->name);
-				ar_registerInterrupt(msi_vector + i, virtio_net_recv_interrupt, irq_name, (void *) this);
-			}
+				ar_registerInterrupt(msi_vector + 2*i, virtio_net_recv_interrupt, irq_name, (void *) this);
+			//}
 #if 0
 			// TODO : enabling sending side interrupts causes freeze in the buffer consumption on the sending side,
 			// till  all the buffers are full for the first time. this happens especially on the smp
@@ -534,31 +541,25 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 	spin_lock_irqsave(&virtionet_lock, flags);
 
 #if 0
-	for (i=0; i<2 && ret == -ERROR_VIRTIO_ENOSPC; i++){
-		ret = addBufToNetQueue(this->vq[1], (unsigned char *) addr, len + 10);
-		if (ret == -ERROR_VIRTIO_ENOSPC){
-			stat_err_nospace++;
-			spin_unlock_irqrestore(&virtionet_lock, flags);
-			free_send_bufs();
-			spin_lock_irqsave(&virtionet_lock, flags);
-			ret = addBufToNetQueue(this->vq[1], (unsigned char *) addr, len + 10);
-		}
-		if (ret == -ERROR_VIRTIO_ENOSPC){
-			stat_err_nospace++;
-			queue_kick(1);
-			//virtio_enable_cb(this->vq[1]);
-		}
-	}
-#else
 	send_count++; /* send continously few packets per each queue */
 	if (send_count > 5000){
-		current_send_q++;
+	//	current_send_q++;
+		current_send_q = 0;
 		send_count=0;
 	}
-	int qno= current_send_q % max_vqs ;
-
-	ret = addBufToNetQueue(qno,VQTYPE_SEND, (unsigned char *) addr, len + 10);
 #endif
+
+	current_send_q++;  /* alternate packet on each */
+	int qno;
+	for (qno=0; qno<max_vqs; qno++){
+		//int qno= current_send_q % max_vqs ;
+		ret = addBufToNetQueue(qno,VQTYPE_SEND, (unsigned char *) addr, len + 10);
+		if (ret == -ERROR_VIRTIO_ENOSPC){
+			continue;
+		}
+		queues[qno].pending_send_kick = 1;
+		break;
+	}
 
 	if (ret == -ERROR_VIRTIO_ENOSPC) {
 		stat_err_nospace++;
@@ -594,17 +595,18 @@ int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 	} else if (arg1 == NETDEV_IOCTL_FLUSH_SENDBUF) {
 		if (pending_kick_onsend!=0){
 			unsigned long flags;
-			int qno= current_send_q % max_vqs ;
+			int qno;
 
 			spin_lock_irqsave(&virtionet_lock, flags);
-			queue_kick(queues[qno].send);
-#if 0
-			for (i=0; i<max_vqs && i<MAX_VIRT_QUEUES; i++){
-				queue_kick(queues[i].send);
+			for (qno=0; qno<max_vqs && qno<MAX_VIRT_QUEUES; qno++){
+				if (queues[qno].pending_send_kick == 1){
+					queue_kick(queues[qno].send);
+					queues[qno].pending_send_kick=0;
+				}
 			}
-#endif
 			pending_kick_onsend=0;
 			spin_unlock_irqrestore(&virtionet_lock, flags);
+
 			return JSUCCESS;
 		}else{
 			return JFAIL;
@@ -888,7 +890,9 @@ void virtio_disk_jdriver::addBufToQueue(struct virtio_blk_req *req, int transfer
 	ret = virtio_add_buf_to_queue(tmp_vq, sg, out, in, (void *) sg[0].page_link, 0);/* send q */
 	queue_kick(queues[0].send);
 
-	virtio_enable_cb(tmp_vq);
+	if (interrupts_disabled == 0){
+		virtio_enable_cb(tmp_vq);
+	}
 
 	return ;
 }
@@ -912,91 +916,137 @@ static uint16_t virtio_config16(unsigned long pcio_addr){
 	ret = inw(addr);
 	return ret;
 }
+
+ /* Feature bits */
+#define VIRTIO_BLK_F_SIZE_MAX   1       /* Indicates maximum segment size */
+#define VIRTIO_BLK_F_SEG_MAX    2       /* Indicates maximum # of segments */
+#define VIRTIO_BLK_F_GEOMETRY   4       /* Legacy geometry available  */
+#define VIRTIO_BLK_F_RO         5       /* Disk is read-only */
+#define VIRTIO_BLK_F_BLK_SIZE   6       /* Block size of disk is available*/
+#define VIRTIO_BLK_F_TOPOLOGY   10      /* Topology information is available */
+#define VIRTIO_BLK_F_MQ         12      /* support more than one vq */
+
+/* Legacy feature bits */
+//#ifndef VIRTIO_BLK_NO_LEGACY
+#define VIRTIO_BLK_F_BARRIER    0       /* Does host support barriers? */
+#define VIRTIO_BLK_F_SCSI       7       /* Supports scsi command passthru */
+#define VIRTIO_BLK_F_WCE        9       /* Writeback mode enabled after reset */
+#define VIRTIO_BLK_F_CONFIG_WCE 11      /* Writeback mode available in config */
+/*
+ * struct v i r t i o _ b l k _ c o n f i g {
+	u64 capacity ;
+	u32 size_max ;
+	u32 seg_max ;
+	s t r u c t v i r t i o _ b l k _ g e o m e t r y {
+		u16 cylinders ;
+		u8 heads;
+		u8 sectors;
+	} g e o m e t r y ;
+	u32 blk_size;
+
+	 the next 4 entries are guarded by VIRTIO_BLK_F_TOPOLOGY
+        exponent for physical block per logical block.
+         __u8 physical_block_exp;
+        **  alignment offset in logical blocks. --
+         __u8 alignment_offset;
+         ** minimum I/O size without performance penalty in logical blocks. --/
+         __u16 min_io_size;
+         ** optimal sustained I/O size in logical blocks. --
+         __u32 opt_io_size;
+        ** writeback mode (if VIRTIO_BLK_F_CONFIG_WCE) --
+         __u8 wce;
+         __u8 unused;
+
+        ** number of vqs, only available when VIRTIO_BLK_F_MQ is set **
+         __u16 num_queues;
+}
+ */
 int virtio_disk_jdriver::disk_attach_device(class jdevice *jdev) {
 	auto pci_ioaddr = jdev->pci_device.pci_ioaddr;
-	unsigned long features;
+	pci_dev_header_t *pci_hdr = &device->pci_device.pci_header;
+	uint32_t features;
+	uint32_t guest_features = 0;
+	uint32_t mask_features = 0;
+	uint32_t msi_vector;
 
 	this->device = jdev;
 	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_ACKNOWLEDGE);
-	ut_log("	Virtio disk: Initializing status :%x : \n", virtio_get_pcistatus(pci_ioaddr));
+	ut_log("	Virtio disk: Initializing status :%x : \n",virtio_get_pcistatus(pci_ioaddr));
 
 	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER);
 	auto addr = pci_ioaddr + VIRTIO_PCI_HOST_FEATURES;
 	features = inl(addr);
-	ut_log("	Virtio disk: Initializing VIRTIO PCI hostfeatures :%x: status :%x :\n", features,  virtio_get_pcistatus(pci_ioaddr));
+	ut_log("	Virtio disk: Initializing VIRTIO PCI hostfeatures :%x: status :%x :\n", features, virtio_get_pcistatus(pci_ioaddr));
+	guest_features = features;
+	mask_features = (0x0007ff);
 
-	if (jdev->pci_device.pci_header.device_id != VIRTIO_PCI_SCSI_DEVICE_ID) {
-		this->queues[0].send = this->virtio_create_queue(0, VQTYPE_SEND);
-	}else{
-		this->queues[0].send = this->virtio_create_queue(0,VQTYPE_SEND);
-	}
+	guest_features = guest_features & mask_features;
+	addr = pci_ioaddr + VIRTIO_PCI_GUEST_FEATURES;
+	outl(addr, features);
 
-
-	if (jdev->pci_device.msix_cfg.isr_vector > 0) {
-		ut_log("  virtio disk :  msi vectors: %d\n",jdev->pci_device.msix_cfg.isr_vector);
-#if 0
-		outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR,0);
-		outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR,0xffff);
-		ar_registerInterrupt(msi_vector, virtio_disk_interrupt, "virtio_disk_msi",this);
+	if (pci_hdr->capabilities_pointer != 0) {
+		msi_vector = pci_read_msi(&device->pci_device.pci_addr,
+				&device->pci_device.pci_header, &device->pci_device.pci_bars[0],
+				device->pci_device.pci_bar_count, &device->pci_device.msix_cfg);
+		if (msi_vector > 0) {
+#if 1
+			pci_enable_msix(&device->pci_device.pci_addr, &device->pci_device.msix_cfg,
+					device->pci_device.pci_header.capabilities_pointer);
+#else
+			msi_vector = 0;
 #endif
+			ut_log("  virtio_disk  MSI available  :%d:%x \n", msi_vector,
+					msi_vector);
+		}
+	} else {
+		msi_vector = 0;
 	}
-	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER_OK);
-	INIT_LOG("	Virtio disk:  VIRTIO PCI COMPLETED with driver ok :%x \n", virtio_get_pcistatus(pci_ioaddr));
-	inb(pci_ioaddr + VIRTIO_PCI_ISR);
-	ut_log("     virtio_blk   interrupt line: %d \n",(32 + jdev->pci_device.pci_header.interrupt_line));
-	ar_registerInterrupt(32 + jdev->pci_device.pci_header.interrupt_line, virtio_disk_interrupt, "virt_disk_irq", (void *) this);
-
 
 	int i;
 	unsigned long config_data;
-	disk_size=0;
-	/*
-	 * struct v i r t i o _ b l k _ c o n f i g {
-		u64 capacity ;
-		u32 size_max ;
-		u32 seg_max ;
-		s t r u c t v i r t i o _ b l k _ g e o m e t r y {
-			u16 cylinders ;
-			u8 heads;
-			u8 sectors;
-		} g e o m e t r y ;
-		u32 blk_size;
+	disk_size = 0;
 
-		 the next 4 entries are guarded by VIRTIO_BLK_F_TOPOLOGY
- 74        exponent for physical block per logical block.
- 75         __u8 physical_block_exp;
- 76        **  alignment offset in logical blocks. --
- 77         __u8 alignment_offset;
- 78         ** minimum I/O size without performance penalty in logical blocks. --/
- 79         __u16 min_io_size;
- 80         ** optimal sustained I/O size in logical blocks. --
- 81         __u32 opt_io_size;
- 82
- 83        ** writeback mode (if VIRTIO_BLK_F_CONFIG_WCE) --
- 84         __u8 wce;
- 85         __u8 unused;
- 86
- 87        ** number of vqs, only available when VIRTIO_BLK_F_MQ is set **
- 88         __u16 num_queues;
-	}
-	 */
 	if (jdev->pci_device.pci_header.device_id != VIRTIO_PCI_SCSI_DEVICE_ID) {
-		disk_size = virtio_config64(pci_ioaddr + 0) * 512;
-		blk_size = virtio_config32(pci_ioaddr + 20);
-		max_vqs = virtio_config16(pci_ioaddr + 34);
-		ut_log(" 	Virtio-blk Disk size:%d(%x)  blk_size:%d   max_vqs: %d \n", disk_size, disk_size,blk_size,max_vqs);
+		auto cfg_addr = pci_ioaddr;
+		if (msi_vector != 0){
+			cfg_addr = cfg_addr + 4;
+		}
+		disk_size = virtio_config64(cfg_addr + 0) * 512;
+		blk_size = virtio_config32(cfg_addr + 20);
+		max_vqs = virtio_config16(cfg_addr + 34);
+		ut_log(" 	Virtio-blk Disk size:%d(%x)  blk_size:%d   max_vqs: %d \n",
+				disk_size, disk_size, blk_size, max_vqs);
 	} else {
-		ut_log("	virtio-scsi  Num of Reques Queues: %d \n", virtio_config32(pci_ioaddr + 0));
+		ut_log("	virtio-scsi  Num of Reques Queues: %d \n",
+				virtio_config32(pci_ioaddr + 0));
 		INIT_LOG("	SCSI seg max: %d \n", virtio_config32(pci_ioaddr + 4));
 		INIT_LOG("	SCSI max sector: %d \n", virtio_config32(pci_ioaddr + 8));
 		INIT_LOG("	SCSI cmd_per_lun: %d \n", virtio_config32(pci_ioaddr + 12));
-		INIT_LOG("	SCSI event_info_size: %d \n", virtio_config32(pci_ioaddr + 16));
+		INIT_LOG("	SCSI event_info_size: %d \n",
+				virtio_config32(pci_ioaddr + 16));
 		INIT_LOG("	SCSI sense size: %d \n", virtio_config32(pci_ioaddr + 20));
 		INIT_LOG("	SCSI cdb size: %d \n", virtio_config32(pci_ioaddr + 24));
 	}
-	INIT_LOG("		driver status:  %x :\n",virtio_get_pcistatus(pci_ioaddr));
-	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER_OK);
-	INIT_LOG("		second time	Virtio disk:  VIRTIO PCI COMPLETED with driver ok :%x \n", virtio_get_pcistatus(pci_ioaddr));
+	if (jdev->pci_device.pci_header.device_id != VIRTIO_PCI_SCSI_DEVICE_ID) {
+		this->queues[0].send = this->virtio_create_queue(0, VQTYPE_SEND);
+	} else {
+		this->queues[0].send = this->virtio_create_queue(0, VQTYPE_SEND);
+	}
+	if (msi_vector > 0) {
+		ut_log("  virtio disk :  msi vectors: %d\n",jdev->pci_device.msix_cfg.isr_vector);
+		outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 0);
+		ar_registerInterrupt(msi_vector, virtio_disk_interrupt, "virtio_disk_msi", this);
+		inb(pci_ioaddr + VIRTIO_PCI_ISR);
+	} else {
+		INIT_LOG("	Virtio disk:  VIRTIO PCI COMPLETED with driver ok :%x \n", virtio_get_pcistatus(pci_ioaddr));
+		inb(pci_ioaddr + VIRTIO_PCI_ISR);
+		ar_registerInterrupt(32 + jdev->pci_device.pci_header.interrupt_line, virtio_disk_interrupt, "virt_disk_irq", (void *) this);
+	}
+
+	INIT_LOG("		driver status:  %x :\n", virtio_get_pcistatus(pci_ioaddr));
+	virtio_set_pcistatus(pci_ioaddr,virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER_OK);
+	INIT_LOG("		second time	Virtio disk:  VIRTIO PCI COMPLETED with driver ok :%x \n",virtio_get_pcistatus(pci_ioaddr));
+	interrupts_disabled =0;
 
 //	virtio_disable_cb(this->queues[0].send); /* disable interrupts on sending side */
 	return 1;
@@ -1216,6 +1266,14 @@ void Jcmd_stat_diskio(unsigned char *arg1, unsigned char *arg2){
 		if (disk_reqs[i].buf == 0 && disk_reqs[i].hits==0) continue;
 		ut_printf(" %d: buf:%x hits:%d req_no:%d \n",i,disk_reqs[i].buf,disk_reqs[i].hits,disk_reqs[i].req_no);
 	}
+
+	ut_printf("  disk devices: \n");
+	for (i=0; i<5; i++){
+		if (disk_drivers[i]!=0){
+			virtio_disk_jdriver *dev=disk_drivers[i];
+			print_vq(dev->queues[0].send);
+		}
+	}
 }
 extern int pc_read_ahead_complete(unsigned long addr);
 }
@@ -1231,8 +1289,12 @@ static int get_from_diskreq(int i, unsigned long req_no) {
 		return ret;
 	}
 	if (disk_reqs[i].req_no == req_no && disk_reqs[i].buf != 0) {
+		unsigned long start_time = g_jiffies;
 		while (disk_reqs[i].state != STATE_REQ_COMPLETED) {
 			disk_reqs[i].dev->waitq->wait(5);
+			if ((g_jiffies-start_time) > 300) { /* if it more then 3 seconds */
+				return -1;
+			}
 		}
 		initial_skip = disk_reqs[i].initial_skip;
 		req = disk_reqs[i].buf;
@@ -1255,11 +1317,14 @@ static int get_from_diskreq(int i, unsigned long req_no) {
 			stat_read_ahead_txts++;
 			disk_reqs[i].read_ahead = 0;
 		}
-
 		disk_reqs[i].buf = 0;
 	}
 
 	return ret;
+}
+
+extern "C"{
+extern int  g_conf_read_ahead_pages;
 }
 
 static int diskio_submit_requests(struct virtio_blk_req **reqs, int req_count, virtio_disk_jdriver *dev, unsigned char *user_buf,int user_len,int initial_skip, int read_ahead){
@@ -1309,12 +1374,17 @@ static int diskio_submit_requests(struct virtio_blk_req **reqs, int req_count, v
 	}
 	spin_unlock_irqrestore(&diskio_lock, flags);
 	if (ret >= 0){
-		/* check if the buffers are got updated by the disk thread */
-		disk_thread_waitq->wakeup();
-
 		if (read_ahead == 1){
+			int count=0;
+			for (i=0; i<MAX_DISK_REQS ; i++){
+				if (disk_reqs[i].buf!=0 && disk_reqs[i].state==0) { count++; }
+			}
+			if (count > (g_conf_read_ahead_pages/2)){
+					disk_thread_waitq->wakeup();
+			}
 			ret = user_len;
 		}else{
+			disk_thread_waitq->wakeup(); /* check if the buffers are got updated by the disk thread */
 			ret = get_from_diskreq(ret, req_no);
 		}
 	}
@@ -1350,11 +1420,16 @@ int diskio_thread(void *arg1, void *arg2) {
 	int i;
 	int pending_req;
 	int progress =0;
-
+	int intr_disabled=0;
 	while(1){
 #if 1
 		if (progress == 0 ){
-			disk_thread_waitq->wait(200);
+			if (intr_disabled == 1){
+				//disk_thread_waitq->wait(1);
+				sc_schedule(); /* give chance other threads to run */
+			}else{
+				disk_thread_waitq->wait(50);
+			}
 		}
 #else
 		if (pending_req == 0){
@@ -1365,9 +1440,13 @@ int diskio_thread(void *arg1, void *arg2) {
 #endif
 		progress =0;
 		pending_req=0;
+		intr_disabled = 0;
 		for (i=0; i<MAX_DISK_REQS; i++){
 			if (disk_reqs[i].buf == 0) { continue; }
 			pending_req++;
+			if (disk_reqs[i].dev->interrupts_disabled == 1){
+				intr_disabled = 1;
+			}
 			if (disk_reqs[i].state == 0){
 				disk_reqs[i].dev->addBufToQueue(disk_reqs[i].buf, disk_reqs[i].data_len);
 				disk_reqs[i].state = STATE_REQ_QUEUED;

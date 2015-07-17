@@ -90,7 +90,7 @@ static inittable_t inittable[] = {
 	//	{init_clock,0,       "clock"},
 //		{init_code_readonly,0,       "Making code readonly",0},
 		{init_kernel_vmaps, 0, "Kernel Vmaps",0},
-		{init_jdevices,0,       "devices in c++ ",0},
+		{init_jdevices,0,       "devices in c++ ",1},
 		{init_procfs,0,"Procfs",0},
 		{init_acpi,0,       "ACPI initialzed ",0},
 #ifdef NETWORKING
@@ -248,7 +248,7 @@ void cmain() {  /* This is the first c function to be executed */
 			ut_log("	%s : ....Failed error:%d\n",inittable[i].comment,ret);
 		}
 	}
-	//ut_log(" After g_conf_func_debug-> :%x(%d)\n",g_conf_func_debug,g_conf_func_debug);
+
 	uint32_t val[5];
 	do_cpuid(1,val);
 	//ut_log("	cpuid result %x : %x :%x :%x \n",val[0],val[1],val[2],val[3]);

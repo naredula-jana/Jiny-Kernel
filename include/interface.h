@@ -94,7 +94,7 @@ page_struct_t *pc_get_dirty_page();
 int pc_put_page(struct page *page);
 int pc_get_page(struct page *page);
 int pc_is_freepages_available(void);
-page_struct_t *pc_getFreePage();
+page_struct_t *pc_getFreePage(int clear_flag);
 uint8_t *pc_page_to_ptr(struct page *p);
 int pc_housekeep(void);
 

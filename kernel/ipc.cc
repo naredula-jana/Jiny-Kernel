@@ -300,11 +300,15 @@ void _ipc_delete_from_waitqueues(struct task_struct *task) {
 	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
 }
-
+extern "C" {
+unsigned long g_stat_timeout_wakeups = 0;
+unsigned long g_stat_async_wakeups = 0;
+}
 void ipc_check_waitqueues() {
 	int i;
 	unsigned long flags;
 	int assigned_to_running_cpu;
+	int wakeup_cpu=-1;
 
 	for (i = 0; i < MAX_WAIT_QUEUES; i++) {
 		if (wait_queue::wait_queues[i] == 0){
@@ -314,8 +318,8 @@ void ipc_check_waitqueues() {
 			continue;
 		}
 
+		wakeup_cpu = -1;
 		spin_lock_irqsave(&g_global_lock, flags);
-
 		if (wait_queue::wait_queues[i]->head.next != &(wait_queue::wait_queues[i]->head)) {
 			struct task_struct *task;
 			task =list_entry(wait_queue::wait_queues[i]->head.next, struct task_struct, wait_queue);
@@ -333,17 +337,17 @@ void ipc_check_waitqueues() {
 				else
 					BUG();
 				if (assigned_to_running_cpu == 0) {
-					spin_unlock_irqrestore(&g_global_lock, flags);
-					wakeup_cpus(task->allocated_cpu);
-					spin_lock_irqsave(&g_global_lock, flags);
-
+					wakeup_cpu = task->allocated_cpu;
 				}else{
 					wait_queue::wait_queues[i]->stat_wakeon_samecpu++;
 				}
 			}
 		}
 		spin_unlock_irqrestore(&g_global_lock, flags);
-
+		if (wakeup_cpu != -1){
+			g_stat_timeout_wakeups++;
+			wakeup_cpus(wakeup_cpu);
+		}
 	}
 
 }
@@ -584,15 +588,16 @@ int wait_queue::_del_from_me( struct task_struct *p) {
 int wait_queue::wakeup() {
 	int ret = 0;
 	struct task_struct *task;
-	int wakeup_cpu=-1;
 	int assigned_to_running_cpu;
 	unsigned long irq_flags;
+	int wakeup_cpu = -1;
 
 	if (head.next == &head ){
 		return ret;
 	}
 
 	while (head.next != &head) {
+		wakeup_cpu  = -1;
 		spin_lock_irqsave(&g_global_lock, irq_flags);
 		task = list_entry(head.next, struct task_struct, wait_queue);
 		if (_del_from_me(task) == JSUCCESS) {
@@ -604,14 +609,16 @@ int wait_queue::wakeup() {
 			}
 			if (assigned_to_running_cpu == 0){
 				int wk_ret;
-				spin_unlock_irqrestore(&g_global_lock, irq_flags);
-				wk_ret = wakeup_cpus(task->allocated_cpu);
-				spin_lock_irqsave(&g_global_lock, irq_flags);
+				wakeup_cpu = task->allocated_cpu;
 				stat_wakeups  = stat_wakeups + wk_ret;
 			}
 			ret++;
 		}
 		spin_unlock_irqrestore(&g_global_lock, irq_flags);
+		if (wakeup_cpu != -1){
+			g_stat_async_wakeups++;
+			wakeup_cpus(wakeup_cpu);
+		}
 
 		if ((ret > 0) && (flags & WAIT_QUEUE_WAKEUP_ONE)){
 			return ret;

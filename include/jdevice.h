@@ -74,6 +74,7 @@ public:
 #define MAX_VIRT_QUEUES 10
 	struct virt_queue{
 		struct virtqueue *recv,*send;
+		int pending_send_kick;
 	}queues[MAX_VIRT_QUEUES];
 	struct virtqueue *control_q;
 	uint16_t max_vqs;
@@ -129,6 +130,7 @@ public:
 	}queues[MAX_VIRT_QUEUES];
 	struct virtqueue *control_q;
 	uint16_t max_vqs;
+	int interrupts_disabled;
 
 	//spinlock_t io_lock;
 	unsigned char *unfreed_req;

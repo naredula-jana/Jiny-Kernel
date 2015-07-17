@@ -502,11 +502,9 @@ void local_apic_timer_ap_init(uint8_t vector)
 }
 extern unsigned char imps_cpu_apic_map[];
 int stat_ipi_send_count =0 ;
-int apic_send_ipi_vector(int cpu, uint8_t vector)
-{
+int apic_send_ipi_vector(int cpu, uint8_t vector){
     int ret = 0;
-
-  apic_icr1_t icr1;
+    apic_icr1_t icr1;
     apic_icr2_t icr2;
 
     do {

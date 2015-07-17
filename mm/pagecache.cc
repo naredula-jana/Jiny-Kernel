@@ -69,7 +69,7 @@ static inline struct page *to_page(uint8_t *addr){ /* TODO remove me later the f
 	pn = (addr - pc_startaddr) / PC_PAGESIZE;
 	return pagecache_map + pn;
 }
-static int page_init(page_struct_t *p) {
+static int page_init(page_struct_t *p, int clear_page) {
 	p->next = p->prev = NULL;
 	p->count.counter = 0;
 	p->flags = 0;
@@ -82,7 +82,9 @@ static int page_init(page_struct_t *p) {
 	p->list.prev = p->list.next = 0;
 	/*	INIT_LIST_HEAD(&(p->lru_link));
 	 INIT_LIST_HEAD(&(p->list)); */
-	ut_memset(pcPageToPtr(p), 0, PC_PAGESIZE); /* TODO : this is performance penality to clear the page , this is to clear the BSS part of page , it is read part from the disk rest will be junk */
+	if (clear_page == 1){
+		ut_memset(pcPageToPtr(p), 0, PC_PAGESIZE); /* TODO : this is performance penality to clear the page , this is to clear the BSS part of page , it is read part from the disk rest will be junk */
+	}
 	return 1;
 }
 
@@ -293,7 +295,7 @@ int pc_init(uint8_t *start_addr, unsigned long len) {
 
 	for (i = 0; i < total_pages; i++) {
 		p = pagecache_map + i;
-		page_init(p);
+		page_init(p,1);
 		p->magic_number = PAGE_MAGIC;
 		if (i < ((reserved_size + PC_PAGESIZE) / PC_PAGESIZE)) {
 			p->flags = (1 << PG_reserved);
@@ -400,7 +402,10 @@ struct page *pc_getInodePage(struct fs_inode *inode, unsigned long offset) {
 		if (page->offset == page_offset) {
 			pc_get_page(page);
 			goto last;
-		}else{
+		}else if (page_offset > page->offset){
+			page = NULL;
+			goto last;
+		}else {
 			page = NULL;
 		}
 	}
@@ -411,16 +416,48 @@ last:
 	return page;
 
 }
+struct fs_inode *latest_inode;
+extern "C" {
+void Jcmd_inode_data(unsigned char *arg1,unsigned char *arg2){
+	struct list_head *p;
+	struct page *tmp_page,*prev_page;
+	unsigned long flags;
+	int ret = JFAIL;
+	int i = 0;
+	int k;
+	int list_index;
+	struct fs_inode *inode = latest_inode;
 
+	ut_printf(" filename: %s \n",inode->filename);
+	for (k=0; k<PAGELIST_HASH_SIZE; k++){
+		int first=0;
+
+		mutexLock(g_inode_lock);
+		list_for_each(p, &(inode->page_list[k])) {
+			tmp_page = list_entry(p, struct page, list);
+			if (first ==0){
+				ut_printf(" %d :: ",k);
+			}
+			first =1;
+			ut_printf(" %d,",tmp_page->offset);
+		}
+		mutexUnLock(g_inode_lock);
+		if (first != 0){
+			ut_printf("\n");
+		}
+	}
+
+}
+}
 /* page enters in to page cache here */
 int pc_insertPage(struct fs_inode *inode, struct page *page) {
 	struct list_head *p;
-	struct page *tmp_page;
+	struct page *tmp_page,*prev_page;
 	unsigned long flags;
 	int ret = JFAIL;
 	int i = 0;
 	int list_index;
-
+	latest_inode = inode;
 	assert(page!=0);
 
 	if (page->offset > inode->fileStat.st_size)
@@ -429,6 +466,7 @@ int pc_insertPage(struct fs_inode *inode, struct page *page) {
 			&& page->lru_link.next == 0 && page->lru_link.prev == 0)) {
 		BUG();
 	}
+	prev_page=0;
 	/*  1. link the page to inode */
 	mutexLock(g_inode_lock);
 	list_index=get_pagelist_index(page->offset);
@@ -441,17 +479,27 @@ int pc_insertPage(struct fs_inode *inode, struct page *page) {
 			//ut_log("ERROR: pc fail : %x offset:%x list_index:%x\n",tmp_page,page->offset,list_index);
 			return JFAIL;
 		}
-		if (page->offset < tmp_page->offset) {
+		if (page->offset > tmp_page->offset) {
 			inode->nrpages++;
-			list_add_tail(&page->list, &tmp_page->list); /* add page before tmp_Page */
+			if (prev_page == 0){
+				list_add_tail(&page->list, &tmp_page->list);  /* add before the current page */
+			}else{
+				list_add(&page->list, &prev_page->list); /* add page after prev Page */
+			}
+			//list_add_tail(&page->list, &tmp_page->list); /* add page before tmp_Page */
 			ret = JSUCCESS;
 			break;
 		}
+		prev_page = tmp_page;
 	}
 	if (ret == JFAIL) {  /* add at the tail */
 		inode->nrpages++;
 		DEBUG("insert page address at end : %x  \n", page);
-		list_add_tail(&page->list, &(inode->page_list[list_index]));
+		if (prev_page != 0){
+			list_add(&page->list, &prev_page->list); /* add page after prev Page */
+		}else{
+			list_add_tail(&page->list, &(inode->page_list[list_index]));
+		}
 		ret = JSUCCESS;
 	}
 
@@ -478,7 +526,7 @@ int pc_putFreePage(struct page *page) {
 	return 1;
 }
 
-page_struct_t *pc_getFreePage() {
+page_struct_t *pc_getFreePage(int clear_page) {
 	page_struct_t *p;
 	int restarted = 0;
 
@@ -498,7 +546,7 @@ page_struct_t *pc_getFreePage() {
 		BUG();
 	}
 	if (p)
-		page_init(p);
+		page_init(p,clear_page);
 	return p;
 }
 #define MAX_PAGES_SYNC 100
