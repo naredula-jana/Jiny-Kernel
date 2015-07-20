@@ -17,7 +17,7 @@
 #include "vhost_user.h"
 
 #define VRING_IDX_NONE          ((uint16_t)-1)
-
+#if 0
 static struct vhost_vring* new_vring(void* vring_base)
 {
     struct vhost_vring* vring = (struct vhost_vring*) vring_base;
@@ -74,7 +74,7 @@ int vring_table_from_memory_region(struct vhost_vring* vring_table[], size_t vri
 
     return 0;
 }
-
+#endif
 /* jana Changed below */
 int send_pkt(VringTable* vring_table, uint32_t v_idx,  void* input_buf, size_t size);
 unsigned long stat_send_succ=0;
@@ -231,7 +231,7 @@ int send_pkt(VringTable* vring_table, uint32_t v_idx,  void* input_buf, size_t s
 
     return 0;
 }
-
+#if 1
 static int free_vring(VringTable* vring_table, uint32_t v_idx, uint32_t d_idx)
 {
     struct vring_desc* desc = vring_table->vring[v_idx].desc;
@@ -247,7 +247,7 @@ static int free_vring(VringTable* vring_table, uint32_t v_idx, uint32_t d_idx)
 
     return 0;
 }
-
+#endif
 int process_used_vring(VringTable* vring_table, uint32_t v_idx)
 {
     struct vring_used* used = vring_table->vring[v_idx].used;

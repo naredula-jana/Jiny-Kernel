@@ -16,7 +16,7 @@
 extern "C" {
 #include "common.h"
 #include "descriptor_tables.h"
-extern int net_bh();
+extern int net_bh(int force_read);
 extern int clock_test();
 static int get_free_cpu();
 unsigned char g_idle_stack[MAX_CPUS + 2][TASK_SIZE] __attribute__ ((aligned (4096)));
@@ -618,7 +618,7 @@ void sc_before_syscall() {
 void sc_after_syscall() {
 	/* Handle any pending signal */
 	//SYSCALL_DEBUG("syscall ret  state:%x\n",g_current_task->state);
-	net_bh();
+	net_bh(0);
 	g_cpu_state[getcpuid()].stats.syscalls++;
 
 	if (g_current_task->pending_signals == 0) {
@@ -1369,7 +1369,7 @@ repeat:
  	 g_cpu_state[cpuid].cpu_spinstate.clock_interrupts = 0;
  	 g_cpu_state[cpuid].cpu_spinstate.nonclock_interrupts = 0;
  	 while(g_cpu_state[cpuid].cpu_spinstate.clock_interrupts < 3){
- 		 net_bh();
+ 		 net_bh(1);
  		 if (g_cpu_state[cpuid].run_queue_length > 0){
  			g_cpu_state[cpuid].task_on_wait = 0;
  			sc_schedule();
@@ -1399,13 +1399,14 @@ void idleTask_func() {
 	while (1) {
 #if 1
 		while(g_conf_netbh_tightloop==1){
-			net_bh();
-			if (g_cpu_state[cpu].run_queue_length != 0){
+			net_bh(1);
+			//if (g_cpu_state[cpu].run_queue_length != 0){
 				sc_schedule();
-			}
+			//}
 		}
 #endif
-		net_bh();
+
+		net_bh(1);
 		cpuspin_before_halt();
 
 		if (g_cpu_state[cpu].run_queue_length == 0) {/* TODO: there is a chance that someone insert in to runqueue */

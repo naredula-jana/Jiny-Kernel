@@ -20,7 +20,7 @@ extern "C"{
 #include "network.hh"
 
 extern "C"{
-extern int net_bh();
+extern int net_bh(int force_read);
 int g_conf_eat_udp=0;
 int default_sock_queue_len=0;
 int g_conf_socket_wakeup=1;
@@ -161,7 +161,7 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int
 	unsigned char *buf = 0;
 	int buf_len;
 
-	net_bh();
+	net_bh(0);
 
 	/* if the message is peeked, then get the message from the peeked buf*/
 	if (peeked_msg_len != 0){

@@ -26,7 +26,7 @@ int main(int argc, char* argv[])
     atexit(cleanup);
     init_signals();
 
-    printf(" arg1: %s arg2: %s \n",argv[1],argv[2]);
+    printf(" <port1-file>: %s <port2-file>: %s \n",argv[1],argv[2]);
     port1 = new_vhost_server(argv[1], 1 /*is_listen*/);
     port2 = new_vhost_server(argv[2], 1 /*is_listen*/);
     if (port1 && port2) {

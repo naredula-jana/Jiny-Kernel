@@ -53,6 +53,7 @@ public:
 	atomic_t stat_recv_kicks;
 	atomic_t stat_kicks;
 	unsigned char pending_kick_onsend;
+	int max_qbuffers;
 
 	struct virtqueue *virtio_create_queue(uint16_t index, int qType);
 	void print_stats(unsigned char *arg1,unsigned char *arg2);

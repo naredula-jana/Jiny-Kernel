@@ -75,7 +75,6 @@ class network_scheduler {
 	int netrx_cpuid; /* cpu id where netrx thread runs */
 	void *g_netBH_lock; /* All BH code will serialised by this lock */
 	int stat_netrx_bh_recvs;
-	int poll_devices(int enable_interrupt);
 
 public:
 	jdevice *device;

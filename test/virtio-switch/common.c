@@ -128,7 +128,7 @@ void dump_buffer(uint8_t* p, size_t len)
     }
     fprintf(stdout,"\n");
 }
-
+#if 0
 void dump_vring(struct vring_desc* desc, struct vring_avail* avail,struct vring_used* used)
 {
     int idx;
@@ -155,7 +155,7 @@ void dump_vhost_vring(struct vhost_vring* vring)
     fprintf(stdout, "kickfd: 0x%x, callfd: 0x%x\n", vring->kickfd, vring->callfd);
     dump_vring(vring->desc, &vring->avail, &vring->used);
 }
-
+#endif
 int vhost_user_send_fds(int fd, const VhostUserMsg *msg, int *fds,
         size_t fd_num)
 {

@@ -31,7 +31,7 @@
 
 extern "C" {
 #include "common.h"
-extern int net_bh();
+extern int net_bh(int read_forced);
 unsigned char g_mac[7];
 int g_conf_nic_intr_off=0;
 //int g_conf_send_alltime=0;
@@ -49,7 +49,7 @@ extern int g_conf_net_sendbuf_delay;
 /*   Release the buffer after calling the callback */
 int network_scheduler::netRx_thread(void *arg, void *arg2) {
 	while(1){
-		net_bh();
+		net_bh(0);
 		netrx_cpuid = getcpuid();
 		g_cpu_state[netrx_cpuid].net_BH = 0;
 		if (g_conf_net_sendbuf_delay != 0) { /* if sendbuf_delay is enabled, smp is having negative impact and rate of recving falls down */
@@ -63,16 +63,10 @@ int network_scheduler::netRx_thread(void *arg, void *arg2) {
 	}
 }
 int network_scheduler::netRx_BH() {
-	int ret =1 ;
-
-	ret = poll_devices(0);
-
-	return 1;
-}
-int network_scheduler::poll_devices(int enable_interrupt) {
 	int i, j;
 	int ret = 0;
 	int pending_devices = 0;
+	int enable_interrupt=0;
 
 	for (i = 0; i < MAX_POLL_DEVICES; i++) {
 		if (device_under_poll[i].private_data != 0 && device_under_poll[i].active == 1) {
@@ -84,17 +78,18 @@ int network_scheduler::poll_devices(int enable_interrupt) {
 				if (pkts == 0)
 					break;
 				total_pkts = total_pkts + pkts;
+				ret = ret + pkts;
 			}
 			if (total_pkts == 0) {
 				//device_under_poll[i].active = 0;
-				device_under_poll[i].poll_func(device_under_poll[i].private_data, enable_interrupt, max_pkts); /* enable interrupts */
+				ret= ret  +device_under_poll[i].poll_func(device_under_poll[i].private_data, enable_interrupt, max_pkts); /* enable interrupts */
 			} else {
 				pending_devices++;
 			}
 		}
 	}
 	poll_underway = 0;
-	return pending_devices;
+	return ret;
 }
 int network_scheduler::netif_rx(unsigned char *data, unsigned int len) {
 	if (socket::attach_rawpkt(data, len) == JFAIL) {
@@ -155,24 +150,34 @@ extern int init_netmod_uipstack();
 spinlock_t netbh_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"netbh_lock");
 extern unsigned long  get_100usec();
 /* TODO : currently it is assum,ed for 1 nic, later this need to be extended for multiple nics*/
-int net_bh(){
+int net_bh(int force_read){
 	unsigned long flags;
 	static int netbh_in_progress=0;
 	static unsigned long last_timestamp=0; /* 100usec units */
+	static unsigned long lasttime_pktconsumed=0; /* last time the packet consumed */
 	unsigned long curr_time; /* interms of 100usec*/
+	int pkt_consumed=0;
 
+	force_read =0;
+	if (force_read == 1){
+		net_bh_active = 1;
+	}
 	process_send_queue();
 
 	if (g_conf_nic_intr_off == 1) {  /* only in the poll mode */
 		net_bh_active = 1;
+#if 0
 		curr_time = get_100usec(); /* interms of 100 usec units*/
 		if (last_timestamp < curr_time) {
 			last_timestamp = curr_time;
 			net_bh_active = 1;
 		}
+#endif
 	}
 
-	if (netbh_in_progress == 1 ||  (net_bh_active == 0)) return 0;
+	if (netbh_in_progress == 1 ||  (net_bh_active == 0)){
+		goto last;
+	}
 
 	/* only one cpu will be in net_bh */
 	spin_lock_irqsave(&netbh_lock, flags);
@@ -181,12 +186,12 @@ int net_bh(){
 		spin_unlock_irqrestore(&netbh_lock, flags);
 	}else{
 		spin_unlock_irqrestore(&netbh_lock, flags);
-		return 0;
+		goto last;
 	}
 
 	do {
 		net_bh_active++;
-		net_sched.netRx_BH();
+		pkt_consumed = pkt_consumed +net_sched.netRx_BH();
 		g_cpu_state[getcpuid()].stats.netbh++;
 	}while (net_bh_active == 1);
 
@@ -196,9 +201,22 @@ int net_bh(){
 	if (g_conf_nic_intr_off == 0 && net_sched.device){
 		net_bh_active =0;
 		net_sched.device->ioctl(NETDEV_IOCTL_ENABLE_RECV_INTERRUPTS, 0);
-		net_sched.netRx_BH();
+		pkt_consumed = pkt_consumed + net_sched.netRx_BH();
 	}
 	netbh_in_progress = 0;
+
+	if (pkt_consumed > 0){
+		lasttime_pktconsumed = g_jiffies;
+	}
+last:
+	if (force_read == 1){
+		if (pkt_consumed > 0){
+			return 1;
+		}
+		if ((g_jiffies - lasttime_pktconsumed) > 2){
+			return 0;
+		}
+	}
 
 	return 1;
 }

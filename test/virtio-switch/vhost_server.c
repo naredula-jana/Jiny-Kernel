@@ -166,6 +166,11 @@ static int _set_mem_table(VhostServer* vhost_server, ServerMsg* msg)
             region->memory_size = msg->msg.memory.regions[idx].memory_size;
             region->userspace_addr = msg->msg.memory.regions[idx].userspace_addr;
 
+#if 1  /* JANA added temporary fix for qemu 2.3.0 */
+            region->memory_size = 268435456 ;
+            printf("  Temporay FIX .... : %x \n",region->memory_size);
+#endif
+
             assert(idx < msg->fd_num);
             assert(msg->fds[idx] > 0);
 
@@ -173,6 +178,10 @@ static int _set_mem_table(VhostServer* vhost_server, ServerMsg* msg)
                     (uintptr_t) init_shm_from_fd(msg->fds[idx], region->memory_size);
 
             vhost_server->memory.nregions++;
+
+#if 1  /* JANA added temporary fix for qemu 2.3.0 */
+           break;
+#endif
         }
     }
 
@@ -282,7 +291,7 @@ static int _kick_server(FdNode* node)
         del_fd_list(&vhost_server->server->fd_list, FD_READ, kickfd);
     } else {
 #if 1
-        fprintf(stdout, "Got kick %"PRId64"\n", kick_it);
+        fprintf(stdout, "Got LATEST  KICK %"PRId64"\n", kick_it);
 #endif
         if (port1_handlers.context == vhost_server){
         	other_vhost_server = port2_handlers.context;
@@ -291,7 +300,7 @@ static int _kick_server(FdNode* node)
         }
 
         process_input_fromport(vhost_server,other_vhost_server);
-        print_rings("port1: ",port1_handlers.context);
+        print_rings("PORT1: ",port1_handlers.context);
         print_rings("port2: ",port2_handlers.context);
     }
 
@@ -409,7 +418,7 @@ void print_rings(char *str,VhostServer* vhost_server){
 		struct vring_avail *avail=vhost_server->vring_table.vring[i].avail;
 		struct vring_used *used=vhost_server->vring_table.vring[i].used;
 		if (avail!=0 && used!=0){
-			printf("%s  %d: AAvail(%p) inx:%d flag:%x   Used(%p) idx:%d flag:%x \n",str,i,(void *)avail,avail->idx,avail->flags,(void *)used,used->idx,used->flags);
+			printf("%s  %d: AAvail(%p) inx:%d flag:%x   Used(%p) idx:%d flag:%x  desc:(%p)\n",str,i,(void *)avail,avail->idx,avail->flags,(void *)used,used->idx,used->flags,vhost_server->vring_table.vring[i].desc);
 		}
 	}
 }
@@ -431,7 +440,7 @@ port2->vring_table.start_i =0;
 port1->vring_table.end_i =0;
 port2->vring_table.end_i =0;
     while (app_running) {
-    //	print_rings("Before",vhost_server);
+    	//print_rings("Before ",port1);
         ret = loop_server(port1->server,port2->server,sleep);
         ret = ret + loop_server(port2->server,port1->server,sleep);
         if (ret == 0){

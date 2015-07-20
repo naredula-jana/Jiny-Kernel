@@ -107,6 +107,8 @@ struct virtqueue *virtio_jdriver::virtio_create_queue(uint16_t index, int qType)
 	outw(pci_ioaddr + VIRTIO_PCI_QUEUE_SEL, index);
 
 	num = inw(pci_ioaddr + VIRTIO_PCI_QUEUE_NUM);
+	max_qbuffers = num;
+
 	//num = 1024;
 	INIT_LOG("		New virtio create queue NUM-%d : num %x(%d)  :%x\n", index, num, num, vring_size(num, VIRTIO_PCI_VRING_ALIGN));
 	if (num == 0) {
@@ -403,8 +405,10 @@ int virtio_net_jdriver::net_attach_device() {
 		if (queues[k].recv == 0 || queues[k].send ==0){
 			break;
 		}
-		for (i = 0; i < 120; i++) /* add buffers to recv q */
+		for (i = 0; i < max_qbuffers/2; i++){ /* add buffers to recv q */
 			addBufToNetQueue(k, VQTYPE_RECV, 0, 4096);
+		}
+		ut_log("    virtio_netq:%d  recv addbuffers:%d \n",k,max_qbuffers/2);
 	}
 	inb(pci_ioaddr + VIRTIO_PCI_ISR);
 	for (k = 0; k < max_vqs; k++) {
@@ -461,9 +465,6 @@ int virtio_net_jdriver::addBufToNetQueue(int qno, int type, unsigned char *buf, 
 	}
 
 	ut_memset(buf, 0, sizeof(struct virtio_net_hdr));
-#if 0
-add_buf((unsigned long)buf,qno);
-#endif
 
 	sg[0].page_link = (unsigned long) buf;
 	sg[0].length = sizeof(struct virtio_net_hdr);

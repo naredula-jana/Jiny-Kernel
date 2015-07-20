@@ -9,6 +9,7 @@
 
 // Number of vring structures used in Linux vhost. Max 32768.
 enum { VHOST_VRING_SIZE = 32*1024 };
+//enum { VHOST_VRING_SIZE = 32*256 };
 
 // vring_desc I/O buffer descriptor
 struct vring_desc {
@@ -45,14 +46,14 @@ struct vring_used {
   uint16_t idx;
   struct vring_used_elem { uint32_t id; uint32_t len; } ring[VHOST_VRING_SIZE];
 };
-
+#if 0
 struct vhost_vring {
   int kickfd, callfd;
   struct vring_desc desc[VHOST_VRING_SIZE] __attribute__((aligned(4)));
   struct vring_avail avail                 __attribute__((aligned(2)));
   struct vring_used used                   __attribute__((aligned(4096)));
 };
-
+#endif
 typedef int (*AvailHandler)(void* context, void* buf, size_t size);
 typedef uintptr_t (*MapHandler)(void* context, uint64_t addr);
 
