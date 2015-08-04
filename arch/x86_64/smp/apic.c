@@ -482,49 +482,57 @@ void local_apic_timer_init(uint8_t vector)
   ar_registerInterrupt(LOCAL_TIMER_CPU_IRQ_VEC, &timer_callback, "APICtimer");
 }
 
+void set_local_apic_timer(uint8_t vector, int duration){
+	  apic_lvt_timer_t lvt_timer=local_apic->lvt_timer;
+
+	 /*calibrate to hz*/
+	  local_apic_timer_ap_calibrate(duration);
+	  /* setup timer vector  */
+	  lvt_timer.vector=vector;
+	  /* set periodic mode (set bit to 1) */
+	  lvt_timer.timer_mode = 0x1;
+	  /* enable timer */
+	  lvt_timer.mask=0x0;
+	  local_apic->lvt_timer.reg=lvt_timer.reg;
+
+}
 void local_apic_timer_ap_init(uint8_t vector)
 {
   apic_lvt_timer_t lvt_timer=local_apic->lvt_timer;
 
   i8254_suspend(); /* suspend general intel timer - bye bye, simple and pretty one, welcome to apic ...*/
 
-  /* calibrate timer delimeter */
-   __local_apic_timer_calibrate(16);
-  /*calibrate to hz*/
-  local_apic_timer_ap_calibrate(TICKS_PER_SECOND);
-  /* setup timer vector  */
-  lvt_timer.vector=vector; 
-  /* set periodic mode (set bit to 1) */
-  lvt_timer.timer_mode = 0x1;
-  /* enable timer */
-  lvt_timer.mask=0x0;
-  local_apic->lvt_timer.reg=lvt_timer.reg;
+  set_local_apic_timer(vector, TICKS_PER_SECOND);
 }
 extern unsigned char imps_cpu_apic_map[];
 int stat_ipi_send_count =0 ;
-int apic_send_ipi_vector(int cpu, uint8_t vector){
-    int ret = 0;
-    apic_icr1_t icr1;
-    apic_icr2_t icr2;
+int apic_send_ipi_vector(int cpu, uint8_t vector) {
+	int ret = 0;
+	apic_icr1_t icr1;
+	apic_icr2_t icr2;
 
-    do {
-        icr1=local_apic->icr1;
-    } while (icr1.tx_status);
+	do {
+		//icr1 = local_apic->icr1;
+		icr1.tx_status = local_apic->icr1.tx_status;
+	} while (icr1.tx_status);
 
-  icr1.tx_mode=TXMODE_FIXED;
-  icr1.rx_mode=DMODE_PHY;
-  icr1.level=LEVEL_DEASSERT;
-  icr1.trigger=TRIG_EDGE; /* trigger mode -> edge */
-  icr1.shorthand=SHORTHAND_NIL;
-  icr1.vector=vector;
-    icr2.dest = imps_cpu_apic_map[cpu];
-    local_apic->icr2.reg=icr2.reg;
-  local_apic->icr1.reg=icr1.reg;
-  stat_ipi_send_count++;
-  if (__local_apic_chkerr())
-        ret = -1;
+	icr1.tx_mode = TXMODE_FIXED;
+	icr1.rx_mode = DMODE_PHY;
+	icr1.level = LEVEL_DEASSERT;
+	icr1.trigger = TRIG_EDGE; /* trigger mode -> edge */
+	icr1.shorthand = SHORTHAND_NIL;
+	icr1.vector = vector;
 
-    return ret;
+	icr2.dest = imps_cpu_apic_map[cpu];
+	local_apic->icr2.reg = icr2.reg;
+	local_apic->icr1.reg = icr1.reg;
+	stat_ipi_send_count++;
+#if 0
+	if (__local_apic_chkerr())
+		ret = -1;
+#endif
+
+	return ret;
 }
 int apic_broadcast_ipi_vector(uint8_t vector)
 {
@@ -554,11 +562,13 @@ void broadcast_msg(){
 	return;
 #endif
 }
+#if 0
 int enable_ioapic(){
 
 	local_apic_timer_ap_init(LOCAL_TIMER_CPU_IRQ_VEC);
 	return 1;
 }
+#endif
 int local_ap_apic_init(void)
 {
 	if (__local_apic_init(false)){
@@ -566,7 +576,7 @@ int local_ap_apic_init(void)
 		//return -1;
 	}
 
-	enable_ioapic();
+	local_apic_timer_ap_init(LOCAL_TIMER_CPU_IRQ_VEC);
 	__unmask_extint();
 	ready_for_broadcast=1;
 	return 0;

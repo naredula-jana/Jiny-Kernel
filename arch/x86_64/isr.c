@@ -280,13 +280,13 @@ int Jcmd_cpu(char *arg1, char *arg2) {
 	ut_printf("       ");
 	for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
 		if (g_cpu_state[j].stats.total_contexts > 10000)
-			ut_printf("[%d/%dk/%dk/%d]:%d ", g_cpu_state[j].stats.idleticks,g_cpu_state[j].stats.nonidle_contexts / 1000, g_cpu_state[j].stats.total_contexts / 1000,
-					g_cpu_state[j].stats.syscalls ,g_cpu_state[j].stats.netbh);
+			ut_printf("[%d/%dk/%dk/%d]:%d-%d:%d ", g_cpu_state[j].stats.idleticks,g_cpu_state[j].stats.nonidle_contexts / 1000, g_cpu_state[j].stats.total_contexts / 1000,
+					g_cpu_state[j].stats.syscalls ,g_cpu_state[j].stats.netbh,g_cpu_state[j].stats.netbh_recv,g_cpu_state[j].stats.netbh_send);
 		else
-			ut_printf("[%d/%d/%d/%d]:%d ",g_cpu_state[j].stats.idleticks, g_cpu_state[j].stats.nonidle_contexts, g_cpu_state[j].stats.total_contexts,
-					g_cpu_state[j].stats.syscalls,g_cpu_state[j].stats.netbh);
+			ut_printf("[%d/%d/%d/%d]:%d-%d:%d ",g_cpu_state[j].stats.idleticks, g_cpu_state[j].stats.nonidle_contexts, g_cpu_state[j].stats.total_contexts,
+					g_cpu_state[j].stats.syscalls,g_cpu_state[j].stats.netbh,g_cpu_state[j].stats.netbh_recv,g_cpu_state[j].stats.netbh_send);
 	}
-	ut_printf(":ctx switches([ idle/nonidle/total/syscalls]NetBH) \n");
+	ut_printf(":ctx switches([ idle/nonidle/total/syscalls]NetBH-netbhrecv,netbhsend) \n");
 
 	ut_printf("       ");
 	for (j = 0; (j < MAX_CPUS) && (j < getmaxcpus()); j++) {
@@ -300,6 +300,8 @@ int Jcmd_cpu(char *arg1, char *arg2) {
 			g_cpu_state[j].stats.idleticks = 0;
 			g_cpu_state[j].stats.total_contexts = 0;
 			g_cpu_state[j].stats.netbh = 0;
+			g_cpu_state[j].stats.netbh_recv = 0;
+			g_cpu_state[j].stats.netbh_send = 0;
 		}
 		ut_printf("STATS CLEARED \n");
 	}

@@ -218,7 +218,8 @@ extern void init_virtio_drivers();
 
 extern void init_keyboard_jdriver();
 extern void init_serial_jdriver();
-static struct jdevice *keyboard_device,*serial1_device,*serial2_device;
+static struct jdevice *keyboard_device;
+struct jdevice *serial1_device,*serial2_device;
 static struct jdevice *vga_device;
 
 jdriver *disk_drivers[MAX_DISK_DEVICES];
@@ -250,8 +251,8 @@ int init_jdevices(unsigned long unused_arg1) {
 	for (k = 0; k < device_count; k++) {
 		for (d = 0; d < driver_count; d++) {
 			if (jdriver_list[d]->probe_device(jdevice_list[k]) == JSUCCESS) {
-				jdevice_list[k]->driver = jdriver_list[d]->attach_device(
-						jdevice_list[k]);
+				jdevice_list[k]->driver = jdriver_list[d]->attach_device(jdevice_list[k]);
+				jdriver_list[d]->instances++;
 				break;
 			}
 		}
@@ -269,8 +270,13 @@ void *get_keyboard_device(int device_type,int file_type){
 		else
 			return (void *)vga_device;
 	}else{
-		if (file_type == IN_FILE || file_type == OUT_FILE)
-			return (void *)serial1_device;
+		if (file_type == IN_FILE || file_type == OUT_FILE){
+			if (device_type == DEVICE_SERIAL1){
+				return (void *)serial1_device;
+			}else if (device_type == DEVICE_SERIAL2){
+				return (void *)serial2_device;
+			}
+		}
 	}
 }
 void Jcmd_jdevices(unsigned char *arg1,unsigned char *arg2) {

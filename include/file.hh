@@ -67,17 +67,28 @@ public:
 	virtual void print_stats(unsigned char *arg1,unsigned char *arg2)=0;
 };
 #define MAX_SOCKET_QUEUE_LENGTH 2500
-struct sock_queue_struct {
-	wait_queue *waitq;
+class fifo_queue {
+	unsigned char name[MAX_FILENAME];
 	int producer, consumer;
 	struct {
 		unsigned char *buf;
 		unsigned int len; /* actual data length , not the buf lenegth, buf always constant length */
+		int flags;
 	} data[MAX_SOCKET_QUEUE_LENGTH];
-	spinlock_t spin_lock; /* lock to protect while adding and revoing from queue */
+	spinlock_t remove_spin_lock,add_spin_lock; /* lock to protect while adding and revoing from queue */
 	int stat_processed[MAX_CPUS];
-	unsigned long queue_len;
+
+public:
+	atomic_t queue_len;
+	wait_queue *waitq;
 	unsigned long error_full;
+	unsigned long stat_attached;
+	unsigned long stat_drop;
+	int remove_from_queue(unsigned char **buf, int *len,int *wr_flags);
+	int add_to_queue(unsigned char *buf, int len, int flags, int freebuf_on_full);
+	int peep_from_queue(unsigned char **buf, int *len,int *wr_flags);
+	void init(unsigned char *arg_name,int wq_enable);
+	void free();
 };
 #define MAX_SOCKETS 100
 class jdevice;
@@ -109,9 +120,13 @@ class socket: public vinode {
 public:
 	class network_connection network_conn;
 	network_stack *net_stack;
-	struct sock_queue_struct queue;
+	class fifo_queue queue;
 	unsigned char *peeked_msg;
 	int peeked_msg_len;
+
+	static unsigned long stat_raw_attached;
+	static unsigned long  stat_raw_drop;
+	static unsigned long stat_raw_default;
 
 	int read(unsigned long offset, unsigned char *data, int len, int flags, int unused_flags);
 	int write(unsigned long offset, unsigned char *data, int len, int flags);
@@ -120,9 +135,8 @@ public:
 	int peek();
 	void print_stats(unsigned char *arg1,unsigned char *arg2);
 
-	void init_socket(int type);
-	int add_to_queue(unsigned char *buf, int len);
-	int remove_from_queue(unsigned char **buf,  int *len);
+	int init_socket(int type);
+
 
 /* static/class members */
 	static vinode *create_new(int type);
@@ -132,9 +146,9 @@ public:
 	static sock_list_t udp_list,tcp_listner_list,tcp_connected_list;
 	static network_stack *net_stack_list[MAX_NETWORK_STACKS];
 	static jdevice *net_dev;
-	static int stat_raw_drop;
-	static int stat_raw_default;
-	static int stat_raw_attached;
+
+
+
 	static class socket *default_socket;
 	static void init_socket_layer();
 	static void print_all_stats();

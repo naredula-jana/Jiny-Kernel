@@ -33,6 +33,7 @@ static wait_queue *timer_queue;
 int g_conf_cpu_stats = 1;
 int g_conf_idle_cpuspin = 1;
 int g_conf_netbh_tightloop=0;
+int g_conf_netbh_cpu=0;
 int g_conf_dynamic_assign_cpu = 0; /* minimizes the IPI interrupt by reassigning the the task to running cpu */
 static int stat_dynamic_assign_errors = 1;
 
@@ -614,11 +615,15 @@ void sc_before_syscall() {
 	}
 #endif
 }
-
+extern "C" {
+unsigned long g_stat_syscall_count=0;
+}
 void sc_after_syscall() {
 	/* Handle any pending signal */
 	//SYSCALL_DEBUG("syscall ret  state:%x\n",g_current_task->state);
-	net_bh(0);
+	net_bh(1);
+	g_stat_syscall_count++;
+
 	g_cpu_state[getcpuid()].stats.syscalls++;
 
 	if (g_current_task->pending_signals == 0) {
@@ -686,11 +691,17 @@ void sc_remove_dead_tasks() {
 		}
 	}
 }
-
+extern "C" {
+unsigned long g_stat_idle_errs=0;
+}
 void sc_schedule() { /* _schedule function task can land here. */
 	unsigned long intr_flags;
 	int cpuid = getcpuid();
 
+	if (g_cpu_state[cpuid].idle_state == 1){
+		g_cpu_state[cpuid].idle_state = 0;
+		g_stat_idle_errs++;
+	}
 	/*  Safe checks */
 	if (!g_current_task) {
 		BUG();
@@ -829,32 +840,7 @@ int do_softirq() {
 		ipc_check_waitqueues();
 	}
 
-#if 0
-	if (cpuid == 0  && (house_keeper_count%100)==0){
-		for (i=1; i< getmaxcpus(); i++){
-			if (g_cpu_state[i].active == 0 || g_cpu_state[i].run_queue_length==0 ) continue;
-			if (g_cpu_state[i].last_total_contexts == g_cpu_state[i].stats.total_contexts){
-				struct task_struct *next;
-				do {
-					unsigned long intr_flags;
-
-					spin_lock_irqsave(&g_global_lock, intr_flags);
-					next = _del_from_runqueue(0, i);
-					if (next != 0){
-						next->allocated_cpu = 0;
-						_add_to_runqueue(next, -1);
-					}
-					spin_unlock_irqrestore(&g_global_lock, intr_flags);
-				} while (next != 0);
-				g_cpu_state[i].active = 0;
-				ut_log(" ERROR: deactive the cpu because cpu %d  is stuck \n",i);
-			}
-			g_cpu_state[i].last_total_contexts = g_cpu_state[i].stats.total_contexts;
-		}
-	}
-#endif
-
-	if (g_current_task->counter <= 0) {
+	if (g_current_task->counter <= 0 ) {
 		sc_schedule();
 	}
 	return JSUCCESS;
@@ -1060,7 +1046,6 @@ static int get_free_cpu() {
 	if (g_cpu_state[k].active == 1) {
 		return k;
 	}
-
 	return 0;
 
 }
@@ -1382,6 +1367,8 @@ repeat:
  	 return 1;
 }
 extern int init_vcputime(int cpu_id);
+
+int curr_cpu_tightloop = -1;
 void idleTask_func() {
 	int k = 0;
 	int cpu;
@@ -1398,11 +1385,21 @@ void idleTask_func() {
 	}
 	while (1) {
 #if 1
-		while(g_conf_netbh_tightloop==1){
-			net_bh(1);
-			//if (g_cpu_state[cpu].run_queue_length != 0){
-				sc_schedule();
-			//}
+		if (g_conf_netbh_tightloop == 1) {
+			if (curr_cpu_tightloop == -1) {
+				curr_cpu_tightloop = 0;
+			}
+			while (cpu == curr_cpu_tightloop  && g_conf_netbh_tightloop == 1) {
+				net_bh(1);
+				g_cpu_state[cpu].idle_state = 0;
+				if (g_cpu_state[cpu].run_queue_length != 0) {
+					//curr_cpu_tightloop = -1;
+					sc_schedule();
+				}
+				if (curr_cpu_tightloop == -1) { /* let us enter tightloop if possible */
+					//curr_cpu_tightloop = cpu;
+				}
+			}
 		}
 #endif
 
@@ -1411,6 +1408,7 @@ void idleTask_func() {
 
 		if (g_cpu_state[cpu].run_queue_length == 0) {/* TODO: there is a chance that someone insert in to runqueue */
 			g_cpu_state[cpu].idle_state = 1;
+			g_current_task->counter = 0;
 			arch::sti_hlt();
 			g_cpu_state[cpu].idle_state = 0;
 		}else{

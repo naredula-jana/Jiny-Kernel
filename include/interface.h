@@ -18,7 +18,8 @@ struct iovec {                    /* Scatter/gather array items */
 /* scheduling */
 extern task_queue_t g_task_queue;
 
-
+unsigned long ut_get_percpu_ns() ; /* get time stamp in nano seconds */
+unsigned long ut_get_systemtime_ns();
 int sc_sleep( long ticks); /* each tick is 100HZ or 10ms */
 unsigned long SYS_sc_fork();
 unsigned long SYS_sc_vfork();

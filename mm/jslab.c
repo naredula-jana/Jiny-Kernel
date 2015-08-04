@@ -255,7 +255,7 @@ static int create_jcache(jcache_t *cachep, const char *name, int obj_size,unsign
 	INIT_LIST_HEAD(&(cachep->cache_list));
 
 	cachep->max_obj_per_slab = max_obj_space / obj_size;
-	cachep->spinlock = SPIN_LOCK_UNLOCKED(0);
+	cachep->spinlock = SPIN_LOCK_UNLOCKED("jslab_cacehp");
 
 	cachep->stat_total_objs = 0;
 	cachep->stat_total_pages = 0;
@@ -406,7 +406,7 @@ static int init_zeropage_cache_done=0;
 static void init_zeropage_cache(){
 	zeropage_cache.max_cleanpage_index =0;
 	zeropage_cache.max_dirtypage_index = 0;
-	zeropage_cache.spinlock = SPIN_LOCK_UNLOCKED(0);
+	zeropage_cache.spinlock = SPIN_LOCK_UNLOCKED("zeropage");
 	init_zeropage_cache_done=1;
 }
 static unsigned long get_from_zeropagecache(int clear_flag){

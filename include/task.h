@@ -220,6 +220,8 @@ struct cpu_state {
 		unsigned long nonidle_contexts;
 		unsigned long idleticks; /* in idle function when the timer arrives */
 		unsigned long syscalls;
+		unsigned long netbh_recv;
+		unsigned long netbh_send;
 		unsigned long rip;
 		unsigned long netbh;
 #if 1  /* TODO (high priority ): there is bug here if the below unused struct is removed, user level program crashes at mmap*/

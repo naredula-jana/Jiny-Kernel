@@ -181,10 +181,13 @@ int init_driver_keyboard() {
 		if (i > 2)
 			BUG(); //TODO: currently only two input devices
 
-		if (i == 0) {
+		if (i == DEVICE_SERIAL1) {
 			input_devices[i].device_id = DEVICE_SERIAL1;
-			input_devices[i].kb_waitq = jnew_obj(wait_queue, "kb-serial",0);
-		} else {
+			input_devices[i].kb_waitq = jnew_obj(wait_queue, "kb-serial1",0);
+		} else 	if (i == DEVICE_SERIAL2) {
+			input_devices[i].device_id = DEVICE_SERIAL2;
+			input_devices[i].kb_waitq = jnew_obj(wait_queue, "kb-serial2",0);
+		}else {
 			input_devices[i].device_id = DEVICE_KEYBOARD;
 			input_devices[i].kb_waitq = jnew_obj(wait_queue, "kb-key",0);
 		}

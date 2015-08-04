@@ -32,6 +32,9 @@ int network_stack::open(network_connection *conn, int flags) {
 	if (conn->protocol == IPPROTO_UDP) {
 		struct uip_udp_conn_struct *uip_conn;
 		uip_conn = uip_udp_new(0, 0);
+		if (uip_conn ==0 ){
+			return JFAIL;
+		}
 		conn->proto_connection = uip_conn;
 		conn->src_port = uip_conn->lport;
 	} else if (conn->protocol == IPPROTO_TCP) {

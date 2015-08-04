@@ -485,7 +485,6 @@ wait_queue::wait_queue( char *arg_name, unsigned long arg_flags) {
 			INIT_LIST_HEAD(&(head));
 			name = arg_name;
 
-			//arch_spinlock_init(&lock, (unsigned char *)name);
 			wait_queue::wait_queues[i] = this;
 			used_for = 0;
 			flags = arg_flags;
@@ -669,7 +668,6 @@ void wait_queue::print_stats(unsigned char *arg1,unsigned char *arg2){
 /******************************************************************************************/
 /* this call consume system resources */
 semaphore::semaphore(uint8_t arg_count, char *arg_name) {
-
 	ut_snprintf(name,IPC_NAME_MAX,"SEM:%s",arg_name);
 	owner_pid = 0;
 	count = arg_count;

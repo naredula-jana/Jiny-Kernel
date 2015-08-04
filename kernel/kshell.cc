@@ -12,7 +12,7 @@
 extern "C" {
 #include "common.h"
 }
-
+#include "jdevice.h"
 #define MAX_LINE_LENGTH 200
 #define CMD_PROMPT "-->"
 #define MAX_CMD_HISTORY 50
@@ -188,16 +188,10 @@ unsigned char *envs[] = { (unsigned char *) "HOSTNAME=jana",
 static int thread_launch_serial(void *arg1, void *arg2) {
 	void **argv = sc_get_thread_argv();
 
-	serial_ksh.input_device = DEVICE_SERIAL1;
+	//serial_ksh.input_device = serial_dev;
 	if (argv == 0) {
-		unsigned char *arg[5];
-		arg[0] = (unsigned char *) arg1;
-		arg[1] = (unsigned char *) arg2;
-		arg[2] = 0;
-
-		SYS_sc_execve((unsigned char *) arg1, arg, envs);
+		BUG();
 	} else {
-		//unsigned char name[100];
 		void *arg[5];
 
 		//ut_strcpy(name, (const unsigned char *)argv[0]);
@@ -205,20 +199,23 @@ static int thread_launch_serial(void *arg1, void *arg2) {
 		arg[1] = argv[1];
 		arg[2] = argv[2];
 		arg[3] = 0;
+		//serial_ksh.input_device = argv[3];
 		SYS_sc_execve((unsigned char *)argv[0], (unsigned char **)arg, envs);
 	}
 	ut_printf(" Error: User Space shell(%s) not found, fallback to kernel shell\n",arg1);
+	serial_ksh.input_device = argv[3];
 	serial_ksh.kshell_process();
 	return 1;
 }
 void *tmp_arg[5];
-static int sh_create(unsigned char *bin_file, unsigned char *name, unsigned char *arg) {
+static int sh_create(unsigned char *bin_file, unsigned char *name, unsigned char *arg, int serial_dev) {
 	int ret;
 
 	tmp_arg[0] =(void *) bin_file;
 	tmp_arg[1] =(void *) name;
 	tmp_arg[2] =(void *) arg;
-	sc_set_fsdevice(DEVICE_SERIAL1, DEVICE_SERIAL1);  /* all user level thread on serial line */
+	tmp_arg[3] =(void *) serial_dev;
+	sc_set_fsdevice(serial_dev, serial_dev);  /* all user level thread on serial line */
 	ret = sc_createKernelThread(thread_launch_serial, (void **) &tmp_arg,
 			name,0);
 
@@ -237,21 +234,27 @@ void kshell::kshell_process(){
 	}
 }
 #define USERLEVEL_SHELL "./busybox"
+extern "C" {
+void Jcmd_newsh(void *arg1,void *arg2){
+
+	 sh_create((unsigned char *) USERLEVEL_SHELL, (unsigned char *) "sh", 0,DEVICE_SERIAL2);
+}
+}
+extern struct jdevice *serial2_device;
 //#define USERLEVEL_SHELL "/jiny_root/busybox"
 int kshell::main(void *arg) {
 	int i, cmd_type;
 	int ret = 1;
 
-	ut_log("   loading the kernel shell :%s:\n",USERLEVEL_SHELL);
+	ut_log("   loading the kernel shell :%s:\n", USERLEVEL_SHELL);
 //	ret = fs_open(USERLEVEL_SHELL,0,0);
 	if (ret != 0) {
 //		fs_close(ret);
-#if 1
-	//	ret = sh_create((unsigned char *) USERLEVEL_SHELL,
-	//			(unsigned char *) "sh", (unsigned char *)"start"); // start the user level shell
-		ret = sh_create((unsigned char *) USERLEVEL_SHELL,
-				(unsigned char *) "sh", 0); // start the user level shell
-#endif
+		ret = sh_create((unsigned char *) USERLEVEL_SHELL,(unsigned char *) "sh", 0, DEVICE_SERIAL1); // start the user level shell
+		if (serial2_device != 0 && serial2_device->driver != 0) {
+			sc_sleep(2000);
+			ret = sh_create((unsigned char *) USERLEVEL_SHELL,(unsigned char *) "sh", 0, DEVICE_SERIAL2);
+		}
 	}
 
 	ut_log(" user shell thread creation ret :%x\n", ret);

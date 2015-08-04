@@ -22,8 +22,8 @@ extern "C"{
 extern "C"{
 extern int net_bh(int force_read);
 int g_conf_eat_udp=0;
-int default_sock_queue_len=0;
-int g_conf_socket_wakeup=1;
+//int default_sock_queue_len=0;
+//int g_conf_socket_wakeup=1;
 static spinlock_t _netstack_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"netstack");
 unsigned long stack_flags;
 void netstack_lock(){
@@ -58,7 +58,7 @@ int socket::attach_rawpkt(unsigned char *buff, unsigned int len) {
 			sock = udp_list.list[i];
 			if (sock == 0) continue;
 			if ((pkt->udphdr.dest == sock->network_conn.src_port)) {
-				sock->add_to_queue(buff, len);
+				sock->queue.add_to_queue(buff, len,0,1);
 				return JSUCCESS;
 			}
 		}
@@ -69,7 +69,7 @@ int socket::attach_rawpkt(unsigned char *buff, unsigned int len) {
 			if (sock == 0) continue;
 			/* tcp and udp ports are located in same location in raw packet  , source and dest udp port is used to search for connected tcp sockets */
 			if ((pkt->udphdr.dest == sock->network_conn.src_port) && (pkt->udphdr.source == sock->network_conn.dest_port)) {
-				sock->add_to_queue(buff, len);
+				sock->queue.add_to_queue(buff, len,0,1);
 				return JSUCCESS;
 			}
 		}
@@ -77,14 +77,14 @@ int socket::attach_rawpkt(unsigned char *buff, unsigned int len) {
 			sock = tcp_listner_list.list[i];
 			if (sock == 0) continue;
 			if ((pkt->udphdr.dest == sock->network_conn.src_port)) {
-				sock->add_to_queue(buff, len);
+				sock->queue.add_to_queue(buff, len,0,1);
 				return JSUCCESS;
 			}
 		}
 
 	}
 
-	default_socket->add_to_queue(buff, len);
+	default_socket->queue.add_to_queue(buff, len,0,1);
 	stat_raw_default++;
 	return JSUCCESS;
 #if 1
@@ -94,63 +94,95 @@ last:
 	return JSUCCESS;
 #endif
 }
-int socket::add_to_queue(unsigned char *buf, int len) {
+void fifo_queue::init(unsigned char *arg_name,int wq_enable){
+	ut_snprintf(name,MAX_FILENAME,"fqueue_%s",arg_name);
+	arch_spinlock_init(&add_spin_lock, (unsigned char *)name);
+	arch_spinlock_init(&remove_spin_lock, (unsigned char *)name);
+	atomic_set(&queue_len, 0);
+	waitq =0;
+	if (wq_enable){
+		waitq = jnew_obj(wait_queue, "socket_waitq", 0);
+	}
+}
+void fifo_queue::free(){
+	if (waitq){
+		waitq->unregister();
+	}
+	arch_spinlock_free(&add_spin_lock);
+	arch_spinlock_free(&remove_spin_lock);
+}
+int fifo_queue::add_to_queue(unsigned char *buf, int len,int data_flags, int freebuf_on_full) {
 	unsigned long flags;
 	int ret = JFAIL;
 	if (buf == 0 || len == 0)
 		return ret;
 
 	//ut_log("Recevied from  network and keeping in queue: len:%d  stat count:%d prod:%d cons:%d\n",len,stat_queue_len,queue.producer,queue.consumer);
-	spin_lock_irqsave(&(queue.spin_lock), flags);
-	if (queue.data[queue.producer].len == 0) {
-		queue.data[queue.producer].len = len;
-		queue.data[queue.producer].buf = buf;
-		queue.producer++;
-		queue.queue_len++;
-		if (queue.producer >= MAX_SOCKET_QUEUE_LENGTH){
-			queue.producer = 0;
+	spin_lock_irqsave(&(add_spin_lock), flags);
+	if ((data[producer].len == 0)  && (data[producer].buf == 0)) {
+		data[producer].len = len;
+		data[producer].buf = buf;
+		data[producer].flags = data_flags;
+		producer++;
+		atomic_inc(&(queue_len));
+
+		if (producer >= MAX_SOCKET_QUEUE_LENGTH){
+			producer = 0;
 		}
 		ret = JSUCCESS;
 		goto last;
 	}
-	queue.error_full++;
+	error_full++;
 
 last:
-	spin_unlock_irqrestore(&(queue.spin_lock), flags);
+	spin_unlock_irqrestore(&(add_spin_lock), flags);
 	if (ret == JFAIL){
-		jfree_page(buf);
-		stat_raw_drop++;
-	}else{
-		if (g_conf_socket_wakeup == 1){
-			queue.waitq->wakeup();
+		if (freebuf_on_full){
+			jfree_page(buf);
 		}
-		stat_raw_attached++;
+		stat_drop++;
+	}else{
+		if (waitq){
+			waitq->wakeup();
+		}
+		stat_attached++;
 	}
 	return ret;
 }
-
-int socket::remove_from_queue(unsigned char **buf, int *len) {
+int fifo_queue::peep_from_queue(unsigned char **buf, int *len,int *wr_flags) {
+	if ((data[consumer].buf != 0) && (data[consumer].len != 0)) {
+		*buf = data[consumer].buf;
+		*len = data[consumer].len;
+		*wr_flags = data[consumer].flags;
+		return JSUCCESS;
+	}
+	return JFAIL;
+}
+int fifo_queue::remove_from_queue(unsigned char **buf, int *len,int *wr_flags) {
 	unsigned long flags;
 	int ret = JFAIL;
 	while (ret == JFAIL) {
-		spin_lock_irqsave(&(queue.spin_lock), flags);
-		if ((queue.data[queue.consumer].buf != 0) && (queue.data[queue.consumer].len != 0)) {
-			*buf = queue.data[queue.consumer].buf;
-			*len = queue.data[queue.consumer].len;
+		spin_lock_irqsave(&(remove_spin_lock), flags);
+		if ((data[consumer].buf != 0) && (data[consumer].len != 0)) {
+			*buf = data[consumer].buf;
+			*len = data[consumer].len;
+			*wr_flags = data[consumer].flags;
+
 			//	ut_log("netrecv : receving from queue len:%d  prod:%d cons:%d\n",queue.data[queue.consumer].len,queue.producer,queue.consumer);
 
-			queue.data[queue.consumer].len = 0;
-			queue.data[queue.consumer].buf = 0;
-			queue.consumer++;
-			queue.queue_len--;
+			data[consumer].buf = 0;
+			data[consumer].len = 0;
+			consumer++;
+			atomic_dec(&queue_len);
+
 			//queue.stat_processed[getcpuid()]++;
-			if (queue.consumer >= MAX_SOCKET_QUEUE_LENGTH)
-				queue.consumer = 0;
+			if (consumer >= MAX_SOCKET_QUEUE_LENGTH)
+				consumer = 0;
 			ret = JSUCCESS;
 		}
-		spin_unlock_irqrestore(&(queue.spin_lock), flags);
-		if (ret == JFAIL){
-			queue.waitq->wait(500);
+		spin_unlock_irqrestore(&(remove_spin_lock), flags);
+		if (ret == JFAIL && waitq){
+			waitq->wait(500);
 		}
 	}
 	return ret;
@@ -161,7 +193,7 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int
 	unsigned char *buf = 0;
 	int buf_len;
 
-	net_bh(0);
+	net_bh(0);  /* check te packets if there and to pending recv from driver */
 
 	/* if the message is peeked, then get the message from the peeked buf*/
 	if (peeked_msg_len != 0){
@@ -174,7 +206,7 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int
 	}
 read_again:
 	/* push a packet in to protocol stack  */
-	ret = remove_from_queue(&buf, &buf_len);
+	ret = queue.remove_from_queue(&buf, &buf_len,&unused_flags);
 	if (ret == JSUCCESS) {
 		network_connection *conn=&network_conn;
 		if (network_conn.type == 0){ /* default socket */
@@ -237,7 +269,7 @@ int socket::close() {
 		return JFAIL;
 	}
 	ret = net_stack->close(&network_conn);
-	queue.waitq->unregister();
+
 	if (peeked_msg != 0 ){
 		free_page(peeked_msg);
 	}
@@ -261,29 +293,30 @@ int socket::ioctl(unsigned long arg1, unsigned long arg2) {
 			ret = net_stack->connect(&network_conn);
 		}
 	}else if (arg1 == SOCK_IOCTL_WAITFORDATA){
-		if ((queue.queue_len == 0)  && (arg2 != 0)){
-			queue.waitq->wait(arg2);
-			//ut_log(" Woken from the queue : %d\n",queue.queue_len);
+		if ((queue.queue_len.counter == 0)  && (arg2 != 0)){
+			if (queue.waitq){
+				queue.waitq->wait(arg2);
+			}
 		}
-		return queue.queue_len;
+		return queue.queue_len.counter;
 	}else if (arg1 == GENERIC_IOCTL_PEEK_DATA){
-		return queue.queue_len;
+		return queue.queue_len.counter;
 	}
 	return ret;
 }
 
 void socket::print_stats(unsigned char *arg1,unsigned char *arg2){
-	ut_printf("socket: count:%d local:%x:%x remote:%x:%x (IO: %d/%d: StatErr: %d Qfull:%d Qlen:%d)  %x\n",
+	ut_printf("socket: count:%d local:%x:%x remote:%x:%x (IO: %d/%d: StatErr: %d Qfull:%d Qlen:%i)  %x\n",
 			count.counter,network_conn.src_ip,network_conn.src_port,network_conn.dest_ip,network_conn.dest_port,stat_in
-	    ,stat_out,stat_err,queue.error_full,queue.queue_len, &network_conn);
+	    ,stat_out,stat_err,queue.error_full,queue.queue_len.counter, &network_conn);
 }
 
 sock_list_t socket::udp_list;
 sock_list_t socket::tcp_listner_list;
 sock_list_t socket::tcp_connected_list;
-int socket::stat_raw_drop = 0;
-int socket::stat_raw_default = 0;
-int socket::stat_raw_attached = 0;
+unsigned long socket::stat_raw_drop = 0;
+unsigned long socket::stat_raw_default = 0;
+unsigned long socket::stat_raw_attached = 0;
 socket *socket::default_socket=0;
 /* TODO need  a lock */
 jdevice *socket::net_dev;
@@ -327,7 +360,7 @@ static int delete_sock_from_list(sock_list_t *listp,socket *sock){
 int socket::delete_sock(socket *sock) {
 	int i;
 
-	arch_spinlock_free(&sock->queue.spin_lock);
+	sock->queue.free();
 	if (delete_sock_from_list(&socket::tcp_listner_list,sock)==JSUCCESS){
 		return JSUCCESS;
 	}
@@ -339,30 +372,34 @@ int socket::delete_sock(socket *sock) {
 	}
 	return JFAIL;
 }
-void socket::init_socket(int type){
-	//queue.spin_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"socketnetq_lock");
-	arch_spinlock_init(&queue.spin_lock, (unsigned char *)"socketnetq_lock" );
+int socket::init_socket(int type){
+	int ret = JFAIL;
+	queue.init((unsigned char*)"socket",1);
 	arch_spinlock_link(&_netstack_lock);
 
-	queue.waitq = jnew_obj(wait_queue, "socket_waitq", 0);
 	net_stack = net_stack_list[0];
 	network_conn.family = AF_INET;
 	network_conn.type = type;
 	network_conn.src_ip = 0;
-	if (type == SOCK_DGRAM){
-		network_conn.protocol = IPPROTO_UDP;
-		net_stack->open(&network_conn,1);
-	}else if (type == SOCK_STREAM){
-		network_conn.protocol = IPPROTO_TCP;
-		net_stack->open(&network_conn,1);
-	} else{
-		network_conn.protocol = 0;
-	}
-	count.counter = 1;
 	stat_in = 0;
 	stat_in_bytes =0;
 	stat_out =0;
 	stat_out_bytes =0;
+	if (type == SOCK_DGRAM){
+		network_conn.protocol = IPPROTO_UDP;
+		ret = net_stack->open(&network_conn,1);
+	}else if (type == SOCK_STREAM){
+		network_conn.protocol = IPPROTO_TCP;
+		ret = net_stack->open(&network_conn,1);
+	} else{
+		network_conn.protocol = 0;
+	}
+	if (ret == JFAIL){
+		queue.free();
+	}
+	count.counter = 1;
+
+	return ret;
 }
 
 extern "C"{
@@ -417,13 +454,16 @@ vinode* socket::create_new(int arg_type) {
 		return NULL;
 	}
 
-	sock->init_socket(arg_type);
+	if (sock->init_socket(arg_type)== JFAIL){
+		jfree_obj((unsigned long)sock);
+		return NULL;
+	}
 	return (vinode *) sock;
 }
 int socket::default_pkt_thread(void *arg1, void *arg2){
 	while(1){
 		default_socket->read(0,0,0,0,0);
-		default_sock_queue_len = default_socket->queue.consumer;
+		//default_sock_queue_len = default_socket->queue.consumer;
 	}
 	return 1;
 }

@@ -31,9 +31,13 @@
 
 extern "C" {
 #include "common.h"
-extern int net_bh(int read_forced);
+extern int net_bh(int full_recv_send);
 unsigned char g_mac[7];
 int g_conf_nic_intr_off=0;
+unsigned long g_stat_netbh_hit=0;
+unsigned long g_stat_netbh_miss=0;
+unsigned long g_stat_netbh_bigmiss=0;
+unsigned long g_stat_netbh_duplicates=0;
 //int g_conf_send_alltime=0;
 }
 #include "jdevice.h"
@@ -147,35 +151,29 @@ extern "C" {
 static int process_send_queue();
 extern int init_udpstack();
 extern int init_netmod_uipstack();
-spinlock_t netbh_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"netbh_lock");
+static spinlock_t netbh_lock;
+static spinlock_t netbhsend_lock;
 extern unsigned long  get_100usec();
 /* TODO : currently it is assum,ed for 1 nic, later this need to be extended for multiple nics*/
-int net_bh(int force_read){
+int net_bh(int full_recv_send){
 	unsigned long flags;
 	static int netbh_in_progress=0;
-	static unsigned long last_timestamp=0; /* 100usec units */
-	static unsigned long lasttime_pktconsumed=0; /* last time the packet consumed */
-	unsigned long curr_time; /* interms of 100usec*/
 	int pkt_consumed=0;
+	int ret_bh = 0;
 
-	force_read =0;
-	if (force_read == 1){
-		net_bh_active = 1;
+	if (full_recv_send){
+		process_send_queue();
 	}
-	process_send_queue();
+
+	if (netbh_in_progress == 1){
+		goto last;
+	}
 
 	if (g_conf_nic_intr_off == 1) {  /* only in the poll mode */
 		net_bh_active = 1;
-#if 0
-		curr_time = get_100usec(); /* interms of 100 usec units*/
-		if (last_timestamp < curr_time) {
-			last_timestamp = curr_time;
-			net_bh_active = 1;
-		}
-#endif
 	}
 
-	if (netbh_in_progress == 1 ||  (net_bh_active == 0)){
+	if ((net_bh_active == 0) || (netbh_in_progress == 1) ){
 		goto last;
 	}
 
@@ -189,46 +187,34 @@ int net_bh(int force_read){
 		goto last;
 	}
 
-	do {
-		net_bh_active++;
-		pkt_consumed = pkt_consumed +net_sched.netRx_BH();
-		g_cpu_state[getcpuid()].stats.netbh++;
-	}while (net_bh_active == 1);
 
-	if (net_bh_active > 10){
-		net_bh_active =0;
-	}
+	ret_bh = net_sched.netRx_BH();
+	g_cpu_state[getcpuid()].stats.netbh_recv = g_cpu_state[getcpuid()].stats.netbh_recv + ret_bh;
+	g_cpu_state[getcpuid()].stats.netbh++;
+
 	if (g_conf_nic_intr_off == 0 && net_sched.device){
 		net_bh_active =0;
 		net_sched.device->ioctl(NETDEV_IOCTL_ENABLE_RECV_INTERRUPTS, 0);
-		pkt_consumed = pkt_consumed + net_sched.netRx_BH();
+		pkt_consumed = net_sched.netRx_BH();
 	}
+
 	netbh_in_progress = 0;
 
-	if (pkt_consumed > 0){
-		lasttime_pktconsumed = g_jiffies;
-	}
 last:
-	if (force_read == 1){
-		if (pkt_consumed > 0){
-			return 1;
-		}
-		if ((g_jiffies - lasttime_pktconsumed) > 2){
-			return 0;
-		}
-	}
-
 	return 1;
 }
 int netif_thread(void *arg1, void *arg2) {
 	return net_sched.netRx_thread(arg1, arg2);
 }
-
+static class fifo_queue send_queue;
 int init_networking() {
 	int pid;
+	arch_spinlock_init(&netbh_lock, (unsigned char *)"NetBhRecv_lock");
+	arch_spinlock_init(&netbhsend_lock, (unsigned char *)"NetBsSend_lock");
 	net_sched.init();
 	//pid = sc_createKernelThread(netif_thread, 0, (unsigned char *) "netRx_BH_1", 0);
 	socket::init_socket_layer();
+	send_queue.init((unsigned char *)"sendQ",0);
 	return JSUCCESS;
 }
 int init_network_stack() { /* this should be initilised once the devices are up */
@@ -242,91 +228,81 @@ int init_network_stack() { /* this should be initilised once the devices are up 
 	return JSUCCESS;
 }
 
-#define MAX_QUEUE_LEN 500
-static unsigned int from_q=0;
-static unsigned int to_q=0;
-static unsigned long send_qlen=0;
-struct {
-	unsigned char *buf;
-	int len;
-	int write_flags;
-}queue[MAX_QUEUE_LEN+1];
-
+static int get_send_qlen(){
+	return send_queue.queue_len.counter;
+}
+static unsigned long last_fail_send_ts_us = 0;
 static int put_to_send_queue(unsigned char *buf, int len, int write_flags){
-	unsigned long flags;
-	int ret = JFAIL;
-
-	spin_lock_irqsave(&netbh_lock, flags);
-	if (send_qlen < MAX_QUEUE_LEN) {
-		queue[from_q].buf = buf;
-		queue[from_q].len = len;
-		queue[from_q].write_flags = write_flags;
-		from_q++;
-		send_qlen++;
-		if (from_q >= MAX_QUEUE_LEN) {
-			from_q = 0;
-		}
-		ret = JSUCCESS;
+	if (send_queue.queue_len.counter  == 0 ){
+		//last_send_timestamp_us = ut_get_systemtime_ns()/1000;
 	}
-	spin_unlock_irqrestore(&netbh_lock, flags);
-	return ret;
+	return send_queue.add_to_queue(buf,len,write_flags,0);
 }
-static int remove_from_send_queue() {
-	unsigned long flags;
+static int _remove_from_send_queue() {  /* under lock */
 	int ret;
-	if (send_qlen == 0) {
-		return 0;
+	unsigned char *buf;
+	int len,wr_flags;
+	if (send_queue.queue_len.counter == 0) {
+		return JFAIL;
 	}
-	ret = socket::net_dev->write(0, queue[to_q].buf, queue[to_q].len,
-			queue[to_q].write_flags);
-	if (ret == JSUCCESS) {
-		spin_lock_irqsave(&netbh_lock, flags);
-		to_q++;
-		send_qlen--;
-		if (to_q >= MAX_QUEUE_LEN) {
-			to_q = 0;
+	if (last_fail_send_ts_us > 0){  /* give a gap of 10us if the virtio ring is full */
+		if (((ut_get_systemtime_ns()/1000) - last_fail_send_ts_us) < 100){
+			return JFAIL;
 		}
-		spin_unlock_irqrestore(&netbh_lock, flags);
+	}
+
+	if (send_queue.peep_from_queue(&buf,&len,&wr_flags)==JFAIL){
+		return JFAIL;
+	}
+	ret = socket::net_dev->write(0, buf, len,wr_flags);
+	if (ret == JSUCCESS){
+		last_fail_send_ts_us = 0;
+		if (send_queue.remove_from_queue(&buf,&len,&wr_flags) == JFAIL){
+			BRK;
+		}
+	}else{
+		last_fail_send_ts_us = ut_get_systemtime_ns()/1000;
+		/* remove the buffer if it full */
+	//	if (send_queue.remove_from_queue(&buf,&len,&wr_flags) == JFAIL){
+	//				BRK;
+	//	}
+	//	ret = JSUCCESS;
 	}
 	return ret;
 }
+
 static int process_send_queue() {
 	unsigned long flags;
 	int ret = JFAIL;
 	int pkt_send = 0;
 	static int in_progress = 0;
 
-#if 0
-	if (g_conf_send_alltime == 0) {
-		if (send_qlen == 0) {
-			return JFAIL;
-		}
-	}
-#else
-	if (send_qlen == 0) {
+	if (get_send_qlen() == 0  || (in_progress == 1) ) {
 		return JFAIL;
 	}
-#endif
-	spin_lock_irqsave(&netbh_lock, flags);
+
+	spin_lock_irqsave(&netbhsend_lock, flags);
 	if (in_progress == 0) {
 		in_progress = 1;
 		ret = JSUCCESS;
 	}
-	spin_unlock_irqrestore(&netbh_lock, flags);
+	spin_unlock_irqrestore(&netbhsend_lock, flags);
+
 	if (ret == JFAIL) {
 		return ret;
 	}
 
-	while (remove_from_send_queue() == JSUCCESS) {
+	while (_remove_from_send_queue() == JSUCCESS) {
 		pkt_send++;
 	}
 	if (pkt_send > 0) {
 		/* send the kick */
 	}
-	in_progress = 0;
-	if (socket::net_dev != 0){
+	g_cpu_state[getcpuid()].stats.netbh_send = g_cpu_state[getcpuid()].stats.netbh_send + pkt_send;
+	if (socket::net_dev != 0 ){
 		socket::net_dev->ioctl(NETDEV_IOCTL_FLUSH_SENDBUF, 0);
 	}
+	in_progress = 0;
 	return ret;
 }
 int net_send_eth_frame(unsigned char *buf, int len, int write_flags) {
@@ -361,7 +337,7 @@ void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
 
 		net_sched.device->ioctl(NETDEV_IOCTL_PRINT_STAT, 0);
 		net_sched.device->ioctl(NETDEV_IOCTL_GETMAC, (unsigned long) &mac);
-		ut_printf(" Mac: %x:%x:%x:%x:%x:%x  sendqlen :%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],send_qlen);
+		ut_printf(" Mac: %x:%x:%x:%x:%x:%x  sendqlen :%i sendq_attached:%d sendq_drop:%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],get_send_qlen(),send_queue.stat_attached,send_queue.stat_drop);
 	}
 	socket::print_all_stats();
 

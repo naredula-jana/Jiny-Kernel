@@ -87,13 +87,7 @@ static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 			: "%rax","%rbx", "memory" );
 #ifdef SPINLOCK_DEBUG
 	lock->stat_locks++;
-#if 0
-	if (lock->name!=0 && lock->linked == -1 && g_spinlock_count<MAX_SPINLOCKS) {
-		lock->linked = 0;
-		g_spinlocks[g_spinlock_count]=lock;
-		g_spinlock_count++;
-	}
-#endif
+
 
 #ifdef SPINLOCK_DEBUG_LOG
 	if (lock->log_length >= MAX_SPIN_LOG) lock->log_length=0;

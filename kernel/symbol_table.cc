@@ -323,7 +323,7 @@ static void display_values(int type) {
 
 	return;
 }
-void symbol_clear_stats(){
+void Jcmd_clearstats(){
 	int i, len, count;
 
 	count = 0;

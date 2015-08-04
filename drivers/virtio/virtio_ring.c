@@ -23,6 +23,10 @@
 #include "mach_dep.h"
 //#include "virtio_config.h"
 
+#define CONFIG_SMP 1
+#define smp_mb()    asm volatile("mfence":::"memory")  /* super of the below */
+#define smp_rmb()   asm volatile("lfence":::"memory")
+#define smp_wmb()   asm volatile("sfence" ::: "memory")
 
 /* virtio guest is communicating with a virtual "device" that actually runs on
  * a host processor.  Memory barriers are used to control SMP effects. */

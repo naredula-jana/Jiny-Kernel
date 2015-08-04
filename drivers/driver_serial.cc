@@ -44,7 +44,7 @@ static int serial_input_handler2(void *unused_private_data) {
 	c = inb(DATA_REG(SERIAL_PORT2));
 	ar_addInputKey(DEVICE_SERIAL2, c);
 	//ut_printf(" Received the char from serial %x %c \n",c,c);
-	outb(INT_ENABLE_REG(SERIAL_PORT1), 0x01); // Issue an interrupt when input buffer is full.
+	outb(INT_ENABLE_REG(SERIAL_PORT2), 0x01); // Issue an interrupt when input buffer is full.
 	return 0;
 }
 int init_serial(unsigned long unsed_arg) {
@@ -77,29 +77,15 @@ int init_serial(unsigned long unsed_arg) {
 	return JSUCCESS;
 }
 static spinlock_t serial_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"serial");
-static int dr_serialWrite(char *buf, int len) {
-	int i;
-	unsigned long flags;
 
-	spin_lock_irqsave(&serial_lock, flags);
-	for (i = 0; i < len; i++) {
-		if (buf[i] >= 0x20 || buf[i] == 0xa || buf[i] == 0xd || buf[i] == 9
-				|| buf[i] == 0x1b){
-			outb(DATA_REG(SERIAL_PORT1), buf[i]);
-			outb(DATA_REG(SERIAL_PORT2), buf[i]); /* port-2 can used for logging of the port-1 */
-		}else {
-			//ut_log(" Special character eaten Up :%x: \n",buf[i]);
-		}
-	}
-	spin_unlock_irqrestore(&serial_lock, flags);
-}
 }
 #include "jdevice.h"
 
 /*************************************************************************************/
 class serial_jdriver: public jdriver {
-
+	int dr_serialWrite(char *buf, int len);
 public:
+
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);
 	int dettach_device(jdevice *dev);
@@ -110,6 +96,27 @@ public:
 	int serial_device_no;
 };
 static serial_jdriver *serial_driver;
+int serial_jdriver::dr_serialWrite(char *buf, int len) {
+	int i;
+	unsigned long flags;
+
+	spin_lock_irqsave(&serial_lock, flags);
+	for (i = 0; i < len; i++) {
+		if (buf[i] >= 0x20 || buf[i] == 0xa || buf[i] == 0xd || buf[i] == 9
+				|| buf[i] == 0x1b){
+			if (serial_device_no == DEVICE_SERIAL1){
+				outb(DATA_REG(SERIAL_PORT1), buf[i]);
+			}else if (serial_device_no == DEVICE_SERIAL2){
+				outb(DATA_REG(SERIAL_PORT2), buf[i]); /* port-2 can used for logging of the port-1 */
+			}else {
+				BUG();
+			}
+		}else {
+			//ut_log(" Special character eaten Up :%x: \n",buf[i]);
+		}
+	}
+	spin_unlock_irqrestore(&serial_lock, flags);
+}
 int serial_jdriver::probe_device(class jdevice *jdev) {
 
 	if (ut_strcmp(jdev->name, (unsigned char *) "/dev/serial1") == 0  || ut_strcmp(jdev->name, (unsigned char *) "/dev/serial2") == 0) {

@@ -345,8 +345,6 @@ unsigned long SYS_sysctl(struct __sysctl_args *args) {
 		ut_symbol_execute(SYMBOL_CONF, carg[1], carg[2],0);
 	} else if (carg[0] != 0 && ut_strcmp(carg[0], (uint8_t *)"stat") == 0){
 		ut_symbol_execute(SYMBOL_STAT, carg[1], carg[2],0);
-	}else if (carg[0] != 0 && ut_strcmp(carg[0], (uint8_t *)"clearstat") == 0){
-		symbol_clear_stats();
 	}else{
 		if (carg[0] == 0) {
 			ut_printf("Conf variables:\n");

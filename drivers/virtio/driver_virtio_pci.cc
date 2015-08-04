@@ -539,22 +539,14 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 	}
 
 	ret = -ERROR_VIRTIO_ENOSPC;
+
+	//current_send_q++;  /* alternate packet on each */
 	spin_lock_irqsave(&virtionet_lock, flags);
-
-#if 0
-	send_count++; /* send continously few packets per each queue */
-	if (send_count > 5000){
-	//	current_send_q++;
-		current_send_q = 0;
-		send_count=0;
-	}
-#endif
-
-	current_send_q++;  /* alternate packet on each */
 	int qno;
-	for (qno=0; qno<max_vqs; qno++){
-		//int qno= current_send_q % max_vqs ;
+	for (qno=0; qno<max_vqs; qno++){  /* try to send from the same queue , if it full then try on the subsequent one, in this way kicks will be less */
+		//spin_lock_irqsave(&virtionet_lock, flags);
 		ret = addBufToNetQueue(qno,VQTYPE_SEND, (unsigned char *) addr, len + 10);
+		//spin_unlock_irqrestore(&virtionet_lock, flags);
 		if (ret == -ERROR_VIRTIO_ENOSPC){
 			continue;
 		}
@@ -571,11 +563,10 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 			pending_kick_onsend = 1;
 		}
 	}else{
+		pending_kick_onsend = 1;
 		stat_sends++;
 		ret = JSUCCESS;
-		pending_kick_onsend = 1;
 	}
-
 	spin_unlock_irqrestore(&virtionet_lock, flags);
 
 	free_send_bufs();
@@ -597,7 +588,6 @@ int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 		if (pending_kick_onsend!=0){
 			unsigned long flags;
 			int qno;
-
 			spin_lock_irqsave(&virtionet_lock, flags);
 			for (qno=0; qno<max_vqs && qno<MAX_VIRT_QUEUES; qno++){
 				if (queues[qno].pending_send_kick == 1){
