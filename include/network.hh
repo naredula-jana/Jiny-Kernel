@@ -60,23 +60,20 @@ struct ether_pkt{
 
 #include "network_stack.hh"
 
-#define MAX_POLL_DEVICES 5
-struct device_under_poll_struct {
-	void *private_data;
-	int (*poll_func)(void *private_data, int enable_interrupt, int total_pkts);
-	int active;
-};
-
+#define MAX_NET_DEVICES  20
 class network_scheduler {
 	int network_enabled;
 	wait_queue *waitq;
-	struct device_under_poll_struct device_under_poll[MAX_POLL_DEVICES];
+
 	int poll_underway;
 	int netrx_cpuid; /* cpu id where netrx thread runs */
 	void *g_netBH_lock; /* All BH code will serialised by this lock */
 	int stat_netrx_bh_recvs;
 
 public:
+	virtio_net_jdriver *device_list[MAX_NET_DEVICES];
+	int device_count;
+
 	jdevice *device;
 	int init();
 	int netRx_thread(void *arg, void *arg2);

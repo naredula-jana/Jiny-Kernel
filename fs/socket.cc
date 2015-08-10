@@ -217,9 +217,8 @@ read_again:
 			stat_in++;
 			stat_in_bytes = stat_in_bytes + ret;
 		} else{ /* when tcp control packets are consumed, need to look for the data packets */
-
 			stat_in++;
-			stat_err++;
+			statin_err++;
 			if (buf > 0) {
 				free_page((unsigned long)buf);
 				buf =0 ;
@@ -257,7 +256,7 @@ int socket::write(unsigned long offset, unsigned char *app_data, int app_len, in
 		stat_out++;
 		stat_out_bytes = stat_out_bytes + ret;
 	} else
-		stat_err++;
+		statout_err++;
 	return ret;
 }
 int socket::close() {
@@ -306,9 +305,9 @@ int socket::ioctl(unsigned long arg1, unsigned long arg2) {
 }
 
 void socket::print_stats(unsigned char *arg1,unsigned char *arg2){
-	ut_printf("socket: count:%d local:%x:%x remote:%x:%x (IO: %d/%d: StatErr: %d Qfull:%d Qlen:%i)  %x\n",
+	ut_printf("socket: count:%d local:%x:%x remote:%x:%x (IO: %d/%d: StatErr:out:%d in:%d Qfull:%d Qlen:%i)  %x\n",
 			count.counter,network_conn.src_ip,network_conn.src_port,network_conn.dest_ip,network_conn.dest_port,stat_in
-	    ,stat_out,stat_err,queue.error_full,queue.queue_len.counter, &network_conn);
+	    ,stat_out,statout_err,statin_err,queue.error_full,queue.queue_len.counter, &network_conn);
 }
 
 sock_list_t socket::udp_list;
@@ -598,7 +597,7 @@ int SYS_accept(int fd) {
 	if (i > 0){
 		inode->stat_out++;
 	}else{
-		inode->stat_err++;
+		inode->statout_err++;
 	}
 	SYSCALL_DEBUG("accept retfd %d \n", i);
 

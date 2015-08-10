@@ -53,7 +53,7 @@ public:
 	unsigned char filename[MAX_FILENAME];
 	int file_type; /* type of file */
 
-	unsigned long stat_out,stat_in,stat_err;
+	unsigned long stat_out,stat_in,statout_err,statin_err;
 	unsigned long stat_in_bytes,stat_out_bytes;
 
 	void update_stat_in(int in_req,int in_byte);

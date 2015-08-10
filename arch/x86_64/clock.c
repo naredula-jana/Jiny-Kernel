@@ -240,9 +240,9 @@ void clock_test(){
 }
 int Jcmd_clock() {
 	unsigned long sec, usec, msec;
-	ut_printf("NEW System clock: version:%x(%d) start:%d sec sec: %d(%x) msec:%d(%x) usec:%d(%x) \n",vcpu_time[0].version,vcpu_time[0].version,start_time, sec,sec, msec,msec, usec,usec);
-	ut_printf("jiffies :%d errors:%d  sec:%d get100Usec:%d\n", g_jiffies,  g_jiffie_errors,sec,get_100usec());
-
+//	ut_printf("NEW System clock: version:%x(%d) start:%d sec sec: %d(%x) msec:%d(%x) usec:%d(%x) \n",vcpu_time[0].version,vcpu_time[0].version,start_time, sec,sec, msec,msec, usec,usec);
+	ut_printf("jiffies :%d errors:%d    get100Usec:%d\n", g_jiffies,  g_jiffie_errors,get_100usec());
+#if 0
 	unsigned long ntjif,tjif = g_jiffies;
 	unsigned long tc[5];
 	tc[0]=0;
@@ -273,6 +273,7 @@ int Jcmd_clock() {
 	ut_printf("System clock: version:%x(%d) start:%d sec sec: %d(%x) msec:%d(%x) usec:%d(%x) \n",vcpu_time[0].version,vcpu_time[0].version,start_time, sec,sec, msec,msec, usec,usec);
 	ut_printf("jiffies :%d errors:%d  sec:%d get100Usec:%d\n", g_jiffies,  g_jiffie_errors,sec,get_100usec());
    clock_test();
+#endif
 	return 1;
 }
 int g_conf_kvmclock_enable = 1;

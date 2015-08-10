@@ -85,6 +85,7 @@ public:
 
 	unsigned long remove_buf_from_vq(struct virtqueue *v_q,int *len);
 	int addBufToNetQueue(int qno, int type, unsigned char *buf, unsigned long len);
+	int virtio_net_poll_device(int total_pkts);
 
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);

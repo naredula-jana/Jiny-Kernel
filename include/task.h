@@ -150,6 +150,7 @@ struct task_struct {
 
 	int counter;  /* ticks for every 1 context switch*/
 	long sleep_ticks;
+	unsigned long last_jiffie;
 
 	struct thread_struct thread;
 	struct mm_struct *mm;

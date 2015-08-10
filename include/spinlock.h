@@ -36,28 +36,6 @@ extern int g_spinlock_count;
 #define SPIN_LOCK_UNLOCKED (spinlock_t) { __SPINLOCK_UNLOCKED }
 #endif
 
-#if 0
-static inline void arch_spinlock_transfer(spinlock_t *lock,
-		struct task_struct *prev, struct task_struct *next) {
-	if (lock->recursion_allowed == 1) SPIN_BUG();
-	if (lock->recursion_allowed == 0 && prev->pid != lock->pid) {
-		SPIN_BUG();
-	}
-	prev->locks_nonsleepable--;
-	next->locks_nonsleepable++;
-	lock->pid = next->pid;
-#ifdef SPINLOCK_DEBUG
-#ifdef SPINLOCK_DEBUG_LOG
-	if (lock->log_length >= MAX_SPIN_LOG) lock->log_length=0;
-	lock->log[lock->log_length].line = 99999;
-	lock->log[lock->log_length].pid = prev->pid;
-	lock->log[lock->log_length].cpuid = next->current_cpu;
-	lock->log_length++;
-#endif
-#endif
-}
-#endif
-
 static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 #ifdef SPINLOCK_DEBUG
 #ifdef RECURSIVE_SPINLOCK

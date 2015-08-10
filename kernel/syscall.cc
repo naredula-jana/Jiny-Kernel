@@ -443,12 +443,12 @@ extern int wait_for_sock_data(void *inode, int timeout);
 int SYS_select(int nfds, int *readfds, int *writefds, int *exceptfds, struct timeval *timeout){
 	int *p;
 	int i;
-	SYSCALL_DEBUG("select (TODO)  nfds:%x readfds:%x write:%x execpt:%x timeout:%d  \n", nfds, readfds,writefds,exceptfds,timeout);
-	int duration =0 ;/* interms of 10 ms */
+		int duration =0 ;/* interms of 10 ms */
 	if (timeout> 0){
 		duration = timeout->tv_sec * 100;
 		duration = duration + (timeout->tv_usec/10000);
 	}
+	SYSCALL_DEBUG("select nfds:%x readfds:%x write:%x execpt:%x timeout:%d duration:%d ms\n", nfds, readfds,writefds,exceptfds,timeout,duration);
 
 	//if (readfds != 0 && timeout == 0) {
 	if (readfds != 0 ) {
@@ -600,13 +600,14 @@ int SYS_tgkill(int tid, int sig){
 	ut_printf(" TODO: tg kill not yet supported \n");
 	return -1;
 }
+extern unsigned long SYS_sched_yield();
 syscalltable_t syscalltable[] = {
 /* 0 */
 { SYS_fs_read },/* 0 */{ SYS_fs_write }, { SYS_fs_open }, { SYS_fs_close }, { SYS_fs_stat }, { SYS_fs_fstat }, /* 5 */
 { SYS_fs_stat }, { SYS_poll }, { SYS_fs_lseek }, { SYS_vm_mmap }, { SYS_vm_mprotect },/* 10 */
 { SYS_vm_munmap }, { SYS_vm_brk }, { SYS_rt_sigaction }, { SYS_rt_sigprocmask }, { snull }, /* 15 */
 { SYS_ioctl }, { snull }, { snull }, { SYS_fs_readv }, { SYS_fs_writev }, /* 20 */
-{ SYS_fs_access }, { SYS_pipe }, { SYS_select }, { snull }, { snull }, /* 25 */
+{ SYS_fs_access }, { SYS_pipe }, { SYS_select }, { SYS_sched_yield }, { snull }, /* 25 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 30 */
 { snull }, { SYS_fs_dup }, { SYS_fs_dup2 }, { snull }, { SYS_nanosleep }, /* 35 = nanosleep */
 { snull }, { SYS_alarm }, { snull }, { SYS_getpid }, { snull }, /* 40 */

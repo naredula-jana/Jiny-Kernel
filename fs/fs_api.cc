@@ -564,7 +564,7 @@ int Jcmd_ls(uint8_t *arg1, uint8_t *arg2) {
 							tmp_inode->fileStat.inode_no, tmp_inode->file_type,
 							tmp_inode->flags, type,tmp_inode->vfs );
 		}
-		len = len - ut_snprintf(buf + max_len - len, len,"(%d/%d/%d-%s\n",tmp_inode->stat_in,tmp_inode->stat_out,tmp_inode->stat_err,tmp_inode->filename);
+		len = len - ut_snprintf(buf + max_len - len, len,"(%d/%d/OE:%d IE:%d-%s\n",tmp_inode->stat_in,tmp_inode->stat_out,tmp_inode->statout_err,tmp_inode->statin_err,tmp_inode->filename);
 		total_pages = total_pages + tmp_inode->nrpages;
 		i++;
 		if (len < 500) break;

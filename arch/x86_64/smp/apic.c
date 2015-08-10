@@ -494,16 +494,19 @@ void set_local_apic_timer(uint8_t vector, int duration){
 	  /* enable timer */
 	  lvt_timer.mask=0x0;
 	  local_apic->lvt_timer.reg=lvt_timer.reg;
-
 }
-void local_apic_timer_ap_init(uint8_t vector)
-{
-  apic_lvt_timer_t lvt_timer=local_apic->lvt_timer;
 
-  i8254_suspend(); /* suspend general intel timer - bye bye, simple and pretty one, welcome to apic ...*/
-
-  set_local_apic_timer(vector, TICKS_PER_SECOND);
+#if 1
+void Jcmd_apic_test(void *arg1,void *arg2){
+	int duration=TICKS_PER_SECOND;
+	if (getcpuid() != 0) {
+		set_local_apic_timer(LOCAL_TIMER_CPU_IRQ_VEC, duration);
+		ut_printf(" increased timer by 10 times :  durastion:%d \n",duration);
+	}else{
+		ut_printf(" cpu is boot cpu duration:%d \n",duration);
+	}
 }
+#endif
 extern unsigned char imps_cpu_apic_map[];
 int stat_ipi_send_count =0 ;
 int apic_send_ipi_vector(int cpu, uint8_t vector) {
@@ -572,11 +575,12 @@ int enable_ioapic(){
 int local_ap_apic_init(void)
 {
 	if (__local_apic_init(false)){
-
 		//return -1;
 	}
 
-	local_apic_timer_ap_init(LOCAL_TIMER_CPU_IRQ_VEC);
+	i8254_suspend(); /* suspend general intel timer - bye bye, simple and pretty one, welcome to apic ...*/
+	set_local_apic_timer(LOCAL_TIMER_CPU_IRQ_VEC, TICKS_PER_SECOND/10);
+
 	__unmask_extint();
 	ready_for_broadcast=1;
 	return 0;

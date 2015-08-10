@@ -65,8 +65,9 @@ int ut_min(int a, int b){
 unsigned long g_stat_memcpy_bytes = 0;
 unsigned long g_stat_memcpy_reqs = 0;
 // Copy len bytes from src to dest.
-void ut_memcpy(uint8_t *dest, uint8_t *src, long len)
-{
+unsigned int g_conf_memcpy=0;
+extern int std_rte_memcpy(uint8_t *dest, uint8_t *src, long len);
+void ut_memcpy(uint8_t *dest, uint8_t *src, long len){
 	uint8_t *sp = (const uint8_t *)src;
 	uint8_t *dp = (uint8_t *)dest;
 	long i=0;
@@ -76,7 +77,11 @@ void ut_memcpy(uint8_t *dest, uint8_t *src, long len)
 		BUG();
 	}
 	DEBUG(" src:%x dest:%x len:%x \n",src,dest,len);
-
+#if 0
+	if (g_conf_memcpy == 1 && len==4096){
+		return std_rte_memcpy(dest,src,len);
+	}
+#endif
 	g_stat_memcpy_bytes = g_stat_memcpy_bytes + len;
 	g_stat_memcpy_reqs++;
 //	if ((((unsigned long)dp & 0x7) == 0) && (((unsigned long)sp & 0x7)==0)) {
@@ -98,8 +103,20 @@ void ut_memcpy(uint8_t *dest, uint8_t *src, long len)
 		sp++;
 		len--;
 	}
-
 	return;
+}
+unsigned char test_dest[4096],test_src[4096];
+int g_conf_memloops=1000;
+void Jcmd_memcpy(void *arg1,void *arg2){
+	int k;
+	unsigned long s,e;
+
+	s=ut_get_systemtime_ns();
+	for (k=0; k<g_conf_memloops; k++){
+		ut_memcpy(test_dest,test_src,4096);
+	}
+	e=ut_get_systemtime_ns();
+	ut_printf(" duration : s:%d e:%d diff:%d us \n",s,e,(e-s)/1000);
 }
 // Write len copies of val into dest.
 void ut_memset(uint8_t *dest, uint8_t val, long len)

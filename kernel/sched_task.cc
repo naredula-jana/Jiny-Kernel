@@ -32,7 +32,7 @@ static unsigned long free_pid_no = 1; // TODO need to make unique when  wrap aro
 static wait_queue *timer_queue;
 int g_conf_cpu_stats = 1;
 int g_conf_idle_cpuspin = 1;
-int g_conf_netbh_tightloop=0;
+extern int g_conf_net_pmd;
 int g_conf_netbh_cpu=0;
 int g_conf_dynamic_assign_cpu = 0; /* minimizes the IPI interrupt by reassigning the the task to running cpu */
 static int stat_dynamic_assign_errors = 1;
@@ -48,6 +48,7 @@ static void schedule_kernelSecondHalf();
 static void schedule_userSecondHalf();
 static int release_resources(struct task_struct *task, int attach_to_parent);
 static void _add_to_deadlist(struct task_struct *task);
+unsigned long SYS_sched_yield();
 static struct task_struct *alloc_task_struct(void) {
 	task_struct *p;
 	p = (struct task_struct *) mm_getFreePages(0, 2); /*WARNING: do not change the size it is related TASK_SIZE, 4*4k=16k page size */
@@ -157,7 +158,11 @@ int sc_sleep(long ticks) /* each tick is 100HZ or 10ms */
 /* TODO : return number ticks elapsed  instead of 1*/
 /* TODO : when multiple user level thread sleep it is not returning in correct time , it may be because the idle thread halting*/
 {
-	return timer_queue->wait(ticks);
+	if (ticks ==0){
+		SYS_sched_yield();
+	}else{
+		return timer_queue->wait(ticks);
+	}
 }
 static backtrace_t temp_bt;
 
@@ -584,7 +589,7 @@ void sc_delete_task(struct task_struct *task) {
 
 	if (1){
 		unsigned long life_length = g_jiffies - task->stats.start_time;
-		ut_log("DELETING TASK :%d(%x) st:%d dur:%d cont:%d tick:%d cpu:%i\n", task->pid,task->pid,task->stats.start_time,life_length,task->stats.total_contexts,task->stats.ticks_consumed,task->allocated_cpu);
+		ut_log("DELETING TASK :%d(%x) st:%d dur:%d cont:%d tick:%d name:%s cpu:%i\n", task->pid,task->pid,task->stats.start_time,life_length,task->stats.total_contexts,task->stats.ticks_consumed,task->name, task->allocated_cpu);
 	}
 
 	free_mm(task->mm);
@@ -801,6 +806,7 @@ static unsigned long _schedule(unsigned long flags) {
 	next->current_cpu = cpuid; /* get cpuid based on this */
 	//next->cpu_contexts++;
 	next->stats.total_contexts++;
+	next->last_jiffie = g_jiffies;
 	g_cpu_state[cpuid].current_task = next;
 	g_cpu_state[cpuid].stats.total_contexts++;
 
@@ -840,6 +846,10 @@ int do_softirq() {
 		ipc_check_waitqueues();
 	}
 
+	if (cpuid == g_conf_netbh_cpu){
+	//if (1){
+		net_bh(1);
+	}
 	if (g_current_task->counter <= 0 ) {
 		sc_schedule();
 	}
@@ -852,7 +862,6 @@ void timer_callback(void *unused_args) {
 
 	/* 1. increment timestamp */
 	if (getcpuid() == 0) {
-
 		unsigned long kvm_ticks = get_kvm_time_fromboot();
 		if (kvm_ticks != 0)  {
 			if (kvm_ticks > g_jiffies){
@@ -865,8 +874,12 @@ void timer_callback(void *unused_args) {
 		}
 	}
 
-	g_current_task->counter--;
-	g_current_task->stats.ticks_consumed++;
+	if (g_jiffies > g_current_task->last_jiffie){
+		//g_current_task->counter--;
+		g_current_task->counter = g_current_task->counter - (g_jiffies-g_current_task->last_jiffie);
+		g_current_task->stats.ticks_consumed++;
+		g_current_task->last_jiffie = g_jiffies;
+	}
 }
 
 /*********************************************8888   Sys calls and Jcmds ************************************/
@@ -955,7 +968,7 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	unsigned long flags;
 	struct list_head *pos;
 	struct task_struct *task;
-	int i, len, max_len;
+	int i, j, len, max_len;
 	unsigned char *buf;
 	int all = 0;
 
@@ -965,6 +978,8 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 		all = 1;
 	} else if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "syscall") == 0) {
 		all =2;
+	}else if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "cpu") == 0) {
+		all =3;
 	}
 	len = PAGE_SIZE * 100;
 	max_len = len;
@@ -1012,6 +1027,13 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 				- ut_snprintf(buf + max_len - len, len, "%2d:(%4d/%4d) <%d-%d> %7s(%d) rlen:%d  runq:%x - %x\n", i,
 						g_cpu_state[i].stats.nonidle_contexts, g_cpu_state[i].stats.total_contexts, g_cpu_state[i].active,
 						g_cpu_state[i].intr_disabled, g_cpu_state[i].current_task->name, g_cpu_state[i].current_task->pid,g_cpu_state[i].run_queue_length,&g_cpu_state[i].run_queue.head,g_cpu_state[i].run_queue.head.next);
+		if (all != 3) { continue; }
+		temp_bt.count = 0;
+		ut_getBackTrace((unsigned long *) g_cpu_state[i].current_task->thread.rbp, (unsigned long) g_cpu_state[i].current_task, &temp_bt);
+		for (j = 0; j < temp_bt.count; j++) {
+				len = len - ut_snprintf(buf + max_len - len, len, "          %d: %9s - %x \n", j, temp_bt.entries[j].name,
+											temp_bt.entries[j].ret_addr);
+		}
 	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
 	if (g_current_task->mm == g_kernel_mm)
@@ -1036,8 +1058,12 @@ static int get_free_cpu() {
 	int k;
 	i++;
 	k = i % getmaxcpus();
-	if (k >= getmaxcpus()) {
+	if (k >= getmaxcpus() ) {
 		k = 0;
+	}
+	if (k == g_conf_netbh_cpu && getmaxcpus()>1){
+		i++;
+		k = i % getmaxcpus();
 	}
 
 	if (g_conf_cpu_stick != 99 &&  g_conf_cpu_stick<getmaxcpus()){
@@ -1167,6 +1193,11 @@ unsigned long SYS_sc_fork() {
 unsigned long SYS_sc_vfork() {
 	SYSCALL_DEBUG("vfork \n");
 	return SYS_sc_clone(CLONE_VFORK, 0, 0, 0, 0);
+}
+unsigned long SYS_sched_yield(){
+	SYSCALL_DEBUG("sched_yield \n");
+    sc_schedule();
+    return 0;
 }
 int SYS_sc_exit(int status) {
 	unsigned long flags;
@@ -1385,11 +1416,11 @@ void idleTask_func() {
 	}
 	while (1) {
 #if 1
-		if (g_conf_netbh_tightloop == 1) {
+		if (g_conf_net_pmd == 1) {
 			if (curr_cpu_tightloop == -1) {
-				curr_cpu_tightloop = 0;
+				curr_cpu_tightloop = g_conf_netbh_cpu;
 			}
-			while (cpu == curr_cpu_tightloop  && g_conf_netbh_tightloop == 1) {
+			while (cpu == curr_cpu_tightloop  && g_conf_net_pmd == 1) {
 				net_bh(1);
 				g_cpu_state[cpu].idle_state = 0;
 				if (g_cpu_state[cpu].run_queue_length != 0) {

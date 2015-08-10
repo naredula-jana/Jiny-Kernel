@@ -34,10 +34,11 @@ extern "C" {
 extern int net_bh(int full_recv_send);
 unsigned char g_mac[7];
 int g_conf_nic_intr_off=0;
-unsigned long g_stat_netbh_hit=0;
-unsigned long g_stat_netbh_miss=0;
-unsigned long g_stat_netbh_bigmiss=0;
-unsigned long g_stat_netbh_duplicates=0;
+//unsigned long g_stat_netbh_hit=0;
+//unsigned long g_stat_netbh_miss=0;
+//unsigned long g_stat_netbh_bigmiss=0;
+//unsigned long g_stat_netbh_duplicates=0;
+extern int g_conf_netbh_cpu;
 //int g_conf_send_alltime=0;
 }
 #include "jdevice.h"
@@ -66,33 +67,42 @@ int network_scheduler::netRx_thread(void *arg, void *arg2) {
 		}
 	}
 }
+static int stats_pktrecv[1024];
+extern "C"{
+void Jcmd_netbhstat(void *arg1,void *arg2){
+	int i;
+	int total=0;
+	int count=0;
+	for (i=0; i<1000; i++){
+		if (stats_pktrecv[i]==0) continue;
+		ut_printf(" %d -> %d  ::",i,stats_pktrecv[i]);
+		total=total+(stats_pktrecv[i]*i);
+		count=count+stats_pktrecv[i];
+	}
+	ut_printf("\n total pkts: %d total calls:%d  AVG pkts per call:%d\n",total,count,total/count);
+}
+
+}
 int network_scheduler::netRx_BH() {
 	int i, j;
 	int ret = 0;
-	int pending_devices = 0;
-	int enable_interrupt=0;
 
-	for (i = 0; i < MAX_POLL_DEVICES; i++) {
-		if (device_under_poll[i].private_data != 0 && device_under_poll[i].active == 1) {
-			int max_pkts = 50;
-			int total_pkts = 0;
-			int pkts = 0;
-			for (j = 0; j < 2000; j++) {
-				pkts = device_under_poll[i].poll_func(device_under_poll[i].private_data, 0, max_pkts);
-				if (pkts == 0)
-					break;
-				total_pkts = total_pkts + pkts;
-				ret = ret + pkts;
+	for (i = 0; i < device_count; i++) {
+		int max_pkts = 800;
+		int total_pkts = 0;
+		int pkts = 0;
+		for (j = 0; j < 2000; j++) {
+			pkts = device_list[i]->virtio_net_poll_device(max_pkts);
+			if (pkts < 900 && pkts > 0) {
+				stats_pktrecv[pkts]++;
 			}
-			if (total_pkts == 0) {
-				//device_under_poll[i].active = 0;
-				ret= ret  +device_under_poll[i].poll_func(device_under_poll[i].private_data, enable_interrupt, max_pkts); /* enable interrupts */
-			} else {
-				pending_devices++;
-			}
+			if (pkts == 0)
+				break;
+			total_pkts = total_pkts + pkts;
+			ret = ret + pkts;
 		}
 	}
-	poll_underway = 0;
+
 	return ret;
 }
 int network_scheduler::netif_rx(unsigned char *data, unsigned int len) {
@@ -101,42 +111,22 @@ int network_scheduler::netif_rx(unsigned char *data, unsigned int len) {
 	}
 	return JSUCCESS;
 }
-int network_scheduler::netif_rx_enable_polling(void *private_data,
-		int (*poll_func)(void *private_data, int enable_interrupt, int total_pkts)) {
-	int i;
-	for (i = 0; i < MAX_POLL_DEVICES; i++) {
-		if (device_under_poll[i].private_data == 0 || device_under_poll[i].private_data == private_data) {
-			device_under_poll[i].private_data = private_data;
-			device_under_poll[i].poll_func = poll_func;
-			device_under_poll[i].active = 1;
-		//	g_cpu_state[netrx_cpuid].net_BH = 1;
-			net_bh_active =1;
-		//	waitq->wakeup();
-			if (g_cpu_state[1].idle_state == 1){
-			//	apic_send_ipi_vector(1, IPI_INTERRUPT);
-			}
-			return 1;
-		}
-	}
-	return 0;
-}
+
 int network_scheduler::init() {
 	unsigned long pid;
 	int i;
 
-	for (i = 0; i < MAX_POLL_DEVICES; i++) {
-		device_under_poll[i].private_data = 0;
-		device_under_poll[i].active = 0;
-	}
-
+	device_count = 0;
 	waitq = jnew_obj(wait_queue,"netRx_BH", WAIT_QUEUE_WAKEUP_ONE);
 	g_netBH_lock = mutexCreate("mutex_netBH");
-	poll_underway = 0;
 	network_enabled = 1;
 	return JSUCCESS;
 }
 
 int register_netdevice(jdevice *device) {
+	net_sched.device_list[net_sched.device_count] = (virtio_net_jdriver *)device->driver;
+	net_sched.device_count++;
+
 	net_sched.device = device;
 	socket::net_dev = device;
 	device->ioctl(NETDEV_IOCTL_GETMAC, (unsigned long) &g_mac);
@@ -148,60 +138,92 @@ int register_netdevice(jdevice *device) {
 }
 
 extern "C" {
-static int process_send_queue();
+static int process_send_queue(int duration,int max_pkts_tosend);
 extern int init_udpstack();
 extern int init_netmod_uipstack();
 static spinlock_t netbh_lock;
 static spinlock_t netbhsend_lock;
 extern unsigned long  get_100usec();
-/* TODO : currently it is assum,ed for 1 nic, later this need to be extended for multiple nics*/
-int net_bh(int full_recv_send){
+
+static int net_bh_recv(){
 	unsigned long flags;
-	static int netbh_in_progress=0;
-	int pkt_consumed=0;
-	int ret_bh = 0;
+		static int netbh_in_progress=0;
+		int pkt_consumed=0;
+		int ret_bh = 0;
 
-	if (full_recv_send){
-		process_send_queue();
+		if (netbh_in_progress == 1){
+			goto last;
+		}
+
+		if (g_conf_nic_intr_off == 1) {  /* only in the poll mode */
+			net_bh_active = 1;
+		}
+
+		if ((net_bh_active == 0) || (netbh_in_progress == 1) ){
+			goto last;
+		}
+
+		/* only one cpu will be in net_bh */
+		spin_lock_irqsave(&netbh_lock, flags);
+		if (netbh_in_progress == 0){
+			netbh_in_progress = 1;
+			spin_unlock_irqrestore(&netbh_lock, flags);
+		}else{
+			spin_unlock_irqrestore(&netbh_lock, flags);
+			goto last;
+		}
+
+
+		ret_bh = net_sched.netRx_BH();
+		g_cpu_state[getcpuid()].stats.netbh_recv = g_cpu_state[getcpuid()].stats.netbh_recv + ret_bh;
+		g_cpu_state[getcpuid()].stats.netbh++;
+
+		if (g_conf_nic_intr_off == 0 && net_sched.device){
+			net_bh_active =0;
+			net_sched.device->ioctl(NETDEV_IOCTL_ENABLE_RECV_INTERRUPTS, 0);
+			pkt_consumed = net_sched.netRx_BH();
+		}
+
+		netbh_in_progress = 0;
+
+	last:
+		return 1;
+}
+extern "C" {
+int g_conf_net_send_dur=0;
+int g_conf_net_send_pkts=300;
+int g_conf_net_pmd=1; /* pollmode driver on/off */
+int g_conf_netbh_one=1; /* all netb by only one thread */
+}
+/* TODO : currently it is assum,ed for 1 nic, later this need to be extended for multiple nics*/
+int net_bh(int send_bh){
+	int ret = 0;
+	static unsigned long last_active=0;
+	unsigned long ts;
+
+	if (g_conf_net_pmd==1  && g_conf_netbh_cpu != getcpuid()){
+		if (g_conf_netbh_one == 1){ /* only one thread does the netbh */
+			return 0;
+		}
 	}
-
-	if (netbh_in_progress == 1){
-		goto last;
+	if (1){
+		if (send_bh){
+			process_send_queue(g_conf_net_send_dur, g_conf_net_send_pkts);
+		}
+		if (g_conf_netbh_cpu != getcpuid()){
+			return 1;
+		}
 	}
-
-	if (g_conf_nic_intr_off == 1) {  /* only in the poll mode */
-		net_bh_active = 1;
+#if 0
+	ts=ut_get_systemtime_ns()/1000;
+	if ((ts - last_active) < 50){ /* every 50 us */
+		return JFAIL;
 	}
+	last_active = ts;
+#endif
 
-	if ((net_bh_active == 0) || (netbh_in_progress == 1) ){
-		goto last;
-	}
-
-	/* only one cpu will be in net_bh */
-	spin_lock_irqsave(&netbh_lock, flags);
-	if (netbh_in_progress == 0){
-		netbh_in_progress = 1;
-		spin_unlock_irqrestore(&netbh_lock, flags);
-	}else{
-		spin_unlock_irqrestore(&netbh_lock, flags);
-		goto last;
-	}
-
-
-	ret_bh = net_sched.netRx_BH();
-	g_cpu_state[getcpuid()].stats.netbh_recv = g_cpu_state[getcpuid()].stats.netbh_recv + ret_bh;
-	g_cpu_state[getcpuid()].stats.netbh++;
-
-	if (g_conf_nic_intr_off == 0 && net_sched.device){
-		net_bh_active =0;
-		net_sched.device->ioctl(NETDEV_IOCTL_ENABLE_RECV_INTERRUPTS, 0);
-		pkt_consumed = net_sched.netRx_BH();
-	}
-
-	netbh_in_progress = 0;
-
-last:
-	return 1;
+	ret = net_bh_recv();
+	return ret;
 }
 int netif_thread(void *arg1, void *arg2) {
 	return net_sched.netRx_thread(arg1, arg2);
@@ -271,11 +293,13 @@ static int _remove_from_send_queue() {  /* under lock */
 	return ret;
 }
 
-static int process_send_queue() {
+static int process_send_queue(int duration, int max_pkts_tosend) {
 	unsigned long flags;
 	int ret = JFAIL;
 	int pkt_send = 0;
 	static int in_progress = 0;
+	static unsigned long last_active=0;
+	unsigned long ts;
 
 	if (get_send_qlen() == 0  || (in_progress == 1) ) {
 		return JFAIL;
@@ -292,7 +316,16 @@ static int process_send_queue() {
 		return ret;
 	}
 
-	while (_remove_from_send_queue() == JSUCCESS) {
+	if (duration > 0) {
+		ts = ut_get_systemtime_ns() / 1000;
+		if ((ts - last_active) < duration) {
+			in_progress = 0;
+			return JFAIL;
+		}
+		last_active = ts;
+	}
+
+	while (_remove_from_send_queue() == JSUCCESS  && (pkt_send < max_pkts_tosend)) {
 		pkt_send++;
 	}
 	if (pkt_send > 0) {
@@ -302,6 +335,7 @@ static int process_send_queue() {
 	if (socket::net_dev != 0 ){
 		socket::net_dev->ioctl(NETDEV_IOCTL_FLUSH_SENDBUF, 0);
 	}
+last:
 	in_progress = 0;
 	return ret;
 }
@@ -312,7 +346,8 @@ int net_send_eth_frame(unsigned char *buf, int len, int write_flags) {
 		if ((write_flags & WRITE_SLEEP_TILL_SEND)
 				&& (write_flags & WRITE_BUF_CREATED)) {
 			ret = put_to_send_queue(buf, len, write_flags);
-			process_send_queue();
+			//process_send_queue();
+			//netbh(1);
 			goto last;
 		} else {
 			ret = socket::net_dev->write(0, buf, len, write_flags);

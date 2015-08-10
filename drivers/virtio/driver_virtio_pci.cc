@@ -141,36 +141,56 @@ struct virtio_feature_desc vtnet_feature_desc[] = { { VIRTIO_NET_F_CSUM, "TxChec
 				VIRTIO_NET_F_HOST_ECN, "TxTSOECN" }, { VIRTIO_NET_F_HOST_UFO, "TxUFO" }, { VIRTIO_NET_F_MRG_RXBUF, "MrgRxBuf" }, {
 				VIRTIO_NET_F_STATUS, "Status" }, { VIRTIO_NET_F_CTRL_VQ, "ControlVq" }, { VIRTIO_NET_F_CTRL_RX, "RxMode" }, {
 				VIRTIO_NET_F_CTRL_VLAN, "VLanFilter" }, { VIRTIO_NET_F_CTRL_RX_EXTRA, "RxModeExtra" }, { VIRTIO_NET_F_MQ, "Multi queue" }, { 0, NULL } };
-static int virtio_net_poll_device(void *private_data, int enable_interrupt, int total_pkts) {
+#define BULK_RECV 1
+#ifdef BULK_RECV
+struct {
+	unsigned char *buf;
+	int len;
+}buf_list[1000];
+#endif
+int virtio_net_jdriver::virtio_net_poll_device( int total_pkts) {
 	unsigned char *addr;
 	unsigned int len = 0;
-	virtio_net_jdriver *driver = (virtio_net_jdriver *) private_data;
+	//virtio_net_jdriver *driver = (virtio_net_jdriver *) private_data;
 	unsigned char *replace_buf;
 	int i;
 	int ret = 0;
 
 	for (i = 0; i < total_pkts; i++) {
-		addr = driver->remove_buf_from_vq(driver->queues[0].recv,(int *)&len);
+		addr = remove_buf_from_vq(queues[0].recv,(int *)&len);
 		if (addr != 0) {
-			driver->stat_recvs++;
+			stat_recvs++;
 			replace_buf = 0;
-			//netif_rx(addr, len);
+#ifndef BULK_RECV
 			net_sched.netif_rx(addr, len);
-
-			driver->addBufToNetQueue(0,VQTYPE_RECV, replace_buf, 4096);
+#else
+			buf_list[ret].buf = addr;
+			buf_list[ret].len = len;
+#endif
+			addBufToNetQueue(0,VQTYPE_RECV, replace_buf, 4096);
 			ret = ret + 1;
+
 		} else {
 			break;
 		}
 	}
 	if (ret > 0) {
-		driver->queue_kick(driver->queues[0].recv);
+		queue_kick(queues[0].recv);
 	}
-	if (enable_interrupt && driver->recv_interrupt_disabled==0) {
-		virtio_enable_cb(driver->queues[0].recv);
+#ifdef BULK_RECV
+	for (i = 0; i < ret; i++) {
+		net_sched.netif_rx(buf_list[i].buf, buf_list[i].len);
+	}
+#endif
+
+#if 0
+	if (enable_interrupt && recv_interrupt_disabled==0) {
+		virtio_enable_cb(queues[0].recv);
 	}else{
 		//virtio_disable_cb(driver->queues[0].recv);
 	}
+#endif
+
 	return ret;
 }
 
@@ -196,9 +216,9 @@ static int virtio_net_recv_interrupt(void *private_data) {
 	}
 
     if (g_conf_netbh_enable == 1){  /* handing over the packets to net bx thread  */
-    	net_sched.netif_rx_enable_polling(private_data, virtio_net_poll_device);
+//    	net_sched.netif_rx_enable_polling(private_data, virtio_net_poll_device);
     }else{ /* without net bx  */
-    	virtio_net_poll_device(private_data,1,1000);
+  //  	virtio_net_poll_device(private_data,1,1000);
     }
 	return 0;
 
@@ -606,7 +626,7 @@ int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 		virtio_disable_cb(queues[0].recv);
 		recv_interrupt_disabled = 1;
 		if (g_conf_netbh_enable == 1){  /* handing over the packets to net bx thread  */
-		    	net_sched.netif_rx_enable_polling(this, virtio_net_poll_device);
+//		    	net_sched.netif_rx_enable_polling(this, virtio_net_poll_device);
 		 }
 	} else if (arg1 == NETDEV_IOCTL_ENABLE_RECV_INTERRUPTS){
 		virtio_enable_cb(queues[0].recv);
