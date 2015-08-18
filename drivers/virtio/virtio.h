@@ -183,6 +183,7 @@ int virtio_queuekick(struct virtqueue *vq);
 
 void *virtio_removeFromQueue(struct virtqueue *vq, unsigned int *len);
 
+
 void virtio_disable_cb(struct virtqueue *vq);
 
 bool virtio_enable_cb(struct virtqueue *vq);

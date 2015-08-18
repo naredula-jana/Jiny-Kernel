@@ -76,7 +76,7 @@ public:
 
 	jdevice *device;
 	int init();
-	int netRx_thread(void *arg, void *arg2);
+
 	int netRx_BH();
 	int netif_rx(unsigned char *data, unsigned int len);
 	int netif_rx_enable_polling(void *private_data, int (*poll_func)(void *private_data, int enable_interrupt, int total_pkts));

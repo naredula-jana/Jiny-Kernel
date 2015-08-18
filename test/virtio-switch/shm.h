@@ -11,6 +11,6 @@ void* init_shm(const char* path, size_t size, int idx);
 void* init_shm_from_fd(int fd, size_t size);
 int end_shm(const char* path, void* ptr, size_t size, int idx);
 
-int sync_shm(void* ptr, size_t size);
+int sync_shm();
 
 #endif /* SHM_H_ */

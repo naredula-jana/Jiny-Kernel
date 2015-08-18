@@ -15,7 +15,7 @@ LFLAGS = -lrt
 all: ${BIN}
 
 ${BIN}: ${SOURCES} ${HEADERS}
-		${CC} ${CFLAGS} ${SOURCES} -o $@ ${LFLAGS}
+		${CC} ${CFLAGS} ${SOURCES} -static -o $@ ${LFLAGS} -lpthread
 
 clean:
 		rm -rf ${BIN}

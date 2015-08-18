@@ -286,7 +286,15 @@ int ipc_mutex_destroy(void *p);
 #define mutexUnLock(p)      do { ipc_mutex_unlock((void *)p,__LINE__); } while (0)
 #define mutexDestroy ipc_mutex_destroy
 
-
+/*************************************** virtio interfaces ******************************/
+static inline void ar_prefetch0(volatile void *p)
+{
+	asm volatile ("prefetcht0 %[p]" : [p] "+m" (*(volatile char *)p));
+}
+struct struct_mbuf{
+		unsigned char *buf;
+		int len;
+};
 
 
 #endif

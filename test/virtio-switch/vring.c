@@ -17,64 +17,7 @@
 #include "vhost_user.h"
 
 #define VRING_IDX_NONE          ((uint16_t)-1)
-#if 0
-static struct vhost_vring* new_vring(void* vring_base)
-{
-    struct vhost_vring* vring = (struct vhost_vring*) vring_base;
-    int i = 0;
-    uintptr_t ptr = (uintptr_t) ((char*)vring + sizeof(struct vhost_vring));
-    size_t initialized_size = 0;
 
-    // Layout the descriptor table
-    for (i = 0; i < VHOST_VRING_SIZE; i++) {
-        // align the pointer
-        ptr = ALIGN(ptr, BUFFER_ALIGNMENT);
-
-        vring->desc[i].addr = ptr;
-        vring->desc[i].len = BUFFER_SIZE;
-        vring->desc[i].flags = VIRTIO_DESC_F_WRITE;
-        vring->desc[i].next = i+1;
-
-        ptr += vring->desc[i].len;
-    }
-
-    initialized_size = ptr - (uintptr_t)vring_base;
-
-    vring->desc[VHOST_VRING_SIZE-1].next = VRING_IDX_NONE;
-
-    vring->avail.idx = 0;
-    vring->used.idx =  0;
-
-
-    sync_shm(vring_base, initialized_size);
-
-    return vring;
-}
-
-int vring_table_from_memory_region(struct vhost_vring* vring_table[], size_t vring_table_num,
-        VhostUserMemory *memory)
-{
-    int i = 0;
-
-    /* TODO: here we assume we're putting each vring in a separate
-     * memory region from the memory map.
-     * In reality this probably is not like that
-     */
-    assert(vring_table_num == memory->nregions);
-
-    for (i = 0; i < vring_table_num; i++) {
-        struct vhost_vring* vring = new_vring(
-                (void*) (uintptr_t) memory->regions[i].guest_phys_addr);
-        if (!vring) {
-            fprintf(stderr, "Unable to create vring %d.\n", i);
-            return -1;
-        }
-        vring_table[i] = vring;
-    }
-
-    return 0;
-}
-#endif
 /* jana Changed below */
 int send_pkt(VringTable* vring_table, uint32_t v_idx,  void* input_buf, size_t size);
 unsigned long stat_send_succ=0;
@@ -154,7 +97,7 @@ int send_pkt(VringTable* vring_table, uint32_t v_idx,  void* input_buf, size_t s
     if (vring_table->vring[v_idx].last_used_idx == avail->idx){
     	if ((stat_send_err%2500000) ==0 ){
    // 	if (((vring_table->dropped % 200)==0) && vring_table->dropped!=0){
-    		fprintf(stdout, "%p: ERROR : No space in avail:%d ava  error:%d DROP:%d max_buf:%d\n",vring_table,avail->idx,stat_send_err,vring_table->dropped,MAX_BUFS);
+    		fprintf(stdout, "%p: ERROR : NO-SPACE in Avail:%d ava  error:%d DROP:%d max_buf:%d\n",vring_table,avail->idx,stat_send_err,vring_table->dropped,MAX_BUFS);
     	}
     	stat_send_err++;
         return -1;
@@ -219,11 +162,12 @@ int send_pkt(VringTable* vring_table, uint32_t v_idx,  void* input_buf, size_t s
     if  (used->flags == 0){
     	used->flags = 1;
     }
+    sync_shm();
     vring_table->vring[v_idx].last_used_idx++;
     used->idx = vring_table->vring[v_idx].last_used_idx;
     vring_table->vring[v_idx].last_avail_idx++;
+    sync_shm();
 
-    sync_shm(used, sizeof(struct vring_used));
     kick(vring_table,v_idx);
 #ifdef DUMP_PACKETS1
     fprintf(stdout, "  len=%d num:%d\n",len,num);
@@ -350,13 +294,14 @@ static int read_pkt(VhostServer* send_port,VringTable* vring_table, uint32_t v_i
     return 0;
 }
 
-int process_input_fromport(VhostServer* vhost_server,VhostServer* other_vhost_server)
+int process_input_fromport(VhostServer* vhost_server,VhostServer* send_vhost_server)
 {
 	int v_idx = VHOST_CLIENT_VRING_IDX_TX;
 	VringTable* vring_table= &vhost_server->vring_table;
     struct vring_avail* avail = vring_table->vring[v_idx].avail;
     struct vring_used* used = vring_table->vring[v_idx].used;
     unsigned int num = vring_table->vring[v_idx].num;
+    int loop;
 
     uint32_t count = 0;
     if (avail==0 || vhost_server->vring_table.vring[v_idx].avail==0){
@@ -365,49 +310,37 @@ int process_input_fromport(VhostServer* vhost_server,VhostServer* other_vhost_se
     uint16_t a_idx = vring_table->vring[v_idx].last_avail_idx % num;
 
     // Loop all avail descriptors
-    for (;;) {
+    for (loop=0; loop<10; loop++) {
         /* we reached the end of avail */
         if (vring_table->vring[v_idx].last_avail_idx == avail->idx) {
             break;
         }
 
-        read_pkt(other_vhost_server,vring_table, v_idx, a_idx);
+        read_pkt(send_vhost_server,vring_table, v_idx, a_idx);
         a_idx = (a_idx + 1) % num;
         vring_table->vring[v_idx].last_avail_idx++;
         vring_table->vring[v_idx].last_used_idx++;
         count++;
-        if (count > 100){
-            used->idx = vring_table->vring[v_idx].last_used_idx;
-            sync_shm(used, sizeof(struct vring_used));
+
 #ifdef DUMP_PACKETS1
             fprintf(stdout, "Recevied inside count :%d used->idx :%d \n",count,used->idx);
 #endif
-            count=0;
-        }
+
     }
     if (count ==0){
     	return 0;
     }
-
+	sync_shm();  /* all memory buffers are seen before used-idx is seen */
     used->idx = vring_table->vring[v_idx].last_used_idx;
+    sync_shm();  /* used->idx  need to seen by others */
 
-    sync_shm(used, sizeof(struct vring_used));
 #ifdef DUMP_PACKETS1
      fprintf(stdout, "vhost:%p Recevied count :%d used->idx :%d \n",(void *)vhost_server,count,used->idx);
 #endif
     return count;
 }
 
-int kick(VringTable* vring_table, uint32_t v_idx)
-{
-#if 0
-    uint64_t kick_it = 1;
-    int kickfd = vring_table->vring[v_idx].kickfd;
-
-
-    write(kickfd, &kick_it, sizeof(kick_it));
-    fsync(kickfd);
-#endif
+int kick(VringTable* vring_table, uint32_t v_idx){
 
 //printf("kicking :%d \n",v_idx);
     return 0;

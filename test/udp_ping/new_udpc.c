@@ -141,26 +141,18 @@ send_func() {
 		target_t = target_t + time_per_pkt;
 		curr_t = wait_till(target_t);
 	}
-	printf(" End time: %d ms sendpkts: %d \n", mtime() / 1000, send_pkts);
+	printf("Only sending End time: %d ms sendpkts: %d \n", mtime() / 1000, send_pkts);
 }
 unsigned char stack[9000];
 main(int argc, char *argv[]) {
 	pthread_t recv_thread; /* thread variables */
 	unsigned long sbps, rbps;
-	int port;
 	sfd = socket(AF_INET, SOCK_DGRAM, 0);
 	bzero(&server, sizeof(server));
 	server.sin_family = AF_INET;
 	server.sin_port = htons(1300);
-	port = 1300;
-#if 0
-	if (argc == 5){
-		server.sin_port = htons(atoi(argv[4]));
-		port = atoi(argv[4]);
-	}
-#endif
-	if (argc < 4) {
-		printf("./udp_client <server_ip> <pkt_size> <total_pkts> \n");
+	if (argc != 4) {
+		printf("./udp_client <server_ip> <pkt_size> <total_pkts>\n");
 		return 1;
 	}
 	inet_aton(argv[1], &server.sin_addr);
@@ -171,7 +163,7 @@ main(int argc, char *argv[]) {
 	int newMaxBuff = 0;
 	int len = sizeof(newMaxBuff);
 //getsockopt(sfd, SOL_SOCKET, SO_SNDBUF, &newMaxBuff, &len);
-	printf("sock buf size :%d  port :%d\n", newMaxBuff,port);
+	printf("sock buf size :%d \n", newMaxBuff);
 	newMaxBuff = 1024000;
 	setsockopt(sfd, SOL_SOCKET, SO_SNDBUF, &newMaxBuff, sizeof(newMaxBuff));
 //getsockopt(sfd, SOL_SOCKET, SO_SNDBUF, &newMaxBuff, &len);
@@ -181,13 +173,11 @@ main(int argc, char *argv[]) {
 		return 0;
 	}
 
-	//pthread_create(&recv_thread, NULL, (void *) &recv_thread_func, 0);
-	clone((void *) &recv_thread_func, &stack[4000], 9000, 0, 0);
 
 	send_func();
 	recv_stop = 1;
 
-	join();
+	//join();
 	//pthread_join(recv_thread, NULL);
 
 	sbps = (send_pkts * pkt_size * 8) / (duration * 1000000);

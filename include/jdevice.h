@@ -83,9 +83,12 @@ public:
 	uint32_t current_send_q;
 	spinlock_t virtionet_lock;
 
-	unsigned long remove_buf_from_vq(struct virtqueue *v_q,int *len);
+#define MAX_BULF_SIZE 1024
+	struct struct_mbuf mbuf_list[MAX_BULF_SIZE];
+
 	int addBufToNetQueue(int qno, int type, unsigned char *buf, unsigned long len);
-	int virtio_net_poll_device(int total_pkts);
+	int virtio_net_poll_device(int total_pkts); /* old version */
+	int virtio_dequeue_burst(int total_pkts);  /* new version */
 
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);
@@ -121,8 +124,6 @@ class virtio_disk_jdriver: public virtio_jdriver {
 
 	int disk_attach_device(jdevice *dev);
 	struct virtio_blk_req *createBuf(int type, unsigned char *buf,uint64_t sector,uint64_t data_len);
-	//int process_bufs(struct virtio_blk_req *req, int data_len);
-
 
 	void *scsi_addBufToQueue(int type, unsigned char *buf, uint64_t len, uint64_t sector,uint64_t data_len);
 	int disk_io(int type,unsigned char *buf, int len, int offset,int read_ahead);
@@ -134,11 +135,9 @@ public:
 	uint16_t max_vqs;
 	int interrupts_disabled;
 
-	//spinlock_t io_lock;
 	unsigned char *unfreed_req;
 	void addBufToQueue(struct virtio_blk_req *req,int transfer_len);
 
-//	struct virtqueue *vq[5];
 	wait_queue *waitq;
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);

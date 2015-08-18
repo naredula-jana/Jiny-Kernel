@@ -21,6 +21,7 @@
 #include "virtio_pci.h"
 #include "virtio_ring.h"
 #include "mach_dep.h"
+#include "interface.h"
 //#include "virtio_config.h"
 
 #define CONFIG_SMP 1
@@ -605,3 +606,70 @@ unsigned int virtqueue_get_vring_size(struct virtqueue *_vq)
 /**********************************************************************************/
 
 
+int virtio_BulkRemoveFromQueue(struct virtqueue *_vq, struct struct_mbuf *mbuf_list, int list_len){
+	struct vring_virtqueue *vq = to_vvq(_vq);
+	void *ret;
+	unsigned int i;
+	u16 pkts_length;
+	int count;
+
+	START_USE(vq);
+
+	if (unlikely(vq->broken)) {
+		END_USE(vq);
+		return 0;
+	}
+
+	pkts_length = vq->vring.used->idx - vq->last_used_idx;
+
+	if (pkts_length == 0){
+		END_USE(vq);
+		return 0;
+	}
+	/* Prefetch available ring to retrieve head indexes. */
+	ar_prefetch0(&vq->vring.used->ring[vq->last_used_idx % vq->vring.num]);
+
+	if (pkts_length > list_len){
+		pkts_length = (u16)list_len;
+	}
+	/* Only get used array entries after they have been exposed by host. */
+	virtio_rmb();
+
+	for (count = 0; count < pkts_length; count++) {
+		i = vq->vring.used->ring[vq->last_used_idx % vq->vring.num].id;
+		mbuf_list[count].len = vq->vring.used->ring[vq->last_used_idx
+				% vq->vring.num].len;
+
+		if (unlikely(i >= vq->vring.num)) {
+			//JANA removed BAD_RING(vq, "id %u out of range\n", i);
+			pr_debug("BAD RING -11 vq:%x \n",vq);
+			BRK
+				;
+			return 0;
+		}
+		ar_prefetch0(&vq->vring.desc[i]);
+		if (unlikely(!vq->data[i])) {
+			// JANA removed BAD_RING(vq, "id %u is not a head!\n", i);
+			pr_debug("BAD RING -22 vq:%x \n",vq);
+			BRK
+				;
+			return 0;
+		}
+		/* detach_buf clears data, so grab it now. */
+		mbuf_list[count].buf = vq->data[i];
+
+		vq->stat_free++;
+		detach_buf(vq, i);
+		vq->last_used_idx++;
+	}
+	/* If we expect an interrupt for the next entry, tell host
+	 * by writing event index and flush out the write before
+	 * the read in the next get_buf call. */
+	if (!(vq->vring.avail->flags & VRING_AVAIL_F_NO_INTERRUPT)) {
+		vring_used_event(&vq->vring) = vq->last_used_idx;
+		virtio_mb();
+	}
+
+	END_USE(vq);
+	return 1;
+}

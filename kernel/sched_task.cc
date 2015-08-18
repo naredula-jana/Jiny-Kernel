@@ -26,6 +26,7 @@ spinlock_t g_global_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"global");
 unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles per second  */
 unsigned long g_jiffie_errors = 0;
 unsigned long g_stat_idle_avoided = 0;
+int g_conf_hw_clock=1;  /* sometimes hw clock is very slow or not accurate , then jiffies can be used at the resoultion of 10ms */
 //unsigned long g_jiffie_tick = 0;
 
 static unsigned long free_pid_no = 1; // TODO need to make unique when  wrap around
@@ -33,7 +34,8 @@ static wait_queue *timer_queue;
 int g_conf_cpu_stats = 1;
 int g_conf_idle_cpuspin = 1;
 extern int g_conf_net_pmd;
-int g_conf_netbh_cpu=0;
+extern int g_net_interrupts_disable;
+extern int g_conf_netbh_cpu;
 int g_conf_dynamic_assign_cpu = 0; /* minimizes the IPI interrupt by reassigning the the task to running cpu */
 static int stat_dynamic_assign_errors = 1;
 
@@ -863,7 +865,7 @@ void timer_callback(void *unused_args) {
 	/* 1. increment timestamp */
 	if (getcpuid() == 0) {
 		unsigned long kvm_ticks = get_kvm_time_fromboot();
-		if (kvm_ticks != 0)  {
+		if (kvm_ticks != 0 && g_conf_hw_clock==1)  {
 			if (kvm_ticks > g_jiffies){
 				g_jiffies++;
 			}else{
@@ -1416,7 +1418,7 @@ void idleTask_func() {
 	}
 	while (1) {
 #if 1
-		if (g_conf_net_pmd == 1) {
+		if (g_conf_net_pmd == 1 && g_net_interrupts_disable==1) {
 			if (curr_cpu_tightloop == -1) {
 				curr_cpu_tightloop = g_conf_netbh_cpu;
 			}

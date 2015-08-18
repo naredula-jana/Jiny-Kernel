@@ -82,10 +82,11 @@ int end_shm(const char* path, void* ptr, size_t size, int idx)
     return 0;
 }
 
-int sync_shm(void* ptr, size_t size)
+int sync_shm()
 {
 	asm volatile("mfence":::"memory");
 	asm volatile("lfence":::"memory");
+	asm volatile("sfence":::"memory");
     //return msync(ptr, size, MS_SYNC | MS_INVALIDATE);
 	return 1;
 }

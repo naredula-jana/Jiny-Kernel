@@ -10,6 +10,7 @@
 
 #define FD_LIST_SIZE    10
 
+extern int thr_mode;
 struct FdNodeStruct;
 
 typedef int (*FdHandler)(struct FdNodeStruct* node);

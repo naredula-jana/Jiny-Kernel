@@ -24,7 +24,7 @@ extern "C" {
 extern int p9_initFs(void *p);
 extern void print_vq(struct virtqueue *_vq);
 extern int init_tarfs(jdriver *driver_arg);
-int g_conf_net_send_int_disable = 1;
+extern int g_conf_net_send_int_disable;
 
 atomic_t  g_conf_stat_pio = ATOMIC_INIT(0);
 }
@@ -141,33 +141,55 @@ struct virtio_feature_desc vtnet_feature_desc[] = { { VIRTIO_NET_F_CSUM, "TxChec
 				VIRTIO_NET_F_HOST_ECN, "TxTSOECN" }, { VIRTIO_NET_F_HOST_UFO, "TxUFO" }, { VIRTIO_NET_F_MRG_RXBUF, "MrgRxBuf" }, {
 				VIRTIO_NET_F_STATUS, "Status" }, { VIRTIO_NET_F_CTRL_VQ, "ControlVq" }, { VIRTIO_NET_F_CTRL_RX, "RxMode" }, {
 				VIRTIO_NET_F_CTRL_VLAN, "VLanFilter" }, { VIRTIO_NET_F_CTRL_RX_EXTRA, "RxModeExtra" }, { VIRTIO_NET_F_MQ, "Multi queue" }, { 0, NULL } };
-#define BULK_RECV 1
-#ifdef BULK_RECV
-struct {
-	unsigned char *buf;
-	int len;
-}buf_list[1000];
-#endif
+
+extern "C"{
+extern int virtio_BulkRemoveFromQueue(struct virtqueue *_vq, struct struct_mbuf *mbuf_list, int list_len);
+}
+int virtio_net_jdriver::virtio_dequeue_burst(int total_pkts){
+	unsigned char *addr;
+	unsigned int list_len = 32;
+	int i;
+	int ret = 0;
+	int recv_pkts=0;
+
+	if (total_pkts < list_len){
+		list_len = total_pkts;
+	}
+
+	recv_pkts=virtio_BulkRemoveFromQueue(queues[0].recv, &mbuf_list[0], list_len);
+
+	if (recv_pkts <= 0){
+		return 0;
+	}
+
+	for (i = 0; i < recv_pkts; i++) {
+		addBufToNetQueue(0,VQTYPE_RECV, 0, 4096);
+	}
+	if (ret > 0) {
+		queue_kick(queues[0].recv);
+	}
+
+	for (i = 0; i < recv_pkts; i++) {
+		net_sched.netif_rx(mbuf_list[i].buf, mbuf_list[i].len);
+	}
+
+	return ret;
+}
+
 int virtio_net_jdriver::virtio_net_poll_device( int total_pkts) {
 	unsigned char *addr;
 	unsigned int len = 0;
-	//virtio_net_jdriver *driver = (virtio_net_jdriver *) private_data;
-	unsigned char *replace_buf;
 	int i;
 	int ret = 0;
 
 	for (i = 0; i < total_pkts; i++) {
-		addr = remove_buf_from_vq(queues[0].recv,(int *)&len);
+		addr = virtio_removeFromQueue(queues[0].recv,(int *)&len);
 		if (addr != 0) {
 			stat_recvs++;
-			replace_buf = 0;
-#ifndef BULK_RECV
-			net_sched.netif_rx(addr, len);
-#else
-			buf_list[ret].buf = addr;
-			buf_list[ret].len = len;
-#endif
-			addBufToNetQueue(0,VQTYPE_RECV, replace_buf, 4096);
+
+			mbuf_list[ret].buf = addr;
+			mbuf_list[ret].len = len;
+			addBufToNetQueue(0,VQTYPE_RECV, 0, 4096);
 			ret = ret + 1;
 
 		} else {
@@ -177,19 +199,10 @@ int virtio_net_jdriver::virtio_net_poll_device( int total_pkts) {
 	if (ret > 0) {
 		queue_kick(queues[0].recv);
 	}
-#ifdef BULK_RECV
-	for (i = 0; i < ret; i++) {
-		net_sched.netif_rx(buf_list[i].buf, buf_list[i].len);
-	}
-#endif
 
-#if 0
-	if (enable_interrupt && recv_interrupt_disabled==0) {
-		virtio_enable_cb(queues[0].recv);
-	}else{
-		//virtio_disable_cb(driver->queues[0].recv);
+	for (i = 0; i < ret; i++) {
+		net_sched.netif_rx(mbuf_list[i].buf, mbuf_list[i].len);
 	}
-#endif
 
 	return ret;
 }
@@ -199,7 +212,8 @@ static int netdriver_xmit(unsigned char* data, unsigned int len, void *private_d
 	virtio_net_jdriver *net_driver = (virtio_net_jdriver *) private_data;
 	return net_driver->write(data, len, 0);
 }
-int g_conf_netbh_enable = 1;
+
+extern int g_net_bh_active;
 static int virtio_net_recv_interrupt(void *private_data) {
 	jdevice *dev;
 	virtio_net_jdriver *driver = (virtio_net_jdriver *) private_data;
@@ -215,11 +229,7 @@ static int virtio_net_recv_interrupt(void *private_data) {
 	  virtio_disable_cb(driver->queues[0].recv); /* disabling interrupts have Big negative impact on packet recived when smp enabled */
 	}
 
-    if (g_conf_netbh_enable == 1){  /* handing over the packets to net bx thread  */
-//    	net_sched.netif_rx_enable_polling(private_data, virtio_net_poll_device);
-    }else{ /* without net bx  */
-  //  	virtio_net_poll_device(private_data,1,1000);
-    }
+	g_net_bh_active = 1;
 	return 0;
 
 }
@@ -501,13 +511,7 @@ int virtio_net_jdriver::addBufToNetQueue(int qno, int type, unsigned char *buf, 
 
 	return ret;
 }
-unsigned long virtio_net_jdriver::remove_buf_from_vq(struct virtqueue *virt_q,int *len){
-	unsigned long addr;
 
-	addr = (unsigned long) virtio_removeFromQueue(virt_q, (unsigned int *) len);
-
-	return addr;
-}
 int virtio_net_jdriver::free_send_bufs(){
 	int i;
 	unsigned long flags;
@@ -521,7 +525,7 @@ int virtio_net_jdriver::free_send_bufs(){
 		while (i < 50) {
 			i++;
 			spin_lock_irqsave(&virtionet_lock, flags);
-			addr = remove_buf_from_vq(queues[qno].send, &len);
+			addr = virtio_removeFromQueue(queues[qno].send, &len);
 			spin_unlock_irqrestore(&virtionet_lock, flags);
 			if (addr != 0) {
 				free_page(addr);
@@ -535,7 +539,7 @@ int virtio_net_jdriver::free_send_bufs(){
 	}
 	return ret;
 }
-int g_conf_net_sendbuf_delay=0;
+
 int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 	jdevice *dev;
 	int i, ret;
@@ -625,9 +629,7 @@ int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 	} else if (arg1 == NETDEV_IOCTL_DISABLE_RECV_INTERRUPTS){
 		virtio_disable_cb(queues[0].recv);
 		recv_interrupt_disabled = 1;
-		if (g_conf_netbh_enable == 1){  /* handing over the packets to net bx thread  */
-//		    	net_sched.netif_rx_enable_polling(this, virtio_net_poll_device);
-		 }
+
 	} else if (arg1 == NETDEV_IOCTL_ENABLE_RECV_INTERRUPTS){
 		virtio_enable_cb(queues[0].recv);
 		recv_interrupt_disabled = 0;

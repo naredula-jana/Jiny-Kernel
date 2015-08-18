@@ -22,6 +22,10 @@ int recv_stop = 0;
 int send_on = 1;
 struct sockaddr_in server, client;
 unsigned long send_pkts, recv_pkts, pkt_size, total_pkts;
+#define MAX_LOG_PKTS 10000
+struct {
+	unsigned long sec,usec;
+}pkt_log[MAX_LOG_PKTS];
 
 void recv_func() {
 	char buf[1424] = "";
@@ -31,7 +35,7 @@ void recv_func() {
 	fd_set readSet;
 	FD_ZERO(&readSet);
 
-	struct timeval timeout;
+	struct timeval timeout,td;
 
 	while (recv_stop == 0) {
 		FD_SET(sfd, &readSet);
@@ -41,6 +45,11 @@ void recv_func() {
 	//	rc = select(sfd + 1, &readSet, NULL, NULL, &timeout);
 		if (rc != 0) {
 			ret = recvfrom(sfd, buf, 1224, 0, (struct sockaddr *) &client, &l);
+			if (recv_pkts <MAX_LOG_PKTS){
+				gettimeofday(&td, (struct timezone *) 0);
+				pkt_log[recv_pkts].sec = td.tv_sec;
+				pkt_log[recv_pkts].usec = td.tv_usec;
+			}
 			if (ret > 0 && (send_on == 1)) {
 				ret = sendto(sfd, buf, ret, 0, (struct sockaddr *) &client,
 						sizeof(client));
@@ -79,10 +88,35 @@ unsigned long wait_till(unsigned long ts) {
 }
 int duration = 30;
 
+#define MAX_DIFFS 1000
+unsigned long usec_diff[MAX_DIFFS];
 void sigTerm(int s) {
+	int i;
 
 	printf("send_on:%d pktsize:%d send:%d recved:%d recvMbps: %d \n", send_on,
 			pkt_size, send_pkts, recv_pkts, (recv_pkts * 8) / (30 * 1000));
+
+	for (i=0; i<MAX_DIFFS; i++){
+		usec_diff[i]=0;
+	}
+	for (i=10; i<MAX_LOG_PKTS ; i++){
+		if (pkt_log[i].sec==pkt_log[i-1].sec){
+			int diff=pkt_log[i].usec-pkt_log[i-1].usec;
+			if (diff < MAX_DIFFS && diff > 0){
+				usec_diff[diff]++;
+			}
+		}
+		printf(" %d : sec: %d usec: %d \n",i,pkt_log[i].sec,pkt_log[i].usec-pkt_log[i-1].usec);
+	}
+	int total=0;
+	for (i=0; i<MAX_DIFFS; i++){
+		if (usec_diff[i]==0) continue;
+		total=total+usec_diff[i];
+		if (usec_diff[i] > 10){
+			printf(" %d  -> %d  \n",i,usec_diff[i]);
+		}
+	}
+	printf(" Total :%d\n",total);
 	send_pkts = 0;
 	recv_pkts = 0;
 

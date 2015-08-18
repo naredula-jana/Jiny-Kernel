@@ -236,6 +236,7 @@ int ipc_mutex_unlock(void *p, int line) {
 int init_ipc(unsigned long arg){
 	int i;
 
+	ut_log("Initilizing the IPC ... \n");
 	for (i = 0; i < MAX_MUTEXS; i++) {
 		stat_semaphores[i] = 0;
 	}
@@ -486,6 +487,7 @@ wait_queue::wait_queue( char *arg_name, unsigned long arg_flags) {
 			name = arg_name;
 
 			wait_queue::wait_queues[i] = this;
+			ut_log(" Initalled new waitqueue at:%d %s \n",i,arg_name);
 			used_for = 0;
 			flags = arg_flags;
 			goto last;
@@ -504,6 +506,7 @@ int wait_queue::unregister() {
 		if (wait_queue::wait_queues[i] == this) {
 			/*TODO:  remove the tasks present in the queue */
 			wait_queues[i] = 0;
+			ut_log(" UNINSTALLED  waitqueue at:%d \n",i);
 			goto last;
 		}
 	}

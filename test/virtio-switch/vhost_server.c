@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #include "fd_list.h"
 #include "shm.h"
@@ -168,7 +169,7 @@ static int _set_mem_table(VhostServer* vhost_server, ServerMsg* msg)
 
 #if 1  /* JANA added temporary fix for qemu 2.3.0 */
             region->memory_size = 268435456 ;
-            printf("  Temporay FIX .... : %x \n",region->memory_size);
+            printf("  Temporay FIX .... :%p \n",(void *)region->memory_size);
 #endif
 
             assert(idx < msg->fd_num);
@@ -396,36 +397,57 @@ static int in_msg_server(void* context, ServerMsg* msg)
     return result;
 }
 int send_cached_pkts(VhostServer* port,  void* input_buf, size_t size);
-int poll_server(void* context, void *other_context){
+int poll_server(void* context, void *send_context){
 	int ret=0;
     VhostServer* port = (VhostServer*) context;
-    VhostServer* other_port = (VhostServer*) other_context;
- //   int tx_idx = VHOST_CLIENT_VRING_IDX_TX;
+    VhostServer* send_port = (VhostServer*) send_context;
     int rx_idx = VHOST_CLIENT_VRING_IDX_RX;
 
     if (port->vring_table.vring[rx_idx].desc) {
-        	ret =process_input_fromport(port,other_port);
+        	ret =process_input_fromport(port,send_port);
     }
-    ret = ret + send_cached_pkts(port,0,0);
-    ret = ret + send_cached_pkts(other_port,0,0);
+    ret = ret + send_cached_pkts(send_port,0,0);
     return ret;
 }
-
+extern unsigned long stat_recv_succ;
+extern unsigned long stat_recv_err;
+extern unsigned long stat_send_succ;
+extern uint32_t stat_send_err;
+void sigTerm(int s) {
+	print_rings("PORT1: ",port1_handlers.context);
+	print_rings("PORT2: ",port2_handlers.context);
+	printf(" SIGNAL recved :\n");
+	printf(" send succ :%lu err:%d  recv: succ:%lu err:%lu\n",stat_send_succ,stat_send_err,stat_recv_succ,stat_recv_err);
+}
 void print_rings(char *str,VhostServer* vhost_server){
 	int i;
-
+if (vhost_server ==0){
+	printf("vhost server is EMPTY\n");
+	return;
+}
 	for (i=0; i<2; i++){
 		struct vring_avail *avail=vhost_server->vring_table.vring[i].avail;
 		struct vring_used *used=vhost_server->vring_table.vring[i].used;
+		printf(" avail :%p used:%p \n",avail,used);
 		if (avail!=0 && used!=0){
 			printf("%s  %d: AAvail(%p) inx:%d flag:%x   Used(%p) idx:%d flag:%x  desc:(%p)\n",str,i,(void *)avail,avail->idx,avail->flags,(void *)used,used->idx,used->flags,vhost_server->vring_table.vring[i].desc);
 		}
 	}
 }
+
+VhostServer* g_ports[10];
+void *thr_server(void *unused){
+	int sleep=0;
+
+	while (app_running) {
+		 loop_server(g_ports[1]->server,g_ports[0]->server,sleep);
+	}
+	return 0;
+}
 int run_vhost_server(VhostServer* port1,VhostServer* port2)
 {
-	int ret=0;
-	int sleep;
+	//int ret=0;
+	int sleep=0;
     port1_handlers.context = port1;
     port2_handlers.context = port2;
     set_handler_server(port1->server, &port1_handlers);
@@ -439,16 +461,20 @@ port1->vring_table.start_i =0;
 port2->vring_table.start_i =0;
 port1->vring_table.end_i =0;
 port2->vring_table.end_i =0;
+g_ports[1] = port2;
+g_ports[0] = port1;
+
+	pthread_t t[2];
+	if (thr_mode == 1){
+		pthread_create(&t[0],NULL,thr_server,NULL);
+		printf(" THread is creating ... \n");
+	}
+
     while (app_running) {
-    	//print_rings("Before ",port1);
-        ret = loop_server(port1->server,port2->server,sleep);
-        ret = ret + loop_server(port2->server,port1->server,sleep);
-        if (ret == 0){
-        	//sleep =1;
-        	sleep =0;
-        }else{
-        	sleep =0;
-        }
+        loop_server(g_ports[0]->server,g_ports[1]->server,sleep);
+    	if (thr_mode == 0){
+    		loop_server(g_ports[1]->server,g_ports[0]->server,sleep);
+    	}
     }
     stop_stat(&port1->stat);
     stop_stat(&port2->stat);

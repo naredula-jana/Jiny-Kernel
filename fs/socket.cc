@@ -102,6 +102,7 @@ void fifo_queue::init(unsigned char *arg_name,int wq_enable){
 	waitq =0;
 	if (wq_enable){
 		waitq = jnew_obj(wait_queue, "socket_waitq", 0);
+		ut_log(" INitilizing the default socket waitQ\n");
 	}
 }
 void fifo_queue::free(){
@@ -139,8 +140,8 @@ last:
 	if (ret == JFAIL){
 		if (freebuf_on_full){
 			jfree_page(buf);
+			stat_drop++;
 		}
-		stat_drop++;
 	}else{
 		if (waitq){
 			waitq->wakeup();
@@ -391,10 +392,13 @@ int socket::init_socket(int type){
 		network_conn.protocol = IPPROTO_TCP;
 		ret = net_stack->open(&network_conn,1);
 	} else{
+		ret = JSUCCESS;
 		network_conn.protocol = 0;
 	}
 	if (ret == JFAIL){
 		queue.free();
+		ut_log("ERROR:   socket OPen fails \n");
+		ut_printf("ERROR:  socket OPen fails \n");
 	}
 	count.counter = 1;
 
@@ -502,7 +506,7 @@ int SYS_socket(int family, int arg_type, int z) {
 
 	if (arg_type > 2 ){
 		SYSCALL_DEBUG("socket : type not supported\n");
-		return -1;
+		return SYSCALL_FAIL;
 	}
 	return SYS_fs_open("/dev/sockets", arg_type, 0);
 }
@@ -514,8 +518,11 @@ int SYS_bind(int fd, struct sockaddr *addr, int len) {
 	}
 
 	struct file *file = g_current_task->fs->filep[fd];
-	if (file == 0)
+	if (file == 0){
+		ut_log(" Bind Fails \n");
+		ut_printf(" Bind Fails \n");
 		return SYSCALL_FAIL;
+	}
 
 	struct socket *sock = (struct socket *) file->vinode;
 	ret = 0;

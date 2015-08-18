@@ -87,7 +87,7 @@ int vring_table_from_memory_region(struct vhost_vring* vring_table[], size_t vri
 int set_host_vring(Client* client, struct vhost_vring *vring, int index);
 
 int set_host_vring_table(struct vhost_vring* vring_table[], size_t vring_table_num, Client* client);
-#define MAX_BUFS 1024
+#define MAX_BUFS 10240
 typedef struct {
     ProcessHandler handler;
     Vring vring[VHOST_CLIENT_VRING_NUM];

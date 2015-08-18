@@ -91,6 +91,7 @@ Host to vm: on a highend hardware.
    
    1. **Test-1**: between two jiny vm's with user based switch using virtio-user :  able to transfer and recv 300 Mbps(bi-directional) with 200bytes packet size.
    2. **Test-2**: between two linux vm's with linux bridge using virtio-vhost :  able to transfer and recv 148 Mbps(bi-directional) with 200bytes packet size.
+   3. **Test-3**: between two jiny vm's with user based switch using virtio-user, with NUMA tunning(memory and cpu on the same node with cpu pinning) :  able to transfer and recv 330-350 Mbps(bi-directional) with 200bytes packet size.
    
    Further Improvements in userspace bridge:
    1. bridge and vm pinning to a particular cpu with NUMA friendly. this can help in cpu cache and gives better throughput.

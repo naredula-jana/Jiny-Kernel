@@ -105,6 +105,7 @@ unsigned long SYS_fs_open(char *filename, int mode, int flags) {
 	goto last;
 
 fail:
+	ret = SYSCALL_FAIL;
 	if (filep != 0)
 		fs_close(filep);
 

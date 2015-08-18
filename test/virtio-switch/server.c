@@ -180,20 +180,21 @@ static int accept_sock_server(FdNode* node)
     return status;
 }
 int poll_server(void* context, void *other_context);
+
 int loop_server(Server* port,Server* other_port,int sleep)
 {
 	int ret =0;
 	int i=0;
 
     ret = traverse_fd_list(&port->fd_list,sleep);
-   // if (port->handlers.poll_handler) {
+
     while(i<5000000){
-       // ret = ret + port->handlers.poll_handler(port->handlers.context,other_port->handlers.context);
         ret = ret + poll_server(port->handlers.context,other_port->handlers.context);
-        ret = ret + poll_server(other_port->handlers.context,port->handlers.context);
+        if (thr_mode == 0){
+        	ret = ret + poll_server(other_port->handlers.context,port->handlers.context);
+        }
         i++;
     }
-
 
     return ret;
 }

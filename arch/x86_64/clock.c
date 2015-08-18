@@ -153,7 +153,7 @@ static  unsigned long __native_read_tsc(void)
 unsigned long test_time_updates=0;
 static spinlock_t	time_spinlock;
 
-unsigned long ut_get_percpu_ns() {  /* get percpu nano seconds */
+static unsigned long get_percpu_ns() {  /* get percpu nano seconds */
 	unsigned long time;
 	unsigned long intr_flags;
 	uint32_t version;
@@ -173,12 +173,17 @@ unsigned long ut_get_percpu_ns() {  /* get percpu nano seconds */
 
 	return time;
 }
+extern int g_conf_hw_clock;
 unsigned long ut_get_systemtime_ns(){ /* returns nano seconds */
 	unsigned long time;
 	unsigned long intr_flags;
 	uint32_t version;
 
-	time = ut_get_percpu_ns();
+	if (g_conf_hw_clock == 1){
+		time = get_percpu_ns();
+	}else{
+		time = g_jiffies * 10 * 1000 * 1000 ;
+	}
   /* storing the time to make sure this function returns the increasing value of time from any cpu, always monotonic. */
 	spin_lock_irqsave(&(time_spinlock), intr_flags);
 	if (time <= stored_system_times[0]){

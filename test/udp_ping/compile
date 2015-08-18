@@ -1,2 +1,3 @@
 gcc -g  -static udp_client.c -lpthread -o udp_client
 gcc -g  -static udp_server.c -lpthread -o udp_server
+gcc -g  -static new_udpc.c -lpthread -o udpc
