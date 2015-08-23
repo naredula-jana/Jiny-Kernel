@@ -144,7 +144,7 @@ unsigned long SYS_fs_fadvise(unsigned long fd,unsigned long offset, unsigned lon
 /* Utilities */
 void ut_getBackTrace(unsigned long *rbp, unsigned long task_addr, backtrace_t *bt);
 int perf_stat_rip_hit(unsigned long rip);
-unsigned long get_kvm_time_fromboot();
+
 void apic_set_task_priority(uint8_t prio);
 void apic_reenable();
 void *get_keyboard_device(int device_type,int file_type);

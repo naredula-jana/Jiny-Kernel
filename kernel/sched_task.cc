@@ -26,8 +26,8 @@ spinlock_t g_global_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"global");
 unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles per second  */
 unsigned long g_jiffie_errors = 0;
 unsigned long g_stat_idle_avoided = 0;
-int g_conf_hw_clock=1;  /* sometimes hw clock is very slow or not accurate , then jiffies can be used at the resoultion of 10ms */
-//unsigned long g_jiffie_tick = 0;
+
+void ar_update_jiffie();
 
 static unsigned long free_pid_no = 1; // TODO need to make unique when  wrap around
 static wait_queue *timer_queue;
@@ -858,22 +858,10 @@ int do_softirq() {
 	return JSUCCESS;
 }
 #endif
-//unsigned long kvm_ticks=0;
-
 void timer_callback(void *unused_args) {
-
 	/* 1. increment timestamp */
 	if (getcpuid() == 0) {
-		unsigned long kvm_ticks = get_kvm_time_fromboot();
-		if (kvm_ticks != 0 && g_conf_hw_clock==1)  {
-			if (kvm_ticks > g_jiffies){
-				g_jiffies++;
-			}else{
-				g_jiffie_errors++;
-			}
-		} else {
-			g_jiffies++;
-		}
+		ar_update_jiffie();
 	}
 
 	if (g_jiffies > g_current_task->last_jiffie){
@@ -1399,7 +1387,7 @@ repeat:
  	 g_cpu_state[cpuid].task_on_wait = 0;
  	 return 1;
 }
-extern int init_vcputime(int cpu_id);
+extern int init_clock(int cpu_id);
 
 int curr_cpu_tightloop = -1;
 void idleTask_func() {
@@ -1411,11 +1399,11 @@ void idleTask_func() {
 		;
 	//init_code_readonly(0); /* TODO:HARDCODED */
 
+
 	ut_log("Idle Thread Started cpuid: %d stack addrss:%x \n", getcpuid(), &k);
 	cpu = getcpuid();
-	if (cpu != 0){
-		init_vcputime(cpu);
-	}
+	init_clock(cpu);
+
 	while (1) {
 #if 1
 		if (g_conf_net_pmd == 1 && g_net_interrupts_disable==1) {

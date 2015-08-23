@@ -67,7 +67,6 @@ public:
 	NEW_OBJ->device = jdev;
 
 class virtio_net_jdriver: public virtio_jdriver {
-
 	int net_attach_device();
 	int free_send_bufs();
 
@@ -83,12 +82,16 @@ public:
 	uint32_t current_send_q;
 	spinlock_t virtionet_lock;
 
-#define MAX_BULF_SIZE 1024
-	struct struct_mbuf mbuf_list[MAX_BULF_SIZE];
+#define MAX_BULF_SIZE 64
+	struct struct_mbuf recv_mbuf_list[MAX_BULF_SIZE];
+	struct struct_mbuf send_mbuf_list[MAX_BULF_SIZE];
+	int send_mbuf_start;
+	int send_mbuf_len;
 
 	int addBufToNetQueue(int qno, int type, unsigned char *buf, unsigned long len);
 	int virtio_net_poll_device(int total_pkts); /* old version */
-	int virtio_dequeue_burst(int total_pkts);  /* new version */
+	int dequeue_burst(int total_pkts);  /* new version */
+	int send_burst();  /* new version */
 
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);

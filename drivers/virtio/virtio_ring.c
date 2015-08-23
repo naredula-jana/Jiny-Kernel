@@ -20,6 +20,7 @@
 #include "virtio.h"
 #include "virtio_pci.h"
 #include "virtio_ring.h"
+#include "net/virtio_net.h"
 #include "mach_dep.h"
 #include "interface.h"
 //#include "virtio_config.h"
@@ -227,12 +228,6 @@ int virtio_add_buf_to_queue(struct virtqueue *_vq,
 	BUG_ON(out + in == 0);
 
 	if (vq->num_free < (out + in)) {
-#if 0
-		pr_debug("Can't add buf len %i - avail = %i  in:%d vringnum:%d\n",
-			 out + in, vq->num_free, in,  vq->vring.num);
-		print_vq(_vq);
-	//	while(1);
-#endif
 		/* FIXME: for historical reasons, we force a notify here if
 		 * there are outgoing parts to the buffer.  Presumably the
 		 * host should service the ring ASAP. */
@@ -456,33 +451,6 @@ bool virtqueue_enable_cb_delayed(struct virtqueue *_vq)
 	return true;
 }
 
-#if 0
-void *virtqueue_detach_unused_buf(struct virtqueue *_vq)
-{
-	struct vring_virtqueue *vq = to_vvq(_vq);
-	unsigned int i;
-	void *buf;
-
-	START_USE(vq);
-
-	for (i = 0; i < vq->vring.num; i++) {
-		if (!vq->data[i])
-			continue;
-		/* detach_buf clears data, so grab it now. */
-		buf = vq->data[i];
-		detach_buf(vq, i);
-		vq->vring.avail->idx--;
-		END_USE(vq);
-		return buf;
-	}
-	/* That should have freed everything. */
-	BUG_ON(vq->num_free != vq->vring.num);
-
-	END_USE(vq);
-	return NULL;
-}
-#endif
-
 irqreturn_t vring_interrupt(int irq, void *_vq)
 {
 	struct vring_virtqueue *vq = to_vvq(_vq);
@@ -608,7 +576,7 @@ unsigned int virtqueue_get_vring_size(struct virtqueue *_vq)
 
 int virtio_BulkRemoveFromQueue(struct virtqueue *_vq, struct struct_mbuf *mbuf_list, int list_len){
 	struct vring_virtqueue *vq = to_vvq(_vq);
-	void *ret;
+	int ret=0;
 	unsigned int i;
 	u16 pkts_length;
 	int count;
@@ -661,6 +629,7 @@ int virtio_BulkRemoveFromQueue(struct virtqueue *_vq, struct struct_mbuf *mbuf_l
 		vq->stat_free++;
 		detach_buf(vq, i);
 		vq->last_used_idx++;
+		ret++;
 	}
 	/* If we expect an interrupt for the next entry, tell host
 	 * by writing event index and flush out the write before
@@ -671,5 +640,84 @@ int virtio_BulkRemoveFromQueue(struct virtqueue *_vq, struct struct_mbuf *mbuf_l
 	}
 
 	END_USE(vq);
-	return 1;
+	return ret;
+}
+int virtio_add_Bulk_to_queue(struct virtqueue *_vq,  struct struct_mbuf *mbuf_list, int list_len){
+	struct vring_virtqueue *vq = to_vvq(_vq);
+	unsigned int i, avail, uninitialized_var(prev);
+	int head,index,len,ret=0;
+	struct scatterlist *sg;
+	struct scatterlist sg_list[2];
+	 unsigned char *data;
+
+	START_USE(vq);
+	for (index = 0; index < list_len; index++) {
+		unsigned int out = 2;
+		unsigned int in = 0;
+		data = mbuf_list[index].buf-10 ;
+		len = mbuf_list[index].len + 10;
+		ut_memset(data, 0, sizeof(struct virtio_net_hdr));
+
+		sg_list[0].page_link = (unsigned long) data;
+		sg_list[0].length = sizeof(struct virtio_net_hdr);
+		sg_list[0].offset = 0;
+		sg_list[1].page_link = (unsigned long) (data
+				+ sizeof(struct virtio_net_hdr));
+		sg_list[1].length = len - sizeof(struct virtio_net_hdr);
+		sg_list[1].offset = 0;
+		sg = &sg_list[0];
+
+		/* If the host supports indirect descriptor tables, and we have multiple
+		 * buffers, then go indirect. FIXME: tune this threshold */
+		if (vq->indirect && (out + in) > 1 && vq->num_free) {
+			head = vring_add_indirect(vq, sg, out, in, 0);
+			if (likely(head >= 0))
+				goto add_head;
+		}
+
+		BUG_ON(out + in > vq->vring.num);
+		BUG_ON(out + in == 0);
+
+		if (vq->num_free < (out + in)) {
+			goto last;
+		}
+
+		/* We're about to use some buffers from the free list. */
+		vq->num_free -= (out + in);
+
+		head = vq->free_head;
+		for (i = vq->free_head; out; i = vq->vring.desc[i].next, out--) {
+			vq->vring.desc[i].flags = VRING_DESC_F_NEXT;
+			vq->vring.desc[i].addr = sg_phys(sg);
+			vq->vring.desc[i].len = sg->length;
+			prev = i;
+			sg++;
+		}
+
+		/* Last one doesn't continue. */
+		vq->vring.desc[prev].flags &= ~VRING_DESC_F_NEXT;
+
+		/* Update free pointer */
+		vq->free_head = i;
+
+add_head:
+		/* Set token. */
+		if (vq->data[head] != 0) {
+			BRK;
+		}
+		vq->data[head] = data;
+		vq->stat_alloc++;
+
+		/* Put entry in available array (but don't update avail->idx until they
+		 * do sync).  FIXME: avoid modulus here? */
+		avail = (vq->vring.avail->idx + vq->num_added++) % vq->vring.num;
+		vq->vring.avail->ring[avail] = head;
+		ret++;
+	}
+last:
+	if (ret > 0){
+		sync_avial_idx(vq);
+	}
+	END_USE(vq);
+	return ret;
 }

@@ -144,8 +144,9 @@ struct virtio_feature_desc vtnet_feature_desc[] = { { VIRTIO_NET_F_CSUM, "TxChec
 
 extern "C"{
 extern int virtio_BulkRemoveFromQueue(struct virtqueue *_vq, struct struct_mbuf *mbuf_list, int list_len);
+extern int virtio_add_Bulk_to_queue(struct virtqueue *_vq,  struct struct_mbuf *mbuf_list, int list_len);
 }
-int virtio_net_jdriver::virtio_dequeue_burst(int total_pkts){
+int virtio_net_jdriver::dequeue_burst(int total_pkts){
 	unsigned char *addr;
 	unsigned int list_len = 32;
 	int i;
@@ -156,7 +157,7 @@ int virtio_net_jdriver::virtio_dequeue_burst(int total_pkts){
 		list_len = total_pkts;
 	}
 
-	recv_pkts=virtio_BulkRemoveFromQueue(queues[0].recv, &mbuf_list[0], list_len);
+	recv_pkts=virtio_BulkRemoveFromQueue(queues[0].recv, &recv_mbuf_list[0], list_len);
 
 	if (recv_pkts <= 0){
 		return 0;
@@ -165,12 +166,12 @@ int virtio_net_jdriver::virtio_dequeue_burst(int total_pkts){
 	for (i = 0; i < recv_pkts; i++) {
 		addBufToNetQueue(0,VQTYPE_RECV, 0, 4096);
 	}
-	if (ret > 0) {
+	if (recv_pkts > 0) {
 		queue_kick(queues[0].recv);
 	}
 
 	for (i = 0; i < recv_pkts; i++) {
-		net_sched.netif_rx(mbuf_list[i].buf, mbuf_list[i].len);
+		net_sched.netif_rx(recv_mbuf_list[i].buf, recv_mbuf_list[i].len);
 	}
 
 	return ret;
@@ -187,8 +188,8 @@ int virtio_net_jdriver::virtio_net_poll_device( int total_pkts) {
 		if (addr != 0) {
 			stat_recvs++;
 
-			mbuf_list[ret].buf = addr;
-			mbuf_list[ret].len = len;
+			recv_mbuf_list[ret].buf = addr;
+			recv_mbuf_list[ret].len = len;
 			addBufToNetQueue(0,VQTYPE_RECV, 0, 4096);
 			ret = ret + 1;
 
@@ -201,7 +202,7 @@ int virtio_net_jdriver::virtio_net_poll_device( int total_pkts) {
 	}
 
 	for (i = 0; i < ret; i++) {
-		net_sched.netif_rx(mbuf_list[i].buf, mbuf_list[i].len);
+		net_sched.netif_rx(recv_mbuf_list[i].buf, recv_mbuf_list[i].len);
 	}
 
 	return ret;
@@ -451,6 +452,7 @@ int virtio_net_jdriver::net_attach_device() {
 	pending_kick_onsend =0;
 	recv_interrupt_disabled = 0;
 
+	send_mbuf_start = send_mbuf_len = 0;
 	virtio_set_pcistatus(pci_ioaddr, virtio_get_pcistatus(pci_ioaddr) + VIRTIO_CONFIG_S_DRIVER_OK);
 	INIT_LOG("		VirtioNet:  Initialization Completed status:%x\n", virtio_get_pcistatus(pci_ioaddr));
 
@@ -539,7 +541,53 @@ int virtio_net_jdriver::free_send_bufs(){
 	}
 	return ret;
 }
+int virtio_net_jdriver::send_burst() {
+	int qno,i, ret=0;
+	unsigned long flags;
 
+	if (send_mbuf_len == 0 ){
+		return ret;
+	}
+
+	spin_lock_irqsave(&virtionet_lock, flags);
+	for (qno=0; qno<max_vqs; qno++){  /* try to send from the same queue , if it full then try on the subsequent one, in this way kicks will be less */
+		ret = virtio_add_Bulk_to_queue(queues[qno].send, &send_mbuf_list[send_mbuf_start],send_mbuf_len);
+	//	ret = virtio_add_Bulk_to_queue(queues[qno].send, &send_mbuf_list[send_mbuf_start],1);
+#if 0
+		ret = addBufToNetQueue(qno,VQTYPE_SEND, (unsigned char *) send_mbuf_list[send_mbuf_start].buf-10, send_mbuf_list[send_mbuf_start].len + 10);
+		if (ret == -ERROR_VIRTIO_ENOSPC){
+				continue;
+			}
+		ret =1;
+#endif
+		if (ret == 0){
+			continue;
+		}
+		queues[qno].pending_send_kick = 1;
+		break;
+	}
+
+	if (ret < 0) {
+		ret=0;
+	}
+	if (ret == 0) {
+		stat_err_nospace++;
+	}else{
+		if (ret == send_mbuf_len){ /* empty the mbuf_list */
+			send_mbuf_start = 0;
+			send_mbuf_len = 0;
+		}else{
+			send_mbuf_start = send_mbuf_start + ret;
+			send_mbuf_len = send_mbuf_len - ret;
+		}
+		pending_kick_onsend = 1;
+		stat_sends++;
+	}
+	spin_unlock_irqrestore(&virtionet_lock, flags);
+
+	free_send_bufs();
+	return ret;  /* Here Sucess indicates the buffer is freed or consumed */
+}
 int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 	jdevice *dev;
 	int i, ret;
@@ -550,18 +598,8 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 	if (dev == 0 || data == 0)
 		return JFAIL;
 
-	if (wr_flags & WRITE_BUF_CREATED) {
-		addr = data-10;
-	} else {
-		addr = (unsigned long) jalloc_page(MEM_NETBUF);
-		if (addr == 0){
-			return JFAIL;
-		}
-		stat_allocs++;
-		ut_memset((unsigned char *) addr, 0, 10);
-		ut_memcpy((unsigned char *) addr + 10, data, len);
-	}
-
+	//if (wr_flags & WRITE_BUF_CREATED) {
+	addr = data-10;
 	ret = -ERROR_VIRTIO_ENOSPC;
 
 	//current_send_q++;  /* alternate packet on each */

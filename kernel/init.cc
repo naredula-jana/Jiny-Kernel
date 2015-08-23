@@ -264,7 +264,7 @@ void cmain() {  /* This is the first c function to be executed */
 	sc_createKernelThread(shell_main, 0, (unsigned char *)"shell_main",0);
 	sc_createKernelThread(housekeeper_thread, 0, (unsigned char *)"house_keeper",0);
 #endif
-	ut_log("	Initialization COMPLETED  time since boot:%d  ten_msecs\n-------------------\n",get_kvm_time_fromboot());
+	ut_log("	Initialization COMPLETED\n-------------------\n");
 
 	idleTask_func();
 	return;

@@ -1016,8 +1016,7 @@ find_local_dest(struct virtio_net *dev, struct rte_mbuf *m,
  * with all devices in the main linked list.
  */
 static int
-switch_worker(__attribute__((unused)) void *arg)
-{
+switch_worker(__attribute__((unused)) void *arg){
 	struct rte_mempool *mbuf_pool = arg;
 	struct virtio_net *dev = NULL;
 	struct vhost_dev *rvdev,*vdev = NULL;
@@ -2054,8 +2053,7 @@ static const struct virtio_net_device_ops virtio_net_device_ops =
  * enabled them.
  */
 static void
-print_stats(void)
-{
+print_stats(void){
 	struct virtio_net_data_ll *dev_ll;
 	uint64_t tx_dropped, rx_dropped;
 	uint64_t tx, tx_total, rx, rx_total;

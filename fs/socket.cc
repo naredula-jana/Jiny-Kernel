@@ -182,8 +182,12 @@ int fifo_queue::remove_from_queue(unsigned char **buf, int *len,int *wr_flags) {
 			ret = JSUCCESS;
 		}
 		spin_unlock_irqrestore(&(remove_spin_lock), flags);
-		if (ret == JFAIL && waitq){
-			waitq->wait(500);
+		if (ret == JFAIL){
+			if (waitq){
+				waitq->wait(500);
+			}else{
+				return ret;
+			}
 		}
 	}
 	return ret;
@@ -256,8 +260,9 @@ int socket::write(unsigned long offset, unsigned char *app_data, int app_len, in
 	if (ret > 0) {
 		stat_out++;
 		stat_out_bytes = stat_out_bytes + ret;
-	} else
+	} else{
 		statout_err++;
+	}
 	return ret;
 }
 int socket::close() {
@@ -274,10 +279,11 @@ int socket::close() {
 		free_page(peeked_msg);
 	}
 
+	ut_log("socket freeing: in:%d out:%d inerr:%d outerr:%d \n",this->stat_in,this->stat_out,this->statin_err,this->statout_err);
 	delete_sock(this);
 	// TODO: need to clear the socket
 	ut_free(this);
-	ut_log("socket freed\n");
+
 	return ret;
 }
 

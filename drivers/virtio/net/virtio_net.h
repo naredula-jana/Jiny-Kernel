@@ -25,11 +25,12 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE. */
+#if 0
 #include <linux/types.h>
 #include <linux/virtio_ids.h>
 #include <linux/virtio_config.h>
 #include <linux/if_ether.h>
-
+#endif
 /* The feature bitmap for virtio net */
 #define VIRTIO_NET_F_CSUM	0	/* Host handles pkts w/ partial csum */
 #define VIRTIO_NET_F_GUEST_CSUM	1	/* Guest handles pkts w/ partial csum */
@@ -133,6 +134,7 @@ typedef __u8 virtio_net_ctrl_ack;
  * This functionality is present if the VIRTIO_NET_F_CTRL_RX feature
  * is available.
  */
+#define ETH_ALEN 6
 struct virtio_net_ctrl_mac {
 	__u32 entries;
 	__u8 macs[][ETH_ALEN];

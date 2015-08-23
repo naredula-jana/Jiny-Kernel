@@ -38,7 +38,7 @@ int g_conf_net_pmd=1; /* pollmode driver on/off */
 int g_conf_net_auto_intr=0; /* auto interrupts, switch on/off based on the recv packet frequency */
 int g_conf_netbh_cpu=0;
 
-int g_conf_net_virtio_burst=0;
+int g_conf_net_virtio_burst=1;
 
 int g_conf_net_send_int_disable = 1;
 int g_conf_net_send_dur=0;
@@ -87,11 +87,13 @@ int network_scheduler::netRx_BH() {
 		int total_pkts = 0;
 		int pkts = 0;
 		for (j = 0; j < 2000; j++) {
-			if (g_conf_net_virtio_burst ==0 ){
-				pkts = device_list[i]->virtio_net_poll_device(max_pkts);
-			}else{
-				pkts = device_list[i]->virtio_dequeue_burst(max_pkts);
-			}
+#if 0
+			//if (g_conf_net_virtio_burst ==0 ){
+			//	pkts = device_list[i]->virtio_net_poll_device(max_pkts);
+			//}else{
+#endif
+				pkts = device_list[i]->dequeue_burst(max_pkts);
+			//}
 
 			if (pkts < 900 && pkts > 0) {
 				stats_pktrecv[pkts]++;
@@ -142,7 +144,7 @@ extern int init_udpstack();
 extern int init_netmod_uipstack();
 static spinlock_t netbh_lock;
 static spinlock_t netbhsend_lock;
-extern unsigned long  get_100usec();
+
 
 static int net_bh_recv(){
 	unsigned long flags;
@@ -276,7 +278,7 @@ static int _remove_from_send_queue() {  /* under lock */
 	if (send_queue.peep_from_queue(&buf,&len,&wr_flags)==JFAIL){
 		return JFAIL;
 	}
-	//ut_log("sending the packet \n");
+
 	ret = socket::net_dev->write(0, buf, len,wr_flags);
 	if (ret == JSUCCESS){
 		last_fail_send_ts_us = 0;
@@ -285,11 +287,45 @@ static int _remove_from_send_queue() {  /* under lock */
 		}
 	}else{
 		last_fail_send_ts_us = ut_get_systemtime_ns()/1000;
-		/* remove the buffer if it full */
-	//	if (send_queue.remove_from_queue(&buf,&len,&wr_flags) == JFAIL){
-	//				BRK;
-	//	}
-	//	ret = JSUCCESS;
+	}
+	return ret;
+}
+
+static int bulk_remove_from_send_queue() {  /* under lock */
+	int i,ret;
+	unsigned char *buf;
+	int len,wr_flags;
+
+	virtio_net_jdriver *driver = (virtio_net_jdriver *)socket::net_dev->driver;
+
+	if (send_queue.queue_len.counter == 0 && driver->send_mbuf_len == 0) {
+		return 0;
+	}
+
+#if 1
+	if (last_fail_send_ts_us > 0  && (g_conf_net_send_shaping==1)){  /* give a gap of 10us if the virtio ring is full */
+		if (((ut_get_systemtime_ns()/1000) - last_fail_send_ts_us) < 100){
+			return 0;
+		}
+		last_fail_send_ts_us = 0;
+	}
+#endif
+	if (driver->send_mbuf_len != 0){
+		ret = driver->send_burst();
+		return ret;
+	}
+	ret=0;
+	for (i=0; i<MAX_BULF_SIZE ; i++){
+		if (send_queue.remove_from_queue(&driver->send_mbuf_list[i].buf,&driver->send_mbuf_list[i].len,&wr_flags) == JFAIL){
+			break;
+		}
+	}
+	if (i > 0) {
+		driver->send_mbuf_len = i;
+		ret = driver->send_burst();
+		if (ret == 0) {
+			last_fail_send_ts_us = ut_get_systemtime_ns() / 1000;
+		}
 	}
 	return ret;
 }
@@ -328,12 +364,18 @@ static int process_send_queue() {
 		last_active = ts;
 	}
 
-	while (_remove_from_send_queue() == JSUCCESS  && (pkt_send < max_pkts_tosend)) {
-		pkt_send++;
+	if (g_conf_net_virtio_burst == 1){
+		int ret=0 ;
+		do {
+			ret = bulk_remove_from_send_queue();
+			pkt_send = pkt_send + ret;
+		}while(ret > 0  && (pkt_send < max_pkts_tosend));
+	}else{
+		while (_remove_from_send_queue() == JSUCCESS  && (pkt_send < max_pkts_tosend)) {
+			pkt_send++;
+		}
 	}
-	if (pkt_send > 0) {
-		/* send the kick */
-	}
+
 	g_cpu_state[getcpuid()].stats.netbh_send = g_cpu_state[getcpuid()].stats.netbh_send + pkt_send;
 	if (socket::net_dev != 0 ){
 		socket::net_dev->ioctl(NETDEV_IOCTL_FLUSH_SENDBUF, 0);
@@ -381,7 +423,7 @@ void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
 
 		net_sched.device->ioctl(NETDEV_IOCTL_PRINT_STAT, 0);
 		net_sched.device->ioctl(NETDEV_IOCTL_GETMAC, (unsigned long) &mac);
-		ut_printf(" Mac: %x:%x:%x:%x:%x:%x  sendqlen :%i sendq_attached:%d sendq_drop:%d current interrup disable:%i\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],get_send_qlen(),send_queue.stat_attached,send_queue.stat_drop,g_net_interrupts_disable);
+		ut_printf(" MAC : %x:%x:%x:%x:%x:%x  sendqlen :%i sendq_attached:%d sendq_drop:%d current interrup disable:%i\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],get_send_qlen(),send_queue.stat_attached,send_queue.stat_drop,g_net_interrupts_disable);
 	}
 	socket::print_all_stats();
 
