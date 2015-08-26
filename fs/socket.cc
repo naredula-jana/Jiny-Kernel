@@ -152,9 +152,15 @@ last:
 }
 int fifo_queue::peep_from_queue(unsigned char **buf, int *len,int *wr_flags) {
 	if ((data[consumer].buf != 0) && (data[consumer].len != 0)) {
-		*buf = data[consumer].buf;
-		*len = data[consumer].len;
-		*wr_flags = data[consumer].flags;
+		if (buf) {
+			*buf = data[consumer].buf;
+		}
+		if (len){
+			*len = data[consumer].len;
+		}
+		if (wr_flags){
+			*wr_flags = data[consumer].flags;
+		}
 		return JSUCCESS;
 	}
 	return JFAIL;
@@ -228,7 +234,7 @@ read_again:
 				free_page((unsigned long)buf);
 				buf =0 ;
 			}
-			if (ret < 0){
+			if (ret < 0 || this==default_socket){
 				return 0;
 			}
 			goto read_again;  /* tcp control packets will get observed, nothing ouput */
@@ -470,9 +476,14 @@ vinode* socket::create_new(int arg_type) {
 	return (vinode *) sock;
 }
 int socket::default_pkt_thread(void *arg1, void *arg2){
+	int ret ;
 	while(1){
-		default_socket->read(0,0,0,0,0);
-		//default_sock_queue_len = default_socket->queue.consumer;
+		ret = default_socket->queue.peep_from_queue(0,0,0);
+		if (ret == JSUCCESS) {
+			default_socket->read(0,0,0,0,0);
+		}else{
+			sc_sleep(5);
+		}
 	}
 	return 1;
 }
@@ -652,7 +663,9 @@ int SYS_connect(int fd, struct sockaddr *addr, int len) {
 	return ret;
 
 }
-
+extern "C"{
+int g_conf_test_dummy_send=1;
+}
 unsigned long SYS_sendto(int sockfd, void *buf, size_t len, int flags, struct sockaddr *dest_addr, int addrlen) {
 	int ret;
 	SYSCALL_DEBUG("SENDTO fd:%x buf:%x len:%d flags:%x dest_addr:%x addrlen:%d\n", sockfd, buf, len, flags, dest_addr, addrlen);
@@ -679,7 +692,12 @@ unsigned long SYS_sendto(int sockfd, void *buf, size_t len, int flags, struct so
 	if (*tmp_sock == 0){ /* TODO: safe check need to remove later, somehow the object data is getting corrupted */
 		BUG();
 	}
-	return sock->write(0, (unsigned char *) buf, len, 0);
+	if (g_conf_test_dummy_send==1){
+		ret = sock->write(0, (unsigned char *) buf, len, 0);
+		ret = sock->write(0, (unsigned char *) buf, len, 0);
+	}
+	ret = sock->write(0, (unsigned char *) buf, len, 0);
+	return ret;
 }
 int SYS_sendmsg(){
 	return 0;

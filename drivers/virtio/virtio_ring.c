@@ -500,6 +500,7 @@ struct virtqueue *vring_new_virtqueue(unsigned int num,
 #if 1
 	vq->vq.pci_ioaddr = pci_ioaddr;
 	vq->vq.queue_number = queue_number;
+	vq->vq.vq = vq;
 #else
 	//vq->vq.vdev = vdev;
 #endif
@@ -572,9 +573,11 @@ unsigned int virtqueue_get_vring_size(struct virtqueue *_vq)
 	return vq->vring.num;
 }
 /**********************************************************************************/
+int virtio_check_recv_pkt(struct vring_virtqueue *vq){
+	return vq->vring.used->idx - vq->last_used_idx ;
+}
 
-
-int virtio_BulkRemoveFromQueue(struct virtqueue *_vq, struct struct_mbuf *mbuf_list, int list_len){
+int virtio_BulkRemoveFromNetQueue(struct virtqueue *_vq, struct struct_mbuf *mbuf_list, int list_len){
 	struct vring_virtqueue *vq = to_vvq(_vq);
 	int ret=0;
 	unsigned int i;
@@ -582,12 +585,10 @@ int virtio_BulkRemoveFromQueue(struct virtqueue *_vq, struct struct_mbuf *mbuf_l
 	int count;
 
 	START_USE(vq);
-
 	if (unlikely(vq->broken)) {
 		END_USE(vq);
 		return 0;
 	}
-
 	pkts_length = vq->vring.used->idx - vq->last_used_idx;
 
 	if (pkts_length == 0){
@@ -611,20 +612,11 @@ int virtio_BulkRemoveFromQueue(struct virtqueue *_vq, struct struct_mbuf *mbuf_l
 		if (unlikely(i >= vq->vring.num)) {
 			//JANA removed BAD_RING(vq, "id %u out of range\n", i);
 			pr_debug("BAD RING -11 vq:%x \n",vq);
-			BRK
-				;
+			BRK;
 			return 0;
 		}
-		ar_prefetch0(&vq->vring.desc[i]);
-		if (unlikely(!vq->data[i])) {
-			// JANA removed BAD_RING(vq, "id %u is not a head!\n", i);
-			pr_debug("BAD RING -22 vq:%x \n",vq);
-			BRK
-				;
-			return 0;
-		}
-		/* detach_buf clears data, so grab it now. */
-		mbuf_list[count].buf = vq->data[i];
+		//ar_prefetch0(&vq->vring.desc[i]);
+		mbuf_list[count].buf = __va(vq->vring.desc[i].addr);
 
 		vq->stat_free++;
 		detach_buf(vq, i);
@@ -638,60 +630,44 @@ int virtio_BulkRemoveFromQueue(struct virtqueue *_vq, struct struct_mbuf *mbuf_l
 		vring_used_event(&vq->vring) = vq->last_used_idx;
 		virtio_mb();
 	}
-
 	END_USE(vq);
 	return ret;
 }
-int virtio_add_Bulk_to_queue(struct virtqueue *_vq,  struct struct_mbuf *mbuf_list, int list_len){
+int virtio_BulkAddToNetqueue(struct virtqueue *_vq,  struct struct_mbuf *mbuf_list, int list_len){
 	struct vring_virtqueue *vq = to_vvq(_vq);
 	unsigned int i, avail, uninitialized_var(prev);
 	int head,index,len,ret=0;
-	struct scatterlist *sg;
-	struct scatterlist sg_list[2];
 	 unsigned char *data;
 
 	START_USE(vq);
 	for (index = 0; index < list_len; index++) {
 		unsigned int out = 2;
-		unsigned int in = 0;
-		data = mbuf_list[index].buf-10 ;
-		len = mbuf_list[index].len + 10;
-		ut_memset(data, 0, sizeof(struct virtio_net_hdr));
-
-		sg_list[0].page_link = (unsigned long) data;
-		sg_list[0].length = sizeof(struct virtio_net_hdr);
-		sg_list[0].offset = 0;
-		sg_list[1].page_link = (unsigned long) (data
-				+ sizeof(struct virtio_net_hdr));
-		sg_list[1].length = len - sizeof(struct virtio_net_hdr);
-		sg_list[1].offset = 0;
-		sg = &sg_list[0];
-
-		/* If the host supports indirect descriptor tables, and we have multiple
-		 * buffers, then go indirect. FIXME: tune this threshold */
-		if (vq->indirect && (out + in) > 1 && vq->num_free) {
-			head = vring_add_indirect(vq, sg, out, in, 0);
-			if (likely(head >= 0))
-				goto add_head;
-		}
-
-		BUG_ON(out + in > vq->vring.num);
-		BUG_ON(out + in == 0);
-
-		if (vq->num_free < (out + in)) {
+		if (vq->num_free < (out)) {
 			goto last;
 		}
+		if (mbuf_list){
+			data = mbuf_list[index].buf-10 ;
+			len = mbuf_list[index].len + 10;
+		}else{
+			data = (unsigned char *) jalloc_page(MEM_NETBUF);
+			len = 4096; /* page size */
+		}
+		ut_memset(data, 0, sizeof(struct virtio_net_hdr));
 
 		/* We're about to use some buffers from the free list. */
-		vq->num_free -= (out + in);
+		vq->num_free -= (out);
 
 		head = vq->free_head;
 		for (i = vq->free_head; out; i = vq->vring.desc[i].next, out--) {
 			vq->vring.desc[i].flags = VRING_DESC_F_NEXT;
-			vq->vring.desc[i].addr = sg_phys(sg);
-			vq->vring.desc[i].len = sg->length;
+			if (i==head){
+				vq->vring.desc[i].addr = __pa(data);
+				vq->vring.desc[i].len = sizeof(struct virtio_net_hdr);;
+			}else{
+				vq->vring.desc[i].addr = __pa(data + sizeof(struct virtio_net_hdr));
+				vq->vring.desc[i].len = len - sizeof(struct virtio_net_hdr);
+			}
 			prev = i;
-			sg++;
 		}
 
 		/* Last one doesn't continue. */
@@ -699,13 +675,6 @@ int virtio_add_Bulk_to_queue(struct virtqueue *_vq,  struct struct_mbuf *mbuf_li
 
 		/* Update free pointer */
 		vq->free_head = i;
-
-add_head:
-		/* Set token. */
-		if (vq->data[head] != 0) {
-			BRK;
-		}
-		vq->data[head] = data;
 		vq->stat_alloc++;
 
 		/* Put entry in available array (but don't update avail->idx until they

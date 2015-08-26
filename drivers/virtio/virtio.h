@@ -101,6 +101,7 @@ struct virtqueue {
 #if 0
 	//struct virtio_device *vdev;
 #else
+	void *vq;
 	int queue_number;
 	unsigned long pci_ioaddr;
 #endif

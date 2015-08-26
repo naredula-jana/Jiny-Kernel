@@ -42,7 +42,8 @@ int g_conf_net_virtio_burst=1;
 
 int g_conf_net_send_int_disable = 1;
 int g_conf_net_send_dur=0;
-int g_conf_net_send_pkts=300;
+int g_conf_net_send_burst=128;
+int g_conf_net_recv_burst=128;
 int g_conf_net_sendblock=0; /* this will block the send till the packet is placed in the queue for a few cycles */
 
 int g_conf_netbh_dedicated=1; /* all netb by only deidcated thread  for send and recv*/
@@ -78,34 +79,7 @@ void Jcmd_netbhstat(void *arg1,void *arg2){
 
 }
 
-int network_scheduler::netRx_BH() {
-	int i, j;
-	int ret = 0;
 
-	for (i = 0; i < device_count; i++) {
-		int max_pkts = 800;
-		int total_pkts = 0;
-		int pkts = 0;
-		for (j = 0; j < 2000; j++) {
-#if 0
-			//if (g_conf_net_virtio_burst ==0 ){
-			//	pkts = device_list[i]->virtio_net_poll_device(max_pkts);
-			//}else{
-#endif
-				pkts = device_list[i]->dequeue_burst(max_pkts);
-			//}
-
-			if (pkts < 900 && pkts > 0) {
-				stats_pktrecv[pkts]++;
-			}
-			if (pkts == 0)
-				break;
-			total_pkts = total_pkts + pkts;
-			ret = ret + pkts;
-		}
-	}
-	return ret;
-}
 int network_scheduler::netif_rx(unsigned char *data, unsigned int len) {
 	if (socket::attach_rawpkt(data, len) == JFAIL) {
 		jfree_page(data);
@@ -137,57 +111,76 @@ int register_netdevice(jdevice *device) {
 	ut_log(" register netdev : %x \n", g_mac[5]);
 	return JSUCCESS;
 }
+int network_scheduler::netRx_BH() {
+	int i, j;
+	int ret = 0;
 
+	for (i = 0; i < device_count; i++) {
+		int max_pkts = g_conf_net_recv_burst;
+		int total_pkts = 0;
+		int pkts = 0;
+		while (ret < g_conf_net_recv_burst) {
+			pkts = device_list[i]->burst_recv(max_pkts);
+			if (pkts == 0) {
+				return ret;
+			}
+			if (pkts < 900 && pkts > 0) {
+				stats_pktrecv[pkts]++;
+			}
+			ret = ret + pkts;
+		}
+	}
+	return ret;
+}
 extern "C" {
-static int process_send_queue();
+static int net_bh_send();
 extern int init_udpstack();
 extern int init_netmod_uipstack();
 static spinlock_t netbh_lock;
 static spinlock_t netbhsend_lock;
 
-
-static int net_bh_recv(){
+static int net_bh_recv() {
 	unsigned long flags;
-		static int netbh_in_progress=0;
-		int pkt_consumed=0;
-		int ret_bh = 0;
+	static int netbh_in_progress = 0;
+	int pkt_consumed = 0;
+	int ret_bh = 0;
 
-		if (netbh_in_progress == 1){
-			goto last;
-		}
+	if (netbh_in_progress == 1) {
+		goto last;
+	}
 
-		if (g_net_interrupts_disable == 1) {  /* only in the poll mode */
-			g_net_bh_active = 1;
-		}
+	if (g_net_interrupts_disable == 1) { /* only in the poll mode */
+		g_net_bh_active = 1;
+	}
 
-		if ((g_net_bh_active == 0) || (netbh_in_progress == 1) ){
-			goto last;
-		}
+	if ((g_net_bh_active == 0) || (netbh_in_progress == 1)) {
+		goto last;
+	}
 
-		/* only one cpu will be in net_bh */
-		spin_lock_irqsave(&netbh_lock, flags);
-		if (netbh_in_progress == 0){
-			netbh_in_progress = 1;
-			spin_unlock_irqrestore(&netbh_lock, flags);
-		}else{
-			spin_unlock_irqrestore(&netbh_lock, flags);
-			goto last;
-		}
+	/* only one cpu will be in net_bh */
+	spin_lock_irqsave(&netbh_lock, flags);
+	if (netbh_in_progress == 0) {
+		netbh_in_progress = 1;
+		spin_unlock_irqrestore(&netbh_lock, flags);
+	} else {
+		spin_unlock_irqrestore(&netbh_lock, flags);
+		goto last;
+	}
 
-		ret_bh = net_sched.netRx_BH();
-		g_cpu_state[getcpuid()].stats.netbh_recv = g_cpu_state[getcpuid()].stats.netbh_recv + ret_bh;
-		g_cpu_state[getcpuid()].stats.netbh++;
+	ret_bh = net_sched.netRx_BH();
+	g_cpu_state[getcpuid()].stats.netbh_recv =
+			g_cpu_state[getcpuid()].stats.netbh_recv + ret_bh;
+	g_cpu_state[getcpuid()].stats.netbh++;
 
-		if (g_net_interrupts_disable == 0 && net_sched.device){
-			g_net_bh_active =0;
-			net_sched.device->ioctl(NETDEV_IOCTL_ENABLE_RECV_INTERRUPTS, 0);
-			pkt_consumed = net_sched.netRx_BH();
-		}
+	if (g_net_interrupts_disable == 0 && net_sched.device) {
+		g_net_bh_active = 0;
+		net_sched.device->ioctl(NETDEV_IOCTL_ENABLE_RECV_INTERRUPTS, 0);
+		pkt_consumed = net_sched.netRx_BH();
+	}
 
-		netbh_in_progress = 0;
+	netbh_in_progress = 0;
 
-	last:
-		return 1;
+	last: return 1;
 }
 
 /* TODO : currently it is assumed for 1 nic, later this need to be extended for multiple nics*/
@@ -205,7 +198,7 @@ int net_bh(int send_bh){
 	}
 	if (1){
 		if (send_bh){
-			process_send_queue();
+			net_bh_send();
 		}
 		if (g_conf_netbh_cpu != getcpuid()){
 			return 1;
@@ -311,7 +304,7 @@ static int bulk_remove_from_send_queue() {  /* under lock */
 	}
 #endif
 	if (driver->send_mbuf_len != 0){
-		ret = driver->send_burst();
+		ret = driver->burst_send();
 		return ret;
 	}
 	ret=0;
@@ -322,7 +315,7 @@ static int bulk_remove_from_send_queue() {  /* under lock */
 	}
 	if (i > 0) {
 		driver->send_mbuf_len = i;
-		ret = driver->send_burst();
+		ret = driver->burst_send();
 		if (ret == 0) {
 			last_fail_send_ts_us = ut_get_systemtime_ns() / 1000;
 		}
@@ -330,9 +323,9 @@ static int bulk_remove_from_send_queue() {  /* under lock */
 	return ret;
 }
 
-static int process_send_queue() {
+static int net_bh_send() {
 	int duration = g_conf_net_send_dur;
-	int max_pkts_tosend =  g_conf_net_send_pkts;
+	int max_pkts_tosend =  g_conf_net_send_burst;
 	unsigned long flags;
 	int ret = JFAIL;
 	int pkt_send = 0;
@@ -340,7 +333,7 @@ static int process_send_queue() {
 	static unsigned long last_active=0;
 	unsigned long ts;
 
-	if (get_send_qlen() == 0  || (in_progress == 1) ) {
+	if (send_queue.queue_len.counter == 0  || (in_progress == 1) ) {
 		return JFAIL;
 	}
 
@@ -394,7 +387,7 @@ int net_send_eth_frame(unsigned char *buf, int len, int write_flags) {
 	repeat_again:
 			ret = put_to_send_queue(buf, len, write_flags);
 			if (ret == JFAIL && g_conf_net_sendblock==1){
-				process_send_queue();
+				net_bh_send();
 				if (g_jiffies < (start_time+2)){
 					goto repeat_again ;
 				}
@@ -423,7 +416,7 @@ void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
 
 		net_sched.device->ioctl(NETDEV_IOCTL_PRINT_STAT, 0);
 		net_sched.device->ioctl(NETDEV_IOCTL_GETMAC, (unsigned long) &mac);
-		ut_printf(" MAC : %x:%x:%x:%x:%x:%x  sendqlen :%i sendq_attached:%d sendq_drop:%d current interrup disable:%i\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],get_send_qlen(),send_queue.stat_attached,send_queue.stat_drop,g_net_interrupts_disable);
+		ut_printf(" MACC : %x:%x:%x:%x:%x:%x  sendqlen :%i sendq_attached:%d sendq_drop:%d current interrup disable:%i\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],get_send_qlen(),send_queue.stat_attached,send_queue.stat_drop,g_net_interrupts_disable);
 	}
 	socket::print_all_stats();
 

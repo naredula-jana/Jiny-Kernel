@@ -143,29 +143,34 @@ struct virtio_feature_desc vtnet_feature_desc[] = { { VIRTIO_NET_F_CSUM, "TxChec
 				VIRTIO_NET_F_CTRL_VLAN, "VLanFilter" }, { VIRTIO_NET_F_CTRL_RX_EXTRA, "RxModeExtra" }, { VIRTIO_NET_F_MQ, "Multi queue" }, { 0, NULL } };
 
 extern "C"{
-extern int virtio_BulkRemoveFromQueue(struct virtqueue *_vq, struct struct_mbuf *mbuf_list, int list_len);
-extern int virtio_add_Bulk_to_queue(struct virtqueue *_vq,  struct struct_mbuf *mbuf_list, int list_len);
+extern int virtio_BulkRemoveFromNetQueue(struct virtqueue *_vq, struct struct_mbuf *mbuf_list, int list_len);
+extern int virtio_BulkAddToNetqueue(struct virtqueue *_vq,  struct struct_mbuf *mbuf_list, int list_len);
 }
-int virtio_net_jdriver::dequeue_burst(int total_pkts){
+extern "C" {
+extern int  virtio_check_recv_pkt(void *);
+}
+int virtio_net_jdriver::burst_recv(int total_pkts){
 	unsigned char *addr;
-	unsigned int list_len = 32;
+	unsigned int list_len = MAX_BULF_SIZE;
 	int i;
 	int ret = 0;
 	int recv_pkts=0;
 
+	if (virtio_check_recv_pkt(queues[0].recv->vq) == 0){
+		return 0;
+	}
 	if (total_pkts < list_len){
 		list_len = total_pkts;
 	}
 
-	recv_pkts=virtio_BulkRemoveFromQueue(queues[0].recv, &recv_mbuf_list[0], list_len);
+	recv_pkts=virtio_BulkRemoveFromNetQueue(queues[0].recv, &recv_mbuf_list[0], list_len);
 
 	if (recv_pkts <= 0){
 		return 0;
 	}
 
-	for (i = 0; i < recv_pkts; i++) {
-		addBufToNetQueue(0,VQTYPE_RECV, 0, 4096);
-	}
+	recv_pkts=virtio_BulkAddToNetqueue(queues[0].recv, 0, MAX_BULF_SIZE);
+
 	if (recv_pkts > 0) {
 		queue_kick(queues[0].recv);
 	}
@@ -541,9 +546,10 @@ int virtio_net_jdriver::free_send_bufs(){
 	}
 	return ret;
 }
-int virtio_net_jdriver::send_burst() {
+int virtio_net_jdriver::burst_send() {
 	int qno,i, ret=0;
 	unsigned long flags;
+	int pkts;
 
 	if (send_mbuf_len == 0 ){
 		return ret;
@@ -551,15 +557,8 @@ int virtio_net_jdriver::send_burst() {
 
 	spin_lock_irqsave(&virtionet_lock, flags);
 	for (qno=0; qno<max_vqs; qno++){  /* try to send from the same queue , if it full then try on the subsequent one, in this way kicks will be less */
-		ret = virtio_add_Bulk_to_queue(queues[qno].send, &send_mbuf_list[send_mbuf_start],send_mbuf_len);
-	//	ret = virtio_add_Bulk_to_queue(queues[qno].send, &send_mbuf_list[send_mbuf_start],1);
-#if 0
-		ret = addBufToNetQueue(qno,VQTYPE_SEND, (unsigned char *) send_mbuf_list[send_mbuf_start].buf-10, send_mbuf_list[send_mbuf_start].len + 10);
-		if (ret == -ERROR_VIRTIO_ENOSPC){
-				continue;
-			}
-		ret =1;
-#endif
+		ret = virtio_BulkAddToNetqueue(queues[qno].send, &send_mbuf_list[send_mbuf_start],send_mbuf_len);
+
 		if (ret == 0){
 			continue;
 		}
@@ -585,7 +584,12 @@ int virtio_net_jdriver::send_burst() {
 	}
 	spin_unlock_irqrestore(&virtionet_lock, flags);
 
-	free_send_bufs();
+	pkts=virtio_BulkRemoveFromNetQueue(queues[0].send, &temp_mbuf_list[0], MAX_BULF_SIZE);
+	for (i=0; i<pkts; i++){
+		free_page(temp_mbuf_list[i].buf);
+		stat_frees++;
+	}
+
 	return ret;  /* Here Sucess indicates the buffer is freed or consumed */
 }
 int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {

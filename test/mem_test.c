@@ -38,7 +38,6 @@ main(int argc, char *argv[]){
 	}
 	loops= atoi(argv[1]);
 
-
 	stime = mtime();
 	while (l < loops) {
 		p = &mem[0];

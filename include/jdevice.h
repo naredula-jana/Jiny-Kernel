@@ -87,11 +87,12 @@ public:
 	struct struct_mbuf send_mbuf_list[MAX_BULF_SIZE];
 	int send_mbuf_start;
 	int send_mbuf_len;
+	struct struct_mbuf temp_mbuf_list[MAX_BULF_SIZE]; /* used to remove the send bufs to free */
 
 	int addBufToNetQueue(int qno, int type, unsigned char *buf, unsigned long len);
 	int virtio_net_poll_device(int total_pkts); /* old version */
-	int dequeue_burst(int total_pkts);  /* new version */
-	int send_burst();  /* new version */
+	int burst_recv(int total_pkts);  /* new version */
+	int burst_send();  /* new version */
 
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);
