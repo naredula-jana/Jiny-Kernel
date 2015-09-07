@@ -82,10 +82,10 @@ static inittable_t inittable[] = {
 		{init_kmemleak,0,       "kmemleak",0},
 #endif
 #ifdef SMP
-		{init_smp_force,4,       "smp_init",0},
+		{init_smp_force,8,       "smp_init",0},
 #endif
 #ifdef NETWORKING
-		{init_networking,0,       "network_sched",0},
+		{init_networking,0,       "network_sched",0},  /* should be after smp,since it uses number of ax core */
 #endif
 	//	{init_clock,0,       "clock"},
 //		{init_code_readonly,0,       "Making code readonly",0},
@@ -236,7 +236,6 @@ void cmain() {  /* This is the first c function to be executed */
 
 	g_cpu_state[0].current_task = g_current_task;
 
-//	while(1);
 	ut_log(" Before g_conf_func_debug-> :%x(%d)\n",g_conf_func_debug,g_conf_func_debug);
 	for (i=0; inittable[i].func != 0; i++){
 		g_init_loglevel = inittable[i].log_level ;

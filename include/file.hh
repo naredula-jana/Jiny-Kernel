@@ -75,8 +75,8 @@ class fifo_queue {
 		unsigned int len; /* actual data length , not the buf lenegth, buf always constant length */
 		int flags;
 	} data[MAX_SOCKET_QUEUE_LENGTH];
-	spinlock_t remove_spin_lock,add_spin_lock; /* lock to protect while adding and revoing from queue */
-	int stat_processed[MAX_CPUS];
+	spinlock_t remove_spin_lock,add_spin_lock; /* lock to protect while adding and removing from queue */
+	//int stat_processed[MAX_CPUS];
 
 public:
 	atomic_t queue_len;

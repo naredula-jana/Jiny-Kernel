@@ -88,7 +88,7 @@ int g_conf_ms_per_jiffie=6;/* instaed of 10ms, the apic timer interrupt generati
 #define MS_PER_JIFF g_conf_ms_per_jiffie
 #define NS_PER_MS 1000000
 #define NS_PER_JIFFIE (NS_PER_MS*MS_PER_JIFF)
-static unsigned long stored_system_times_ns[MAX_CPUS];
+//static unsigned long stored_system_times_ns[MAX_CPUS];
 static unsigned long stored_start_times[MAX_CPUS];
 static unsigned long store_common_time_ns=0;
 unsigned long g_stat_clock_errors=0;
@@ -127,7 +127,8 @@ static unsigned long get_percpu_ns() { /* get percpu nano seconds */
 		time_ns = (g_jiffies*NS_PER_JIFFIE) +  delta_ns;
 
 	}
-	stored_system_times_ns[cpu] = time_ns;
+	//stored_system_times_ns[cpu] = time_ns;
+	g_cpu_state[cpu].system_times_ns = time_ns;
 	return time_ns;
 }
 extern int g_conf_hw_clock;
@@ -135,18 +136,25 @@ unsigned long ut_get_systemtime_ns(){ /* returns nano seconds */
 	unsigned long ns;
 	unsigned long intr_flags;
 	uint32_t version;
+	int i;
 
 	ns = get_percpu_ns();
-
+#if 0
   /* storing the time to make sure this function returns the increasing value of time from any cpu, always monotonic. */
 	spin_lock_irqsave(&(time_spinlock), intr_flags);
 	if (ns <= store_common_time_ns){
 		ns = store_common_time_ns;
 	}else{
 		store_common_time_ns=ns;
-		//asm volatile("sfence":::"memory");  /* make sure all other cpu see the only one time */
 	}
 	spin_unlock_irqrestore(&(time_spinlock), intr_flags);
+#else
+	for (i=0; i<getmaxcpus(); i++){
+		if (ns < g_cpu_state[i].system_times_ns){
+			ns = g_cpu_state[i].system_times_ns;
+		}
+	}
+#endif
 
 	return ns;
 }
@@ -258,7 +266,7 @@ int Jcmd_clock() {
 	ut_printf(" timestamp cpu0: %d (%d) mycpu: %d (%d)  version:%d systemtiem:%d\n",cpu0,cpu0/1000000,mycpu,mycpu/1000000,ver,vcpu_time[getcpuid()].system_time);
 
 	for (i=0; i<getmaxcpus(); i++){
-		ut_printf(" %d : stored time: %x(%d) ns\n",i,stored_system_times_ns[i],stored_system_times_ns[i]);
+		ut_printf(" %d : stored time: %x(%d) ns\n",i,g_cpu_state[i].system_times_ns,g_cpu_state[i].system_times_ns);
 	}
 	for (i=0; i<getmaxcpus(); i++){
 		ut_printf(" %d : Start time: %x(%d) ns\n",i,stored_start_times[i],stored_start_times[i]);

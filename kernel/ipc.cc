@@ -506,7 +506,7 @@ int wait_queue::unregister() {
 		if (wait_queue::wait_queues[i] == this) {
 			/*TODO:  remove the tasks present in the queue */
 			wait_queues[i] = 0;
-			ut_log(" UNINSTALLED  waitqueue at:%d \n",i);
+			//ut_log(" UNINSTALLED  waitqueue at:%d \n",i);
 			goto last;
 		}
 	}

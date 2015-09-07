@@ -584,7 +584,7 @@ void sc_delete_task(struct task_struct *task) {
 		spin_lock_irqsave(&g_global_lock, intr_flags);
 
 		if (!list_empty((task->dead_tasks.head.next))) {
-			BUG();
+			//BUG();
 		}
 	}
 	spin_unlock_irqrestore(&g_global_lock, intr_flags);
@@ -1088,7 +1088,7 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	unsigned long ret_pid = 0;
 	int i;
 
-	SYSCALL_DEBUG("clone ctid:%x child_stack:%x flags:%x args:%x \n", fn, child_stack, clone_flags, args);
+	ut_log("clone ctid:%x child_stack:%x flags:%x args:%x \n", fn, child_stack, clone_flags, args);
 
 	/* Initialize the stack  */
 	p = alloc_task_struct();
@@ -1165,7 +1165,7 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	spin_unlock_irqrestore(&g_global_lock, flags);
 
 	p->clone_flags = clone_flags;
-//	ut_log(" clone : %s  pid :%d(%x) task:%x \n",p->name,p->pid,p->pid, p);
+	ut_log(" clone : %s  pid :%d(%x) task:%x \n",p->name,p->pid,p->pid, p);
 
 	if (clone_flags & CLONE_VFORK) { //TODO : sys-vfork partially done, need to use to signals suspend and continue the parent process
 		g_current_task->state = TASK_STOPPED;

@@ -188,13 +188,13 @@ void print_vq(struct virtqueue *_vq) {
 
 }
 static sync_avial_idx(struct vring_virtqueue *vq){
-	u16 new, old;
+	u16 old;
 	/* Descriptors and available array need to be set before we expose the
 	 * new available array entries. */
 	virtio_wmb();
 
 	old = vq->vring.avail->idx;
-	new = vq->vring.avail->idx = old + vq->num_added;
+	vq->vring.avail->idx = old + vq->num_added;
 	vq->num_added = 0;
 
 	/* Need to update avail index before checking if we should notify */
@@ -212,9 +212,7 @@ int virtio_add_buf_to_queue(struct virtqueue *_vq,
 	int head;
 
 	START_USE(vq);
-
 	BUG_ON(data == NULL);
-
 
 	/* If the host supports indirect descriptor tables, and we have multiple
 	 * buffers, then go indirect. FIXME: tune this threshold */
@@ -315,14 +313,17 @@ static void detach_buf(struct vring_virtqueue *vq, unsigned int head)
 	i = head;
 
 	/* Free the indirect table */
-	if (vq->vring.desc[i].flags & VRING_DESC_F_INDIRECT)
+	if (vq->vring.desc[i].flags & VRING_DESC_F_INDIRECT){
+		BRK;  /* currently we are not supporting this */
 		kfree(phys_to_virt(vq->vring.desc[i].addr));
+	}
 
 	while (vq->vring.desc[i].flags & VRING_DESC_F_NEXT) {
+		vq->vring.desc[i].addr = 0;
 		i = vq->vring.desc[i].next;
 		vq->num_free++;
 	}
-
+	vq->vring.desc[i].addr = 0;
 	vq->vring.desc[i].next = vq->free_head;
 	vq->free_head = head;
 	/* Plus final descriptor */
@@ -565,11 +566,8 @@ void vring_transport_features(struct virtio_device *vdev)
 
 
 /* return the size of the vring within the virtqueue */
-unsigned int virtqueue_get_vring_size(struct virtqueue *_vq)
-{
-
+unsigned int virtqueue_get_vring_size(struct virtqueue *_vq){
 	struct vring_virtqueue *vq = to_vvq(_vq);
-
 	return vq->vring.num;
 }
 /**********************************************************************************/
@@ -617,6 +615,9 @@ int virtio_BulkRemoveFromNetQueue(struct virtqueue *_vq, struct struct_mbuf *mbu
 		}
 		//ar_prefetch0(&vq->vring.desc[i]);
 		mbuf_list[count].buf = __va(vq->vring.desc[i].addr);
+		if (vq->vring.desc[i].addr == 0){
+			BRK;
+		}
 
 		vq->stat_free++;
 		detach_buf(vq, i);
@@ -648,9 +649,13 @@ int virtio_BulkAddToNetqueue(struct virtqueue *_vq,  struct struct_mbuf *mbuf_li
 		if (mbuf_list){
 			data = mbuf_list[index].buf-10 ;
 			len = mbuf_list[index].len + 10;
+			mbuf_list[index].buf = 0;
 		}else{
 			data = (unsigned char *) jalloc_page(MEM_NETBUF);
 			len = 4096; /* page size */
+		}
+		if (data == 0){
+			BRK;
 		}
 		ut_memset(data, 0, sizeof(struct virtio_net_hdr));
 
@@ -660,6 +665,9 @@ int virtio_BulkAddToNetqueue(struct virtqueue *_vq,  struct struct_mbuf *mbuf_li
 		head = vq->free_head;
 		for (i = vq->free_head; out; i = vq->vring.desc[i].next, out--) {
 			vq->vring.desc[i].flags = VRING_DESC_F_NEXT;
+			if (vq->vring.desc[i].addr != 0){
+				BRK;
+			}
 			if (i==head){
 				vq->vring.desc[i].addr = __pa(data);
 				vq->vring.desc[i].len = sizeof(struct virtio_net_hdr);;
@@ -682,6 +690,11 @@ int virtio_BulkAddToNetqueue(struct virtqueue *_vq,  struct struct_mbuf *mbuf_li
 		avail = (vq->vring.avail->idx + vq->num_added++) % vq->vring.num;
 		vq->vring.avail->ring[avail] = head;
 		ret++;
+#if 1 /* TODO: may not be needed for every packet, it may have negative impact, doing for the correctness */
+		if (ret > 0){
+				sync_avial_idx(vq);
+		}
+#endif
 	}
 last:
 	if (ret > 0){

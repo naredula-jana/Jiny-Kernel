@@ -201,6 +201,7 @@ struct cpu_state {
 	volatile int run_queue_length;
 	int net_BH; /* enable if the net_RX BH need to be kept on the cpu on a priority basis */
 	spinlock_t *sched_lock; /* lock to relase after schedule, it is filled before the schedule */
+	unsigned long system_times_ns;
 
 	unsigned char cpu_priority;
 	int active; /* only active cpu will pickup the tasks , otherwise they can only run idle threads */

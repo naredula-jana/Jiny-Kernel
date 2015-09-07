@@ -149,16 +149,16 @@ extern int virtio_BulkAddToNetqueue(struct virtqueue *_vq,  struct struct_mbuf *
 extern "C" {
 extern int  virtio_check_recv_pkt(void *);
 }
+int virtio_net_jdriver::check_for_pkts(){
+	return virtio_check_recv_pkt(queues[0].recv->vq);
+}
 int virtio_net_jdriver::burst_recv(int total_pkts){
 	unsigned char *addr;
-	unsigned int list_len = MAX_BULF_SIZE;
+	unsigned int list_len = MAX_BUF_LIST_SIZE;
 	int i;
 	int ret = 0;
 	int recv_pkts=0;
 
-	if (virtio_check_recv_pkt(queues[0].recv->vq) == 0){
-		return 0;
-	}
 	if (total_pkts < list_len){
 		list_len = total_pkts;
 	}
@@ -169,16 +169,13 @@ int virtio_net_jdriver::burst_recv(int total_pkts){
 		return 0;
 	}
 
-	recv_pkts=virtio_BulkAddToNetqueue(queues[0].recv, 0, MAX_BULF_SIZE);
-
-	if (recv_pkts > 0) {
-		queue_kick(queues[0].recv);
-	}
+	virtio_BulkAddToNetqueue(queues[0].recv, 0, MAX_BUF_LIST_SIZE*3);
+	queue_kick(queues[0].recv);
 
 	for (i = 0; i < recv_pkts; i++) {
 		net_sched.netif_rx(recv_mbuf_list[i].buf, recv_mbuf_list[i].len);
+		recv_mbuf_list[i].buf = 0;
 	}
-
 	return ret;
 }
 
@@ -187,7 +184,7 @@ int virtio_net_jdriver::virtio_net_poll_device( int total_pkts) {
 	unsigned int len = 0;
 	int i;
 	int ret = 0;
-
+BRK; /* TODO: this function will become obsolute*/
 	for (i = 0; i < total_pkts; i++) {
 		addr = virtio_removeFromQueue(queues[0].recv,(int *)&len);
 		if (addr != 0) {
@@ -213,11 +210,12 @@ int virtio_net_jdriver::virtio_net_poll_device( int total_pkts) {
 	return ret;
 }
 
-
+#if 0
 static int netdriver_xmit(unsigned char* data, unsigned int len, void *private_data) {
 	virtio_net_jdriver *net_driver = (virtio_net_jdriver *) private_data;
 	return net_driver->write(data, len, 0);
 }
+#endif
 
 extern int g_net_bh_active;
 static int virtio_net_recv_interrupt(void *private_data) {
@@ -442,7 +440,8 @@ int virtio_net_jdriver::net_attach_device() {
 			break;
 		}
 		for (i = 0; i < max_qbuffers/2; i++){ /* add buffers to recv q */
-			addBufToNetQueue(k, VQTYPE_RECV, 0, 4096);
+			//addBufToNetQueue(k, VQTYPE_RECV, 0, 4096);
+			virtio_BulkAddToNetqueue(queues[k].recv, 0, MAX_BUF_LIST_SIZE*3);
 		}
 		ut_log("    virtio_netq:%d  recv addbuffers:%d \n",k,max_qbuffers/2);
 	}
@@ -481,7 +480,7 @@ int virtio_net_jdriver::dettach_device(jdevice *jdev) {
 int virtio_net_jdriver::read(unsigned char *buf, int len, int rd_flags, int opt_flags) {
 	return 0;
 }
-
+#if 1
 int virtio_net_jdriver::addBufToNetQueue(int qno, int type, unsigned char *buf, unsigned long len) {
 	struct scatterlist sg[2];
 	int ret;
@@ -518,7 +517,7 @@ int virtio_net_jdriver::addBufToNetQueue(int qno, int type, unsigned char *buf, 
 
 	return ret;
 }
-
+#endif
 int virtio_net_jdriver::free_send_bufs(){
 	int i;
 	unsigned long flags;
@@ -584,7 +583,7 @@ int virtio_net_jdriver::burst_send() {
 	}
 	spin_unlock_irqrestore(&virtionet_lock, flags);
 
-	pkts=virtio_BulkRemoveFromNetQueue(queues[0].send, &temp_mbuf_list[0], MAX_BULF_SIZE);
+	pkts=virtio_BulkRemoveFromNetQueue(queues[0].send, &temp_mbuf_list[0], MAX_BUF_LIST_SIZE);
 	for (i=0; i<pkts; i++){
 		free_page(temp_mbuf_list[i].buf);
 		stat_frees++;
@@ -597,7 +596,7 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 	int i, ret;
 	unsigned long flags;
 	unsigned long addr;
-
+BRK;
 	dev = (jdevice *) this->device;
 	if (dev == 0 || data == 0)
 		return JFAIL;

@@ -19,7 +19,7 @@
 /*#define TASK_SIZE 4*PAGE_SIZE */
 #define TASK_SIZE 4*(0x1000)  /* duplicate defenition*/
 #ifdef SMP
-#define MAX_CPUS 5
+#define MAX_CPUS 10
 #else
 #define MAX_CPUS 1
 #endif

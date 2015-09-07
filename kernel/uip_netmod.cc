@@ -130,21 +130,16 @@ int network_stack::read(network_connection *conn, uint8_t *raw_data, int raw_len
 			ret = -2;
 		}
 		if (uip_len > 0) {
-			int tret;
 			uip_arp_out();
-			tret = net_send_eth_frame(uip_buf, uip_len, WRITE_BUF_CREATED);
-			if (tret != JFAIL) {
-				tret = 0;
+			ret = net_send_eth_frame(uip_buf, uip_len, 0);
+			if (ret != JFAIL) {
 				jbuf = 0;
 			}
 			uip_len = 0;
-			//ut_printf(" ret :%d \n",ret);
 			goto last;
 		}
-
 		jfree_page(jbuf);
 		jbuf =0 ;
-
 		goto last;
 
 	}else if (conn == 0 ){
@@ -158,7 +153,7 @@ int network_stack::read(network_connection *conn, uint8_t *raw_data, int raw_len
 		if (uip_len > 0) {
 			uip_arp_out();
 			DEBUG("FROM READ .... buf :%x  replied with the packet len : %d \n",uip_buf,uip_len);
-			ret = net_send_eth_frame(uip_buf, uip_len,WRITE_BUF_CREATED);
+			ret = net_send_eth_frame(uip_buf, uip_len,0);
 			uip_len = 0;
 			goto last;
 		}
@@ -166,8 +161,9 @@ int network_stack::read(network_connection *conn, uint8_t *raw_data, int raw_len
 		uip_arp_arpin();
 		if (uip_len > 0) {
 			DEBUG(" replied with the ARP   packet len : %d \n",uip_len);
-			ret = net_send_eth_frame(uip_buf, uip_len,WRITE_BUF_CREATED);
+			ret = net_send_eth_frame(uip_buf, uip_len,0);
 			uip_len = 0;
+			goto last;
 		}
 	}
 
@@ -179,7 +175,9 @@ last:
 	netstack_unlock();
 	return ret;
 }
-
+extern "C"{
+int g_conf_test_dummy_send=0;
+}
 int network_stack::write(network_connection *conn, uint8_t *app_data, int app_len) {
 	int ret = JFAIL;
 	unsigned char *buf=0;
@@ -237,10 +235,27 @@ int network_stack::write(network_connection *conn, uint8_t *app_data, int app_le
 		if (send_len > 0){
 			uip_buf=0;
 			netstack_unlock();
-			ret = net_send_eth_frame(send_buf, send_len,WRITE_BUF_CREATED | WRITE_SLEEP_TILL_SEND);
-			//ret = net_send_eth_frame(send_buf, send_len,WRITE_BUF_CREATED);
+#if 1
+			if (g_conf_test_dummy_send > 0) {
+				int i;
+				for (i=0; i<g_conf_test_dummy_send; i++) {
+					unsigned char *test_dbuf = (unsigned long) jalloc_page(MEM_NETBUF);
+					if (test_dbuf != 0) {
+						ut_memset(test_dbuf,0,10);
+						test_dbuf = test_dbuf +10;
+						ut_memcpy(test_dbuf, send_buf, send_len+50);
+						ret = net_send_eth_frame(test_dbuf, send_len, WRITE_SLEEP_TILL_SEND);
+						if (ret == JFAIL) {
+							jfree_page(test_dbuf);
+						}
+					}
+				}
+			}
+#endif
+			ret = net_send_eth_frame(send_buf, send_len, WRITE_SLEEP_TILL_SEND);
 			if ((ret == JFAIL) && send_buf){
 					jfree_page(send_buf);
+					buf =0 ;
 			}
 			return ret;
 		}
@@ -293,7 +308,7 @@ int network_stack::connect(network_connection *conn) { // only for TCP
 	if (uip_len > 0) {
 		uip_arp_out();
 		ut_printf(" tcp connect  message : %d \n",uip_len);
-		ret = net_send_eth_frame(uip_buf, uip_len,WRITE_BUF_CREATED);
+		ret = net_send_eth_frame(uip_buf, uip_len,0);
 		uip_len = 0;
 	}
 last:

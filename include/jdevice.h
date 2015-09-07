@@ -82,17 +82,18 @@ public:
 	uint32_t current_send_q;
 	spinlock_t virtionet_lock;
 
-#define MAX_BULF_SIZE 64
-	struct struct_mbuf recv_mbuf_list[MAX_BULF_SIZE];
-	struct struct_mbuf send_mbuf_list[MAX_BULF_SIZE];
+#define MAX_BUF_LIST_SIZE 64
+	struct struct_mbuf recv_mbuf_list[MAX_BUF_LIST_SIZE];
+	struct struct_mbuf send_mbuf_list[MAX_BUF_LIST_SIZE];
 	int send_mbuf_start;
 	int send_mbuf_len;
-	struct struct_mbuf temp_mbuf_list[MAX_BULF_SIZE]; /* used to remove the send bufs to free */
+	struct struct_mbuf temp_mbuf_list[MAX_BUF_LIST_SIZE]; /* used to remove the send bufs to free */
 
 	int addBufToNetQueue(int qno, int type, unsigned char *buf, unsigned long len);
 	int virtio_net_poll_device(int total_pkts); /* old version */
 	int burst_recv(int total_pkts);  /* new version */
 	int burst_send();  /* new version */
+	int check_for_pkts();
 
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);

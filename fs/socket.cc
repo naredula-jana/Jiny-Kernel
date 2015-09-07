@@ -22,8 +22,7 @@ extern "C"{
 extern "C"{
 extern int net_bh(int force_read);
 int g_conf_eat_udp=0;
-//int default_sock_queue_len=0;
-//int g_conf_socket_wakeup=1;
+
 static spinlock_t _netstack_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"netstack");
 unsigned long stack_flags;
 void netstack_lock(){
@@ -140,8 +139,8 @@ last:
 	if (ret == JFAIL){
 		if (freebuf_on_full){
 			jfree_page(buf);
-			stat_drop++;
 		}
+		stat_drop++;
 	}else{
 		if (waitq){
 			waitq->wakeup();
@@ -174,7 +173,6 @@ int fifo_queue::remove_from_queue(unsigned char **buf, int *len,int *wr_flags) {
 			*buf = data[consumer].buf;
 			*len = data[consumer].len;
 			*wr_flags = data[consumer].flags;
-
 			//	ut_log("netrecv : receving from queue len:%d  prod:%d cons:%d\n",queue.data[queue.consumer].len,queue.producer,queue.consumer);
 
 			data[consumer].buf = 0;
@@ -182,9 +180,9 @@ int fifo_queue::remove_from_queue(unsigned char **buf, int *len,int *wr_flags) {
 			consumer++;
 			atomic_dec(&queue_len);
 
-			//queue.stat_processed[getcpuid()]++;
-			if (consumer >= MAX_SOCKET_QUEUE_LENGTH)
+			if (consumer >= MAX_SOCKET_QUEUE_LENGTH){
 				consumer = 0;
+			}
 			ret = JSUCCESS;
 		}
 		spin_unlock_irqrestore(&(remove_spin_lock), flags);
@@ -202,7 +200,7 @@ int fifo_queue::remove_from_queue(unsigned char **buf, int *len,int *wr_flags) {
 int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int read_flags, int unused_flags) {
 	int ret = 0;
 	unsigned char *buf = 0;
-	int buf_len;
+	int buf_len=0;
 
 	net_bh(0);  /* check te packets if there and to pending recv from driver */
 
@@ -663,9 +661,7 @@ int SYS_connect(int fd, struct sockaddr *addr, int len) {
 	return ret;
 
 }
-extern "C"{
-int g_conf_test_dummy_send=1;
-}
+
 unsigned long SYS_sendto(int sockfd, void *buf, size_t len, int flags, struct sockaddr *dest_addr, int addrlen) {
 	int ret;
 	SYSCALL_DEBUG("SENDTO fd:%x buf:%x len:%d flags:%x dest_addr:%x addrlen:%d\n", sockfd, buf, len, flags, dest_addr, addrlen);
@@ -691,10 +687,6 @@ unsigned long SYS_sendto(int sockfd, void *buf, size_t len, int flags, struct so
 	unsigned long *tmp_sock = (unsigned long *)sock;
 	if (*tmp_sock == 0){ /* TODO: safe check need to remove later, somehow the object data is getting corrupted */
 		BUG();
-	}
-	if (g_conf_test_dummy_send==1){
-		ret = sock->write(0, (unsigned char *) buf, len, 0);
-		ret = sock->write(0, (unsigned char *) buf, len, 0);
 	}
 	ret = sock->write(0, (unsigned char *) buf, len, 0);
 	return ret;

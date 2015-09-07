@@ -428,9 +428,9 @@ if (vhost_server ==0){
 	for (i=0; i<2; i++){
 		struct vring_avail *avail=vhost_server->vring_table.vring[i].avail;
 		struct vring_used *used=vhost_server->vring_table.vring[i].used;
-		printf(" avail :%p used:%p \n",avail,used);
+		//printf(" avail :%p used:%p \n",avail,used);
 		if (avail!=0 && used!=0){
-			printf("%s  %d: AAvail(%p) inx:%d flag:%x   Used(%p) idx:%d flag:%x  desc:(%p)\n",str,i,(void *)avail,avail->idx,avail->flags,(void *)used,used->idx,used->flags,vhost_server->vring_table.vring[i].desc);
+			printf("%s %d: AAvail(%p) inx:%d flag:%x Used(%p)idx:%d flag:%x diff:%d  desc:(%p)\n",str,i,(void *)avail,avail->idx,avail->flags,(void *)used,used->idx,used->flags,(avail->idx-used->idx),vhost_server->vring_table.vring[i].desc);
 		}
 	}
 }

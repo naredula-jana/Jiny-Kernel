@@ -19,13 +19,16 @@
 #include<fcntl.h> 
 #include <pthread.h>
 //#define DEBUG 1
+#define MAX_THREADS 20
 int sfd;
 int recv_stop = 0;
+int send_stop[MAX_THREADS];
 int duration = 30;
 int error_in_time=0;
+int total_thds=0;
 struct sockaddr_in server, client;
-unsigned long send_pkts, recv_pkts, pkt_size, total_pkts;
-
+unsigned long g_send_pkts[MAX_THREADS], recv_pkts, pkt_size, total_pkts;
+int recv_touch=0;
 void recv_func(int total_pkts) {
 	char buf[1424] = "";
 	int l;
@@ -38,13 +41,10 @@ void recv_func(int total_pkts) {
 	struct timeval timeout;
 
 	while (recv_stop == 0 && iters > 0) {
+		recv_touch = 1;
 		FD_SET(sfd, &readSet);
 		timeout.tv_sec = 1;
 		timeout.tv_usec = 0;
-
-
-//		rc = select(sfd + 1, 0 , NULL, NULL, &timeout);
-//		continue;
 
 		rc = select(sfd + 1, &readSet, NULL, NULL, &timeout);
 		if (rc != 0) {
@@ -67,18 +67,43 @@ void recv_thread_func() {
 	while (recv_stop == 0) {
 		recv_func(0);
 	}
-	sbps = (send_pkts * pkt_size * 8) / (duration * 1000000);
+	sbps = ((g_send_pkts[0]+g_send_pkts[1]) * pkt_size * 8) / (duration * 1000000);
 	rbps = (recv_pkts * pkt_size * 8) / (duration * 1000000);
 	printf(
-				" RECV thread udp_client pktsize:%d send:%d recved:%d  loss:%d SBit rate:%d Mbps Rbir rate:%d err_in_time:%d\n",
-				pkt_size, send_pkts, recv_pkts, (send_pkts - recv_pkts), sbps,
+				" RECV thread udp_client pktsize:%d send:%d:%d recved:%d  loss:%d SBit rate:%d Mbps Rbir rate:%d err_in_time:%d\n",
+				pkt_size, g_send_pkts[0],g_send_pkts[1], recv_pkts, (g_send_pkts[0]+g_send_pkts[1] - recv_pkts), sbps,
 				rbps,error_in_time);
 	recv_stop = 99;
 }
 join() {
+	int i;
+
 	while (recv_stop != 99) {
-		delay(500000); /* delay 500 ms */
+		recv_touch =0;
+		delay(600000); /* delay 600 ms */
+		delay(800000); /* delay 800 ms */
+		delay(900000); /* delay 800 ms */
+		if (recv_touch == 0){
+			goto last;
+		}
 	}
+
+#if 0
+	while (1) {
+		int found = 0;
+		for (i = 0; i < total_thds; i++) {
+			if (send_stop[i] == 99) {
+				found++;
+			}
+		}
+		if (found == total_thds) {
+			goto last;
+		}
+	}
+#endif
+	last: delay(700000);
+	printf(" Joing is existing \n");
+
 }
 
 unsigned long old_ts=0;
@@ -87,14 +112,15 @@ unsigned long mtime() {
 	unsigned long ret;
 	gettimeofday(&td, (struct timezone *) 0);
 	ret = (td.tv_sec * 1000000 + ((double) td.tv_usec));
-#if 1
+#if 0
 	if (ret < old_ts){
 		error_in_time++;
 		//printf("ERROR: oldts : %x(%d)  new ts: %x(%d) \n",old_ts,old_ts,ret,ret);
 		//recv_stop = 1;
 	}
-#endif
 	old_ts = ret;
+#endif
+
 	return ret;
 }
 
@@ -115,62 +141,72 @@ unsigned long wait_till(unsigned long ts) {
 	return ts;
 }
 
-send_func() {
+send_func(int th_id) {
 	int i;
 	char buf[1424] = "";
 	struct timeval td;
 	unsigned long start_time, end_time, time_per_pkt, target_t, curr_t;/* time in milliseconds */
 
-	printf(" START time: %d ms\n", mtime() / 1000);
+	printf("%d: send thread START time: %d ms\n", th_id, mtime() / 1000);
 	start_time = mtime();
 	end_time = start_time + duration * 1000000; /* 30 seconds */
-
+//return 1;
 	time_per_pkt = (end_time - start_time) / total_pkts;
 	target_t = start_time;
 	curr_t = start_time;
 
-	while (curr_t < end_time && send_pkts < total_pkts) {
+	while (curr_t < end_time && g_send_pkts[th_id] < total_pkts) {
 		sprintf(buf, "[pkt Current time :%d ]", curr_t);
 		sendto(sfd, buf, pkt_size - 28, 0, (struct sockaddr *) &server,
 				sizeof(server));
 #ifdef DEBUG
 		printf("packet send : currtime:%d\n",curr_t);
 #endif
-		send_pkts++;
+		g_send_pkts[th_id]++;
 
 		target_t = target_t + time_per_pkt;
 		curr_t = wait_till(target_t);
 	}
-	printf(" End time: %d ms sendpkts: %d \n", mtime() / 1000, send_pkts);
+	printf(" %d: SEND End time: %d ms sendpkts: %d \n",th_id, mtime() / 1000, g_send_pkts[th_id]);
 }
+
+void send_thread_func(unsigned long *arg){
+	unsigned long i = *arg;
+	printf("send arg :%d: \n",i);
+	if (i<0 || i>20){
+		return;
+	}
+	send_func(i);
+	recv_stop = 1;
+	send_stop[i] = 99;
+}
+
 unsigned char stack[9000];
+unsigned char send_stack[10][9000];
 main(int argc, char *argv[]) {
 	pthread_t recv_thread; /* thread variables */
 	unsigned long sbps, rbps;
 	int port;
+
 	sfd = socket(AF_INET, SOCK_DGRAM, 0);
 	bzero(&server, sizeof(server));
 	server.sin_family = AF_INET;
 	server.sin_port = htons(1300);
 	port = 1300;
-#if 0
-	if (argc == 5){
-		server.sin_port = htons(atoi(argv[4]));
-		port = atoi(argv[4]);
-	}
-#endif
-	if (argc < 4) {
-		printf("./udp_client <server_ip> <pkt_size> <total_pkts> \n");
+
+	if (argc < 5) {
+		printf("./udp_client <server_ip> <pkt_size> <total_pkts> <threads>\n");
 		return 1;
 	}
 	inet_aton(argv[1], &server.sin_addr);
-	send_pkts = recv_pkts = 0;
+	g_send_pkts[0] = g_send_pkts[1] = recv_pkts = 0;
 
 	pkt_size = atoi(argv[2]);
 	total_pkts = atoi(argv[3]);
+	total_thds = atoi(argv[4]);
 	int newMaxBuff = 0;
 	int len = sizeof(newMaxBuff);
-//getsockopt(sfd, SOL_SOCKET, SO_SNDBUF, &newMaxBuff, &len);
+
 	printf("sock buf size :%d  port :%d\n", newMaxBuff,port);
 	newMaxBuff = 1024000;
 	setsockopt(sfd, SOL_SOCKET, SO_SNDBUF, &newMaxBuff, sizeof(newMaxBuff));
@@ -181,19 +217,29 @@ main(int argc, char *argv[]) {
 		return 0;
 	}
 
-	//pthread_create(&recv_thread, NULL, (void *) &recv_thread_func, 0);
 	clone((void *) &recv_thread_func, &stack[4000], 9000, 0, 0);
 
-	send_func();
-	recv_stop = 1;
+	unsigned long args[50];
+	if (total_thds >= 1){
+		int i;
+		for (i=0; i<total_thds; i++){
+			send_stop[i]=0;
+			args[2*i+0]= i;
+			args[2*i + 1]= 0;
+			printf(" creatin gthread ... \n");
+			clone((void *) &send_thread_func, &send_stack[i][4000], 9000, &args[2*i], 0);
+		}
+	}
+	//send_func(0);
+
 
 	join();
 	//pthread_join(recv_thread, NULL);
 
-	sbps = (send_pkts * pkt_size * 8) / (duration * 1000000);
+	sbps = ((g_send_pkts[0]+g_send_pkts[1]) * pkt_size * 8) / (duration * 1000000);
 	rbps = (recv_pkts * pkt_size * 8) / (duration * 1000000);
 	printf(
-			"udp_client pktsize:%d send:%d recved:%d  loss:%d SBit rate:%d Mbps Rbir rate:%d duration:%d\n",
-			pkt_size, send_pkts, recv_pkts, (send_pkts - recv_pkts), sbps,
+			"udp_client pktsize:%d send:%d:%d recved:%d  loss:%d SBit rate:%d Mbps Rbir rate:%d duration:%d\n",
+			pkt_size, g_send_pkts[0],g_send_pkts[1], recv_pkts, (g_send_pkts[0]+g_send_pkts[1] - recv_pkts), sbps,
 			rbps,duration);
 }
