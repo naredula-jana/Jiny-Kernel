@@ -1,18 +1,19 @@
-## Benchmarks, Optimizations and Performance improvements .
+## Benchmarks and Performance improvements of opensource kernels and virtual Infra.
 
 [Jiny kernel](https://github.com/naredula-jana/Jiny-Kernel) was designed from ground up for superior performance on virtual environment. This paper provides performance comparision of [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel) with Linux kernel on different workloads like cpu,network,storage,memory,IPC etc on the virtual platform like kvm.
-The below benchmarks show Jiny performed better then linux, one of the reason is linux being generic kernel designed to run on the metal  when compare to Jiny designed for virtual platform. 
+The below benchmarks shows the bottlenecks in open source kernels and virtual infra like hypervisors,virtual switch..etc. It also provides the solutions for the bottlenecks. This paper is limited only to the opensource kernels and opensource virtual infra like kvm,qemu, virtual switches..etc. 
+
   
 - Benchmark-1(CPU centric): Comparisions of cpu centric app running in linux vm versus same app running in Jiny vm. There was big improvement when the same app run in Jiny vm as High priority app. 
-- Benchmark-2(Network centric): Comparisions of network throughput in linux vm versus Jiny vm as aginst with linux bridge versus user space switch. 
+- Benchmark-2(Network centric): Comparisions of network throughput in linux vm versus Jiny vm as aginst with linux bridge and user space switch. user space switch outperforms when compare to the kernel based switch. 
 - Benchmark-3(Storage centric): In progress.
 - Benchmark-4(PageCache): Comparisions of Read/write throughput for Hadoop workload. Improvement of 20% in read/write throughput of hdfs/hadoop workloads.
 - Benchmark-5(Malloc): Memory  improvements with zero page accumulation and other related techiniques: In progress
-- Benchmark-6(IPC): locks and interrutpts improvement: more then 100% improvement : Mostly completed.
+- Benchmark-6(IPC): locks and interrutpts improvements.
 
 ----------------------------------------------------------------------------------
 
-###Benchmark-1(CPU centric): Completed
+###Benchmark-1(CPU centric): 
 **Overview:** An application execution time on the metal is compared with the same app wrapped using thin OS like Jiny and launched as vm. The single app running in Jiny vm outperforms by completing in 6 seconds when compare to the same running on the metal that took 44sec. The key reason for superior performance in Jiny os is, it accelerates the app by allowing  it to run in ring-0 so that the overhead of system calls and context switches are minimized. The protection of system from app malfunctioning is left to virtulization hardware, means if the app crashes in ring-0 at the maximum vm goes down, but not the host. To run in Jiny vm, the app need to recompile without any changes using the modified c library.
 
 **Application(app) used for testing:** A simple C application that read and writes in to a /dev/null file repeatedly in a tight loop is used, this is a system call intensive application. [The app](https://github.com/naredula-jana/Jiny-Kernel/blob/master/modules/test_file/test_file.c) is executed in four environments on the metal, inside the Jiny as High priority, as normal priority inside Jiny  and inside the linux vm.   
@@ -43,14 +44,14 @@ The below benchmarks show Jiny performed better then linux, one of the reason is
 
 ###Benchmark-2(Network centric): 
 
-This benchmark measures the network throughput between vm's using virtual switch on the same host. This is mainly to highlight the bottlenecks in kernel, vNIC and virtual switch connecting the vm's. Networking in Jiny is based on the [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). This benchmark is used to measure the maxumum throughput of the networking stack of the kernel and vswitch connecting the vm's. 
+This benchmark measures the network throughput between vm's using virtual switch on the same host. This is mainly to highlight the bottlenecks in kernel and virtual switch connecting the vm's. Networking in Jiny is based on the [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). This benchmark is used to measure the maxumum throughput of the networking stack of the kernel and vswitch connecting the vm's. 
 
- - **Test Environment**:  In this benchmark, udp client and udp server applications are used to send and recv the udp packets from one vm to another. udp server is a reflector responds back the packet recvied from udp client. The below test results shows the network thoughput(in terms of million packets processed per second(MPPS).The below test mentioned in the table compares with two kernel against with two virtual switches.  
- - **kernels** : Jiny kernel(2.x) , linux kernel(3.18): These two  kernels are compared in below tests. 
- - **virtual switch **: Linux Bridge(LB), [user Space Switch(USS)](https://github.com/naredula-jana/Jiny-Kernel/tree/master/test/virtio-switch): These two vswitches are compared against each kernel.  
- - **VNIC type**: uses vhost-kernel with LB, uses vhost-user with USS.
+ - **Test Environment**:  In this benchmark, udp client and udp server applications are used to send and recv the udp packets from one vm to another. udp server is a reflector responds back the packet recvied from udp client. The below test results shows the network thoughput(in terms of million packets processed per second(MPPS) on sending/recving side.The below test mentioned in the table compares with two kernel against with two virtual switches.  
+ - **kernels** : Jiny kernel(2.x) , linux kernel(3.18) are used. 
+ - **virtual switch**: Linux Bridge(LB), [User Space Switch(USS)](https://github.com/naredula-jana/Jiny-Kernel/tree/master/test/virtio-switch): These two vswitches are compared against the above two kernels. USS is a simple two port virtual user space switch to connect two vm's. It is based on opensource vhost-user vNIC, currently available in kvm hypervisor. other User space virtual switch are Snabb,..etc . 
+ - **VNIC type**: uses vhost-kernel or virtio-vhost with LB, uses vhost-user with USS.
  - **Packet size** used by udp client: 50 bytes. 
- - **Number of cpu cores**: in the linux and Jiny Vm are 2 to 6 cores, udp client consumes 4 thread/cores to generate and recv such large number of packets.  
+ - **Number of cpu cores**: in the linux and Jiny Vm are 2 to 6 cores, udp client consumes 1 to 4 thread/cores to generate and recv such large number of packets.  
  - **Hypervisor**: kvm/qemu-2.4/linux host-kernel-3.18.
  - **two way versus one way test**: "two way" means udp client sends the packets to the udp server running on other vm, where udp_server recves the packets it response same packet back to the udp client. In the one way reflector or udp server will not be running, the packets are dropped in the recving side of the OS. 
 
@@ -100,14 +101,14 @@ This benchmark measures the network throughput between vm's using virtual switch
    </tr>  
    <tr>
     <td> 6-TODO </td>
-    <td>Jinyvm1- userSpaceSwitch -Jinyvm2, with multichannel vNIC</td>
+    <td>Jinyvm1- USS -Jinyvm2, with multichannel vNIC</td>
     <td>????  </td>
     <td>????</td>
     <td>vhost-user vNIC with multichannel is not fully implemented in kvm</td>
     </tr> 
     <tr>
     <td> 7-TODO </td>
-    <td>linuxvm- userSpaceSwitch -linusvm with DPDK  </td>
+    <td>linuxvm- USS -linusvm with DPDK  </td>
      <td>????</td>
      <td>????</td>
     <td>same as test-3 </td>
@@ -130,8 +131,9 @@ This benchmark measures the network throughput between vm's using virtual switch
 2. minimum copies, userspace switch directly copies from source vm ring to destination vm ring without intermediate copies. It uses shared memory between vm and switch.
 3. user space switch uses huge pages, lesser TLB misses.
 
-##### Summary:
-Network throughput in virtual environment between vm to vm is decided by the kernel throughput and the virtual switch connecting the vm's. The shortfall in linux kernel network throughput can be mitigated by DPDK to a larger extent, but apps need to change accordingly.USS switch provide faster virtual infra when compare to linux bridge or switch inside the host kernel.
+##### Conclusion :
+1. Network throughput in virtual environment  is decided by the kernel throughput and the virtual switch connecting the vm's. The shortfall in linux kernel network throughput can be mitigated by DPDK to a larger extent, but apps need to change accordingly.
+2. User Space virtual switch will outperform Kernel based switch like Linux bridge or OVS.  USS switch provide faster virtual infra when compare to linux bridge or switch inside the host kernel.
 
 ---------------------------------------------------------------------------------- 
 ###Benchmark-3(Storage centric): In Progress:
