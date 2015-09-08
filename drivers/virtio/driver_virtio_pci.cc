@@ -185,6 +185,7 @@ int virtio_net_jdriver::virtio_net_poll_device( int total_pkts) {
 	int i;
 	int ret = 0;
 BRK; /* TODO: this function will become obsolute*/
+#if 0
 	for (i = 0; i < total_pkts; i++) {
 		addr = virtio_removeFromQueue(queues[0].recv,(int *)&len);
 		if (addr != 0) {
@@ -206,7 +207,7 @@ BRK; /* TODO: this function will become obsolute*/
 	for (i = 0; i < ret; i++) {
 		net_sched.netif_rx(recv_mbuf_list[i].buf, recv_mbuf_list[i].len);
 	}
-
+#endif
 	return ret;
 }
 
@@ -480,7 +481,7 @@ int virtio_net_jdriver::dettach_device(jdevice *jdev) {
 int virtio_net_jdriver::read(unsigned char *buf, int len, int rd_flags, int opt_flags) {
 	return 0;
 }
-#if 1
+#if 0
 int virtio_net_jdriver::addBufToNetQueue(int qno, int type, unsigned char *buf, unsigned long len) {
 	struct scatterlist sg[2];
 	int ret;
@@ -517,7 +518,7 @@ int virtio_net_jdriver::addBufToNetQueue(int qno, int type, unsigned char *buf, 
 
 	return ret;
 }
-#endif
+
 int virtio_net_jdriver::free_send_bufs(){
 	int i;
 	unsigned long flags;
@@ -545,6 +546,7 @@ int virtio_net_jdriver::free_send_bufs(){
 	}
 	return ret;
 }
+#endif
 int virtio_net_jdriver::burst_send() {
 	int qno,i, ret=0;
 	unsigned long flags;
@@ -597,6 +599,7 @@ int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 	unsigned long flags;
 	unsigned long addr;
 BRK;
+#if 0
 	dev = (jdevice *) this->device;
 	if (dev == 0 || data == 0)
 		return JFAIL;
@@ -636,6 +639,7 @@ BRK;
 
 	free_send_bufs();
 	return ret;  /* Here Sucess indicates the buffer is freed or consumed */
+#endif
 }
 
 int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {

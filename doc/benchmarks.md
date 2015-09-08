@@ -1,22 +1,32 @@
-## Benchmarks and Performance improvements of opensource kernels and virtual Infra.
+## Benchmarks and Performance improvements in opensource Virtual Infra.
 
-[Jiny kernel](https://github.com/naredula-jana/Jiny-Kernel) was designed from ground up for superior performance on virtual environment. This paper provides performance comparision of [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel) with Linux kernel on different workloads like cpu,network,storage,memory,IPC etc on the virtual platform like kvm.
-The below benchmarks shows the bottlenecks in open source kernels and virtual infra like hypervisors,virtual switch..etc. It also provides the solutions for the bottlenecks. This paper is limited only to the opensource kernels and opensource virtual infra like kvm,qemu, virtual switches..etc. 
+[Jiny kernel](https://github.com/naredula-jana/Jiny-Kernel) was designed from ground up for superior performance in virtual infrastructure. This paper mainly compares the throughput of [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel) with Linux kernel on different workloads like cpu,network,storage,memory,IPC,.. etc on hypervisors like kvm. Along with kernel,other key components like virtual switch throughput also covered.
+In each benchmark the bottlenecks and corresponding solution was highlighted.  This paper was limited only to the opensource virtual infrastructure software components like Jiny,Linux, kvm, qemu, virtual switches(linux bridge,userspace switch,ovs,snabb),DPDK..etc.  There are lot of performance centric areas like storage,memory.. etc  yet to be explored.
 
-  
-- Benchmark-1(CPU centric): Comparisions of cpu centric app running in linux vm versus same app running in Jiny vm. There was big improvement when the same app run in Jiny vm as High priority app. 
-- Benchmark-2(Network centric): Comparisions of network throughput in linux vm versus Jiny vm as aginst with linux bridge and user space switch. user space switch outperforms when compare to the kernel based switch. 
-- Benchmark-3(Storage centric): In progress.
-- Benchmark-4(PageCache): Comparisions of Read/write throughput for Hadoop workload. Improvement of 20% in read/write throughput of hdfs/hadoop workloads.
-- Benchmark-5(Malloc): Memory  improvements with zero page accumulation and other related techiniques: In progress
-- Benchmark-6(IPC): locks and interrutpts improvements.
+**About me**
+ I have started Jiny Kernel almost 5 years back from scratch, Along with Jiny  development, these Benchmarks are added or developed over the period of time. The paper highlights performance improvements in areas like pagecache suitable for Hadoop workloads, IPC improvements for multi threaded apps, Network throughput improvements for vm's communication within same host suitable for NFV,..etc. 
 
+   <table border="1" style="width:100%">
+  <tr>
+    <td><b> -  </b></td>
+    <td><b> Area </b></td>
+    <td><b>Description </b></td>
+    <td><b> Improvements</b></td>
+    </tr>
+    <tr><td>Benchmark-1</td><td>CPU centric</td> <td> Comparisions of cpu centric app running in linux vm versus same app running in Jiny vm.</td> <td> 7X </td></tr>
+    <tr><td>Benchmark-2</td><td>Network centric</td> <td>Comparisions of network throughput in linux vm versus Jiny vm as against with linux bridge and user space switch. Jiny on user space switch outperforms when compare to the kernel based switch like linux bridge.</td> <td> 7X </td></tr>
+     <tr><td>Benchmark-3</td><td>Storage</td> <td> Incomplete</td> <td> - </td></tr>
+     <tr><td>Benchmark-4</td><td>PageCache</td> <td> Comparisions of Read/write throughput for Hadoop workload, especially hdfs or IO centric. </td> <td> 20% </td></tr>
+     <tr><td>Benchmark-5</td><td>Memory</td> <td> Memory  improvements with zero page accumulation and other related techiniques</td> <td> - </td></tr>
+      <tr><td>Benchmark-6</td><td>IPC</td> <td> locks and interrutpts improvements.</td> <td> 140% </td></tr>
+    </table>
+    
 ----------------------------------------------------------------------------------
 
 ###Benchmark-1(CPU centric): 
-**Overview:** An application execution time on the metal is compared with the same app wrapped using thin OS like Jiny and launched as vm. The single app running in Jiny vm outperforms by completing in 6 seconds when compare to the same running on the metal that took 44sec. The key reason for superior performance in Jiny os is, it accelerates the app by allowing  it to run in ring-0 so that the overhead of system calls and context switches are minimized. The protection of system from app malfunctioning is left to virtulization hardware, means if the app crashes in ring-0 at the maximum vm goes down, but not the host. To run in Jiny vm, the app need to recompile without any changes using the modified c library.
+**Overview:** An application execution time on the metal is compared with the same app wrapped using thin OS like Jiny and launched as vm. The single app running in Jiny vm outperforms by completing in 6 seconds when compare to the same running on the metal that took 44sec. The key reason for superior performance in Jiny os is, it accelerates the app by allowing  it to run in ring-0 so that the overhead of system calls and context switches are minimized. The protection of system from app malfunctioning is left to virtulization hardware, means if the app crashes in ring-0 at the maximum vm goes down, but not the host. To run in Jiny vm, the app need to recompile using the modified c library. libc need to modify to convert the system calls in to plain function calls.
 
-**Application(app) used for testing:** A simple C application that read and writes in to a /dev/null file repeatedly in a tight loop is used, this is a system call intensive application. [The app](https://github.com/naredula-jana/Jiny-Kernel/blob/master/modules/test_file/test_file.c) is executed in four environments on the metal, inside the Jiny as High priority, as normal priority inside Jiny  and inside the linux vm.   
+**Application(app) used for testing:** A simple C application that read and writes in to a /dev/null file repeatedly in a tight loop is used, the app is a system call intensive. [The app](https://github.com/naredula-jana/Jiny-Kernel/blob/master/modules/test_file/test_file.c) is executed in four environments on the metal, inside the Jiny as High priority, as normal priority inside Jiny  and inside the linux vm.   
 
 #####Completion time of app in different environments:
 
@@ -36,19 +46,18 @@ The below benchmarks shows the bottlenecks in open source kernels and virtual in
 
 ##### summary
  1. Virtulization hardware(vt-x) along with thin OS like Jiny can function as hardware assit  layer to speedup the app. Launching single app using Jiny Vm will be useful not only from virtulization point of view but also to increase the speed.
- 2. In the test,I have used syscall intensive app that as shown huge improvement when compare to app on metal, but other workload like io intensive may not give that large improvement.  Speeds of virtulization io path are improving continuously both in software or hardware,  so  io intensive  apps also will become better in the future.
- 3. Most of apps as  high priority app in Jiny will  show big performance improvement when compare the same app in linux or freebsd vm's. 
+ 2. In the test, syscall intensive app was used, and  as shown huge improvement when compare to app on metal, but other workload like io intensive will not give that large improvement.  Speeds of virtulization io path are improving continuously both in software or hardware,  so  io intensive  apps also will become better. 
 
 ----------------------------------------------------------------------------------
 
 
 ###Benchmark-2(Network centric): 
 
-This benchmark measures the network throughput between vm's using virtual switch on the same host. This is mainly to highlight the bottlenecks in kernel and virtual switch connecting the vm's. Networking in Jiny is based on the [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). This benchmark is used to measure the maxumum throughput of the networking stack of the kernel and vswitch connecting the vm's. 
+This benchmark measures the network throughput between vm's using virtual switch on the same host. This mainly highlight the bottlenecks in kernel and virtual switch connecting the vm's. Networking in Jiny is based on the [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). This benchmark was used to measure the maxumum throughput of the networking stack of the kernel and vswitch forwarding throughput connecting the vm's. 
 
- - **Test Environment**:  In this benchmark, udp client and udp server applications are used to send and recv the udp packets from one vm to another. udp server is a reflector responds back the packet recvied from udp client. The below test results shows the network thoughput(in terms of million packets processed per second(MPPS) on sending/recving side.The below test mentioned in the table compares with two kernel against with two virtual switches.  
+ - **Test Environment**:  In this benchmark, udp client and udp server applications are used to send and recv the udp packets from one vm to another. udp server acts like a reflector, responds back the packet recvied from udp client. The below test results shows the network thoughput(in terms of million packets processed per second(MPPS) on sending/recving side.The below test mentioned in the table compares two kernel througput using one of the two virtual switches.  
  - **kernels** : Jiny kernel(2.x) , linux kernel(3.18) are used. 
- - **virtual switch**: Linux Bridge(LB), [User Space Switch(USS)](https://github.com/naredula-jana/Jiny-Kernel/tree/master/test/virtio-switch): These two vswitches are compared against the above two kernels. USS is a simple two port virtual user space switch to connect two vm's. It is based on opensource vhost-user vNIC, currently available in kvm hypervisor. other User space virtual switch are Snabb,..etc . 
+ - **virtual switch**: Linux Bridge(LB), [User Space Switch(USS)](https://github.com/naredula-jana/Jiny-Kernel/tree/master/test/virtio-switch): These two vswitches are compared against the above two kernels. USS is a simple two port virtual user space switch to connect two vm's. It is based on opensource vhost-user vNIC, this vNIC is available in kvm hypervisor. other User space virtual switch are Snabb,DPDK,..etc . 
  - **VNIC type**: uses vhost-kernel or virtio-vhost with LB, uses vhost-user with USS.
  - **Packet size** used by udp client: 50 bytes. 
  - **Number of cpu cores**: in the linux and Jiny Vm are 2 to 6 cores, udp client consumes 1 to 4 thread/cores to generate and recv such large number of packets.  
@@ -126,9 +135,9 @@ This benchmark measures the network throughput between vm's using virtual switch
 4. **Area to Improve* further*: a) checksum computation takes large amount of cpu cycles, need to improve further in this area. b) Multichannels in NIC, current kvm hypervisor does not support fully.
 
 
-##### Reasons for Better throughput in User-Space-Switch(USS) when compre to Linux-Bridge(LB):
+##### Reasons for Better throughput in User-Space-Switch(USS) when compare to Linux-Bridge(LB):
 1. lesser context switches in USS when compare to LB.
-2. minimum copies, userspace switch directly copies from source vm ring to destination vm ring without intermediate copies. It uses shared memory between vm and switch.
+2. minimum copies, userspace switch directly copies from source vm ring to destination vm ring without intermediate copies because of shared memory. It uses shared memory between vm and switch.
 3. user space switch uses huge pages, lesser TLB misses.
 
 ##### Conclusion :
@@ -193,4 +202,5 @@ Issue-1: In IPC, if there is a contention in mutext or semop or other IPC, then 
 ##Related Projects:
  -   [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel) .
  -   [Vmstate](https://github.com/naredula-jana/vmstate): Virtualmachine state capture and analysis.
+ -   [User Space virtual Switch using Vhost-user](https://github.com/naredula-jana/Jiny-Kernel/tree/master/test/virtio-switch): Works only with kvm hypervisor.
  
