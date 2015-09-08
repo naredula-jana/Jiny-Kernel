@@ -1,10 +1,10 @@
 ## Benchmarks and Performance improvements in opensource Virtual Infra.
 
-[Jiny kernel](https://github.com/naredula-jana/Jiny-Kernel) was designed from ground up for superior performance in virtual infrastructure. This paper mainly compares the throughput of [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel) with Linux kernel on different workloads like cpu,network,storage,memory,IPC,.. etc on hypervisors like kvm. Along with kernel,other key components like virtual switch throughput also covered.
+[Jiny kernel](https://github.com/naredula-jana/Jiny-Kernel) was designed from ground up for superior performance on virtual infrastructure. This paper mainly compares the throughput of [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel) with Linux kernel on different workloads like cpu,network,storage,memory,IPC,.. etc on hypervisors like kvm. Apart from kernel,other key virtual infra components like virtual switch throughput are also covered.
 In each benchmark the bottlenecks and corresponding solution was highlighted.  This paper was limited only to the opensource virtual infrastructure software components like Jiny,Linux, kvm, qemu, virtual switches(linux bridge,userspace switch,ovs,snabb),DPDK..etc.  There are lot of performance centric areas like storage,memory.. etc  yet to be explored.
 
-**About me**
- I have started Jiny Kernel almost 5 years back from scratch, Along with Jiny  development, these Benchmarks are added or developed over the period of time. The paper highlights performance improvements in areas like pagecache suitable for Hadoop workloads, IPC improvements for multi threaded apps, Network throughput improvements for vm's communication within same host suitable for NFV,..etc. 
+**About me:**
+ I have started Jiny Kernel almost 5 years back from scratch, Along with Jiny development, these Benchmarks are added or developed over the period of time. The paper highlights performance improvements in areas like pagecache suitable for Hadoop workloads, IPC improvements for multi threaded apps, Network throughput improvements for inter vm communication within same host suitable for NFV,..etc. 
 
    <table border="1" style="width:100%">
   <tr>
@@ -53,14 +53,14 @@ In each benchmark the bottlenecks and corresponding solution was highlighted.  T
 
 ###Benchmark-2(Network centric): 
 
-This benchmark measures the network throughput between vm's using virtual switch on the same host. This mainly highlight the bottlenecks in kernel and virtual switch connecting the vm's. Networking in Jiny is based on the [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). This benchmark was used to measure the maxumum throughput of the networking stack of the kernel and vswitch forwarding throughput connecting the vm's. 
+This benchmark measures the network throughput between two vm's using virtual switch on the same host. This mainly highlight the bottlenecks in kernel and virtual switch connecting the vm's. Networking in Jiny is based on the [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). This benchmark gives the maxumum throughput in terms of packets per second at which one vm can send to second vm using the virtual switch in between. 
 
- - **Test Environment**:  In this benchmark, udp client and udp server applications are used to send and recv the udp packets from one vm to another. udp server acts like a reflector, responds back the packet recvied from udp client. The below test results shows the network thoughput(in terms of million packets processed per second(MPPS) on sending/recving side.The below test mentioned in the table compares two kernel througput using one of the two virtual switches.  
+ - **Test Environment**:  In this benchmark, udp client and udp server socket applications are used to send and recv the udp packets from one vm to another. udp server acts like a reflector, responds back the same packet recvied from udp client. udp client counts the number of packet it got respond back from the server. The below test results shows the network thoughput(in terms of million packets processed per second(MPPS) on sending/recving side.The  tests mentioned in the table compares jiny/linux kernel througput using one of the two virtual switches.  
  - **kernels** : Jiny kernel(2.x) , linux kernel(3.18) are used. 
  - **virtual switch**: Linux Bridge(LB), [User Space Switch(USS)](https://github.com/naredula-jana/Jiny-Kernel/tree/master/test/virtio-switch): These two vswitches are compared against the above two kernels. USS is a simple two port virtual user space switch to connect two vm's. It is based on opensource vhost-user vNIC, this vNIC is available in kvm hypervisor. other User space virtual switch are Snabb,DPDK,..etc . 
- - **VNIC type**: uses vhost-kernel or virtio-vhost with LB, uses vhost-user with USS.
- - **Packet size** used by udp client: 50 bytes. 
- - **Number of cpu cores**: in the linux and Jiny Vm are 2 to 6 cores, udp client consumes 1 to 4 thread/cores to generate and recv such large number of packets.  
+ - **VNIC type**: uses vhost-kernel or virtio-vhost with LB, uses vhost-user with USS bypassing host kernel.
+ - **Packet size** used by udp client/server: 50/200 bytes. 
+ - **Number of cpu cores**:  vm with 2 to 6 cores are used, udp client consumes 1 to 4 thread/cores to generate and recv such large number of packets.  
  - **Hypervisor**: kvm/qemu-2.4/linux host-kernel-3.18.
  - **two way versus one way test**: "two way" means udp client sends the packets to the udp server running on other vm, where udp_server recves the packets it response same packet back to the udp client. In the one way reflector or udp server will not be running, the packets are dropped in the recving side of the OS. 
 
@@ -105,7 +105,7 @@ This benchmark measures the network throughput between vm's using virtual switch
     <td>Jinyvm1- USS/LB -Jinyvm2 - one way</td>
     <td>1.800 MPPS with USS
      , and 0.266 MPPS with LB </td>
-    <td> USS is a single thread, it can improve further from 1.800MPPS further.  </td>
+    <td> USS is a single thread, it can improve further from 1.800MPPS.  </td>
         <td> - </td>
    </tr>  
    <tr>
@@ -125,14 +125,14 @@ This benchmark measures the network throughput between vm's using virtual switch
 </table> 
 
 ##### Summary of Tests:
-1. Test-5 : USS versus LB with Jiny VM: USS as outperformed when compare to LB.
-2. Test-1 versus Test-2: Jiny kernel versus Linux kernel using LB: Jiny as performed better when compare to linux.This can be mitigated in Linux kernel using DPDK. The application need to change accordingly when used with DPDK.
+1. Test-5 : USS versus LB with Jiny VM's: USS as outperformed when compare to LB.
+2. Test-1 versus Test-2: Jiny kernel versus Linux kernel using LB: Jiny as performed better when compare to linux.This can be mitigated in Linux kernel using DPDK. The application need to change accordingly when used with DPDK. Jiny does not need DPDK, application can directly interact with jiny kernel.
 
 ##### Reasons for Better throughput in Jiny kernel when compare to linux kernel:
-1. Network bottom half is very thin, and entire computation of send/recv packet is done in the application context, means the network stack runs in parallels as part of application context, this makes packet processing computation on the same core and avoid locking. The implementaion of network frame work is similar to [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). 
+1. Network bottom half is very thin, and entire computation of send/recv packet is done in the application context, means the network stack runs  as part of application context concurrently without locks, this makes most of the packet processing computation on the same core and avoid locking. The implementaion of network frame work is similar to [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). 
 2. lockless implementation of memory management in acquiring and releasing the memory buffers.
-3. Poll Mode Driver (PMD): Minimising the virtio kicks in send path and interrupts in recv path. Operates in Poll Mode at high rate by switching off the interupts.
-4. **Area to Improve* further*: a) checksum computation takes large amount of cpu cycles, need to improve further in this area. b) Multichannels in NIC, current kvm hypervisor does not support fully.
+3. Poll Mode Driver (PMD): Minimising the virtio kicks in send path and in recv path using the bulk operations. Operates in Poll Mode at high rate by switching off the interupts.
+4. **Area to Improve* further*: a) checksum computation takes large amount of cpu cycles, need to improve further in this area. b) using Multichannel vNIC, current kvm hypervisor does not support fully. c) third party open source networking stack from uip is used, it can be further finetuned.
 
 
 ##### Reasons for Better throughput in User-Space-Switch(USS) when compare to Linux-Bridge(LB):
