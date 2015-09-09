@@ -80,17 +80,6 @@ void Jcmd_netbhstat(void *arg1,void *arg2){
 
 }
 
-
-int network_scheduler::netif_rx(unsigned char *data, unsigned int len) {
-	if (data == 0){
-		return JFAIL;
-	}
-	if (socket::attach_rawpkt(data, len) == JFAIL) {
-		jfree_page(data);
-	}
-	return JSUCCESS;
-}
-
 int network_scheduler::init() {
 	unsigned long pid;
 	int i;
@@ -242,13 +231,25 @@ int net_bh(int send_bh){
 /*****************************************************************/
 static int sendqs_empty=1;
 static class fifo_queue *send_queues[MAX_CPUS];
-
+/* from socket layer -->  NIC */
 static int sendq_add(unsigned char *buf, int len, int write_flags){
 	int ret = send_queues[getcpuid()]->add_to_queue(buf,len,write_flags,0);
 	if (sendqs_empty == 1 && ret==JSUCCESS){
 		sendqs_empty = 0;
+//		PageSetNetBuf(virt_to_page(buf));
 	}
 	return ret;
+}
+/* from NIC -->  socket layer */
+int netif_rx(unsigned char *data, unsigned int len) {
+	if (data == 0){
+		return JFAIL;
+	}
+	//PageClearNetBuf(virt_to_page(data));
+	if (socket::attach_rawpkt(data, len) == JFAIL) {
+		jfree_page(data);
+	}
+	return JSUCCESS;
 }
 static int sendq_remove(){
 	static int last_q=0;
@@ -302,6 +303,7 @@ last:
 	}
 	return ret;
 }
+
 /*******************************************************************/
 int init_networking() {
 	int pid;
@@ -447,7 +449,7 @@ void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
 		for (i=0; i<getmaxcpus(); i++){
 			ut_printf(" %d: sendq_attached:%d sendq_DROP:%d LEN :%d \n",i,send_queues[i]->stat_attached,send_queues[i]->stat_drop,send_queues[i]->queue_len.counter);
 		}
-		ut_printf(" Maac****addr : %x:%x:%x:%x:%x:%x current interrupt disable:%i qeuesstatus:%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],g_net_interrupts_disable,sendqs_empty);
+		ut_printf(" mac-addr : %x:%x:%x:%x:%x:%x current interrupt disable:%i qeuesstatus:%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],g_net_interrupts_disable,sendqs_empty);
 	}
 	socket::print_all_stats();
 

@@ -192,6 +192,7 @@ extern struct mm_struct *g_kernel_mm;
 #define PG_skip                 11
 #define PG_large_page           12
 #define PG_readinprogress       13
+#define PG_netbuf               14  /* these pages are used for network buffer */
 #define PG_reserved             31
 
 #define PageReserved(page)      (test_bit(PG_reserved, &(page)->flags))
@@ -201,9 +202,11 @@ extern struct mm_struct *g_kernel_mm;
 #define PageSlab(page)           (test_bit(PG_slab, &(page)->flags))
 #define PageLargePage(page)           (test_bit(PG_large_page, &(page)->flags))
 #define PageDirty(page)      (test_bit(PG_dirty, &(page)->flags))
+#define PageNetBuf(page)      (test_bit(PG_netbuf, &(page)->flags))
 #define PageReadinProgress(page)      (test_bit(PG_readinprogress, &(page)->flags))
 
 #define PageSetSlab(page)	set_bit(PG_slab, &(page)->flags)
+#define PageSetNetBuf(page)	set_bit(PG_netbuf, &(page)->flags)
 #define PageSetLargePage(page)	set_bit(PG_large_page, &(page)->flags)
 #define PageSetDirty(page)      set_bit(PG_dirty, &(page)->flags)
 #define PageSetReferenced(page)      (set_bit(PG_referenced, &(page)->flags))
@@ -211,6 +214,7 @@ extern struct mm_struct *g_kernel_mm;
 
 #define PageClearReferenced(page)      (clear_bit(PG_referenced, &(page)->flags))
 #define PageClearDirty(page)    clear_bit(PG_dirty, &(page)->flags)
+#define PageClearNetBuf(page)    clear_bit(PG_netbuf, &(page)->flags)
 #define PageClearSlab(page)	(clear_bit(PG_slab, &(page)->flags))
 #define PageClearLargePage(page)	(clear_bit(PG_large_page, &(page)->flags))
 #define PageClearReadinProgress(page)      (clear_bit(PG_readinprogress, &(page)->flags))

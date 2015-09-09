@@ -613,6 +613,9 @@ unsigned long jalloc_page(int flags){
 int jfree_page(unsigned long p){
 	int cpu = getcpuid();
 
+	if (PageNetBuf(virt_to_page(p))){
+		BRK;
+	}
 	stat_page_frees++;
 	//ut_log(" jfree_page:%x \n",p);
 #if 1

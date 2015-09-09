@@ -144,13 +144,13 @@ struct virtio_feature_desc vtnet_feature_desc[] = { { VIRTIO_NET_F_CSUM, "TxChec
 
 extern "C"{
 extern int virtio_BulkRemoveFromNetQueue(struct virtqueue *_vq, struct struct_mbuf *mbuf_list, int list_len);
-extern int virtio_BulkAddToNetqueue(struct virtqueue *_vq,  struct struct_mbuf *mbuf_list, int list_len);
+extern int virtio_BulkAddToNetqueue(struct virtqueue *_vq,  struct struct_mbuf *mbuf_list, int list_len, int is_send);
 }
 extern "C" {
 extern int  virtio_check_recv_pkt(void *);
 }
 int virtio_net_jdriver::check_for_pkts(){
-	return virtio_check_recv_pkt(queues[0].recv->vq);
+	return virtio_check_recv_pkt(queues[0].recv);
 }
 int virtio_net_jdriver::burst_recv(int total_pkts){
 	unsigned char *addr;
@@ -169,11 +169,11 @@ int virtio_net_jdriver::burst_recv(int total_pkts){
 		return 0;
 	}
 
-	virtio_BulkAddToNetqueue(queues[0].recv, 0, MAX_BUF_LIST_SIZE*3);
+	virtio_BulkAddToNetqueue(queues[0].recv, 0, MAX_BUF_LIST_SIZE*3,0);
 	queue_kick(queues[0].recv);
 
 	for (i = 0; i < recv_pkts; i++) {
-		net_sched.netif_rx(recv_mbuf_list[i].buf, recv_mbuf_list[i].len);
+		netif_rx(recv_mbuf_list[i].buf, recv_mbuf_list[i].len);
 		recv_mbuf_list[i].buf = 0;
 	}
 	return ret;
@@ -205,7 +205,7 @@ BRK; /* TODO: this function will become obsolute*/
 	}
 
 	for (i = 0; i < ret; i++) {
-		net_sched.netif_rx(recv_mbuf_list[i].buf, recv_mbuf_list[i].len);
+		netif_rx(recv_mbuf_list[i].buf, recv_mbuf_list[i].len);
 	}
 #endif
 	return ret;
@@ -440,10 +440,8 @@ int virtio_net_jdriver::net_attach_device() {
 		if (queues[k].recv == 0 || queues[k].send ==0){
 			break;
 		}
-		for (i = 0; i < max_qbuffers/2; i++){ /* add buffers to recv q */
-			//addBufToNetQueue(k, VQTYPE_RECV, 0, 4096);
-			virtio_BulkAddToNetqueue(queues[k].recv, 0, MAX_BUF_LIST_SIZE*3);
-		}
+		virtio_BulkAddToNetqueue(queues[k].recv, 0, max_qbuffers/2,0);
+
 		ut_log("    virtio_netq:%d  recv addbuffers:%d \n",k,max_qbuffers/2);
 	}
 	inb(pci_ioaddr + VIRTIO_PCI_ISR);
@@ -558,7 +556,7 @@ int virtio_net_jdriver::burst_send() {
 
 	spin_lock_irqsave(&virtionet_lock, flags);
 	for (qno=0; qno<max_vqs; qno++){  /* try to send from the same queue , if it full then try on the subsequent one, in this way kicks will be less */
-		ret = virtio_BulkAddToNetqueue(queues[qno].send, &send_mbuf_list[send_mbuf_start],send_mbuf_len);
+		ret = virtio_BulkAddToNetqueue(queues[qno].send, &send_mbuf_list[send_mbuf_start],send_mbuf_len,1);
 
 		if (ret == 0){
 			continue;

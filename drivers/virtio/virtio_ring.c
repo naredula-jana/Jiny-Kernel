@@ -572,6 +572,8 @@ unsigned int virtqueue_get_vring_size(struct virtqueue *_vq){
 }
 /**********************************************************************************/
 int virtio_check_recv_pkt(struct vring_virtqueue *vq){
+//int virtio_check_recv_pkt(struct virtqueue *_vq){
+//	struct vring_virtqueue *vq = to_vvq(_vq);
 	return vq->vring.used->idx - vq->last_used_idx ;
 }
 
@@ -634,7 +636,8 @@ int virtio_BulkRemoveFromNetQueue(struct virtqueue *_vq, struct struct_mbuf *mbu
 	END_USE(vq);
 	return ret;
 }
-int virtio_BulkAddToNetqueue(struct virtqueue *_vq,  struct struct_mbuf *mbuf_list, int list_len){
+int g_conf_virtio_sync = 0;
+int virtio_BulkAddToNetqueue(struct virtqueue *_vq,  struct struct_mbuf *mbuf_list, int list_len, int is_send){
 	struct vring_virtqueue *vq = to_vvq(_vq);
 	unsigned int i, avail, uninitialized_var(prev);
 	int head,index,len,ret=0;
@@ -653,6 +656,9 @@ int virtio_BulkAddToNetqueue(struct virtqueue *_vq,  struct struct_mbuf *mbuf_li
 		}else{
 			data = (unsigned char *) jalloc_page(MEM_NETBUF);
 			len = 4096; /* page size */
+			if (data) {
+				//PageSetNetBuf(virt_to_page(data));
+			}
 		}
 		if (data == 0){
 			BRK;
@@ -664,7 +670,11 @@ int virtio_BulkAddToNetqueue(struct virtqueue *_vq,  struct struct_mbuf *mbuf_li
 
 		head = vq->free_head;
 		for (i = vq->free_head; out; i = vq->vring.desc[i].next, out--) {
-			vq->vring.desc[i].flags = VRING_DESC_F_NEXT;
+			if (is_send == 1){
+				vq->vring.desc[i].flags = VRING_DESC_F_NEXT  ;
+			}else{
+				vq->vring.desc[i].flags = VRING_DESC_F_NEXT | VRING_DESC_F_WRITE  ;
+			}
 			if (vq->vring.desc[i].addr != 0){
 				BRK;
 			}
@@ -683,6 +693,7 @@ int virtio_BulkAddToNetqueue(struct virtqueue *_vq,  struct struct_mbuf *mbuf_li
 
 		/* Update free pointer */
 		vq->free_head = i;
+		//vq->data[head] = data;
 		vq->stat_alloc++;
 
 		/* Put entry in available array (but don't update avail->idx until they
@@ -691,8 +702,10 @@ int virtio_BulkAddToNetqueue(struct virtqueue *_vq,  struct struct_mbuf *mbuf_li
 		vq->vring.avail->ring[avail] = head;
 		ret++;
 #if 1 /* TODO: may not be needed for every packet, it may have negative impact, doing for the correctness */
-		if (ret > 0){
+		if (g_conf_virtio_sync == 1) {
+			if (ret > 0) {
 				sync_avial_idx(vq);
+			}
 		}
 #endif
 	}
