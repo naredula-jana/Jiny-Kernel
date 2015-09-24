@@ -38,20 +38,15 @@ int g_conf_net_pmd=1; /* pollmode driver on/off */
 int g_conf_net_auto_intr=0; /* auto interrupts, switch on/off based on the recv packet frequency */
 int g_conf_netbh_cpu=0;
 
-int g_conf_net_virtio_burst=1;
-
 int g_conf_net_send_int_disable = 1;
 int g_conf_net_send_dur=0;
 int g_conf_net_send_burst=128;
 int g_conf_net_recv_burst=128;
-
 int g_conf_netbh_dedicated=1; /* all netb by only deidcated thread  for send and recv*/
-int g_conf_net_send_shaping=1; /* on error or speedy sending , slowy down sending if shaping is enabled*/
+int g_conf_net_send_shaping=0; /* on error or speedy sending , slowy down sending if shaping is enabled*/
 
 int g_net_interrupts_disable=1;
-
 unsigned long g_stat_net_send_errors=0;
-
 unsigned long g_stat_net_intr_mode_toggle=0;
 }
 #include "jdevice.h"
@@ -113,11 +108,9 @@ int network_scheduler::netRx_BH() {
 		int total_pkts = 0;
 		int pkts = 0;
 		while (ret < g_conf_net_recv_burst) {
-			if (g_conf_net_virtio_burst == 1){
-				pkts = device_list[i]->burst_recv(max_pkts);
-			}else{
-				pkts = device_list[i]->virtio_net_poll_device(max_pkts);
-			}
+
+			pkts = device_list[i]->burst_recv(max_pkts);
+
 			if (pkts == 0) {
 				return ret;
 			}
@@ -444,12 +437,12 @@ void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
 	if (net_sched.device) {
 		unsigned char mac[10];
 
-		net_sched.device->ioctl(NETDEV_IOCTL_PRINT_STAT, 0);
+		net_sched.device->ioctl(NETDEV_IOCTL_PRINT_STAT, arg1);
 		net_sched.device->ioctl(NETDEV_IOCTL_GETMAC, (unsigned long) &mac);
 		for (i=0; i<getmaxcpus(); i++){
 			ut_printf(" %d: sendq_attached:%d sendq_DROP:%d LEN :%d \n",i,send_queues[i]->stat_attached,send_queues[i]->stat_drop,send_queues[i]->queue_len.counter);
 		}
-		ut_printf(" mac-addr : %x:%x:%x:%x:%x:%x current interrupt disable:%i qeuesstatus:%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],g_net_interrupts_disable,sendqs_empty);
+		ut_printf(" MAC-ADDRESS : %x:%x:%x:%x:%x:%x current interrupt disable:%i qeuesstatus:%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],g_net_interrupts_disable,sendqs_empty);
 	}
 	socket::print_all_stats();
 

@@ -12,6 +12,7 @@ OBJ_XEN=drivers/xen/xen_init.o drivers/xen/xenbus.o drivers/xen/evntchn.o driver
 
 OBJ_VIRTIO= drivers/virtio/virtio_ring.o \
 	drivers/virtio/virtio_memballoon.o \
+	drivers/virtio/virtio_queue.o \
 	drivers/virtio/9p/p9.o \
 	drivers/virtio/9p/p9_fs.o drivers/virtio/driver_virtio_pci.o
 

@@ -6,7 +6,9 @@ extern "C" {
 #include "interface.h"
 }
 #include "file.hh"
+#include "virtio_queue.hh"
 class jdriver;
+class virtio_queue;
 #define MAX_DEVICE_NAME 100
 class jdevice: public vinode {
 
@@ -58,6 +60,7 @@ public:
 	struct virtqueue *virtio_create_queue(uint16_t index, int qType);
 	void print_stats(unsigned char *arg1,unsigned char *arg2);
 	void queue_kick(struct virtqueue *vq);
+	void queue_kick(struct virtio_queue *vq);
 
 	unsigned long stat_allocs,stat_frees,stat_err_nospace;
 };
@@ -73,10 +76,10 @@ class virtio_net_jdriver: public virtio_jdriver {
 public:
 #define MAX_VIRT_QUEUES 10
 	struct virt_queue{
-		struct virtqueue *recv,*send;
+		 virtio_queue *recv,*send;
 		int pending_send_kick;
 	}queues[MAX_VIRT_QUEUES];
-	struct virtqueue *control_q;
+	struct virtqueue *control_q; /* need to change to virio_queue class */
 	uint16_t max_vqs;
 	uint32_t send_count;
 	uint32_t current_send_q;
@@ -89,8 +92,6 @@ public:
 	int send_mbuf_len;
 	struct struct_mbuf temp_mbuf_list[MAX_BUF_LIST_SIZE]; /* used to remove the send bufs to free */
 
-	int addBufToNetQueue(int qno, int type, unsigned char *buf, unsigned long len);
-	int virtio_net_poll_device(int total_pkts); /* old version */
 	int burst_recv(int total_pkts);  /* new version */
 	int burst_send();  /* new version */
 	int check_for_pkts();

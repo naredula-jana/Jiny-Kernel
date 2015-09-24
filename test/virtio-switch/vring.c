@@ -103,18 +103,10 @@ int send_pkt(VringTable* vring_table, uint32_t v_idx,  void* input_buf, size_t s
         return -1;
     }
 
-#ifdef DUMP_PACKETS1
-    fprintf(stdout, "SENDING chunks on %d - size:%d : ",v_idx,(int)size);
-#endif
-
     i=d_idx;
     for (k=0; k<2; k++) {
         void* cur = 0;
         uint32_t cur_len = desc[i].len;
-
-#ifdef DUMP_PACKETS1
-        fprintf(stdout, "desc_len:%d addr:%p ", cur_len,(void *)desc[i].addr);
-#endif
 
         // map the address
         if (handler && handler->map_handler) {
@@ -124,24 +116,12 @@ int send_pkt(VringTable* vring_table, uint32_t v_idx,  void* input_buf, size_t s
         }
 
         if (k==1) {
-        	//if (cur_len > size){
-        	if (1){
-        		memcpy(cur, input_buf, size);
-        		cur_len =size;
-        	}{
-        		//cur_len=0;
-        	}
-#ifdef DUMP_PACKETS1
-            fprintf(stdout, "New %d(%d) ", (int)size,cur_len);
-#endif
+        	memcpy(cur, input_buf, size);
+        	cur_len =size;
         }else{
             memset(cur, 0, hdr_len);
             cur_len=hdr_len;
-#ifdef DUMP_PACKETS1
-            fprintf(stdout, "%d(%d) ",(int)hdr_len,cur_len);
-#endif
         }
-
         len = len + cur_len;
 
         if (desc[i].flags & VIRTIO_DESC_F_NEXT) {
@@ -167,11 +147,6 @@ int send_pkt(VringTable* vring_table, uint32_t v_idx,  void* input_buf, size_t s
     used->idx = vring_table->vring[v_idx].last_used_idx;
     vring_table->vring[v_idx].last_avail_idx++;
     sync_shm();
-
-    kick(vring_table,v_idx);
-#ifdef DUMP_PACKETS1
-    fprintf(stdout, "  len=%d num:%d\n",len,num);
-#endif
 
     return 0;
 }
@@ -339,11 +314,215 @@ int process_input_fromport(VhostServer* vhost_server,VhostServer* send_vhost_ser
 #endif
     return count;
 }
+/************************************************   New functions ****************************/
+struct struct_mbuf{
+	void *input_buf;
+	int len;
+};
+//int Bulk_send_pkt(VringTable* vring_table, uint32_t v_idx,  void* input_buf, size_t size){
+int Bulk_send_pkt(VringTable* vring_table,  struct struct_mbuf *mbuf_list, int list_size){
+    struct vring_desc* desc = vring_table->vring[VHOST_CLIENT_VRING_IDX_RX].desc;
+    struct vring_avail* avail = vring_table->vring[VHOST_CLIENT_VRING_IDX_RX].avail;
+    struct vring_used* used = vring_table->vring[VHOST_CLIENT_VRING_IDX_RX].used;
+    unsigned int num = vring_table->vring[VHOST_CLIENT_VRING_IDX_RX].num;
+    ProcessHandler* handler = &vring_table->handler;
+    uint16_t u_idx = vring_table->vring[VHOST_CLIENT_VRING_IDX_RX].last_used_idx % num;
+    uint32_t a_idx=vring_table->vring[VHOST_CLIENT_VRING_IDX_RX].last_avail_idx % num;
+    uint16_t d_idx = avail->ring[a_idx];
+    uint32_t i, len = 0;
+    size_t hdr_len = sizeof(struct virtio_net_hdr);
+    int k;
+    uint16_t pkt;
+    int ret=0;
 
-int kick(VringTable* vring_table, uint32_t v_idx){
+	for (pkt = 0; pkt < list_size; pkt++) {
+		if ((vring_table->vring[VHOST_CLIENT_VRING_IDX_RX].last_used_idx +pkt) == avail->idx) {
+			if ((stat_send_err % 2500000) == 0) {
+				// 	if (((vring_table->dropped % 200)==0) && vring_table->dropped!=0){
+				fprintf(stdout,
+						"%p: ERROR : NO-SPACE in Avail:%d ava  error:%d DROP:%d max_buf:%d\n",
+						vring_table, avail->idx, stat_send_err,
+						vring_table->dropped, MAX_BUFS);
+			}
+			stat_send_err = stat_send_err + list_size - pkt ;
+			goto last;
+		}
+		d_idx = avail->ring[(a_idx+pkt)% num];
+		i = d_idx;
+		for (k = 0; k < 2; k++) {
+			void* cur = 0;
+			uint32_t cur_len = desc[i].len;
 
-//printf("kicking :%d \n",v_idx);
-    return 0;
+			// map the address
+			if (handler && handler->map_handler) {
+				cur = (void*) handler->map_handler(handler->context,
+						desc[i].addr);
+			} else {
+				cur = (void*) (uintptr_t) desc[i].addr;
+			}
+
+			if (k == 1) {
+				memcpy(cur, mbuf_list[pkt].input_buf+hdr_len, mbuf_list[pkt].len-hdr_len );
+				cur_len = mbuf_list[pkt].len-hdr_len;
+			} else {
+				memset(cur, 0, hdr_len);
+				cur_len = hdr_len;
+			}
+			len = len + cur_len;
+
+			if (desc[i].flags & VIRTIO_DESC_F_NEXT) {
+				i = desc[i].next;
+			} else {
+				break;
+			}
+		}
+
+		if (!len) {
+			stat_send_err++;
+			goto last;
+		}
+		stat_send_succ++;
+		// add it to the used ring
+		used->ring[(u_idx+ret) % num].id = d_idx;
+		used->ring[(u_idx+ret) % num].len = len;
+		if (used->flags == 0) {
+			used->flags = 1;
+		}
+		ret++;
+	}
+last:
+    sync_shm();
+    vring_table->vring[VHOST_CLIENT_VRING_IDX_RX].last_used_idx = ret + vring_table->vring[VHOST_CLIENT_VRING_IDX_RX].last_used_idx;
+    used->idx = vring_table->vring[VHOST_CLIENT_VRING_IDX_RX].last_used_idx;
+    vring_table->vring[VHOST_CLIENT_VRING_IDX_RX].last_avail_idx = ret + vring_table->vring[VHOST_CLIENT_VRING_IDX_RX].last_avail_idx;
+    sync_shm();
+
+    return ret;
 }
+#define MAX_PKT 16
+extern int test_mode;
+extern void sigTerm(int s);
+static uint16_t Bulk_read_pkt(VhostServer* send_port,VringTable* vring_table,  uint32_t a_idx){
+    struct vring_desc* desc = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].desc;
+    struct vring_avail* avail = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].avail;
+    struct vring_used* used = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].used;
+    unsigned int num = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].num;
+    ProcessHandler* handler = &vring_table->handler;
+    uint16_t u_idx = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_used_idx % num;
+    uint16_t d_idx = avail->ring[a_idx];
+    uint32_t  len = 0;
+    struct struct_mbuf mbuf_list[MAX_PKT];
+    struct virtio_net_hdr *hdr = 0;
+    uint16_t pkt;
+    uint16_t ret=0;
+    uint16_t i;
+    int k;
+    void* cur = 0;
+
+	for (pkt = 0; pkt < MAX_PKT; pkt++) {
+		if ((vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_avail_idx+pkt) == avail->idx) {
+			goto last;
+		}
+		a_idx = (vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_avail_idx + pkt) % num;
+		d_idx = avail->ring[a_idx];
+		i = d_idx;
+		len =0;
+		for (k = 0; k < 2; k++) {
+			cur = 0;
+			uint32_t cur_len = desc[i].len;
+
+			// map the address
+			if (handler && handler->map_handler) {
+				cur = (void*) handler->map_handler(handler->context,
+						desc[i].addr);
+			} else {
+				cur = (void*) (uintptr_t) desc[i].addr;
+			}
+			if (len ==0){
+				mbuf_list[pkt].input_buf = cur;
+				mbuf_list[pkt].len = 0;
+			}
+			if (desc[i].addr == 0  && k==0){
+				stat_recv_err++;
+				goto last;
+			}
+
+			mbuf_list[pkt].len += cur_len;
+			len += cur_len;
+
+			if (desc[i].flags & VIRTIO_DESC_F_NEXT) {
+				i = desc[i].next;
+			} else {
+				break;
+			}
+		}
+
+		if (!len) {
+			fprintf(stderr, "ERROR:... WRONG Len\n");
+			sigTerm(1);
+			stat_recv_err++;
+			goto last;
+		}
+		// check the header
+		hdr = (struct virtio_net_hdr *) mbuf_list[pkt].input_buf;
+
+		if ((hdr->flags != 0) || (hdr->gso_type != 0) || (hdr->hdr_len != 0)
+						|| (hdr->gso_size != 0) || (hdr->csum_start != 0)
+						|| (hdr->csum_offset != 0)) {
+				fprintf(stderr, "ERROR:... WRONG flags  avail_index: %d   descr addr:%p cur:%p count:%d k:%d\n",i,(void *)desc[i].addr,cur,pkt,k);
+				sigTerm(1);
+				stat_recv_err++;
+				fprintf(stderr, "..... going infinite loop \n");
+				while(1);
+				goto last;
+		}
+		stat_recv_succ++;
+
+		// add it to the used ring
+		used->ring[(u_idx+pkt) % num].id = d_idx;
+		used->ring[(u_idx+pkt) % num].len = len;
+		if (used->flags == 0) {
+			used->flags = 1;
+		}
+		ret++;
+	}
+last:
+    // if (ret > 0  && test_mode==0){
+    if (ret > 0 ){
+    	 Bulk_send_pkt(&send_port->vring_table,&mbuf_list[0], pkt);
+     }
+
+    return ret;
+}
+int Bulk_process_input_fromport(VhostServer* vhost_server,VhostServer* send_vhost_server){
+	VringTable* vring_table= &vhost_server->vring_table;
+    struct vring_avail* avail = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].avail;
+    struct vring_used* used = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].used;
+    unsigned int num = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].num;
+    uint16_t ret;
+    if (avail==0 || vhost_server->vring_table.vring[VHOST_CLIENT_VRING_IDX_TX].avail==0){
+    	return 0;
+    }
+    uint16_t a_idx = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_avail_idx % num;
+
+        /* we reached the end of avail */
+	if (vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_avail_idx == avail->idx) {
+		return 0;
+	}
+
+	ret = Bulk_read_pkt(send_vhost_server, vring_table, a_idx);
+	vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_avail_idx = ret + vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_avail_idx;
+	vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_used_idx  = ret + vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_used_idx;
+
+    if (ret==0){
+    	return 0;
+    }
+	sync_shm();  /* all memory buffers are seen before used-idx is seen */
+    used->idx = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_used_idx;
+    sync_shm();  /* used->idx  need to seen by others */
+
+    return ret;
+}
+
 
 #endif /* VRING_C_ */

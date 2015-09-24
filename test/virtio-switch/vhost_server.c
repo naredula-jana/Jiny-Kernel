@@ -397,27 +397,33 @@ static int in_msg_server(void* context, ServerMsg* msg)
     return result;
 }
 int send_cached_pkts(VhostServer* port,  void* input_buf, size_t size);
+int Bulk_process_input_fromport(VhostServer* vhost_server,VhostServer* send_vhost_server);
 int poll_server(void* context, void *send_context){
 	int ret=0;
     VhostServer* port = (VhostServer*) context;
     VhostServer* send_port = (VhostServer*) send_context;
-    int rx_idx = VHOST_CLIENT_VRING_IDX_RX;
 
-    if (port->vring_table.vring[rx_idx].desc) {
-        	ret =process_input_fromport(port,send_port);
+    if (port->vring_table.vring[VHOST_CLIENT_VRING_IDX_RX].desc) {
+        	ret =Bulk_process_input_fromport(port,send_port);
+        	//ret =process_input_fromport(port,send_port);
     }
-    ret = ret + send_cached_pkts(send_port,0,0);
+   //ret = ret + send_cached_pkts(send_port,0,0);
     return ret;
 }
 extern unsigned long stat_recv_succ;
 extern unsigned long stat_recv_err;
 extern unsigned long stat_send_succ;
 extern uint32_t stat_send_err;
+int test_mode=0;
 void sigTerm(int s) {
 	print_rings("PORT1: ",port1_handlers.context);
 	print_rings("PORT2: ",port2_handlers.context);
 	printf(" SIGNAL recved :\n");
-	printf(" send succ :%lu err:%d  recv: succ:%lu err:%lu\n",stat_send_succ,stat_send_err,stat_recv_succ,stat_recv_err);
+	if (test_mode==0)
+	    test_mode=1;
+	else
+		test_mode=0;
+	printf(" BULK NEWWWW send succ :%lu err:%d  recv: succ:%lu err:%lu test_mode:%d\n",stat_send_succ,stat_send_err,stat_recv_succ,stat_recv_err,test_mode);
 }
 void print_rings(char *str,VhostServer* vhost_server){
 	int i;

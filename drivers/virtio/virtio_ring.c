@@ -192,6 +192,7 @@ static sync_avial_idx(struct vring_virtqueue *vq){
 	/* Descriptors and available array need to be set before we expose the
 	 * new available array entries. */
 	virtio_wmb();
+	virtio_mb();
 
 	old = vq->vring.avail->idx;
 	vq->vring.avail->idx = old + vq->num_added;
@@ -391,8 +392,7 @@ void *virtio_removeFromQueue(struct virtqueue *_vq, unsigned int *len)
 }
 
 
-void virtio_disable_cb(struct virtqueue *_vq)
-{
+void virtio_disable_cb(struct virtqueue *_vq){
 	if (_vq == 0){
 		return;
 	}
@@ -402,10 +402,8 @@ void virtio_disable_cb(struct virtqueue *_vq)
 }
 
 
-bool virtio_enable_cb(struct virtqueue *_vq)
-{
+bool virtio_enable_cb(struct virtqueue *_vq){
 	struct vring_virtqueue *vq = to_vvq(_vq);
-
 	START_USE(vq);
 
 	/* We optimistically turn back on interrupts, then check if there was
@@ -617,7 +615,7 @@ int virtio_BulkRemoveFromNetQueue(struct virtqueue *_vq, struct struct_mbuf *mbu
 		}
 		//ar_prefetch0(&vq->vring.desc[i]);
 		mbuf_list[count].buf = __va(vq->vring.desc[i].addr);
-		if (vq->vring.desc[i].addr == 0){
+		if (vq->vring.desc[i].addr == 0){ /* TODO: Hitting this POINT*/
 			BRK;
 		}
 

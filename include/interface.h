@@ -287,7 +287,8 @@ int ipc_mutex_destroy(void *p);
 #define mutexDestroy ipc_mutex_destroy
 
 /*************************************** virtio interfaces ******************************/
-static inline void ar_prefetch0(volatile void *p)
+static inline void __attribute__((always_inline)) ar_prefetch0(volatile void *p)
+//static inline void ar_prefetch0(volatile void *p)
 {
 	asm volatile ("prefetcht0 %[p]" : [p] "+m" (*(volatile char *)p));
 }
