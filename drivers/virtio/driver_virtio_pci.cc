@@ -16,10 +16,8 @@ extern "C" {
 #include "pci.h"
 #include "interface.h"
 
-#include "virtio.h"
-#include "virtio_ring.h"
 #include "virtio_pci.h"
-#include "net/virtio_net.h"
+//#include "net/virtio_net.h"
 #include "mach_dep.h"
 extern int p9_initFs(void *p);
 extern void print_vq(struct virtqueue *_vq);
@@ -59,11 +57,13 @@ static void virtio_set_pcistatus(unsigned long pci_ioaddr, unsigned char status)
 	uint16_t addr = pci_ioaddr + VIRTIO_PCI_STATUS;
 	outb(addr, status);
 }
+#if 0
 /* the notify function used when creating a virt queue */
 static void notify(struct virtqueue *vq) {
 	atomic_inc(&g_conf_stat_pio);
 	outw(vq->pci_ioaddr + VIRTIO_PCI_QUEUE_NOTIFY, vq->queue_number);
 }
+#endif
 static void callback(struct virtqueue *vq) {
 	DEBUG("  VIRTIO CALLBACK in VIRT queue :%x\n", vq);
 }
@@ -79,71 +79,14 @@ int get_order(unsigned long size) {
 	return order;
 }
 
-/*******************************  virtio_jdriver ********************************/
-void virtio_jdriver::print_stats(unsigned char *arg1,unsigned char *arg2) {
-	ut_printf("		Network device: %s: Send(P,K,I): %d,%i,%d  Recv(P,K,I):%d,%i,%d allocs:%d free:%d ERR(send no space):%d TotalKick:%i\n", this->name, this->stat_sends,
-			this->stat_send_kicks, this->stat_send_interrupts, this->stat_recvs, this->stat_recv_kicks, this->stat_recv_interrupts, this->stat_allocs,
-			this->stat_frees, this->stat_err_nospace,this->stat_kicks);
-}
-
-void virtio_jdriver::queue_kick(struct virtqueue *vq){
-	if (vq ==0 ) return;
-	if (virtio_queuekick(vq) == 1){
-		atomic_inc(&stat_kicks);
-		if (vq->qType == VQTYPE_RECV){
-			atomic_inc(&stat_recv_kicks);
-		}else{
-			atomic_inc(&stat_send_kicks);
-		}
-	}
-}
-void virtio_jdriver::queue_kick(struct virtio_queue *vq){
-	if (vq ==0 ) return;
-	if (vq->virtio_queuekick() == 1){
-		atomic_inc(&stat_kicks);
-		if (vq->qType == VQTYPE_RECV){
-			atomic_inc(&stat_recv_kicks);
-		}else{
-			atomic_inc(&stat_send_kicks);
-		}
-	}
-}
-struct virtqueue *virtio_jdriver::virtio_create_queue(uint16_t index, int qType) {
-	int size;
-	uint16_t num;
-	unsigned long ring_addr;
-	struct virtqueue *virt_q;
-	unsigned long pci_ioaddr = device->pci_device.pci_ioaddr;
-
-	outw(pci_ioaddr + VIRTIO_PCI_QUEUE_SEL, index);
-
-	num = inw(pci_ioaddr + VIRTIO_PCI_QUEUE_NUM);
-	max_qbuffers = num;
-
-	//num = 1024;
-	INIT_LOG("		New virtio create queue NUM-%d : num %x(%d)  :%x\n", index, num, num, vring_size(num, VIRTIO_PCI_VRING_ALIGN));
-	if (num == 0) {
-		return 0;
-	}
-	size = PAGE_ALIGN(vring_size(num, VIRTIO_PCI_VRING_ALIGN));
-
-	//vring_size(num);
-	ring_addr = mm_getFreePages(MEM_CLEAR, get_order(size));
-
-	/* activate the queue */
-	outl(pci_ioaddr + VIRTIO_PCI_QUEUE_PFN, __pa(ring_addr) >> VIRTIO_PCI_QUEUE_ADDR_SHIFT);
-
-	/* create the vring */
-	INIT_LOG("		virtioqueue Creating queue:%x(pa:%x) size-order:%x  size:%x\n", ring_addr, __pa(ring_addr),get_order(size),size);
-	virt_q = (struct virtqueue * )vring_new_virtqueue(num, VIRTIO_PCI_VRING_ALIGN, device->pci_device.pci_ioaddr, (void *) ring_addr, &notify,
-			&callback, "VIRTQUEUE", index);
-	virtqueue_enable_cb_delayed(virt_q);
-	virt_q->qType = qType;
 
 
-	return virt_q;
-}
 /******************************************* virtio net *********************************/
+void virtio_net_jdriver::print_stats(unsigned char *arg1,unsigned char *arg2) {
+	ut_printf("		Network device: %s: Send(P,K,I): %d,%i,%d  Recv(P,K,I):%d,%i,%d allocs:%d free:%d ERR(send no space):%d \n", this->name, this->stat_sends,
+			this->stat_send_kicks, this->stat_send_interrupts, this->stat_recvs, this->stat_recv_kicks, this->stat_recv_interrupts, this->stat_allocs,
+			this->stat_frees, this->stat_err_nospace);
+}
 
 struct virtio_feature_desc vtnet_feature_desc[] = { { VIRTIO_NET_F_CSUM, "TxChecksum" },
 		{ VIRTIO_NET_F_GUEST_CSUM, "RxChecksum" }, { VIRTIO_NET_F_MAC, "MacAddress" }, { VIRTIO_NET_F_GSO, "TxAllGSO" }, {
@@ -179,8 +122,9 @@ int virtio_net_jdriver::burst_recv(int total_pkts){
 		return 0;
 	}
 
-	queues[0].recv->BulkAddToNetqueue( 0, MAX_BUF_LIST_SIZE*3,0);
-	queue_kick(queues[0].recv);
+	//queues[0].recv->BulkAddToNetqueue( 0, MAX_BUF_LIST_SIZE*3,0);
+	fill_empty_buffers(queues[0].recv);
+	queues[0].recv->virtio_queuekick();
 
 	for (i = 0; i < recv_pkts; i++) {
 		netif_rx(recv_mbuf_list[i].buf, recv_mbuf_list[i].len);
@@ -237,7 +181,8 @@ struct virtio_net_ctrl_mq {
  };
 #define VIRTIO_NET_CTRL_MQ   4
 #define VIRTIO_NET_CTRL_MQ_VQ_PAIRS_SET        0
-static int virtnet_send_command(struct virtqueue *vq,
+static int virtnet_send_command(
+								net_virtio_queue *vq,
                                 uint16_t mq_len ){
 	struct scatterlist sg[2];
 	int ret;
@@ -273,14 +218,19 @@ static int virtnet_send_command(struct virtqueue *vq,
 	sg[2].offset = 0;
 	//DEBUG(" scatter gather-0: %x:%x sg-1 :%x:%x \n",sg[0].page_link,__pa(sg[0].page_link),sg[1].page_link,__pa(sg[1].page_link));
 
-	ret = virtio_add_buf_to_queue(vq, sg, 2, 1, (void *) sg[0].page_link, 0);/* send q */
-	virtio_queuekick(vq);
+	//ret = virtio_add_buf_to_queue(vq, sg, 2, 1, (void *) sg[0].page_link, 0);/* send q */
+	//virtio_queuekick(vq);
+
+	ret = vq->virtio_add_buf_to_queue( sg, 2, 1, (void *) sg[0].page_link, 0);/* send q */
+	vq->virtio_queuekick();
 	//sc_sleep(1000);
-	ut_log(" New111 SEND the maxq control command \n");
+	ut_log("Net ControlQ: SEND the maxq control command \n");
 /* TODO:  wait for the response and free the buf */
 	return ret;
 }
-
+int virtio_net_jdriver::fill_empty_buffers(net_virtio_queue *queue){
+	queue->BulkAddToNetqueue( 0, 128,0);
+}
 int virtio_net_jdriver::net_attach_device() {
 	unsigned long addr;
 	uint32_t features=0;
@@ -355,17 +305,18 @@ int virtio_net_jdriver::net_attach_device() {
 	INIT_LOG("	VIRTIONET: initializing MAX VQ's:%d\n",max_vqs);
 	for (i=0; i<max_vqs; i++){
 		if (i==1){/* by default only 3 queues will be present , at this point already 2 queues are configured */
-			control_q = virtio_create_queue(2*i,VQTYPE_RECV);
+			control_q = jnew_obj(virtio_queue,device,  2*i,VQTYPE_RECV);
 			if (control_q){ /* send mq command */
 				virtnet_send_command(control_q,max_vqs);
 				//break;
 			}
 		}
-		queues[i].recv = jnew_obj(virtio_queue,device,  2*i,VQTYPE_RECV);
+		queues[i].recv = jnew_obj(net_virtio_queue,device,  2*i,VQTYPE_RECV);
+		//ut_log(" virtio_queue obj: %x\n",queues[i].recv );
 		if (msi_vector > 0) {
 			outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, (2*i)+0);
 		}
-		queues[i].send = jnew_obj(virtio_queue, device, (2*i)+1,VQTYPE_SEND);
+		queues[i].send = jnew_obj(net_virtio_queue, device, (2*i)+1,VQTYPE_SEND);
 		if (msi_vector > 0) {
 			outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, (2*i)+1);
 		}
@@ -401,16 +352,17 @@ int virtio_net_jdriver::net_attach_device() {
 		if (queues[k].recv == 0 || queues[k].send ==0){
 			break;
 		}
-		queues[k].recv->BulkAddToNetqueue( 0, 128,0);
+		fill_empty_buffers(queues[k].recv);
+		//queues[k].recv->BulkAddToNetqueue( 0, 128,0);
 
-		ut_log("    virtio_netq:%d  recv addbuffers:%d \n",k,max_qbuffers/2);
+		//ut_log("    virtio_netq:%d  recv addbuffers:%d \n",k,max_qbuffers/2);
 	}
 	inb(pci_ioaddr + VIRTIO_PCI_ISR);
 	for (k = 0; k < max_vqs; k++) {
 		if (queues[k].recv == 0 || queues[k].send ==0){
 			break;
 		}
-		queue_kick(queues[k].recv);
+		queues[k].recv->virtio_queuekick();
 //	queue_kick(queues[k].send);
 	}
 	pending_kick_onsend =0;
@@ -443,6 +395,7 @@ int virtio_net_jdriver::read(unsigned char *buf, int len, int rd_flags, int opt_
 
 int virtio_net_jdriver::burst_send() {
 	int qno,i, ret=0;
+	int qret;
 	unsigned long flags;
 	int pkts;
 
@@ -452,13 +405,17 @@ int virtio_net_jdriver::burst_send() {
 
 	spin_lock_irqsave(&virtionet_lock, flags);
 	for (qno=0; qno<max_vqs; qno++){  /* try to send from the same queue , if it full then try on the subsequent one, in this way kicks will be less */
-		ret = queues[qno].send->BulkAddToNetqueue( &send_mbuf_list[send_mbuf_start],send_mbuf_len,1);
+		qret = queues[qno].send->BulkAddToNetqueue( &send_mbuf_list[send_mbuf_start+ret],send_mbuf_len-ret,1);
 
-		if (ret == 0){
+		if (qret == 0){
 			continue;
 		}
 		queues[qno].pending_send_kick = 1;
-		break;
+		//break;
+		ret=ret+qret;
+		if (ret == send_mbuf_len){
+			break;
+		}
 	}
 
 	if (ret < 0) {
@@ -479,10 +436,12 @@ int virtio_net_jdriver::burst_send() {
 	}
 	spin_unlock_irqrestore(&virtionet_lock, flags);
 
-	pkts=queues[0].send->BulkRemoveFromNetQueue( &temp_mbuf_list[0], MAX_BUF_LIST_SIZE);
-	for (i=0; i<pkts; i++){
-		free_page(temp_mbuf_list[i].buf);
-		stat_frees++;
+	for (qno = 0; qno < max_vqs; qno++) {
+		pkts = queues[qno].send->BulkRemoveFromNetQueue(&temp_mbuf_list[0],MAX_BUF_LIST_SIZE);
+		for (i = 0; i < pkts; i++) {
+			free_page(temp_mbuf_list[i].buf);
+			stat_frees++;
+		}
 	}
 
 	return ret;  /* Here Sucess indicates the buffer is freed or consumed */
@@ -509,7 +468,7 @@ int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 			spin_lock_irqsave(&virtionet_lock, flags);
 			for (qno=0; qno<max_vqs && qno<MAX_VIRT_QUEUES; qno++){
 				if (queues[qno].pending_send_kick == 1){
-					queue_kick(queues[qno].send);
+					queues[qno].send->virtio_queuekick();
 					queues[qno].pending_send_kick=0;
 				}
 			}
@@ -537,8 +496,12 @@ int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 			queues[i].recv->print_stats(arg2,0);
 			queues[i].send->print_stats(arg2,0);
 		}
-		ut_printf("Control-Q :\n");
-		print_vq(control_q);
+		if (control_q){
+			ut_printf("Control-Q :\n");
+			control_q->print_stats(0,0);
+		}else{
+			ut_printf("No Control-Q present\n");
+		}
 
 	}
 }
@@ -647,6 +610,7 @@ static void req_construct(unsigned char *buf, unsigned long offset, unsigned lon
 	req->command = SCSI_CMD_READ_16;
 }
 void *virtio_disk_jdriver::scsi_addBufToQueue(int type, unsigned char *buf_arg, uint64_t len, uint64_t sector, uint64_t data_len) {
+#if 0
 	struct virtqueue *tmp_vq = this->queues[0].send;
 	struct virtio_scsi_blk_req *req;
 	struct scatterlist sg[8];
@@ -723,7 +687,14 @@ ut_printf("Sending the SCSI request sector:%x len:%d  :%d \n",sector,len,data_le
 
 	virtio_enable_cb(tmp_vq);
 sc_sleep(2000);
-	return (void *)buf;
+return 0; /* remove later */
+#endif
+	//return (void *)buf;
+}
+void virtio_disk_jdriver::print_stats(unsigned char *arg1,unsigned char *arg2) {
+	ut_printf("		disk device: %s: Send(P,K,I): %d,%i,%d  Recv(P,K,I):%d,%i,%d allocs:%d free:%d ERR(send no space):%d \n", this->name, this->stat_sends,
+			this->stat_send_kicks, this->stat_send_interrupts, this->stat_recvs, this->stat_recv_kicks, this->stat_recv_interrupts, this->stat_allocs,
+			this->stat_frees, this->stat_err_nospace);
 }
 struct virtio_blk_req *virtio_disk_jdriver::createBuf(int type, unsigned char *user_buf,  uint64_t sector, uint64_t data_len) {
 	unsigned char *buf=0;
@@ -757,7 +728,6 @@ struct virtio_blk_req *virtio_disk_jdriver::createBuf(int type, unsigned char *u
 	return req;
 }
 void virtio_disk_jdriver::addBufToQueue(struct virtio_blk_req *req, int transfer_len) {
-	struct virtqueue *tmp_vq = this->queues[0].send;
 	struct scatterlist sg[4];
 	int ret;
 	int out,in;
@@ -791,14 +761,12 @@ void virtio_disk_jdriver::addBufToQueue(struct virtio_blk_req *req, int transfer
 	sg[2].length =  1;
 	sg[2].offset = 0;
 
-	//DEBUG(" scatter gather-0: %x:%x sg-1 :%x:%x \n",sg[0].page_link,__pa(sg[0].page_link),sg[1].page_link,__pa(sg[1].page_link));
-
-	virtio_disable_cb(tmp_vq);
-	ret = virtio_add_buf_to_queue(tmp_vq, sg, out, in, (void *) sg[0].page_link, 0);/* send q */
-	queue_kick(queues[0].send);
+	queues[0].send->virtio_disable_cb();
+	ret = queues[0].send->virtio_add_buf_to_queue(sg, out, in, (void *) sg[0].page_link, 0);/* send q */
+	queues[0].send->virtio_queuekick();
 
 	if (interrupts_disabled == 0){
-		virtio_enable_cb(tmp_vq);
+		queues[0].send->virtio_enable_cb();
 	}
 
 	return ;
@@ -935,9 +903,9 @@ int virtio_disk_jdriver::disk_attach_device(class jdevice *jdev) {
 		INIT_LOG("	SCSI cdb size: %d \n", virtio_config32(pci_ioaddr + 24));
 	}
 	if (jdev->pci_device.pci_header.device_id != VIRTIO_PCI_SCSI_DEVICE_ID) {
-		this->queues[0].send = this->virtio_create_queue(0, VQTYPE_SEND);
+		this->queues[0].send = jnew_obj(disk_virtio_queue,device,  0,VQTYPE_SEND);
 	} else {
-		this->queues[0].send = this->virtio_create_queue(0, VQTYPE_SEND);
+		this->queues[0].send = jnew_obj(disk_virtio_queue,device,  0,VQTYPE_SEND);
 	}
 	if (msi_vector > 0) {
 		ut_log("  virtio disk :  msi vectors: %d\n",jdev->pci_device.msix_cfg.isr_vector);
@@ -1078,6 +1046,11 @@ static int virtio_9p_interrupt(void *private_data) { // TODO: handling similar  
 
 	return 0;
 }
+void virtio_p9_jdriver::print_stats(unsigned char *arg1,unsigned char *arg2) {
+	ut_printf("		p9 disk device: %s: Send(P,K,I): %d,%i,%d  Recv(P,K,I):%d,%i,%d allocs:%d free:%d ERR(send no space):%d \n", this->name, this->stat_sends,
+			this->stat_send_kicks, this->stat_send_interrupts, this->stat_recvs, this->stat_recv_kicks, this->stat_recv_interrupts, this->stat_allocs,
+			this->stat_frees, this->stat_err_nospace);
+}
 int virtio_p9_jdriver::probe_device(class jdevice *jdev) {
 
 	if ((jdev->pci_device.pci_header.vendor_id == VIRTIO_PCI_VENDOR_ID)
@@ -1101,7 +1074,8 @@ int virtio_p9_jdriver::p9_attach_device(class jdevice *jdev) {
 	features = inl(addr);
 	ut_log("	Virtio P9: Initializing VIRTIO PCI 9P hostfeatures :%x: status:%x\n", features, virtio_get_pcistatus(pci_ioaddr));
 
-	this->vq[0] = this->virtio_create_queue(0, VQTYPE_SEND);
+	//this->vq[0] = this->virtio_create_queue(0, VQTYPE_SEND);
+	this->vq[0] = jnew_obj(virtio_queue,device,  0,VQTYPE_SEND);
 	if (jdev->pci_device.msix_cfg.isr_vector > 0) {
 #if 0
 		outw(virtio_dev->pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR,0);
@@ -1178,7 +1152,8 @@ void Jcmd_stat_diskio(unsigned char *arg1, unsigned char *arg2){
 	for (i=0; i<5; i++){
 		if (disk_drivers[i]!=0){
 			virtio_disk_jdriver *dev=disk_drivers[i];
-			print_vq(dev->queues[0].send);
+			//print_vq(dev->queues[0].send);
+			dev->queues[0].send->print_stats(0,0);
 		}
 	}
 }
@@ -1308,7 +1283,7 @@ static int extract_reqs_from_devices(virtio_disk_jdriver *dev) {
 
 	while (loop > 0) {
 		loop--;
-		req = virtio_removeFromQueue(dev->queues[0].send, &qlen);
+		req = dev->queues[0].send->virtio_removeFromQueue(&qlen);
 		if (req == 0 ) return ret;
 		for (i = 0; i < MAX_DISK_REQS; i++) {
 			if (disk_reqs[i].buf == 0) {
@@ -1399,7 +1374,7 @@ void init_virtio_drivers() {
 	register_jdriver(disk_jdriver);
 }
 
-struct virtqueue *virtio_jdriver_getvq(void *driver, int index) {
+virtio_queue *virtio_jdriver_getvq(void *driver, int index) {
 	virtio_p9_jdriver *jdriver = (virtio_p9_jdriver *) driver;
 
 	return jdriver->vq[index];

@@ -243,7 +243,7 @@ uint8_t *ut_strcpy(uint8_t *dest, const uint8_t *src);
 uint8_t *ut_strncpy(uint8_t *dest, const uint8_t *src,int n);
 uint8_t *ut_strcat(uint8_t *dest, const uint8_t *src);
 uint8_t *ut_strstr(uint8_t *s1,uint8_t *s2);
-int ut_count_obj_add(unsigned char *name, int sz);
+
 int ut_count_obj_free(int id);
 int ut_strlen(const uint8_t * s);
 int ut_mod_symbol_execute(int type, char *name, char *argv1, char *argv2);

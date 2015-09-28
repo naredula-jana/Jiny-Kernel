@@ -103,9 +103,9 @@ This benchmark measures the network throughput between two vm's using virtual sw
   <tr>
     <td> 5 </td>
     <td>Jinyvm1- USS/LB -Jinyvm2 - one way</td>
-    <td>1.800 MPPS with USS
+    <td>1.800 MPPS with USS @50byte pkt, 1.300MPPS with USS @2000byte pkt
      , and 0.266 MPPS with LB </td>
-    <td> USS is a single thread, it can improve further from 1.800MPPS.  </td>
+    <td> 1) USS is a single thread,it can improve further from 1.800MPPS using multithreaded switch.  2) USS fetch one packet at time instead of fetching bulk packets from virtio ring. </td>
         <td> - </td>
    </tr>  
    <tr>
@@ -117,16 +117,29 @@ This benchmark measures the network throughput between two vm's using virtual sw
     </tr> 
     <tr>
     <td> 7-TODO </td>
-    <td>linuxvm- USS -linusvm with DPDK  </td>
+    <td>Jinyvm- USS -Jinyvm with DPDK based USS</td>
      <td>????</td>
      <td>????</td>
-    <td>same as test-3 </td>
+    <td> using DPDK based USS </td>
+    </tr>
+    </tr> 
+    <tr>
+     <td> 8-TODO </td>
+     <td>Jinyvm - USS - Jinyvm with USS+Fast switch using VMFUNC  </td>
+     <td>????</td>
+     <td>????</td>
+     <td>  Acessing other vm's virtio ring using Hardware Assist VMFUNC instruction, need changes in kvm/qemu accordingly as mentioned in the below papers. </td>
     </tr>
 </table> 
 
+papers mentioned in 8-TODO test:
+
+1. [Fast Switch using VMFUNC:](http://www.linux-kvm.org/images/8/87/02x09-Aspen-Jun_Nakajima-KVM_as_the_NFV_Hypervisor.pdf)
+2. [openNFV](https://wiki.opnfv.org/vm2vm_mst)
+
 ##### Summary of Tests:
 1. Test-5 : USS versus LB with Jiny VM's: USS as outperformed when compare to LB.
-2. Test-1 versus Test-2: Jiny kernel versus Linux kernel using LB: Jiny as performed better when compare to linux.This can be mitigated in Linux kernel using DPDK. The application need to change accordingly when used with DPDK. Jiny does not need DPDK, application can directly interact with jiny kernel.
+2. Test-1 versus Test-2: Jiny kernel versus Linux kernel using LB: Jiny as performed better when compare to linux.This can be mitigated in Linux kernel using DPDK. The application need to change accordingly when used with DPDK. Jiny does not need DPDK, linux based application can directly run on jiny kernel without DPDK.
 
 ##### Reasons for Better throughput in Jiny kernel when compare to linux kernel:
 1. Network bottom half is very thin, and entire computation of send/recv packet is done in the application context, means the network stack runs  as part of application context concurrently without locks, this makes most of the packet processing computation on the same core and avoid locking. The implementaion of network frame work is similar to [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). 
@@ -191,6 +204,8 @@ Issue-1: In IPC, if there is a contention in mutext or semop or other IPC, then 
 3. The issue will popup if the critical section's in the app's are small and there is contention among the threads. If the critical section are large then waiter thread goes to a long sleep, in this case receving IPI interrupts is better when compare to tight cpu spin.
 
  Monitoring Issue-1: Due to this this, IPI interrupts will be generated in large number, this can be monitered using the number of [Rescheduling Interrupts](https://help.ubuntu.com/community/ReschedulingInterrupts) in /proc/interrupts, Rescheduling interrupts are implemented using Inter Processor Interrupt(IPI). 
+ 
+
 
 ----------------------------------------------------------------------------------
 ##Papers:

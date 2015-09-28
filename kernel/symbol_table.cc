@@ -13,6 +13,8 @@
  *    Jcmd_xxx   - commands in the format cmd arg1 arg2
  *    Jcmd_xxx_stat  - display stats
  */
+#include "file.hh"
+
 extern "C" {
 #include "common.h"
 
@@ -176,22 +178,26 @@ unsigned long init_symbol_table(unsigned long bss_start, unsigned long bss_end) 
 #define MAX_CLASSESS 100
 struct class_types {
 	int count; /* currently active objects */
-	unsigned long use; /* so far the number of objects created */
+//	unsigned long use; /* so far the number of objects created */
+	jobject *list;   /* list of objects */
 	unsigned char *name;
 	int sz;
 };
 #define CLASS_ID_START 0x5 /* this is to avoid 0 index */
 static struct class_types classtype_list[MAX_CLASSESS];
 static int class_count = 0;
-int ut_count_obj_add(unsigned char *name, int sz) {
+}
+int ut_count_obj_add(jobject *obj,unsigned char *name, int sz) {
 	int i;
 
 	for (i = 0; i < class_count; i++) {
 		if (ut_strstr(classtype_list[i].name, name) != 0) {
 			classtype_list[i].count++;
-			classtype_list[i].use++;
+
 			classtype_list[i].sz = sz;
-			//ut_log("   name:%s : %d \n",name,classtype_list[i].count);
+			obj->next_obj = classtype_list[i].list;
+			classtype_list[i].list = obj;
+			//if (i==19) { ut_log("%d:   name:%s : obj:%x \n",i,name,obj);}
 			return i + CLASS_ID_START;
 		}
 	}
@@ -208,12 +214,28 @@ int ut_count_obj_free(int id) {
 	}
 	return JFAIL;
 }
-void Jcmd_obj_list() {
+
+extern "C" {
+void Jcmd_obj_list(unsigned char *arg1,unsigned char *arg2) {
 	int i;
+	int class_id=-1;
+	jobject *obj;
+
+	if (arg1 != 0){
+		class_id = ut_atoi(arg1, FORMAT_DECIMAL);
+	}
 
 	ut_printf("  ClassName           Count         used  size\n");
 	for (i = 0; i < class_count; i++) {
-		ut_printf("  %9s  -> %d  : %d  : %d\n", &classtype_list[i].name[5], classtype_list[i].count, classtype_list[i].use,classtype_list[i].sz);
+		ut_printf("%d:  %9s  -> %d  : %d\n",i, &classtype_list[i].name[5], classtype_list[i].count,classtype_list[i].sz);
+		if (class_id == i ){
+			obj=classtype_list[i].list;
+			while(obj != 0){
+				obj->print_stats(0,0);
+				obj=obj->next_obj;
+			}
+		}
+
 	}
 	return;
 }
@@ -269,7 +291,7 @@ static int add_symbol_types(unsigned long unused) {
 		if (ut_strcmp(sym, dst) == 0) {
 			classtype_list[class_count].name = g_symbol_table[i].name;
 			classtype_list[class_count].count = 0;
-			classtype_list[class_count].use = 0;
+			classtype_list[class_count].list = 0;
 			class_count++;
 			continue;
 		}

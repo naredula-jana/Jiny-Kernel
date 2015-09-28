@@ -10,7 +10,7 @@ OBJ_LWIP=$(LWIP_USER_OBJ) /opt_src/lwip/src/api/sockets.o /opt_src/lwip/src/api/
  
 OBJ_XEN=drivers/xen/xen_init.o drivers/xen/xenbus.o drivers/xen/evntchn.o drivers/xen/gntmap.o drivers/xen/gnttab.o drivers/xen/net_front.o 
 
-OBJ_VIRTIO= drivers/virtio/virtio_ring.o \
+OBJ_VIRTIO=  \
 	drivers/virtio/virtio_memballoon.o \
 	drivers/virtio/virtio_queue.o \
 	drivers/virtio/9p/p9.o \
@@ -96,7 +96,6 @@ endif
 	make SOURCE_ROOT=$$PWD -C modules/uip-uip-1-0/uip
 	make SOURCE_ROOT=$$PWD -C drivers/virtio
 	make SOURCE_ROOT=$$PWD -C drivers/virtio/9p
-	make SOURCE_ROOT=$$PWD -C drivers/virtio/net
 	make SOURCE_ROOT=$$PWD -C arch/$(ARCH_DIR)
 	make SOURCE_ROOT=$$PWD -C arch/$(ARCH_DIR)/smp
 	make SOURCE_ROOT=$$PWD -C mm
@@ -117,7 +116,6 @@ clean:
 	make SOURCE_ROOT=$$PWD -C drivers/hostshm clean
 	make SOURCE_ROOT=$$PWD -C drivers/virtio clean
 	make SOURCE_ROOT=$$PWD -C drivers/virtio/9p clean
-	make SOURCE_ROOT=$$PWD -C drivers/virtio/net clean
 	make SOURCE_ROOT=$$PWD -C fs clean
 	make SOURCE_ROOT=$$PWD -C arch/$(ARCH_DIR) clean
 	make SOURCE_ROOT=$$PWD -C arch/$(ARCH_DIR)/smp clean

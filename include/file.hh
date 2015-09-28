@@ -42,6 +42,7 @@ void jfree_obj(unsigned long addr);
 class jobject { /* All objects will be inherited from here */
 public:
 	int jobject_id; /* currently used only for debugging purpose */
+	jobject *next_obj;
 	virtual void print_stats(unsigned char *arg1,unsigned char *arg2)=0;
 };
 
@@ -59,7 +60,6 @@ public:
 	void update_stat_in(int in_req,int in_byte);
 	void update_stat_out(int out_req,int out_byte);
 
-	/* TODO : preserve the order, this is C++ fix  */
 	virtual int read(unsigned long offset, unsigned char *data, int len, int flags, int opt_flags)=0;
 	virtual int write(unsigned long offset, unsigned char *data, int len, int flags)=0;
 	virtual int close()=0;

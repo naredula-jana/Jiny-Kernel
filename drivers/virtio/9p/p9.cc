@@ -1,5 +1,6 @@
 //#define DEBUG_ENABLE 1
 #include "file.hh"
+#include "jdevice.h"
 extern "C"{
 #include "9p.h"
 #define cpu_to_le16(x) x /* already intel is little indian */
@@ -202,7 +203,7 @@ int p9_pdu_write(struct p9_fcall *pdu, const char *fmt, va_list ap) {
 }
 /****************************************************************************************/
 static int stat_request=0;
-#include "../virtio.h"
+
 #include "../virtio_pci.h"
 void *p9_dev = 0;
 wait_queue *p9_waitq;
@@ -260,13 +261,18 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 		in = 1;
 	}
 #if 1 /* TODO: this should be called using the driver */
-	struct virtqueue *vq=virtio_jdriver_getvq(p9_dev,0);
+	virtio_queue *vq=virtio_jdriver_getvq(p9_dev,0);
 	if (vq ==0){
 		BUG();
 	}
+#if 0
 	virtio_enable_cb(vq);
 	virtio_add_buf_to_queue(vq, sg, out, in, sg[0].page_link, 0);
 	virtio_queuekick(vq);
+#endif
+	vq->virtio_enable_cb();
+	vq->virtio_add_buf_to_queue( sg, out, in, sg[0].page_link, 0);
+	vq->virtio_queuekick();
 #endif
 	p9_waitq->wait(50);
 	unsigned int len;
@@ -274,7 +280,8 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 	i = 0;
 	addr = 0;
 	while (i < 50 && addr == 0) {
-		addr = virtio_removeFromQueue(vq, &len); /* TODO : here sometime returns zero because of some race condition, the packet is not recevied */
+		//addr = virtio_removeFromQueue(vq, &len); /* TODO : here sometime returns zero because of some race condition, the packet is not recevied */
+		addr = vq->virtio_removeFromQueue(&len);
 		i++;
 		if (addr == 0) {
 			//ut_log("sleep in P9 so sleeping for while requests:%d intr:%d\n",stat_request,stat_intr);

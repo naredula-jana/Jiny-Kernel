@@ -9,7 +9,7 @@
 *
 */
 #include "jdevice.h"
-
+#include "file.hh"
 #define MAX_DEVICES 200
 static class jdevice *jdevice_list[MAX_DEVICES];
 static int device_count = 0;
@@ -151,6 +151,7 @@ void register_jdriver(class jdriver *driver) {
 }
 
 int g_conf_obj_count=1;
+int ut_count_obj_add(jobject *obj,unsigned char *name, int sz);
 /*
 calling new :  new (arg1,arg2..) type
  */
@@ -158,20 +159,15 @@ void *operator new(int sz,const char *name) {
     void *obj = ut_calloc(sz);
 
     if(g_conf_obj_count == 1){
-    	unsigned long tmp_p = obj;
-    	tmp_p=tmp_p+8;
-    	class jobject *jobj = tmp_p;
-    	jobj->jobject_id = ut_count_obj_add(name,sz);
+    	class jobject *jobj = obj;
+    	jobj->jobject_id = ut_count_obj_add(jobj,name,sz);
     }
     return obj;
 }
 void jfree_obj(unsigned long addr){
 
     if(g_conf_obj_count == 1){
-    	unsigned long tmp_p = addr;
-
-    	tmp_p=tmp_p+8;
-    	class jobject *obj=tmp_p;
+    	class jobject *obj=addr;
     	ut_count_obj_free(obj->jobject_id);
     }
 	ut_free(addr);
