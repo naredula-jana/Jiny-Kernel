@@ -81,7 +81,7 @@ This benchmark measures the network throughput between two vm's using virtual sw
     <td> 2 </td>
     <td>vm1- USS -vm2</td>
     <td> ???? </td>
-    <td>Throughput using USS @50bytes: 1.800 MPPS (one way)  <br>Throughput using USS @200bytes: 1.300MPPS (one way)<br>Throughput: 0.366 MPPS (two way)<br>Bottleneck in two way: udpserver on recv side is single thread <br>
+    <td>Throughput @50bytes: 1.800 MPPS (one way)  <br>Throughput@200bytes: 1.300MPPS (one way)<br>Throughput: 0.366 MPPS (two way)<br>Bottleneck in two way: udpserver on recv side is single thread <br>
         Bottleneck in one way: USS is a single thread and fetch one packet from queue,it can improve further from 1.800MPPS using multithreaded switch. </td>
    </tr>  
    <tr>
@@ -92,20 +92,20 @@ This benchmark measures the network throughput between two vm's using virtual sw
     </tr> 
        <tr>
     <td> 4 </td>
-    <td>vm1- USS -vm2, with multichannel vNIC(5queues)</td>
+    <td>vm1- USS -vm2 <br>with multichannel vNIC(5queues)</td>
     <td> ???? </td>
     <td> ???? <br>TODO:vhost-user vNIC with multichannel is not fully implemented in kvm </td>
     </tr>
     <tr>
-    <td> 5-TODO </td>
-    <td>vm1 - USS -vm2 with DPDK based USS</td>
+    <td> 5 </td>
+    <td>vm1 - USS -vm2 <br>with DPDK based USS</td>
      <td>????</td>
      <td>????</td>
     </tr>
     </tr> 
     <tr>
-     <td> 6-TODO </td>
-     <td>vm1 - USS - vm2 with USS+Fast switch using VMFUNC inside vm  </td>
+     <td> 6 </td>
+     <td>vm1- USS -vm2 <br>with VMFUNC inside vm  </td>
      <td>????</td>
      <td>????<br>
       Acessing other vm's virtio ring using Hardware Assist VMFUNC instruction, need changes in kvm/qemu accordingly as mentioned in the below papers. </td>
