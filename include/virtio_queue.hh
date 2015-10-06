@@ -83,8 +83,6 @@ extern "C" {
 #define VIRTIO_PCI_VRING_ALIGN		4096
 
 
-
-
 /* This marks a buffer as continuing via the next field. */
 #define VRING_DESC_F_NEXT	1
 /* This marks a buffer as write-only (otherwise read-only). */
@@ -247,8 +245,9 @@ struct scatterlist {
 };
 
 struct scatter_buf {
+		uint64_t addr;
         unsigned int    offset;
-        unsigned int    length;
+        uint32_t    length;
         int read_only;
 };
 class virtio_queue: public jobject {
@@ -267,9 +266,7 @@ public:
 	atomic_t stat_kicks;
 	int qType;
 	int virtio_type;
-#define MAX_SCATTER_LIST 10
-	struct scatter_buf scatter_list[MAX_SCATTER_LIST];
-	int total_scatter_list;
+	int scatter_list_size;
 
 	void print_stats(unsigned char *arg1,unsigned char *arg2);
 	int check_recv_pkt();
@@ -280,41 +277,51 @@ public:
 	int virtio_add_buf_to_queue(struct scatterlist sg[], unsigned int out,
 				  unsigned int in, void *data, int gfp);
 	void *virtio_queue::virtio_removeFromQueue(unsigned int *len);
-	int BulkAddToNetqueue(  struct struct_mbuf *mbuf_list, int list_len, int is_send);
-	int BulkRemoveFromNetQueue( struct struct_mbuf *mbuf_list, int list_len);
+	int BulkAddToQueue(struct struct_mbuf *mbuf_list, int list_len, int read_only);
+	int BulkRemoveFromQueue(struct struct_mbuf *mbuf_list, int list_len);
+	int MaxBufsSpace();  /* numbers of that can be added */
 };
 
 class net_virtio_queue: public virtio_queue {
 
 public:
-
 	net_virtio_queue(jdevice *device, uint16_t index, int queue_type):
 			virtio_queue(device, index, queue_type){
 		virtio_type = VIRTIO_ID_NET;
-		total_scatter_list = 2;
-		scatter_list[0].length = 10;  /* struct virtio_net_hdr */
-		scatter_list[0].offset = 0;
-		scatter_list[1].length = 4096-10;
-		scatter_list[1].offset = 10;
+
+		scatter_list_size = 2;
 	}
 };
 
+
+#define VIRTIO_BLK_T_IN 0
+#define VIRTIO_BLK_T_OUT 1
+#define VIRTIO_BLK_T_SCSI_CMD 2
+#define VIRTIO_BLK_T_SCSI_CMD_OUT 3
+#define VIRTIO_BLK_T_FLUSH 4
+#define VIRTIO_BLK_T_FLUSH_OUT 5
+#define VIRTIO_BLK_T_BARRIER 0x80000000
+#define VIRTIO_BLK_DATA_SIZE (4096)
+struct virtio_blk_req {
+	uint32_t type;
+	uint32_t ioprio;
+	uint64_t sector;
+
+	uint8_t status;
+	uint8_t pad[3];
+	uint32_t len;
+
+	char *user_data; /* this memory block can be used directly to avoid the mem copy, this is if it from pagecache */
+
+	char data[2];  /* here data can be one byte or  1 page depending on the user_data */
+};
 class disk_virtio_queue: public virtio_queue {
 
 public:
-
 	disk_virtio_queue(jdevice *device, uint16_t index, int queue_type):
 			virtio_queue(device, index, queue_type){
 		virtio_type = VIRTIO_ID_BLOCK;
-		total_scatter_list = 3;  /* out=1 , int=2 */
-		scatter_list[0].length = 16;
-		scatter_list[0].offset = 0;
-
-		scatter_list[1].length = 4096;
-		scatter_list[1].offset = 16 + 8 + 8;
-
-		scatter_list[2].length = 1;
-		scatter_list[2].offset = 16;
+		scatter_list_size = 3;
 	}
 
 };

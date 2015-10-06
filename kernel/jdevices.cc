@@ -150,25 +150,24 @@ void register_jdriver(class jdriver *driver) {
 	driver_count++;
 }
 
-int g_conf_obj_count=1;
-int ut_count_obj_add(jobject *obj,unsigned char *name, int sz);
+int ut_obj_add(jobject *obj,unsigned char *name, int sz);
+int ut_obj_free(jobject *obj);
 /*
 calling new :  new (arg1,arg2..) type
  */
 void *operator new(int sz,const char *name) {
+
     void *obj = ut_calloc(sz);
 
-    if(g_conf_obj_count == 1){
-    	class jobject *jobj = obj;
-    	jobj->jobject_id = ut_count_obj_add(jobj,name,sz);
+    if(1){
+    	ut_obj_add((jobject *)obj,name,sz);
     }
     return obj;
 }
 void jfree_obj(unsigned long addr){
 
-    if(g_conf_obj_count == 1){
-    	class jobject *obj=addr;
-    	ut_count_obj_free(obj->jobject_id);
+    if(1){
+    	ut_obj_free((jobject *)addr);
     }
 	ut_free(addr);
 }

@@ -280,7 +280,6 @@ unsigned long p9_write_rpc(p9_client_t *client, const char *fmt, ...) { /* The c
 	i = 0;
 	addr = 0;
 	while (i < 50 && addr == 0) {
-		//addr = virtio_removeFromQueue(vq, &len); /* TODO : here sometime returns zero because of some race condition, the packet is not recevied */
 		addr = vq->virtio_removeFromQueue(&len);
 		i++;
 		if (addr == 0) {

@@ -178,18 +178,23 @@ unsigned long init_symbol_table(unsigned long bss_start, unsigned long bss_end) 
 #define MAX_CLASSESS 100
 struct class_types {
 	int count; /* currently active objects */
-//	unsigned long use; /* so far the number of objects created */
 	jobject *list;   /* list of objects */
 	unsigned char *name;
 	int sz;
+	unsigned long stat_add,stat_remove;
 };
-#define CLASS_ID_START 0x5 /* this is to avoid 0 index */
+//#define CLASS_ID_START 0x5 /* this is to avoid 0 index */
 static struct class_types classtype_list[MAX_CLASSESS];
 static int class_count = 0;
 }
-int ut_count_obj_add(jobject *obj,unsigned char *name, int sz) {
-	int i;
 
+static unsigned long curr_obj_id=1; /* running serial number */
+int ut_obj_add(jobject *obj,unsigned char *name, int sz) {
+	/* Note: constructor is needed for every class, otherwise entire object initiazed by c++ with zero after new, during that all the entries created in obj class willbe erased. */
+	int i;
+	unsigned long flags;
+
+	spin_lock_irqsave(&g_global_lock, flags);
 	for (i = 0; i < class_count; i++) {
 		if (ut_strstr(classtype_list[i].name, name) != 0) {
 			classtype_list[i].count++;
@@ -197,22 +202,46 @@ int ut_count_obj_add(jobject *obj,unsigned char *name, int sz) {
 			classtype_list[i].sz = sz;
 			obj->next_obj = classtype_list[i].list;
 			classtype_list[i].list = obj;
-			//if (i==19) { ut_log("%d:   name:%s : obj:%x \n",i,name,obj);}
-			return i + CLASS_ID_START;
+			obj->jobject_id = curr_obj_id;
+			obj->jclass_id = i;
+			curr_obj_id++;
+			classtype_list[i].stat_add++;
+			break;
 		}
 	}
+	spin_unlock_irqrestore(&g_global_lock, flags);
+
 	return 0;
 }
-int ut_count_obj_free(int id) {
-	int i;
+int ut_obj_free(jobject *obj) {
+	unsigned long flags;
+	int i = obj->jclass_id;
+	int ret=JFAIL;
 
-	i = id - CLASS_ID_START;
+	spin_lock_irqsave(&g_global_lock, flags);
+
 	if (i >= 0 && (i < class_count)) {
 		classtype_list[i].count--;
-		//ut_log("   name:%s : %d \n",name,classtype_list[i].count);
-		return JSUCCESS;
+		classtype_list[i].stat_remove++;
+
+		jobject *curr_obj=classtype_list[i].list;
+		jobject *prev_obj=classtype_list[i].list;
+		while(curr_obj!=0){
+			if (curr_obj == obj){
+				if (prev_obj == classtype_list[i].list){
+					classtype_list[i].list = obj->next_obj;
+				}else{
+					prev_obj->next_obj = obj->next_obj;
+				}
+				break;
+			}
+			prev_obj=curr_obj;
+			curr_obj=curr_obj->next_obj;
+		}
+		ret = JSUCCESS;
 	}
-	return JFAIL;
+	spin_unlock_irqrestore(&g_global_lock, flags);
+	return ret;
 }
 
 extern "C" {
@@ -225,15 +254,19 @@ void Jcmd_obj_list(unsigned char *arg1,unsigned char *arg2) {
 		class_id = ut_atoi(arg1, FORMAT_DECIMAL);
 	}
 
-	ut_printf("  ClassName           Count         used  size\n");
+	ut_printf("  ClassName           Count    [ add/removed ]  size\n");
+
+
 	for (i = 0; i < class_count; i++) {
-		ut_printf("%d:  %9s  -> %d  : %d\n",i, &classtype_list[i].name[5], classtype_list[i].count,classtype_list[i].sz);
 		if (class_id == i ){
 			obj=classtype_list[i].list;
 			while(obj != 0){
+				ut_printf(" %d : ",obj->jobject_id);
 				obj->print_stats(0,0);
 				obj=obj->next_obj;
 			}
+		}else{
+			ut_printf("%d:  %9s  -> %d  [%d/%d]: %d\n",i, &classtype_list[i].name[5], classtype_list[i].count,classtype_list[i].stat_add,classtype_list[i].stat_remove, classtype_list[i].sz);
 		}
 
 	}

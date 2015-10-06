@@ -123,7 +123,7 @@ void virtio_queue::init_virtqueue(unsigned int num, unsigned int vring_align,
 		vq->vring.desc[i].next = i + 1;
 	}
 	vq->free_tail = num-1;
-	INIT_LOG("	c++	virtqueue Initialized  \n");
+	INIT_LOG("	virtqueue Initialized vq:%x  \n",vq);
 	queue = vq;
 
 	stat_add_success=1;
@@ -222,12 +222,12 @@ void virtio_queue::print_stats(unsigned char *arg1,unsigned char *arg2) {
 					vq->vring.avail->ring[i], vq->vring.used->ring[i]);
 		}
 	}
-	ut_printf("		VQ:%x size:%i num_free:%i  free_head:%d  tail:%d used:%u(%i) avail:%u(%i) diff:%u last_use_idx:%u alloc:%i free:%i\n",
+	ut_printf("		VirtQ:%x size:%i num_free:%i  free_head:%d  tail:%d used:%u(%i) avail:%u(%i) diff:%u last_use_idx:%u alloc:%i free:%i\n",
 			vq, vq->vring.num, vq->num_free, vq->free_head, vq->free_tail,vq->vring.used->idx,
 			vq->vring.used->idx, vq->vring.avail->idx, vq->vring.avail->idx,
 			diff, vq->last_used_idx, vq->stat_alloc, vq->stat_free);
-	ut_printf("		Queue adding success:%d fails:%d pkts:%d rate of pkt/sucees:%d\n",stat_add_success,stat_add_fails,stat_add_pkts,stat_add_pkts/stat_add_success);
-	ut_printf("		Queue remove success:%d fails:%d pkts:%d rate of pkt/sucees:%d\n",stat_rem_success,stat_rem_fails,stat_rem_pkts,stat_rem_pkts/stat_rem_success);
+	ut_printf("		VQueue adding success:%d fails:%d pkts:%d rate of pkt/sucees:%d\n",stat_add_success,stat_add_fails,stat_add_pkts,stat_add_pkts/stat_add_success);
+	ut_printf("		VQueue remove success:%d fails:%d pkts:%d rate of pkt/sucees:%d\n",stat_rem_success,stat_rem_fails,stat_rem_pkts,stat_rem_pkts/stat_rem_success);
 #if 0
 	if (arg1 && (ut_strcmp(arg1, "clean") == 0)) {
 		stat_add_success=1;
@@ -393,7 +393,7 @@ add_head:
 }
 
 
-int virtio_queue::BulkRemoveFromNetQueue(struct struct_mbuf *mbuf_list,
+int virtio_queue::BulkRemoveFromQueue(struct struct_mbuf *mbuf_list,
 		int list_len) {
 	struct vring_queue *vq = this->queue;
 	int ret = 0;
@@ -460,23 +460,28 @@ int virtio_queue::BulkRemoveFromNetQueue(struct struct_mbuf *mbuf_list,
 	}
 	return ret;
 }
-
-int virtio_queue::BulkAddToNetqueue(struct struct_mbuf *mbuf_list, int list_len,
-		int is_send) {
+int virtio_queue::MaxBufsSpace(){
+	struct vring_queue *vq = this->queue;
+	return vq->num_free/scatter_list_size ;
+}
+int virtio_queue::BulkAddToQueue(struct struct_mbuf *mbuf_list, int list_len,
+		int read_only) {
 	struct vring_queue *vq = this->queue;
 	unsigned int i,k, avail, uninitialized_var(prev);
 	int head, index, len, ret = 0;
 	unsigned char *data;
+	int in,out;
+	struct scatter_buf scatter_list[4];
 
 	START_USE(vq);
 	for (index = 0; index < list_len; index++) {
-		unsigned int total_bufs = total_scatter_list;
+		unsigned int total_bufs = scatter_list_size;
 		if (vq->num_free < (total_bufs)) {
 			goto last;
 		}
 		if (mbuf_list) {
-			data = mbuf_list[index].buf - 10;
-			len = mbuf_list[index].len + 10;
+			data = mbuf_list[index].buf;
+			len = mbuf_list[index].len;
 			mbuf_list[index].buf = 0;
 		} else {
 			data = (unsigned char *) jalloc_page(MEM_NETBUF);
@@ -485,16 +490,58 @@ int virtio_queue::BulkAddToNetqueue(struct struct_mbuf *mbuf_list, int list_len,
 		if (data == 0) {
 			BRK;
 		}
-		//ut_memset(data, 0, sizeof(struct virtio_net_hdr));
-		ut_memset(data, 0, 10);
+		if (virtio_type == VIRTIO_ID_NET){
+			//ut_memset(data, 0, sizeof(struct virtio_net_hdr));
+			if (mbuf_list){
+				data = data - 10;
+			}
+			ut_memset(data, 0, 10);
+			if (read_only == 1){
+				out = total_bufs;
+			}else{
+				out = 0;
+			}
+			if (total_bufs != 2) {BUG();}
+			scatter_list[0].addr= __pa(data);
+			scatter_list[0].length = 10;
+
+			scatter_list[1].addr= __pa(data+10);
+			scatter_list[1].length = len;
+		} else if (virtio_type == VIRTIO_ID_BLOCK){
+			struct virtio_blk_req *disk_req=(struct virtio_blk_req *)data;
+			if (total_bufs != 3){ BUG(); }
+			if (disk_req->type == VIRTIO_BLK_T_IN){
+				out = 1;
+				in = 2;
+			}else{
+				out = 2;
+				in = 1;
+			}
+			scatter_list[0].addr= __pa(data);
+			scatter_list[0].length = 16;
+
+			if (disk_req->user_data == 0){
+				scatter_list[1].addr= __pa(data + 16 + 8 + 8);
+			}else{
+				scatter_list[1].addr= __pa(disk_req->user_data);
+			}
+			if (len < 512){
+				len = 512;
+			}
+			scatter_list[1].length = len;
+
+			scatter_list[2].addr= __pa(data+16);
+			scatter_list[2].length = 1;
+		}
+
 		/* We're about to use some buffers from the free list. */
 		vq->num_free -= (total_bufs);
-
 		head = vq->free_head;
 		ar_prefetch0(&vq->vring.desc[head]);
+
 		k=0;
 		for (i = vq->free_head; total_bufs; i = vq->vring.desc[i].next, total_bufs--,k++) {
-			if (is_send == 1) {
+			if (out > k) {
 				vq->vring.desc[i].flags = VRING_DESC_F_NEXT;
 			} else {
 				vq->vring.desc[i].flags = VRING_DESC_F_NEXT | VRING_DESC_F_WRITE;
@@ -502,19 +549,12 @@ int virtio_queue::BulkAddToNetqueue(struct struct_mbuf *mbuf_list, int list_len,
 			if (vq->vring.desc[i].addr != 0) {
 				BRK;
 			}
-			vq->vring.desc[i].addr = __pa(data+scatter_list[k].offset);
-			vq->vring.desc[i].len = scatter_list[k].length ;
-#if 0
-			if (i == head) {
-				vq->vring.desc[i].addr = __pa(data);
-				vq->vring.desc[i].len  = 10;
-			} else {
-				vq->vring.desc[i].addr = __pa(data + 10);
-				vq->vring.desc[i].len = len - 10;
-			}
-#endif
+			vq->vring.desc[i].addr = scatter_list[k].addr;
+			vq->vring.desc[i].len = scatter_list[k].length;
 			prev = i;
 		}
+
+
 		/* Last one doesn't continue. */
 		vq->vring.desc[prev].flags &= ~VRING_DESC_F_NEXT;
 

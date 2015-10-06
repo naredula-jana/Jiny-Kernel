@@ -1,4 +1,4 @@
-## Benchmarks and Performance improvements in opensource Virtual Infra.
+## Benchmarks and Performance improvements in Opensource Virtual Infra.
 
 [Jiny kernel](https://github.com/naredula-jana/Jiny-Kernel) was designed from ground up for superior performance on virtual infrastructure. This paper mainly compares the throughput of [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel) with Linux kernel on different workloads like cpu,network,storage,memory,IPC,.. etc on hypervisors like kvm. Apart from kernel,other key virtual infra components like virtual switch throughput are also covered.
 In each benchmark the bottlenecks and corresponding solution was highlighted.  This paper was limited only to the opensource virtual infrastructure software components like Jiny,Linux, kvm, qemu, virtual switches(linux bridge,userspace switch,ovs,snabb),DPDK..etc.  There are lot of performance centric areas like storage,memory.. etc  yet to be explored.
@@ -53,7 +53,7 @@ In each benchmark the bottlenecks and corresponding solution was highlighted.  T
 
 ###Benchmark-2(Network centric): 
 
-This benchmark measures the network throughput between two vm's using virtual switch on the same host. This mainly highlight the bottlenecks in kernel and virtual switch connecting the vm's. Networking in Jiny is based on the [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). This benchmark gives the maxumum throughput in terms of packets per second at which one vm can send to second vm using the virtual switch in between. 
+This benchmark measures the network throughput between two vm's using virtual switch on the same host. This mainly highlight the bottlenecks in quest kernel and virtual switch connecting the vm's. Networking in Jiny is based on the [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). This benchmark gives the maxumum throughput in terms of packets per second(PPS) at which one vm can send to second vm using the virtual switch in between. 
 
  - **Test Environment**:  In this benchmark, udp client and udp server socket applications are used to send and recv the udp packets from one vm to another. udp server acts like a reflector, responds back the same packet recvied from udp client. udp client counts the number of packet it got respond back from the server. The below test results shows the network thoughput(in terms of million packets processed per second(MPPS) on sending/recving side.The  tests mentioned in the table compares jiny/linux kernel througput using one of the two virtual switches.  
  - **kernels** : Jiny kernel(2.x) , linux kernel(3.18) are used. 
@@ -62,73 +62,53 @@ This benchmark measures the network throughput between two vm's using virtual sw
  - **Packet size** used by udp client/server: 50/200 bytes. 
  - **Number of cpu cores**:  vm with 2 to 6 cores are used, udp client consumes 1 to 4 thread/cores to generate and recv such large number of packets.  
  - **Hypervisor**: kvm/qemu-2.4/linux host-kernel-3.18.
- - **two way versus one way test**: "two way" means udp client sends the packets to the udp server running on other vm, where udp_server recves the packets it response same packet back to the udp client. In the one way reflector or udp server will not be running, the packets are dropped in the recving side of the OS. 
+ - **two way versus one way test**: "two way" means udp client sends the packets to the udp server running on other vm, where udp_server recves the packets it response same packet back to the udp client. In the one way, udp server will not be running on the destination vm,so the packets will be dropped in the recving side of the OS. 
 
  <table border="1" style="width:100%">
   <tr>
     <td><b>Test# </b></td>
     <td><b> Description</b></td>
-    <td><b>Throughput</b></td>
-    <td><b> bottleneck</b></td>
-    <td><b>comment</b></td>
+    <td><b>Using Linux kernel inside vm</b></td>
+    <td><b>Using Jiny kernel inside vm</b></td>
     </tr>
   <tr>
     <td> 1 </td>
-    <td>linuxvm1- LB -linuxvm2 - two way</td>
-    <td>0.120 MPPS</td>
-    <td>linux kernel</td>
-    <td> - </td>
+    <td> vm1 -LB- vm2 </td>
+    <td>Throughput for two way: 0.120 MPPS<br>Bottleneck: linux kernel </td>
+    <td>Throughput for two way: 0.225 MPPS<br>Throughput for one way: 0.266 MPPS<br>Bottleneck: LB </td>
   </tr>
   <tr>
     <td> 2 </td>
-    <td>Jinyvm1- LB -Jinyvm2 - two way</td>
-    <td>0.225 MPPS </td>
-    <td>linux bridge(LB)</td>
-    <td> - </td>
-    </tr>
-      <tr>
-    <td> 3-TODO </td>
-    <td>linuxvm1- USS -linuxvm2 - two way</td>
-    <td>???? </td>
-    <td>???? </td>
-    <td>linux fails to communicate with USS</td>
-    </tr>
-  <tr>
-    <td> 4 </td>
-    <td>Jinyvm1- USS -Jinyvm2 - two way</td>
-    <td>0.366 MPPS </td>
-    <td>app on recv side is single thread</td>
-        <td> - </td>
-    </tr>
-  <tr>
-    <td> 5 </td>
-    <td>Jinyvm1- USS/LB -Jinyvm2 - one way</td>
-    <td>1.800 MPPS with USS @50byte pkt, 1.300MPPS with USS @2000byte pkt
-     , and 0.266 MPPS with LB </td>
-    <td> 1) USS is a single thread,it can improve further from 1.800MPPS using multithreaded switch.  2) USS fetch one packet at time instead of fetching bulk packets from virtio ring. </td>
-        <td> - </td>
+    <td>vm1- USS -vm2</td>
+    <td> ???? </td>
+    <td>Throughput using USS @50bytes: 1.800 MPPS (one way)  <br>Throughput using USS @200bytes: 1.300MPPS (one way)<br>Throughput: 0.366 MPPS (two way)<br>Bottleneck in two way: udpserver on recv side is single thread <br>
+        Bottleneck in one way: USS is a single thread and fetch one packet from queue,it can improve further from 1.800MPPS using multithreaded switch. </td>
    </tr>  
    <tr>
-    <td> 6-TODO </td>
-    <td>Jinyvm1- USS -Jinyvm2, with multichannel vNIC</td>
-    <td>????  </td>
-    <td>????</td>
-    <td>vhost-user vNIC with multichannel is not fully implemented in kvm</td>
+    <td> 3 </td>
+    <td>vm1- LB -vm2, <br>with multichannel vNIC(5queues)</td>
+    <td> ???? </td>
+    <td> Throughput till switch oneway: 1.000MPPS <br>Bottleneck: LB cannot send to other side on muktiqueue., send side of the switch uses only one queue </td>
     </tr> 
+       <tr>
+    <td> 4 </td>
+    <td>vm1- USS -vm2, with multichannel vNIC(5queues)</td>
+    <td> ???? </td>
+    <td> ???? <br>TODO:vhost-user vNIC with multichannel is not fully implemented in kvm </td>
+    </tr>
     <tr>
-    <td> 7-TODO </td>
-    <td>Jinyvm- USS -Jinyvm with DPDK based USS</td>
+    <td> 5-TODO </td>
+    <td>vm1 - USS -vm2 with DPDK based USS</td>
      <td>????</td>
      <td>????</td>
-    <td> using DPDK based USS </td>
     </tr>
     </tr> 
     <tr>
-     <td> 8-TODO </td>
-     <td>Jinyvm - USS - Jinyvm with USS+Fast switch using VMFUNC  </td>
+     <td> 6-TODO </td>
+     <td>vm1 - USS - vm2 with USS+Fast switch using VMFUNC inside vm  </td>
      <td>????</td>
-     <td>????</td>
-     <td>  Acessing other vm's virtio ring using Hardware Assist VMFUNC instruction, need changes in kvm/qemu accordingly as mentioned in the below papers. </td>
+     <td>????<br>
+      Acessing other vm's virtio ring using Hardware Assist VMFUNC instruction, need changes in kvm/qemu accordingly as mentioned in the below papers. </td>
     </tr>
 </table> 
 
@@ -138,8 +118,8 @@ papers mentioned in 8-TODO test:
 2. [openNFV](https://wiki.opnfv.org/vm2vm_mst)
 
 ##### Summary of Tests:
-1. Test-5 : USS versus LB with Jiny VM's: USS as outperformed when compare to LB.
-2. Test-1 versus Test-2: Jiny kernel versus Linux kernel using LB: Jiny as performed better when compare to linux.This can be mitigated in Linux kernel using DPDK. The application need to change accordingly when used with DPDK. Jiny does not need DPDK, linux based application can directly run on jiny kernel without DPDK.
+1. Test-1/2 : USS versus LB with Jiny VM's: USS as outperformed when compare to LB.
+2. Test-1 : Jiny kernel versus Linux kernel using LB: Jiny as performed better when compare to linux.This can be mitigated in Linux kernel using DPDK. The application need to change accordingly when used with DPDK. Jiny does not need DPDK, linux based application can directly run on jiny kernel without DPDK.
 
 ##### Reasons for Better throughput in Jiny kernel when compare to linux kernel:
 1. Network bottom half is very thin, and entire computation of send/recv packet is done in the application context, means the network stack runs  as part of application context concurrently without locks, this makes most of the packet processing computation on the same core and avoid locking. The implementaion of network frame work is similar to [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). 
@@ -205,7 +185,7 @@ Issue-1: In IPC, if there is a contention in mutext or semop or other IPC, then 
 
  Monitoring Issue-1: Due to this this, IPI interrupts will be generated in large number, this can be monitered using the number of [Rescheduling Interrupts](https://help.ubuntu.com/community/ReschedulingInterrupts) in /proc/interrupts, Rescheduling interrupts are implemented using Inter Processor Interrupt(IPI). 
  
-
+Same Problem was solved in KVM hypervisor in this [paper](http://www.linux-kvm.org/images/a/ac/02x03-Davit_Matalack-KVM_Message_passing_Performance.pdf).
 
 ----------------------------------------------------------------------------------
 ##Papers:

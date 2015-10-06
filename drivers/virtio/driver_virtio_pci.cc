@@ -17,7 +17,6 @@ extern "C" {
 #include "interface.h"
 
 #include "virtio_pci.h"
-//#include "net/virtio_net.h"
 #include "mach_dep.h"
 extern int p9_initFs(void *p);
 extern void print_vq(struct virtqueue *_vq);
@@ -117,7 +116,7 @@ int virtio_net_jdriver::burst_recv(int total_pkts){
 		list_len = total_pkts;
 	}
 
-	recv_pkts=queues[0].recv->BulkRemoveFromNetQueue(&recv_mbuf_list[0], list_len);
+	recv_pkts=queues[0].recv->BulkRemoveFromQueue(&recv_mbuf_list[0], list_len);
 	if (recv_pkts <= 0){
 		return 0;
 	}
@@ -229,7 +228,7 @@ static int virtnet_send_command(
 	return ret;
 }
 int virtio_net_jdriver::fill_empty_buffers(net_virtio_queue *queue){
-	queue->BulkAddToNetqueue( 0, 128,0);
+	queue->BulkAddToQueue( 0, 128,0);
 }
 int virtio_net_jdriver::net_attach_device() {
 	unsigned long addr;
@@ -353,9 +352,6 @@ int virtio_net_jdriver::net_attach_device() {
 			break;
 		}
 		fill_empty_buffers(queues[k].recv);
-		//queues[k].recv->BulkAddToNetqueue( 0, 128,0);
-
-		//ut_log("    virtio_netq:%d  recv addbuffers:%d \n",k,max_qbuffers/2);
 	}
 	inb(pci_ioaddr + VIRTIO_PCI_ISR);
 	for (k = 0; k < max_vqs; k++) {
@@ -363,7 +359,6 @@ int virtio_net_jdriver::net_attach_device() {
 			break;
 		}
 		queues[k].recv->virtio_queuekick();
-//	queue_kick(queues[k].send);
 	}
 	pending_kick_onsend =0;
 	recv_interrupt_disabled = 0;
@@ -405,7 +400,7 @@ int virtio_net_jdriver::burst_send() {
 
 	spin_lock_irqsave(&virtionet_lock, flags);
 	for (qno=0; qno<max_vqs; qno++){  /* try to send from the same queue , if it full then try on the subsequent one, in this way kicks will be less */
-		qret = queues[qno].send->BulkAddToNetqueue( &send_mbuf_list[send_mbuf_start+ret],send_mbuf_len-ret,1);
+		qret = queues[qno].send->BulkAddToQueue( &send_mbuf_list[send_mbuf_start+ret],send_mbuf_len-ret,1);
 
 		if (qret == 0){
 			continue;
@@ -437,7 +432,7 @@ int virtio_net_jdriver::burst_send() {
 	spin_unlock_irqrestore(&virtionet_lock, flags);
 
 	for (qno = 0; qno < max_vqs; qno++) {
-		pkts = queues[qno].send->BulkRemoveFromNetQueue(&temp_mbuf_list[0],MAX_BUF_LIST_SIZE);
+		pkts = queues[qno].send->BulkRemoveFromQueue(&temp_mbuf_list[0],MAX_BUF_LIST_SIZE);
 		for (i = 0; i < pkts; i++) {
 			free_page(temp_mbuf_list[i].buf);
 			stat_frees++;
@@ -506,13 +501,7 @@ int virtio_net_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 	}
 }
 /*****************************  Virtio Disk ********************************************/
-#define VIRTIO_BLK_T_IN 0
-#define VIRTIO_BLK_T_OUT 1
-#define VIRTIO_BLK_T_SCSI_CMD 2
-#define VIRTIO_BLK_T_SCSI_CMD_OUT 3
-#define VIRTIO_BLK_T_FLUSH 4
-#define VIRTIO_BLK_T_FLUSH_OUT 5
-#define VIRTIO_BLK_T_BARRIER 0x80000000
+
 
 #define DISK_READ 0
 #define DISK_WRITE 1
@@ -692,9 +681,7 @@ return 0; /* remove later */
 	//return (void *)buf;
 }
 void virtio_disk_jdriver::print_stats(unsigned char *arg1,unsigned char *arg2) {
-	ut_printf("		disk device: %s: Send(P,K,I): %d,%i,%d  Recv(P,K,I):%d,%i,%d allocs:%d free:%d ERR(send no space):%d \n", this->name, this->stat_sends,
-			this->stat_send_kicks, this->stat_send_interrupts, this->stat_recvs, this->stat_recv_kicks, this->stat_recv_interrupts, this->stat_allocs,
-			this->stat_frees, this->stat_err_nospace);
+		queues[0].send->print_stats(0,0);
 }
 struct virtio_blk_req *virtio_disk_jdriver::createBuf(int type, unsigned char *user_buf,  uint64_t sector, uint64_t data_len) {
 	unsigned char *buf=0;
@@ -727,42 +714,14 @@ struct virtio_blk_req *virtio_disk_jdriver::createBuf(int type, unsigned char *u
 	req->len = data_len;
 	return req;
 }
-void virtio_disk_jdriver::addBufToQueue(struct virtio_blk_req *req, int transfer_len) {
-	struct scatterlist sg[4];
+int virtio_disk_jdriver::MaxBufsSpace(){
+	return queues[0].send->MaxBufsSpace();
+}
+void virtio_disk_jdriver::addBufListToQueue(struct struct_mbuf *mbuf, int len){
 	int ret;
-	int out,in;
-	unsigned char *buf=(unsigned char *)req;
-
-	if (req->type == VIRTIO_BLK_T_IN){
-		out = 1;
-		in = 2;
-	}else{
-		out = 2;
-		in = 1;
-	}
-	sg[0].page_link = (unsigned long) buf;
-	sg[0].length = 16;
-	sg[0].offset = 0;
-
-	if (req->user_data == 0){
-
-		sg[1].page_link = (unsigned long) (buf + 16 + 8 + 8);
-	}else{
-		sg[1].page_link = req->user_data;
-	}
-	if (transfer_len < blk_size){
-		transfer_len=blk_size;
-	}
-	//ut_log(" buf:%x  len:%d  blk_size:%d\n",sg[1].page_link,transfer_len, blk_size);
-	sg[1].length =  transfer_len;
-	sg[1].offset = 0;
-
-	sg[2].page_link = (unsigned long) (buf + 16 );
-	sg[2].length =  1;
-	sg[2].offset = 0;
 
 	queues[0].send->virtio_disable_cb();
-	ret = queues[0].send->virtio_add_buf_to_queue(sg, out, in, (void *) sg[0].page_link, 0);/* send q */
+	ret = queues[0].send->BulkAddToQueue(mbuf,len, 0);
 	queues[0].send->virtio_queuekick();
 
 	if (interrupts_disabled == 0){
@@ -771,6 +730,7 @@ void virtio_disk_jdriver::addBufToQueue(struct virtio_blk_req *req, int transfer
 
 	return ;
 }
+
 static uint64_t virtio_config64(unsigned long pcio_addr){
 	uint64_t ret;
 	auto addr = pcio_addr  + VIRTIO_MSI_CONFIG_VECTOR ;
@@ -941,9 +901,6 @@ extern jdriver *disk_drivers[];
 jdriver *virtio_disk_jdriver::attach_device(class jdevice *jdev) {
 	int i;
 
-	stat_allocs = 0;
-	stat_frees = 0;
-	stat_err_nospace = 0;
 	COPY_OBJ(virtio_disk_jdriver, this, new_obj, jdev);
 	((virtio_disk_jdriver *) new_obj)->disk_attach_device(jdev);
 	for (i=0; i<5; i++){
@@ -1279,32 +1236,45 @@ static int extract_reqs_from_devices(virtio_disk_jdriver *dev) {
 	int ret = 0;
 	int loop = 10;
 	int i, qlen;
+	struct struct_mbuf mbuf_list[64];
 	unsigned char *req;
+	int k;
 
-	while (loop > 0) {
+	ret = dev->queues[0].send->BulkRemoveFromQueue(&mbuf_list[0], 63);
+	for (k=0;  k < ret; k++) {
 		loop--;
-		req = dev->queues[0].send->virtio_removeFromQueue(&qlen);
-		if (req == 0 ) return ret;
+		req = mbuf_list[k].buf;
+		qlen = mbuf_list[k].len;
+		//req = dev->queues[0].send->virtio_removeFromQueue(&qlen);
+		if (req == 0 ) {
+			BUG();
+		}
 		for (i = 0; i < MAX_DISK_REQS; i++) {
 			if (disk_reqs[i].buf == 0) {
 				continue;
 			}
 			if (disk_reqs[i].buf == req) {
 				disk_reqs[i].state = STATE_REQ_COMPLETED;
-				ret++;
 				break;
 			}
+		}
+		if ( i==MAX_DISK_REQS ){
+			BUG();
 		}
 	}
 	return ret;
 }
+static struct  struct_mbuf disk_mbufs[MAX_DISK_REQS];
+extern "C" {
+ int g_conf_disk_bulkio=1;
+}
 int diskio_thread(void *arg1, void *arg2) {
-	int i;
+	int i,j,k;
 	int pending_req;
 	int progress =0;
 	int intr_disabled=0;
+	int bufs_space=0;
 	while(1){
-#if 1
 		if (progress == 0 ){
 			if (intr_disabled == 1){
 				//disk_thread_waitq->wait(1);
@@ -1313,13 +1283,7 @@ int diskio_thread(void *arg1, void *arg2) {
 				disk_thread_waitq->wait(50);
 			}
 		}
-#else
-		if (pending_req == 0){
-			disk_thread_waitq->wait(400);
-		}else if (progress == 0) {
-			disk_thread_waitq->wait(1);
-		}
-#endif
+
 		progress =0;
 		pending_req=0;
 		intr_disabled = 0;
@@ -1329,10 +1293,24 @@ int diskio_thread(void *arg1, void *arg2) {
 			if (disk_reqs[i].dev->interrupts_disabled == 1){
 				intr_disabled = 1;
 			}
-			if (disk_reqs[i].state == 0){
-				disk_reqs[i].dev->addBufToQueue(disk_reqs[i].buf, disk_reqs[i].data_len);
-				disk_reqs[i].state = STATE_REQ_QUEUED;
-				progress++;
+			if (disk_reqs[i].state == 0) {
+				bufs_space = disk_reqs[i].dev->MaxBufsSpace();
+				if (g_conf_disk_bulkio == 0){
+					bufs_space = 1;
+				}
+				k = 0;
+				for (j = i; j < MAX_DISK_REQS && k < bufs_space; j++) {
+					if (disk_reqs[j].buf != 0 && disk_reqs[j].state == 0 && disk_reqs[j].dev == disk_reqs[i].dev) {
+						disk_mbufs[k].buf = (unsigned char *) disk_reqs[j].buf;
+						disk_mbufs[k].len = disk_reqs[j].data_len;
+						disk_reqs[j].state = STATE_REQ_QUEUED;
+						progress++;
+						k++;
+					}
+				}
+				if (k > 0) {
+					disk_reqs[i].dev->addBufListToQueue(&disk_mbufs[0], k);
+				}
 			}
 			if (disk_reqs[i].state == STATE_REQ_QUEUED){
 				progress = progress +extract_reqs_from_devices(disk_reqs[i].dev);
@@ -1345,7 +1323,7 @@ int diskio_thread(void *arg1, void *arg2) {
 					disk_reqs[i].dev->waitq->wakeup();
 				}
 			}
-		}
+		} /* end of for loop */
 	}
 }
 

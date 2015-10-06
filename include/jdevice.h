@@ -99,22 +99,6 @@ public:
 	int recv_interrupt_disabled;
 };
 
-#define VIRTIO_BLK_DATA_SIZE (4096)
-struct virtio_blk_req {
-	uint32_t type;
-	uint32_t ioprio;
-	uint64_t sector;
-
-	uint8_t status;
-	uint8_t pad[3];
-	uint32_t len;
-
-	char *user_data; /* this memory block can be used directly to avoid the mem copy, this is if it from pagecache */
-
-	char data[2];  /* here data can be one byte or  1 page depending on the user_data */
-};
-
-
 #define IOCTL_DISK_SIZE 1
 class virtio_disk_jdriver: public jdriver {
 	unsigned long disk_size,blk_size;
@@ -133,14 +117,11 @@ public:
 	int interrupts_disabled;
 
 	unsigned char *unfreed_req;
-
-	atomic_t stat_send_kicks;
-	atomic_t stat_recv_kicks;
-	unsigned long stat_allocs,stat_frees,stat_err_nospace;
-
-	void addBufToQueue(struct virtio_blk_req *req,int transfer_len);
-
 	wait_queue *waitq;
+
+	void addBufListToQueue(struct struct_mbuf *mbuf, int len);
+	int MaxBufsSpace();
+
 	void print_stats(unsigned char *arg1,unsigned char *arg2);
 	int probe_device(jdevice *dev);
 	jdriver *attach_device(jdevice *dev);

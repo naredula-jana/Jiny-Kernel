@@ -666,7 +666,7 @@ int wait_queue::wait_with_lock(unsigned long ticks, spinlock_t *spin_lock) {
 	return wait_internal(ticks,spin_lock);
 }
 void wait_queue::print_stats(unsigned char *arg1,unsigned char *arg2){
-
+	ut_printf("name:%s ticks:%d count:%d wakeups:%d \n",name,stat_wait_ticks,stat_wait_count,stat_wakeups);
 }
 /******************************************************************************************/
 /* this call consume system resources */
@@ -775,6 +775,6 @@ void semaphore::free() {
     jfree_obj((unsigned long)this);
 }
 void semaphore::print_stats(unsigned char *arg1,unsigned char *arg2){
-
+ut_printf(" name:%s \n",name);
 }
 

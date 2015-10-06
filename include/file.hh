@@ -41,7 +41,11 @@ void jfree_obj(unsigned long addr);
 
 class jobject { /* All objects will be inherited from here */
 public:
+	jobject(){
+
+	}
 	int jobject_id; /* currently used only for debugging purpose */
+	int jclass_id;
 	jobject *next_obj;
 	virtual void print_stats(unsigned char *arg1,unsigned char *arg2)=0;
 };
@@ -127,6 +131,9 @@ public:
 	static unsigned long stat_raw_attached;
 	static unsigned long  stat_raw_drop;
 	static unsigned long stat_raw_default;
+
+	socket(){
+	}
 
 	int read(unsigned long offset, unsigned char *data, int len, int flags, int unused_flags);
 	int write(unsigned long offset, unsigned char *data, int len, int flags);
