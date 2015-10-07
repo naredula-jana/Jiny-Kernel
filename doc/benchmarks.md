@@ -1,7 +1,7 @@
 ## Benchmarks and Performance improvements in Opensource Virtual Infra.
 
-[Jiny kernel](https://github.com/naredula-jana/Jiny-Kernel) was designed from ground up for superior performance on virtual infrastructure. This paper mainly compares the throughput of [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel) with Linux kernel on different workloads like cpu,network,storage,memory,IPC,.. etc on hypervisors like kvm. Apart from kernel,other key virtual infra components like virtual switch throughput are also covered.
-In each benchmark the bottlenecks and corresponding solution was highlighted.  This paper was limited only to the opensource virtual infrastructure software components like Jiny,Linux, kvm, qemu, virtual switches(linux bridge,userspace switch,ovs,snabb),DPDK..etc.  There are lot of performance centric areas like storage,memory.. etc  yet to be explored.
+[Jiny kernel](https://github.com/naredula-jana/Jiny-Kernel) was designed from ground up for superior performance on virtual infrastructur, so as vm should run to near native performance. This paper mainly compares throughput of [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel) with Linux kernel on different workloads like cpu,network,storage,memory,IPC,.. etc on hypervisors like kvm. Apart from kernel,other key virtual infra components like virtual switch throughput are also compared.
+In each benchmark the bottlenecks and corresponding optimizations was highlighted.  This paper was limited only to the opensource virtual infrastructure software components like Jiny,Linux, kvm, qemu, virtual switches(linux bridge,userspace switch,ovs,snabb),DPDK..etc.  There are lot of performance centric areas like storage,memory.. etc  yet to be explored.
 
 **About me:**
  I have started Jiny Kernel almost 5 years back from scratch, Along with Jiny development, these Benchmarks are added or developed over the period of time. The paper highlights performance improvements in areas like pagecache suitable for Hadoop workloads, IPC improvements for multi threaded apps, Network throughput improvements for inter vm communication within same host suitable for NFV,..etc. 
@@ -53,23 +53,23 @@ In each benchmark the bottlenecks and corresponding solution was highlighted.  T
 
 ###Benchmark-2(Network centric): 
 
-This benchmark measures the network throughput between two vm's using virtual switch on the same host. This mainly highlight the bottlenecks in quest kernel and virtual switch connecting the vm's. Networking in Jiny is based on the [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). This benchmark gives the maxumum throughput in terms of packets per second(PPS) at which one vm can send to second vm using the virtual switch in between. 
+This benchmark measures the network throughput between two vm's using virtual switch on the same host. This mainly highlight the bottlenecks in quest kernel or virtual switch connecting the vm's. Networking in Jiny is based on the [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). This benchmark gives the maxumum throughput in terms of packets per second(PPS) at which first vm can send udp packets to second vm using the virtual switch in between. 
 
- - **Test Environment**:  In this benchmark, udp client and udp server socket applications are used to send and recv the udp packets from one vm to another. udp server acts like a reflector, responds back the same packet recvied from udp client. udp client counts the number of packet it got respond back from the server. The below test results shows the network thoughput(in terms of million packets processed per second(MPPS) on sending/recving side.The  tests mentioned in the table compares jiny/linux kernel througput using one of the two virtual switches.  
+ - **Test Environment**:  In this benchmark, udp client and udp server socket applications are used to send and recv the udp packets from one vm to another. udp server acts like a reflector, responds back the same packet recvied from udp client. udp client counts the number of packet it got responded back from the udp server. udp client is executed in the first vm and udp server is executed in the second vm. The below test results shows the network thoughput(in terms of million packets processed per second(MPPS) on sending/recving side.The  tests mentioned in the table compares Jiny and Linux kernel througput using one of the two virtual switches with various configurations.  
  - **kernels** : Jiny kernel(2.x) , linux kernel(3.18) are used. 
  - **virtual switch**: Linux Bridge(LB), [User Space Switch(USS)](https://github.com/naredula-jana/Jiny-Kernel/tree/master/test/virtio-switch): These two vswitches are compared against the above two kernels. USS is a simple two port virtual user space switch to connect two vm's. It is based on opensource vhost-user vNIC, this vNIC is available in kvm hypervisor. other User space virtual switch are Snabb,DPDK,..etc . 
  - **VNIC type**: uses vhost-kernel or virtio-vhost with LB, uses vhost-user with USS bypassing host kernel.
  - **Packet size** used by udp client/server: 50/200 bytes. 
  - **Number of cpu cores**:  vm with 2 to 6 cores are used, udp client consumes 1 to 4 thread/cores to generate and recv such large number of packets.  
  - **Hypervisor**: kvm/qemu-2.4/linux host-kernel-3.18.
- - **two way versus one way test**: "two way" means udp client sends the packets to the udp server running on other vm, where udp_server recves the packets it response same packet back to the udp client. In the one way, udp server will not be running on the destination vm,so the packets will be dropped in the recving side of the OS. 
+ - **two way versus one way test**: "two way" means udp client sends the packets to the udp server running on other vm, where udp_server recves the packets it response back the same packet to the udp client. In the one way, udp server will not be running on the destination vm,so the packets will be dropped in the recving side of the OS or in the switch. 
 
  <table border="1" style="width:100%">
   <tr>
     <td><b>Test# </b></td>
     <td><b> Description</b></td>
-    <td><b>Using Linux kernel inside vm</b></td>
-    <td><b>Using Jiny kernel inside vm</b></td>
+    <td><b>Using Linux kernel inside both vm's</b></td>
+    <td><b>Using Jiny kernel inside both vm's</b></td>
     </tr>
   <tr>
     <td> 1 </td>
@@ -86,9 +86,9 @@ This benchmark measures the network throughput between two vm's using virtual sw
    </tr>  
    <tr>
     <td> 3 </td>
-    <td>vm1- LB -vm2, <br>with multichannel vNIC(5queues)</td>
+    <td>vm1- LB -vm2, <br>with multichannel vNIC(5 queues)</td>
     <td> ???? </td>
-    <td> Throughput till switch oneway: 1.000MPPS <br>Bottleneck: LB cannot send to other side on muktiqueue., send side of the switch uses only one queue </td>
+    <td> Throughput till switch: 1.000MPPS (oneway) <br>Bottleneck: LB cannot send to other side using multiqueue, send side of the switch uses only one queue, due to this the packets recved at  other end are lot less</td>
     </tr> 
        <tr>
     <td> 4 </td>
@@ -150,28 +150,61 @@ papers mentioned in 8-TODO test:
   Memory allocation improvements like zero page accumulation and other related techiniques: Based on this technique one round of testing is done but it as not given the substantial improvements as expected, need to improve and redo.
    
 ----------------------------------------------------------------------------------
-###Benchmark-6(Speeding IPC): 
+###Benchmark-6( IPC Improvements): 
+
 This benchmark measures InterProcess Communication(mutex,semphore,messages etc) in virtual environment.The performance gaps are especially from interrupts(especially IPI and timer interrupts) inside the kernel: 
 
-  - spin locks are well suited for SMP not for virtual machines because of lock-holder preemption. Solution is avoiding spin locks and writing the lock free code.
-  -  Hitting "hlt" instruction by a CPU and getting awaken up by other cpu using IPI(Inter Processor Interrupt) within short period of time is not good for virtual machines. The cost is more in vm when comapre to metal.
+##### Problem Definition:
+   CPU going to sleep (Hitting "hlt" instruction) and getting awaken up by other cpu using IPI(Inter Processor Interrupt) within short period of time is not good for virtual machines. The cost is more in vm when compare to metal.
  
   
-   **Test Environment and Results**: 
-     IPC Test: This is a Producer and consumer test using semaphores. Producer and consumer runs in two seperate threads. Producer is more cpu intesive when compare to consumer, this make consumer waits for producer at the end of each loop. producer wakes consumer once item is produced. In this way consumer get context switched at the end of every loop. This emulates  producer and consumer with unequal cpu computation to process every item, this will be very common case. The [source code for test available here.] (https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/expirements/sem_test4.c). If the amount of computation for producer and consumer is same then there will be not be any lock contention then it will run at full speed without entering in to kernel. This test emulates the non-good case.
+#####Test Environment and Results
+    
+    
+  IPC Test: This is a Producer and consumer test using semaphores. Producer and consumer runs in two seperate threads. Producer is more cpu intesive when compare to consumer, this make consumer waits for producer at the end of each loop. producer wakes consumer once item is produced. In this way consumer get context switched at the end of every loop. This emulates  producer and consumer with unequal cpu computation to process every item, this is a very common case. The [source code for test available here.] (https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/expirements/sem_test4.c). If the amount of computation for producer and consumer is same then there will be minimum lock contention. 
      **Hypervisor**: kvm/qemu-2.x
      **host kernel version**:3.13.0-32
      **command and arguments to run the test**:  "sem 800k 2000"  :  Here 800k represents the number of items produced and consumed, producer loops 2000 times in tight loop to emulate cpu consumption after every item, the more this value the more will be the consumer wait time.
      
-   1. **Test-1**: with ubuntu-14(linux vm - kernel 3.0.x) on 2 cpu :  able to complete the IPC test as mentioned above in 22 seconds. host cpu consumption is 150%(1.5 cpu's). There are large number of IPI interrupts due to IPC test, close to 280k are generated inside the guestos.
-   2. **Test-2**: Same test on Jiny os with 2 cpu as vm(version 2.x): able to complete in 9 seconds(more then 140% improvement). host cpu consumption is 200%(2 cpu's) noticed with top utility. No additional IPI interrupts are generated in the quest OS.
-   3. **Test-3**: ubuntu-14(linux os) on metal: almost same as Test-2(takes 9 sec), with large loops metal takes 97sec whereas Test-2 takes 93 seconds, means on the metal it takes almost 3% to 4% more, this may be because of IPI interrupts on the metal.
-   4. **Test-4**: with ubuntu-14(linux vm - kernel 3.0.x) on 2 cpu : same as Test-1 with "cpu hogger" program in background with lowest priority(using nice command). "cpu hogger" is a simple c program in a infinite loop with 2 threads, this program started at priority 20(lowest priority) to avoid the cpu entering into idle state. In this case, same IPC test as in test-1 completes in 12 seconds. So the IPC test as improved from 22sec to 12sec(regained 110% out of 140%) with cpu-hogger in background. 
+     
+ <table border="1" style="width:100%">
+  <tr>
+    <td><b>Test# </b></td>
+    <td><b> Description</b></td>
+    <td><b>Throughput</b></td>
+    <td><b>Comment</b></td>
+  </tr>
+  <tr>
+    <td>Test-1 </td>
+    <td> linux vm : kernel 3.0.x on 2 cpu,ubuntu-14  </td>
+    <td> timetaken= 22 sec</td>
+    <td> cpu consumption in host=150%,There are large number of IPI interrupts due to IPC test, close to 280k are generated inside the guestos </td> 
+  </tr>
+    <tr>
+    <td>Test-2 </td>
+    <td> Jiny vm : on 2 cpu, version-2  </td>
+    <td> timetaken= 9sec (140% over test-1)</td>
+    <td> host cpu consumption is 200%(2 cpu's) noticed with top utility. No additional IPI interrupts are generated in the quest OS </td> 
+  </tr>
+    <tr>
+    <td>Test-3 </td>
+    <td> linux on metal, with ubutuntu-14, more then 2 cpu  </td>
+    <td> timetaken= 9.2sec (slightly less then Test-2) </td>
+    <td>  </td> 
+  </tr>
+  <tr>
+    <td>Test-4 </td>
+    <td> with ubuntu-14(linux vm - kernel 3.0.x) on 2 cpu, with cpu hogger with low priority in background </td>
+    <td>Throughput: timetaken= 12sec (better then Test-1 by 83%) </td>
+    <td> cpu hogger with low priority makes the cpu core  alive without going to sleep.</td> 
+  </tr>
+  </table>
+  
           
-##### Reasons for Better throughput of IPC in Jiny kernel when compare to linux
+##### Solution : Changes in Guest VM kernel
 1. Producer and consumer thread will be running on seperate cpu's. when consumer thread goes to sleep when ever it contents for the lock, and control goes to idle thread before hitting the "hlt" instruction, idle thread checks if there is any threads belonging to the cpu is waiting, if there is any threads under wait then it spin the cpus or does a small house keeping tasks for a short duration(10ms or 1 tick) then it goes to sleep using "hlt" instruction, In this short duration if the consumer thread got woken up then it saves IPI(interrupts) generation and exit/entry of the vcpu. In this way it saves around 800k interrupts for 800k loop in Test-2. Interrupts are costly in virtual environment when compare to metal. every interrupt causes exist and entry in the hypervisor. The "hlt" instruction casues context switch at host.        
 
-##### Summary of Tests:
+##### **Summary of Tests:**
 1. Test-1 versus Teset-2 : Jiny-vm as performed 140% better when compare to linux vm with same test setup, this is mainly interrupts are not generated because cpu avoids hitting "hlt" instruction when the thread is under wait for a short period.
 2. Test-2 versus Test-3 :linux on baremetal is very close to that of jiny vm. 3% to 4% degredation is due to the IPI interrupts are generated on the metal when compare to jiny.
 3. Test-1 versus Test-3 :linux kernel on the metal and on hypervisor(i,e test-1 and test-3) shows a gap of 140%. this is mainly the interrupts speed on hypervisor and hitting hlt instruction frequently. whenever "hlt" instruction is executed in guest os, control goes to kvm and get back to guest os upon wakeup, this transfer is costly when compare to small cpu spin in guest os. This is exactly implmented in jiny os to avoid hitting the "hlt" instruction. 
@@ -185,7 +218,12 @@ Issue-1: In IPC, if there is a contention in mutext or semop or other IPC, then 
 
  Monitoring Issue-1: Due to this this, IPI interrupts will be generated in large number, this can be monitered using the number of [Rescheduling Interrupts](https://help.ubuntu.com/community/ReschedulingInterrupts) in /proc/interrupts, Rescheduling interrupts are implemented using Inter Processor Interrupt(IPI). 
  
-Same Problem was solved in KVM hypervisor in this [paper](http://www.linux-kvm.org/images/a/ac/02x03-Davit_Matalack-KVM_Message_passing_Performance.pdf).
+#### Same Problem was solved differently:
+Same Problem was solved by changing KVM hypervisor in this [paper](http://www.linux-kvm.org/images/a/ac/02x03-Davit_Matalack-KVM_Message_passing_Performance.pdf), published in kvm-forum-2105.  Difference between the two solutions are:
+
+1. **Problem definition:** same in both. In this paper IPC worload was used to explain the problem, in other paper "message passing workload" is used to explain the problem.
+2. **Solution:** It was fixed in guest kernel(Jiny kernel) in this paper, and the problem is resolved completely. Whereas in other paper, it is fixed in hypervisor and problem is resolved partialy(slide-29).
+3. Both solutions can co-exist. since the problem are solved in two diffferent layers independently. 
 
 ----------------------------------------------------------------------------------
 ##Papers:
