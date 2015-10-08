@@ -221,9 +221,9 @@ Issue-1: In IPC, if there is a contention in mutext or semop or other IPC, then 
 #### Same Problem was solved differently:
 Same Problem was solved by changing KVM hypervisor in this [paper](http://www.linux-kvm.org/images/a/ac/02x03-Davit_Matalack-KVM_Message_passing_Performance.pdf), published in kvm-forum-2105.  Difference between the two solutions are:
 
-1. **Problem definition:** same in both. In this paper IPC worload was used to explain the problem, in other paper "message passing workload" is used to explain the problem.
-2. **Solution:** It was fixed in guest kernel(Jiny kernel) in this paper, and the problem is resolved completely. Whereas in other paper, it is fixed in hypervisor and problem is resolved partialy(slide-29).
-3. Both solutions can co-exist. since the problem are solved in two diffferent layers independently. 
+1. **Problem definition:** same in both. In this paper IPC workload is used to explain the problem, In other paper "message passing workload" is used to explain the problem.
+2. **Solution:** It was fixed in guest kernel(Jiny kernel) in this paper, and the problem is resolved completely. Whereas in other paper, it is fixed in hypervisor(kvm) and problem is resolved partially(slide-29). 
+3. Both solutions can co-exist. since the problem is solved at two different layers independently. 
 
 ----------------------------------------------------------------------------------
 ##Papers:
