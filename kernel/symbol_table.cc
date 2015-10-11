@@ -255,8 +255,6 @@ void Jcmd_obj_list(unsigned char *arg1,unsigned char *arg2) {
 	}
 
 	ut_printf("  ClassName           Count    [ add/removed ]  size\n");
-
-
 	for (i = 0; i < class_count; i++) {
 		if (class_id == i ){
 			obj=classtype_list[i].list;
@@ -265,7 +263,7 @@ void Jcmd_obj_list(unsigned char *arg1,unsigned char *arg2) {
 				obj->print_stats(0,0);
 				obj=obj->next_obj;
 			}
-		}else{
+		}else if (classtype_list[i].count > 0){
 			ut_printf("%d:  %9s  -> %d  [%d/%d]: %d\n",i, &classtype_list[i].name[5], classtype_list[i].count,classtype_list[i].stat_add,classtype_list[i].stat_remove, classtype_list[i].sz);
 		}
 

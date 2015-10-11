@@ -1,10 +1,10 @@
 ## Benchmarks and Performance improvements in Opensource Virtual Infra.
 
-[Jiny kernel](https://github.com/naredula-jana/Jiny-Kernel) was designed from ground up for superior performance on virtual infrastructur, so as vm should run to near native performance. This paper mainly compares throughput of [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel) with Linux kernel on different workloads like cpu,network,storage,memory,IPC,.. etc on hypervisors like kvm. Apart from kernel,other key virtual infra components like virtual switch throughput are also compared.
-In each benchmark the bottlenecks and corresponding optimizations was highlighted.  This paper was limited only to the opensource virtual infrastructure software components like Jiny,Linux, kvm, qemu, virtual switches(linux bridge,userspace switch,ovs,snabb),DPDK..etc.  There are lot of performance centric areas like storage,memory.. etc  yet to be explored.
+[Jiny kernel](https://github.com/naredula-jana/Jiny-Kernel) was designed from ground up for superior performance on virtual infrastructure, so as vm can run to near native performance. This paper mainly compares throughput of [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel) with Linux kernel on different workloads like cpu,network,storage,memory,IPC,.. etc on hypervisors like kvm. Apart from kernel,other key virtual infra components like virtual switch throughput are also compared.
+In each benchmark the bottlenecks and corresponding optimizations were highlighted.  This paper was limited only to the opensource virtual infrastructure software components like Jiny,Linux, kvm, qemu, virtual switches(linux bridge,userspace switch,ovs,snabb),DPDK..etc.  There are lot of performance centric areas like storage,memory.. etc that are yet to be explored.
 
 **About me:**
- I have started Jiny Kernel almost 5 years back from scratch, Along with Jiny development, these Benchmarks are added or developed over the period of time. The paper highlights performance improvements in areas like pagecache suitable for Hadoop workloads, IPC improvements for multi threaded apps, Network throughput improvements for inter vm communication within same host suitable for NFV,..etc. 
+ I have started developing Jiny Kernel almost 5 years back from scratch, Along with Jiny development, these Benchmarks are developed over the period of time. The paper highlights performance improvements in areas like pagecache suitable for Hadoop workloads, IPC improvements for multi threaded apps, Network throughput improvements for inter vm communication within same host suitable for NFV,..etc. 
 
    <table border="1" style="width:100%">
   <tr>
@@ -26,7 +26,7 @@ In each benchmark the bottlenecks and corresponding optimizations was highlighte
 ###Benchmark-1(CPU centric): 
 **Overview:** An application execution time on the metal is compared with the same app wrapped using thin OS like Jiny and launched as vm. The single app running in Jiny vm outperforms by completing in 6 seconds when compare to the same running on the metal that took 44sec. The key reason for superior performance in Jiny os is, it accelerates the app by allowing  it to run in ring-0 so that the overhead of system calls and context switches are minimized. The protection of system from app malfunctioning is left to virtulization hardware, means if the app crashes in ring-0 at the maximum vm goes down, but not the host. To run in Jiny vm, the app need to recompile using the modified c library. libc need to modify to convert the system calls in to plain function calls.
 
-**Application(app) used for testing:** A simple C application that read and writes in to a /dev/null file repeatedly in a tight loop is used, the app is a system call intensive. [The app](https://github.com/naredula-jana/Jiny-Kernel/blob/master/modules/test_file/test_file.c) is executed in four environments on the metal, inside the Jiny as High priority, as normal priority inside Jiny  and inside the linux vm.   
+**Application(app) used for testing:** A simple C application that read and writes into a /dev/null file repeatedly in a tight loop is used, the app is a system call intensive. [The app](https://github.com/naredula-jana/Jiny-Kernel/blob/master/modules/test_file/test_file.c) is executed in four environments on the metal, inside the Jiny as High priority, as normal priority inside Jiny  and inside the linux vm.   
 
 #####Completion time of app in different environments:
 
@@ -35,21 +35,20 @@ In each benchmark the bottlenecks and corresponding optimizations was highlighte
 3. **case-3:** same app as normal priority in Jiny vm: 55 sec
 4. **case-4:** same app on the linux vm:          43 sec
 
-#####Reasons for superior performance:
+#####Reasons for better performance:
 
 - **From cpu point of view**: when app runs inside jiny vm(case-1), virtualization hardware(like intel VT-x) is active and it will protect system  from app malfunctioning, here app runs in ring-0 along with Jiny kernel. means if the app crashes it will not bring down the host, but only the vm crashes at the maximum. when app on the metal(case-2) , virtualization hardware is passive/disabled and the os surrounding(i.e host os) will make sure that the app malfunctioning will not bring down the host by running the app in ring-3. 
 
- One of key difference between case-1 and case-2 is, in case-1 vt-x hardware is used while in case-2 host os software does the job of system protection from app malfunctioning. Jiny OS will allow the app to run in the same address space, it does not spend cpu cycles to protect the system or os from app malfunciton, at the maximum the vm goes down since only one app is running it is equal to single app crashing without effecting the system.
+ One key difference between case-1 and case-2 is, in case-1 vt-x hardware is used while in case-2 host os software does the job of system protection from app malfunctioning. Jiny OS will allow the app to run in the same address space, it does not spend cpu cycles to protect the system or os from app malfunciton, at the maximum the vm goes down since only one app is running it is equal to single app crashing without effecting the system.
 
         
 - **From end user point of view**: To run the app inside the Jiny vm as high priority app, it need to recompile so the syscall located in libc will replaced with corresponding function calls. app is not required any change , only libc will be modified. start time in the first case will be slightly slower since vm need to be started before the app. so long running applications like servers will be suitable for high priority app.
 
 ##### summary
- 1. Virtulization hardware(vt-x) along with thin OS like Jiny can function as hardware assit  layer to speedup the app. Launching single app using Jiny Vm will be useful not only from virtulization point of view but also to increase the speed.
+ 1. Virtulization hardware(vt-x) along with thin OS like Jiny can function as hardware assit layer to speedup the app. Launching single app using Jiny Vm will be useful not only from virtulization point of view but also to increase the speed.
  2. In the test, syscall intensive app was used, and  as shown huge improvement when compare to app on metal, but other workload like io intensive will not give that large improvement.  Speeds of virtulization io path are improving continuously both in software or hardware,  so  io intensive  apps also will become better. 
 
 ----------------------------------------------------------------------------------
-
 
 ###Benchmark-2(Network centric): 
 
@@ -112,11 +111,6 @@ This benchmark measures the network throughput between two vm's using virtual sw
     </tr>
 </table> 
 
-papers mentioned in 8-TODO test:
-
-1. [Fast Switch using VMFUNC:](http://www.linux-kvm.org/images/8/87/02x09-Aspen-Jun_Nakajima-KVM_as_the_NFV_Hypervisor.pdf)
-2. [openNFV](https://wiki.opnfv.org/vm2vm_mst)
-
 ##### Summary of Tests:
 1. Test-1/2 : USS versus LB with Jiny VM's: USS as outperformed when compare to LB.
 2. Test-1 : Jiny kernel versus Linux kernel using LB: Jiny as performed better when compare to linux.This can be mitigated in Linux kernel using DPDK. The application need to change accordingly when used with DPDK. Jiny does not need DPDK, linux based application can directly run on jiny kernel without DPDK.
@@ -137,13 +131,18 @@ papers mentioned in 8-TODO test:
 1. Network throughput in virtual environment  is decided by the kernel throughput and the virtual switch connecting the vm's. The shortfall in linux kernel network throughput can be mitigated by DPDK to a larger extent, but apps need to change accordingly.
 2. User Space virtual switch will outperform Kernel based switch like Linux bridge or OVS.  USS switch provide faster virtual infra when compare to linux bridge or switch inside the host kernel.
 
+##### Similar papers:
+
+1. [Fast Switch using VMFUNC:](http://www.linux-kvm.org/images/8/87/02x09-Aspen-Jun_Nakajima-KVM_as_the_NFV_Hypervisor.pdf)
+2. [openNFV](https://wiki.opnfv.org/vm2vm_mst)
+
 ---------------------------------------------------------------------------------- 
 ###Benchmark-3(Storage centric): In Progress:
-  currently jiny uses  [tar file sytem](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/tar_fs.md) with virtio-disk without vhost, once vhost is available then it can be tuned and benchmark against linux similer to the bencmark-2. 
+  currently jiny uses  [tar file sytem](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/tar_fs.md):  
 
 ----------------------------------------------------------------------------------
 ###Benchmark-4(PageCache): 
-   Details available in this paper ["Page cache optimizations for Hadoop".](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/PageCache-Open-Cirrus.pdf).  This paper was presented in opencirrus 2011 summit. Jiny uses similar page algorithm as mentioned in the paper.
+   Details available in this paper ["Page cache optimizations for Hadoop".](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/PageCache-Open-Cirrus.pdf).  This paper was presented in opencirrus 2011 summit. Jiny uses same page algorithm as mentioned in the paper.
    
 ----------------------------------------------------------------------------------
 ###Benchmark-5(Malloc): In Progress
@@ -152,16 +151,15 @@ papers mentioned in 8-TODO test:
 ----------------------------------------------------------------------------------
 ###Benchmark-6( IPC Improvements): 
 
-This benchmark measures InterProcess Communication(mutex,semphore,messages etc) in virtual environment.The performance gaps are especially from interrupts(especially IPI and timer interrupts) inside the kernel: 
+This benchmark measures InterProcess Communication(mutex,semphore,messages passing etc) in virtual environment. 
 
 ##### Problem Definition:
-   CPU going to sleep (Hitting "hlt" instruction) and getting awaken up by other cpu using IPI(Inter Processor Interrupt) within short period of time is not good for virtual machines. The cost is more in vm when compare to metal.
+   when CPU sleeps (Hitting "hlt" instruction) and getting awaken up by other cpu using IPI(Inter Processor Interrupt) within short period of time, this as performance implications for IPC and message passing workloads in virtual machines. The cost is more in vm when compare to metal.
  
   
 #####Test Environment and Results
     
-    
-  IPC Test: This is a Producer and consumer test using semaphores. Producer and consumer runs in two seperate threads. Producer is more cpu intesive when compare to consumer, this make consumer waits for producer at the end of each loop. producer wakes consumer once item is produced. In this way consumer get context switched at the end of every loop. This emulates  producer and consumer with unequal cpu computation to process every item, this is a very common case. The [source code for test available here.] (https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/expirements/sem_test4.c). If the amount of computation for producer and consumer is same then there will be minimum lock contention. 
+  IPC Test: This is a Producer-consumer test using semaphores. Producer and consumer runs in two seperate threads. Producer is more cpu intesive when compare to consumer, this make consumer waits for producer at the end of each loop. producer wakes consumer once item is produced. In this way consumer get context switched at the end of every loop. This emulates  producer and consumer with unequal cpu computation to process every item, this is a very common case. The [source code for test available here.] (https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/expirements/sem_test4.c). If the amount of computation for producer and consumer is same then there will be minimum lock contention. 
      **Hypervisor**: kvm/qemu-2.x
      **host kernel version**:3.13.0-32
      **command and arguments to run the test**:  "sem 800k 2000"  :  Here 800k represents the number of items produced and consumed, producer loops 2000 times in tight loop to emulate cpu consumption after every item, the more this value the more will be the consumer wait time.
@@ -175,25 +173,25 @@ This benchmark measures InterProcess Communication(mutex,semphore,messages etc) 
     <td><b>Comment</b></td>
   </tr>
   <tr>
-    <td>Test-1 </td>
+    <td>1 </td>
     <td> linux vm : kernel 3.0.x on 2 cpu,ubuntu-14  </td>
     <td> timetaken= 22 sec</td>
     <td> cpu consumption in host=150%,There are large number of IPI interrupts due to IPC test, close to 280k are generated inside the guestos </td> 
   </tr>
     <tr>
-    <td>Test-2 </td>
+    <td>2 </td>
     <td> Jiny vm : on 2 cpu, version-2  </td>
     <td> timetaken= 9sec (140% over test-1)</td>
     <td> host cpu consumption is 200%(2 cpu's) noticed with top utility. No additional IPI interrupts are generated in the quest OS </td> 
   </tr>
     <tr>
-    <td>Test-3 </td>
+    <td>3 </td>
     <td> linux on metal, with ubutuntu-14, more then 2 cpu  </td>
     <td> timetaken= 9.2sec (slightly less then Test-2) </td>
     <td>  </td> 
   </tr>
   <tr>
-    <td>Test-4 </td>
+    <td>4 </td>
     <td> with ubuntu-14(linux vm - kernel 3.0.x) on 2 cpu, with cpu hogger with low priority in background </td>
     <td>Throughput: timetaken= 12sec (better then Test-1 by 83%) </td>
     <td> cpu hogger with low priority makes the cpu core  alive without going to sleep.</td> 
@@ -201,15 +199,15 @@ This benchmark measures InterProcess Communication(mutex,semphore,messages etc) 
   </table>
   
           
-##### Solution : Changes in Guest VM kernel
-1. Producer and consumer thread will be running on seperate cpu's. when consumer thread goes to sleep when ever it contents for the lock, and control goes to idle thread before hitting the "hlt" instruction, idle thread checks if there is any threads belonging to the cpu is waiting, if there is any threads under wait then it spin the cpus or does a small house keeping tasks for a short duration(10ms or 1 tick) then it goes to sleep using "hlt" instruction, In this short duration if the consumer thread got woken up then it saves IPI(interrupts) generation and exit/entry of the vcpu. In this way it saves around 800k interrupts for 800k loop in Test-2. Interrupts are costly in virtual environment when compare to metal. every interrupt causes exist and entry in the hypervisor. The "hlt" instruction casues context switch at host.        
-
 ##### **Summary of Tests:**
 1. Test-1 versus Teset-2 : Jiny-vm as performed 140% better when compare to linux vm with same test setup, this is mainly interrupts are not generated because cpu avoids hitting "hlt" instruction when the thread is under wait for a short period.
 2. Test-2 versus Test-3 :linux on baremetal is very close to that of jiny vm. 3% to 4% degredation is due to the IPI interrupts are generated on the metal when compare to jiny.
 3. Test-1 versus Test-3 :linux kernel on the metal and on hypervisor(i,e test-1 and test-3) shows a gap of 140%. this is mainly the interrupts speed on hypervisor and hitting hlt instruction frequently. whenever "hlt" instruction is executed in guest os, control goes to kvm and get back to guest os upon wakeup, this transfer is costly when compare to small cpu spin in guest os. This is exactly implmented in jiny os to avoid hitting the "hlt" instruction. 
 
 Issue-1: In IPC, if there is a contention in mutext or semop or other IPC, then one of the thread will be active and other thread goes to sleep. In this situation, It will be costly to wakeup a thread under sleep in virtual environment with linux  when compare to the metal or jiny os. 
+
+##### Solution : Changes in Guest VM kernel
+1. Producer and consumer thread will be running on seperate cpu's. when consumer thread goes to sleep when ever it contents for the lock, and control goes to idle thread before hitting the "hlt" instruction, idle thread checks if there is any threads belonging to the cpu is waiting, if there is any threads under wait then it spin the cpus or does a small house keeping tasks for a short duration(10ms or 1 tick) then it goes to sleep using "hlt" instruction, In this short duration if the consumer thread got woken up then it saves IPI(interrupts) generation and exit/entry of the vcpu. In this way it saves around 800k interrupts for 800k loop in Test-2. Interrupts are costly in virtual environment when compare to metal. every interrupt causes exist and entry in the hypervisor. The "hlt" instruction casues context switch at host. 
 
 ##### When IPC based apps in linux vm can under perform due to Issue-1
 1. linux as vm and with multicore(more then one cpu). The issue will not be present in single core, to minimum level on metal( shown it is only 3 to 4% as against 140%).
