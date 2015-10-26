@@ -78,9 +78,11 @@ public:
 	int send_mbuf_len;
 	struct struct_mbuf temp_mbuf_list[MAX_BUF_LIST_SIZE]; /* used to remove the send bufs to free */
 
+#if 0
 	atomic_t stat_send_kicks;
 	atomic_t stat_recv_kicks;
 	unsigned long stat_allocs,stat_frees,stat_err_nospace;
+#endif
 
 	int burst_recv(int total_pkts);  /* new version */
 	int burst_send();  /* new version */

@@ -200,6 +200,7 @@ struct cpu_state {
 	task_queue_t run_queue;
 	volatile int run_queue_length;
 	int net_BH; /* enable if the net_RX BH need to be kept on the cpu on a priority basis */
+	int net_bh_inprogress;
 	spinlock_t *sched_lock; /* lock to relase after schedule, it is filled before the schedule */
 	unsigned long system_times_ns;
 

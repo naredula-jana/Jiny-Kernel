@@ -82,9 +82,9 @@ int get_order(unsigned long size) {
 
 /******************************************* virtio net *********************************/
 void virtio_net_jdriver::print_stats(unsigned char *arg1,unsigned char *arg2) {
-	ut_printf("		Network device: %s: Send(P,K,I): %d,%i,%d  Recv(P,K,I):%d,%i,%d allocs:%d free:%d ERR(send no space):%d \n", this->name, this->stat_sends,
-			this->stat_send_kicks, this->stat_send_interrupts, this->stat_recvs, this->stat_recv_kicks, this->stat_recv_interrupts, this->stat_allocs,
-			this->stat_frees, this->stat_err_nospace);
+//	ut_printf("		Network device: %s: Send(P,K,I): %d,%i,%d  Recv(P,K,I):%d,%i,%d allocs:%d free:%d ERR(send no space):%d \n", this->name, this->stat_sends,
+//			this->stat_send_kicks, this->stat_send_interrupts, this->stat_recvs, this->stat_recv_kicks, this->stat_recv_interrupts, this->stat_allocs,
+//			);
 }
 
 struct virtio_feature_desc vtnet_feature_desc[] = { { VIRTIO_NET_F_CSUM, "TxChecksum" },
@@ -371,9 +371,7 @@ int virtio_net_jdriver::net_attach_device() {
 }
 
 jdriver *virtio_net_jdriver::attach_device(class jdevice *jdev) {
-	stat_allocs = 0;
-	stat_frees = 0;
-	stat_err_nospace = 0;
+
 	COPY_OBJ(virtio_net_jdriver, this, new_obj, jdev);
 	((virtio_net_jdriver *) new_obj)->net_attach_device();
 	jdev->driver = new_obj;
@@ -398,6 +396,16 @@ int virtio_net_jdriver::burst_send() {
 		return ret;
 	}
 
+	for (qno = 0; qno < max_vqs; qno++) {
+		pkts = queues[qno].send->BulkRemoveFromQueue(0,MAX_BUF_LIST_SIZE*4);
+#if 0
+		pkts = queues[qno].send->BulkRemoveFromQueue(&temp_mbuf_list[0],MAX_BUF_LIST_SIZE);
+		for (i = 0; i < pkts; i++) {
+			free_page(temp_mbuf_list[i].buf);
+		}
+#endif
+	}
+
 	spin_lock_irqsave(&virtionet_lock, flags);
 	for (qno=0; qno<max_vqs; qno++){  /* try to send from the same queue , if it full then try on the subsequent one, in this way kicks will be less */
 		qret = queues[qno].send->BulkAddToQueue( &send_mbuf_list[send_mbuf_start+ret],send_mbuf_len-ret,1);
@@ -416,9 +424,7 @@ int virtio_net_jdriver::burst_send() {
 	if (ret < 0) {
 		ret=0;
 	}
-	if (ret == 0) {
-		stat_err_nospace++;
-	}else{
+	if (ret != 0) {
 		if (ret == send_mbuf_len){ /* empty the mbuf_list */
 			send_mbuf_start = 0;
 			send_mbuf_len = 0;
@@ -430,15 +436,6 @@ int virtio_net_jdriver::burst_send() {
 		stat_sends++;
 	}
 	spin_unlock_irqrestore(&virtionet_lock, flags);
-
-	for (qno = 0; qno < max_vqs; qno++) {
-		pkts = queues[qno].send->BulkRemoveFromQueue(&temp_mbuf_list[0],MAX_BUF_LIST_SIZE);
-		for (i = 0; i < pkts; i++) {
-			free_page(temp_mbuf_list[i].buf);
-			stat_frees++;
-		}
-	}
-
 	return ret;  /* Here Sucess indicates the buffer is freed or consumed */
 }
 int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {

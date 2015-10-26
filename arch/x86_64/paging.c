@@ -641,8 +641,8 @@ int ar_check_valid_address(unsigned long addr, int len) {
 	BUG();
 	return JFAIL;
 }
-int g_stat_pagefault=0;
-int g_stat_pagefaults_write=0;
+int g_stat_pagefault;
+int g_stat_pagefaults_write;
 extern unsigned long g_phy_mem_size;
 
 int check_kernel_address(unsigned long addr){

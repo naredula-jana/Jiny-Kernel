@@ -505,10 +505,10 @@ static struct page_bucket *empty_buckets,*full_buckets;
 
 struct percpu_pagecache {
 	char inuse;
-
     struct page_bucket *buck1,*buck2;
 	unsigned long stat_allocs,stat_frees,stat_miss_alloc,stat_miss_free;
-};
+} __attribute__ ((aligned (64)));
+
 static struct percpu_pagecache page_cache[MAX_CPUS];
 static struct page_bucket raw_buckets[MAX_BUCKETS];
 static spinlock_t jslab_cache_lock = SPIN_LOCK_UNLOCKED("jslab_cache");
@@ -616,7 +616,7 @@ int jfree_page(unsigned long p){
 	if (PageNetBuf(virt_to_page(p))){
 		BRK;
 	}
-	stat_page_frees++;
+	//stat_page_frees++;
 	//ut_log(" jfree_page:%x \n",p);
 #if 1
 	if (g_conf_percpu_pagecache == 1) {/* TODO:1)  we are adding the address without validation, 2) large page also into this cache which is wrong need to avoid. */

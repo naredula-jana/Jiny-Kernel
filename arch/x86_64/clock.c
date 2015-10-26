@@ -91,7 +91,7 @@ int g_conf_ms_per_jiffie=6;/* instaed of 10ms, the apic timer interrupt generati
 //static unsigned long stored_system_times_ns[MAX_CPUS];
 static unsigned long stored_start_times[MAX_CPUS];
 static unsigned long store_common_time_ns=0;
-unsigned long g_stat_clock_errors=0;
+unsigned long g_stat_clock_errors;
 static unsigned long get_percpu_ns() { /* get percpu nano seconds */
 	unsigned long time_ns;
 	unsigned long intr_flags;

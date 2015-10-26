@@ -183,6 +183,7 @@ virtio_queue::virtio_queue(jdevice *device, uint16_t index, int queue_type) {
 	uint16_t num;
 	unsigned long ring_addr;
 	unsigned long pci_ioaddr = device->pci_device.pci_ioaddr;
+	unsigned char *qname;
 
 	outw(pci_ioaddr + VIRTIO_PCI_QUEUE_SEL, index);
 	num = inw(pci_ioaddr + VIRTIO_PCI_QUEUE_NUM);
@@ -197,11 +198,15 @@ virtio_queue::virtio_queue(jdevice *device, uint16_t index, int queue_type) {
 	outl(pci_ioaddr + VIRTIO_PCI_QUEUE_PFN,
 			__pa(ring_addr) >> VIRTIO_PCI_QUEUE_ADDR_SHIFT);
 
+	qname="send_queue";
+	if (queue_type == VQTYPE_RECV){
+		qname="recv_queue";
+	}
 	/* create the vring */
 	INIT_LOG("		virtioqueuec++  Creating queue:%x(pa:%x) size-order:%x  size:%x\n",
 			ring_addr, __pa(ring_addr), get_order(size), size);
 	init_virtqueue(num, VIRTIO_PCI_VRING_ALIGN, device->pci_device.pci_ioaddr,
-			(void *) ring_addr,  0, "VIRTQUEUE", index);
+			(void *) ring_addr,  0, qname, index);
 	virtqueue_enable_cb_delayed();
 	this->qType = queue_type;
 }
@@ -222,10 +227,10 @@ void virtio_queue::print_stats(unsigned char *arg1,unsigned char *arg2) {
 					vq->vring.avail->ring[i], vq->vring.used->ring[i]);
 		}
 	}
-	ut_printf("		VirtQ:%x size:%i num_free:%i  free_head:%d  tail:%d used:%u(%i) avail:%u(%i) diff:%u last_use_idx:%u alloc:%i free:%i\n",
-			vq, vq->vring.num, vq->num_free, vq->free_head, vq->free_tail,vq->vring.used->idx,
+	ut_printf("		%s :%x size:%i num_free:%i  free_head:%d  tail:%d used:%u(%i) avail:%u(%i) diff:%u last_use_idx:%u alloc:%i free:%i kicks:%i empty_err:%d\n",
+			vq->name, vq, vq->vring.num, vq->num_free, vq->free_head, vq->free_tail,vq->vring.used->idx,
 			vq->vring.used->idx, vq->vring.avail->idx, vq->vring.avail->idx,
-			diff, vq->last_used_idx, vq->stat_alloc, vq->stat_free);
+			diff, vq->last_used_idx, vq->stat_alloc, vq->stat_free, stat_kicks.counter,stat_error_empty_bufs);
 	ut_printf("		VQueue adding success:%d fails:%d pkts:%d rate of pkt/sucees:%d\n",stat_add_success,stat_add_fails,stat_add_pkts,stat_add_pkts/stat_add_success);
 	ut_printf("		VQueue remove success:%d fails:%d pkts:%d rate of pkt/sucees:%d\n",stat_rem_success,stat_rem_fails,stat_rem_pkts,stat_rem_pkts/stat_rem_success);
 #if 0
@@ -393,8 +398,7 @@ add_head:
 }
 
 
-int virtio_queue::BulkRemoveFromQueue(struct struct_mbuf *mbuf_list,
-		int list_len) {
+int virtio_queue::BulkRemoveFromQueue(struct struct_mbuf *mbuf_list, int list_len) {
 	struct vring_queue *vq = this->queue;
 	int ret = 0;
 	unsigned int i;
@@ -423,19 +427,22 @@ int virtio_queue::BulkRemoveFromQueue(struct struct_mbuf *mbuf_list,
 
 	for (count = 0; count < pkts_length; count++) {
 		i = vq->vring.used->ring[vq->last_used_idx % vq->vring.num].id;
-		mbuf_list[count].len = vq->vring.used->ring[vq->last_used_idx
-				% vq->vring.num].len;
 
+		ar_prefetch0(&vq->vring.desc[i]);
 		if ((i >= vq->vring.num)) {
 			//JANA removed BAD_RING(vq, "id %u out of range\n", i);
 			ut_printf("BAD RING -11 vq:%x \n", vq);
 			BRK;
 			return 0;
 		}
-		ar_prefetch0(&vq->vring.desc[i]);
-		mbuf_list[count].buf = __va(vq->vring.desc[i].addr);
-		if (vq->vring.desc[i].addr == 0) { /* TODO: Hitting this POINT*/
+		if (vq->vring.desc[i].addr == 0) { /* TODO: Hitting this POINT IN THE LATEST*/
 			BRK;
+		}
+		if (mbuf_list !=0 ){
+			mbuf_list[count].buf = __va(vq->vring.desc[i].addr);
+			mbuf_list[count].len = vq->vring.used->ring[vq->last_used_idx % vq->vring.num].len;
+		}else{
+			free_page(__va(vq->vring.desc[i].addr));
 		}
 
 		vq->stat_free++;
@@ -488,7 +495,8 @@ int virtio_queue::BulkAddToQueue(struct struct_mbuf *mbuf_list, int list_len,
 			len = 4096; /* page size */
 		}
 		if (data == 0) {
-			BRK;
+			stat_error_empty_bufs++;
+			continue;
 		}
 		if (virtio_type == VIRTIO_ID_NET){
 			//ut_memset(data, 0, sizeof(struct virtio_net_hdr));
@@ -551,6 +559,9 @@ int virtio_queue::BulkAddToQueue(struct struct_mbuf *mbuf_list, int list_len,
 			}
 			vq->vring.desc[i].addr = scatter_list[k].addr;
 			vq->vring.desc[i].len = scatter_list[k].length;
+			if (vq->vring.desc[i].addr ==0){
+				BRK;
+			}
 			prev = i;
 		}
 

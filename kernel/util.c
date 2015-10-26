@@ -62,10 +62,10 @@ int ut_min(int a, int b){
 	if (a<b) return a;
 	else return b;
 }
-unsigned long g_stat_memcpy_bytes = 0;
-unsigned long g_stat_memcpy_reqs = 0;
+unsigned long g_stat_memcpy_bytes;
+unsigned long g_stat_memcpy_reqs;
 // Copy len bytes from src to dest.
-unsigned int g_conf_memcpy=0;
+//unsigned int g_conf_memcpy=0;
 extern int std_rte_memcpy(uint8_t *dest, uint8_t *src, long len);
 void ut_memcpy(uint8_t *dest, uint8_t *src, long len){
 	uint8_t *sp = (const uint8_t *)src;

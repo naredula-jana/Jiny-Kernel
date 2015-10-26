@@ -75,7 +75,7 @@ int futex::unlock(){
 extern "C"{
 #include "interface.h"
 static int ipc_init_done=0;
-int g_stat_idle_busy=0;
+int g_stat_idle_busy;
 extern int sc_task_assign_to_cpu(struct task_struct *task);
 unsigned long _schedule(unsigned long flags);
 void sc_remove_dead_tasks();
@@ -302,8 +302,8 @@ void _ipc_delete_from_waitqueues(struct task_struct *task) {
 	spin_unlock_irqrestore(&g_global_lock, flags);
 }
 extern "C" {
-unsigned long g_stat_timeout_wakeups = 0;
-unsigned long g_stat_async_wakeups = 0;
+unsigned long g_stat_timeout_wakeups ;
+unsigned long g_stat_async_wakeups ;
 }
 void ipc_check_waitqueues() {
 	int i;

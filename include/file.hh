@@ -73,24 +73,33 @@ public:
 #define MAX_SOCKET_QUEUE_LENGTH 2500
 class fifo_queue {
 	unsigned char name[MAX_FILENAME];
-	int producer, consumer;
+
+	int producer_index;  /* all producer related at one place */
+	unsigned long producer_count;
+	spinlock_t add_spin_lock;
+
 	struct {
 		unsigned char *buf;
 		unsigned int len; /* actual data length , not the buf lenegth, buf always constant length */
 		int flags;
 	} data[MAX_SOCKET_QUEUE_LENGTH];
-	spinlock_t remove_spin_lock,add_spin_lock; /* lock to protect while adding and removing from queue */
-	//int stat_processed[MAX_CPUS];
+
+	int consumer_index;  /* all consumer related at one place */
+	unsigned long consumer_count;
+	spinlock_t remove_spin_lock; /* lock to protect while removing from queue */
 
 public:
-	atomic_t queue_len;
+	//atomic_t queue_len;
 	wait_queue *waitq;
 	unsigned long error_full;
 	unsigned long stat_attached;
 	unsigned long stat_drop;
 	int remove_from_queue(unsigned char **buf, int *len,int *wr_flags);
+	int Bulk_remove_from_queue(struct struct_mbuf *mbufs, int mbuf_len);
 	int add_to_queue(unsigned char *buf, int len, int flags, int freebuf_on_full);
 	int peep_from_queue(unsigned char **buf, int *len,int *wr_flags);
+	unsigned long queue_size();
+	int is_empty();
 	void init(unsigned char *arg_name,int wq_enable);
 	void free();
 };

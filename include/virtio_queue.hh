@@ -263,6 +263,7 @@ public:
 	struct vring_queue *queue;
 	unsigned long stat_add_success,stat_add_fails,stat_add_pkts;
 	unsigned long stat_rem_success,stat_rem_fails,stat_rem_pkts;
+	unsigned long stat_error_empty_bufs;
 	atomic_t stat_kicks;
 	int qType;
 	int virtio_type;

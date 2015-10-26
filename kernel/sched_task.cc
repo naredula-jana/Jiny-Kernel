@@ -25,7 +25,7 @@ task_queue_t g_task_queue;
 spinlock_t g_global_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"global");
 unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles per second  */
 unsigned long g_jiffie_errors = 0;
-unsigned long g_stat_idle_avoided = 0;
+unsigned long g_stat_idle_avoided ;
 
 void ar_update_jiffie();
 
@@ -623,7 +623,7 @@ void sc_before_syscall() {
 #endif
 }
 extern "C" {
-unsigned long g_stat_syscall_count=0;
+unsigned long g_stat_syscall_count;
 }
 void sc_after_syscall() {
 	/* Handle any pending signal */
@@ -699,7 +699,7 @@ void sc_remove_dead_tasks() {
 	}
 }
 extern "C" {
-unsigned long g_stat_idle_errs=0;
+unsigned long g_stat_idle_errs;
 }
 void sc_schedule() { /* _schedule function task can land here. */
 	unsigned long intr_flags;
@@ -1389,7 +1389,7 @@ repeat:
 }
 extern int init_clock(int cpu_id);
 
-int curr_cpu_tightloop = -1;
+//int curr_cpu_tightloop = -1;
 void idleTask_func() {
 	int k = 0;
 	int cpu;
@@ -1406,19 +1406,14 @@ void idleTask_func() {
 
 	while (1) {
 #if 1
-		if (g_conf_net_pmd == 1 && g_net_interrupts_disable==1) {
-			if (curr_cpu_tightloop == -1) {
-				curr_cpu_tightloop = g_conf_netbh_cpu;
-			}
-			while (cpu == curr_cpu_tightloop  && g_conf_net_pmd == 1) {
+		//if (g_conf_net_pmd == 1 && g_net_interrupts_disable==1) {
+		if (g_conf_net_pmd == 1 && cpu == g_conf_netbh_cpu) {
+			while (1) {
 				net_bh(1);
 				g_cpu_state[cpu].idle_state = 0;
 				if (g_cpu_state[cpu].run_queue_length != 0) {
 					//curr_cpu_tightloop = -1;
 					sc_schedule();
-				}
-				if (curr_cpu_tightloop == -1) { /* let us enter tightloop if possible */
-					//curr_cpu_tightloop = cpu;
 				}
 			}
 		}

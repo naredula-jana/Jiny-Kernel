@@ -1,6 +1,6 @@
 ## Benchmarks and Performance improvements in Opensource Virtual Infra.
 
-[Jiny kernel](https://github.com/naredula-jana/Jiny-Kernel) was designed from ground up for superior performance on virtual infrastructure, so as vm can run to near native performance. This paper mainly compares throughput of [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel) with Linux kernel on different workloads like cpu,network,storage,memory,IPC,.. etc on hypervisors like kvm. Apart from kernel,other key virtual infra components like virtual switch throughput are also compared.
+[Jiny kernel](https://github.com/naredula-jana/Jiny-Kernel) was designed from ground up for superior performance on virtual infrastructure, so as vm can run to near native performance. This paper mainly compares throughput of [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel) with Linux kernel on different workloads like cpu,network,storage,memory,IPC,.. etc, with hypervisors like kvm. Apart from kernel,other key virtual infra components like virtual switch throughput are also compared.
 In each benchmark the bottlenecks and corresponding optimizations were highlighted.  This paper was limited only to the opensource virtual infrastructure software components like Jiny,Linux, kvm, qemu, virtual switches(linux bridge,userspace switch,ovs,snabb),DPDK..etc.  There are lot of performance centric areas like storage,memory.. etc that are yet to be explored.
 
 **About me:**
@@ -80,8 +80,8 @@ This benchmark measures the network throughput between two vm's using virtual sw
     <td> 2 </td>
     <td>vm1- USS -vm2</td>
     <td> ???? </td>
-    <td>Throughput @50bytes: 1.800 MPPS (one way)  <br>Throughput@200bytes: 1.300MPPS (one way)<br>Throughput: 0.366 MPPS (two way)<br>Bottleneck in two way: udpserver on recv side is single thread <br>
-        Bottleneck in one way: USS is a single thread and fetch one packet from queue,it can improve further from 1.800MPPS using multithreaded switch. </td>
+    <td><b>Throughput</b>(halfway: from vm to switch) : 4.100MPPS , <b>Bottleneck</b>: USS/Jiny os start dropping, both need to improve further. <hr> <b>Throughput</b>(one way: from first vm to second vm through switch): 1.800 MPPS , <b>Bottleneck</b> : USS is a single thread and fetch one packet from queue.  <hr><b>Throughput</b>(two way): 0.366 MPPS  , <b>Bottleneck:</b> udpserver on recv side is single thread. 
+        </td>
    </tr>  
    <tr>
     <td> 3 </td>

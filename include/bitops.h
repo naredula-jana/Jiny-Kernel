@@ -220,19 +220,14 @@ static __inline__ int test_and_change_bit(long nr, volatile void * addr)
 	return oldbit;
 }
 
-#if 0 /* Fool kernel-doc since it doesn't do macros yet */
-/**
- * test_bit - Determine whether a bit is set
- * @nr: bit number to test
- * @addr: Address to start counting from
- */
-static int test_bit(int nr, const volatile void * addr);
-#endif
 
+#if 0
 static __inline__ int constant_test_bit(long nr, const volatile void * addr)
 {
 	return ((1UL << (nr & 31)) & (((const volatile unsigned int *) addr)[nr >> 5])) != 0;
 }
+#endif
+#define constant_test_bit(nr, addr) (((1UL << (nr & 31)) & (((const volatile unsigned int *) addr)[nr >> 5])) != 0)
 
 static __inline__ int variable_test_bit(long nr, volatile void * addr)
 {

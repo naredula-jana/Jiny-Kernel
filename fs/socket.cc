@@ -97,7 +97,7 @@ void fifo_queue::init(unsigned char *arg_name,int wq_enable){
 	ut_snprintf(name,MAX_FILENAME,"fqueue_%s",arg_name);
 	arch_spinlock_init(&add_spin_lock, (unsigned char *)name);
 	arch_spinlock_init(&remove_spin_lock, (unsigned char *)name);
-	atomic_set(&queue_len, 0);
+	//atomic_set(&queue_len, 0);
 	waitq =0;
 	if (wq_enable){
 		waitq = jnew_obj(wait_queue, "socket_waitq", 0);
@@ -119,15 +119,15 @@ int fifo_queue::add_to_queue(unsigned char *buf, int len,int data_flags, int fre
 
 	//ut_log("Recevied from  network and keeping in queue: len:%d  stat count:%d prod:%d cons:%d\n",len,stat_queue_len,queue.producer,queue.consumer);
 	spin_lock_irqsave(&(add_spin_lock), flags);
-	if ((data[producer].len == 0)  && (data[producer].buf == 0)) {
-		data[producer].len = len;
-		data[producer].buf = buf;
-		data[producer].flags = data_flags;
-		producer++;
-		atomic_inc(&(queue_len));
+	if ((data[producer_index].len == 0)  && (data[producer_index].buf == 0)) {
+		data[producer_index].len = len;
+		data[producer_index].buf = buf;
+		data[producer_index].flags = data_flags;
+		producer_index++;
+		producer_count++;
 
-		if (producer >= MAX_SOCKET_QUEUE_LENGTH){
-			producer = 0;
+		if (producer_index >= MAX_SOCKET_QUEUE_LENGTH){
+			producer_index = 0;
 		}
 		ret = JSUCCESS;
 		goto last;
@@ -150,15 +150,15 @@ last:
 	return ret;
 }
 int fifo_queue::peep_from_queue(unsigned char **buf, int *len,int *wr_flags) {
-	if ((data[consumer].buf != 0) && (data[consumer].len != 0)) {
+	if ((data[consumer_index].buf != 0) && (data[consumer_index].len != 0)) {
 		if (buf) {
-			*buf = data[consumer].buf;
+			*buf = data[consumer_index].buf;
 		}
 		if (len){
-			*len = data[consumer].len;
+			*len = data[consumer_index].len;
 		}
 		if (wr_flags){
-			*wr_flags = data[consumer].flags;
+			*wr_flags = data[consumer_index].flags;
 		}
 		return JSUCCESS;
 	}
@@ -169,19 +169,19 @@ int fifo_queue::remove_from_queue(unsigned char **buf, int *len,int *wr_flags) {
 	int ret = JFAIL;
 	while (ret == JFAIL) {
 		spin_lock_irqsave(&(remove_spin_lock), flags);
-		if ((data[consumer].buf != 0) && (data[consumer].len != 0)) {
-			*buf = data[consumer].buf;
-			*len = data[consumer].len;
-			*wr_flags = data[consumer].flags;
+		if ((data[consumer_index].buf != 0) && (data[consumer_index].len != 0)) {
+			*buf = data[consumer_index].buf;
+			*len = data[consumer_index].len;
+			*wr_flags = data[consumer_index].flags;
 			//	ut_log("netrecv : receving from queue len:%d  prod:%d cons:%d\n",queue.data[queue.consumer].len,queue.producer,queue.consumer);
 
-			data[consumer].buf = 0;
-			data[consumer].len = 0;
-			consumer++;
-			atomic_dec(&queue_len);
+			data[consumer_index].buf = 0;
+			data[consumer_index].len = 0;
+			consumer_index++;
+			consumer_count++;
 
-			if (consumer >= MAX_SOCKET_QUEUE_LENGTH){
-				consumer = 0;
+			if (consumer_index >= MAX_SOCKET_QUEUE_LENGTH){
+				consumer_index = 0;
 			}
 			ret = JSUCCESS;
 		}
@@ -196,7 +196,59 @@ int fifo_queue::remove_from_queue(unsigned char **buf, int *len,int *wr_flags) {
 	}
 	return ret;
 }
+int fifo_queue::Bulk_remove_from_queue(struct struct_mbuf *mbufs, int mbuf_len) {
+	unsigned long flags;
+	int ret = 0;
+	while (ret < mbuf_len) {
+	//	spin_lock_irqsave(&(remove_spin_lock), flags);
+		if ((data[consumer_index].buf != 0) && (data[consumer_index].len != 0)) {
+			mbufs[ret].buf = data[consumer_index].buf;
+			mbufs[ret].len = data[consumer_index].len;
+			//*wr_flags = data[consumer].flags;
+			//	ut_log("netrecv : receving from queue len:%d  prod:%d cons:%d\n",queue.data[queue.consumer].len,queue.producer,queue.consumer);
 
+			data[consumer_index].buf = 0;
+			data[consumer_index].len = 0;
+			consumer_index++;
+			consumer_count++;
+
+			if (consumer_index >= MAX_SOCKET_QUEUE_LENGTH){
+				consumer_index = 0;
+			}
+			ret++;
+		}else{
+			//spin_unlock_irqrestore(&(remove_spin_lock), flags);
+			return ret;
+		}
+		//spin_unlock_irqrestore(&(remove_spin_lock), flags);
+	}
+	return ret;
+}
+int fifo_queue::is_empty(){
+	if (producer_count == consumer_count){
+		return JSUCCESS;
+	}else{
+		return JFAIL;
+	}
+}
+unsigned long  fifo_queue::queue_size(){
+
+
+	return producer_count - consumer_count;
+#if 0
+	unsigned long qlen;
+	unsigned long flags,aflags;
+
+	spin_lock_irqsave(&(add_spin_lock), aflags);
+	spin_lock_irqsave(&(remove_spin_lock), flags);
+	qlen = producer_count - consumer_count;
+	spin_unlock_irqrestore(&(remove_spin_lock), flags);
+	spin_unlock_irqrestore(&(add_spin_lock), aflags);
+
+	return qlen;
+#endif
+
+}
 int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int read_flags, int unused_flags) {
 	int ret = 0;
 	unsigned char *buf = 0;
@@ -303,14 +355,14 @@ int socket::ioctl(unsigned long arg1, unsigned long arg2) {
 			ret = net_stack->connect(&network_conn);
 		}
 	}else if (arg1 == SOCK_IOCTL_WAITFORDATA){
-		if ((queue.queue_len.counter == 0)  && (arg2 != 0)){
+		if ((queue.is_empty() == JSUCCESS)  && (arg2 != 0)){
 			if (queue.waitq){
 				queue.waitq->wait(arg2);
 			}
 		}
-		return queue.queue_len.counter;
+		return queue.queue_size();
 	}else if (arg1 == GENERIC_IOCTL_PEEK_DATA){
-		return queue.queue_len.counter;
+		return queue.queue_size();
 	}
 	return ret;
 }
@@ -318,7 +370,7 @@ int socket::ioctl(unsigned long arg1, unsigned long arg2) {
 void socket::print_stats(unsigned char *arg1,unsigned char *arg2){
 	ut_printf("socket: count:%d local:%x:%x remote:%x:%x (IO: %d/%d: StatErr:out:%d in:%d Qfull:%d Qlen:%i)  %x\n",
 			count.counter,network_conn.src_ip,network_conn.src_port,network_conn.dest_ip,network_conn.dest_port,stat_in
-	    ,stat_out,statout_err,statin_err,queue.error_full,queue.queue_len.counter, &network_conn);
+	    ,stat_out,statout_err,statin_err,queue.error_full,queue.queue_size(), &network_conn);
 }
 
 sock_list_t socket::udp_list;

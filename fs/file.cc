@@ -85,7 +85,7 @@ fs_inode::fs_inode(uint8_t *arg_filename, unsigned long mode, struct filesystem 
 }
 extern wait_queue *read_ahead_waitq;
 extern "C" {
-unsigned long g_stat_readahead_miss=0;
+unsigned long g_stat_readahead_miss;
 }
 struct page *fs_inode::fs_genericRead(unsigned long offset, int read_ahead) {
 	struct page *page;
