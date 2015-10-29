@@ -17,7 +17,7 @@ extern "C" {
 #include "mach_dep.h"
 #include "interface.h"
 
-int g_conf_debug_level = 1;
+int g_conf_debug_level __attribute__ ((section ("confdata"))) = 1;
 int __gxx_personality_v0=0; /*TODO:  WORKAROUND: this is to link c++ files with gcc */
 /* SLAB cache for vm_area_struct structures */
 kmem_cache_t *vm_area_cachep;

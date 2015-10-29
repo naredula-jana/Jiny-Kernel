@@ -814,7 +814,7 @@ struct func_debug {
 static int func_hits_count=0;
 struct func_debug func_hits[MAX_FUNC_HITS];
 static int stat_cpu_rip_unknown_hit = 0;
-long g_conf_func_debug=982;
+long g_conf_func_debug  __attribute__ ((section ("confdata")))=982;
 //int g_conf_func_debug;  // TODO like cause the kernel to crash
 static unsigned long stat_unknown_ip=0;
 

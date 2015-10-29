@@ -20,7 +20,7 @@
  - Running multiple normal priority application like any traditional unix like systems with optimizations for vm. 
 
 
-## Performance and Benchmarks Summary
+## Performance and Benchmarks:
 
 More details of the Benchmarks are available at [Jiny-Benchmarks.](../master/doc/benchmarks.md).   
 

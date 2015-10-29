@@ -31,12 +31,13 @@ void ar_update_jiffie();
 
 static unsigned long free_pid_no = 1; // TODO need to make unique when  wrap around
 static wait_queue *timer_queue;
-int g_conf_cpu_stats = 1;
-int g_conf_idle_cpuspin = 1;
 extern int g_conf_net_pmd;
 extern int g_net_interrupts_disable;
 extern int g_conf_netbh_cpu;
-int g_conf_dynamic_assign_cpu = 0; /* minimizes the IPI interrupt by reassigning the the task to running cpu */
+
+int g_conf_cpu_stats __attribute__ ((section ("confdata"))) = 1;
+int g_conf_idle_cpuspin __attribute__ ((section ("confdata"))) = 1;
+int g_conf_dynamic_assign_cpu __attribute__ ((section ("confdata"))) = 0; /* minimizes the IPI interrupt by reassigning the the task to running cpu */
 static int stat_dynamic_assign_errors = 1;
 
 extern kmem_cache_t *g_slab_filep;
@@ -1041,7 +1042,7 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 }
 
 extern "C" {
-int g_conf_cpu_stick = 99; /* auto mode, */
+int g_conf_cpu_stick  __attribute__ ((section ("confdata"))) = 99; /* auto mode, */
 }
 static int get_free_cpu() {
 	static int i = 0;

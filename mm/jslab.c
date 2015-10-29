@@ -391,7 +391,7 @@ int jslab_destroy_cache(jcache_t *cachep) {
  *    so that zero pages stays in the zero page list for a period of time otherwise KSM will consume lot of CPU cycles in moving the pages from one state to another.
  *
  * */
-int g_conf_zeropage_cache = 0;
+int g_conf_zeropage_cache  __attribute__ ((section ("confdata"))) = 0;
 #define MAX_ZEROLIST_SIZE 40000  /* 4k*40000 =160 Mb */
 typedef struct {
 	int cache_size; /* total number of pages */
@@ -565,7 +565,7 @@ static struct page_bucket *get_bucket(struct page_bucket *in){
 
 	return ret;
 }
-int g_conf_percpu_pagecache=1;
+int g_conf_percpu_pagecache  __attribute__ ((section ("confdata"))) =1;
 unsigned long jalloc_page(int flags){
 	int cpu=getcpuid(); /* local for each cpu */
 
@@ -630,11 +630,8 @@ int jfree_page(unsigned long p){
 
 			bucket = page_cache[cpu].buck1;
 			if (bucket && bucket->top >= MAX_STACK_SIZE) {
-				bucket = page_cache[cpu].buck2;
-				if (bucket && bucket->top >= MAX_STACK_SIZE) {
-					bucket = get_bucket(page_cache[cpu].buck1);
-					page_cache[cpu].buck1 = bucket;
-				}
+				bucket = get_bucket(page_cache[cpu].buck1);
+				page_cache[cpu].buck1 = bucket;
 			}
 
 			if (bucket && bucket->top < MAX_STACK_SIZE) {

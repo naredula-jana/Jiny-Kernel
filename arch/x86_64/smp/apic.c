@@ -411,7 +411,7 @@ static void __local_apic_timer_calibrate(uint32_t x)
   local_apic->timer_dcr.reg=timer_dcr.reg;
 }
 static uint32_t delay_loop;
-int g_conf_clock_scale=1; //default is 1
+int g_conf_clock_scale __attribute__ ((section ("confdata")))=1; //default is 1
 
 void local_apic_timer_calibrate(uint32_t hz)
 {

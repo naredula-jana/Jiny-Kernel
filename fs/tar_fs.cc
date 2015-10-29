@@ -903,8 +903,8 @@ void tar_fs::set_mount_pnt(unsigned char *mnt_pnt_arg){
 static class tar_fs *tarfs_obj;
 extern "C" {
 //unsigned long g_conf_tarfs_extent_size=20000 ; /* 20k */
-unsigned long g_conf_tarfs_extent_size=512*8000 ; /* 512k */
-unsigned char *g_conf_tarfs_dummy_prefix = ".dummy_file";
+unsigned long g_conf_tarfs_extent_size  __attribute__ ((section ("confdata"))) =512*8000 ; /* 512k */
+unsigned char *g_conf_tarfs_dummy_prefix  __attribute__ ((section ("confdata"))) = ".dummy_file";
 int init_tarfs(jdriver *driver_arg) {
 	tarfs_obj = jnew_obj(tar_fs);
 	if (tarfs_obj->init(driver_arg, g_conf_tarfs_extent_size, g_conf_tarfs_dummy_prefix) == JFAIL) return JFAIL;

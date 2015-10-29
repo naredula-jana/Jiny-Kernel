@@ -80,7 +80,7 @@ This benchmark measures the network throughput between two vm's using virtual sw
     <td> 2 </td>
     <td>vm1- USS -vm2</td>
     <td> ???? </td>
-    <td><b>Throughput</b>(halfway: from vm to switch) : 4.100MPPS , <b>Bottleneck</b>: USS/Jiny os start dropping, both need to improve further. <hr> <b>Throughput</b>(one way: from first vm to second vm through switch): 1.800 MPPS , <b>Bottleneck</b> : USS is a single thread and fetch one packet from queue.  <hr><b>Throughput</b>(two way): 0.366 MPPS  , <b>Bottleneck:</b> udpserver on recv side is single thread. 
+    <td><b>Throughput</b>(halfway: from vm to switch) : 4.100MPPS ,<br> <b>Bottleneck</b>: USS/Jiny os start dropping, both need to improve further. <hr> <b>Throughput</b>(one way: from first vm to second vm through switch): 1.800 MPPS ,<br> <b>Bottleneck</b> : USS is a single thread and fetch one packet from queue.  <hr><b>Throughput</b>(two way: from first vm to senond vm through switch, and back to first vm): 0.366 MPPS  ,<br> <b>Bottleneck:</b> udpserver on recv side is single thread. 
         </td>
    </tr>  
    <tr>
@@ -107,7 +107,7 @@ This benchmark measures the network throughput between two vm's using virtual sw
      <td>vm1- USS -vm2 <br>with VMFUNC inside vm  </td>
      <td>????</td>
      <td>????<br>
-      Acessing other vm's virtio ring using Hardware Assist VMFUNC instruction, need changes in kvm/qemu accordingly as mentioned in the below papers. </td>
+      Using Fast switch Path: Acessing other vm's virtio ring using Hardware Assist VMFUNC instruction, need changes in kvm/qemu accordingly as mentioned in the below papers. </td>
     </tr>
 </table> 
 
@@ -220,8 +220,8 @@ Issue-1: In IPC, if there is a contention in mutext or semop or other IPC, then 
 Same Problem was solved by changing KVM hypervisor in this [paper](http://www.linux-kvm.org/images/a/ac/02x03-Davit_Matalack-KVM_Message_passing_Performance.pdf), published in kvm-forum-2105.  Difference between the two solutions are:
 
 1. **Problem definition:** same in both. In this paper IPC workload is used to explain the problem, In other paper "message passing workload" is used to explain the problem.
-2. **Solution:** It was fixed in guest kernel(Jiny kernel) in this paper, and the problem is resolved completely. Whereas in other paper, it is fixed in hypervisor(kvm) and problem is resolved partially(slide-29). 
-3. Both solutions can co-exist. since the problem is solved at two different layers independently. 
+2. **Solution to the problem:** It was fixed in guest kernel(Jiny kernel) in this paper, and the problem was solved completely. Whereas in other paper, it is fixed in hypervisor(kvm) , due to this the problem is solved partially(slide-29). 
+3. Both solutions to the same problem can co-exist. since the problem is solved at two different layers(kernel and kypervisor) independently. 
 
 ----------------------------------------------------------------------------------
 ##Papers:

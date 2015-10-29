@@ -31,7 +31,7 @@ typedef struct {
 	unsigned char *mount_pnt;
 	unsigned char *type;
 } filesystem_list_t;
-int g_conf_tarfs_as_root=1;
+int g_conf_tarfs_as_root  __attribute__ ((section ("confdata")))=1;
 filesystem_list_t g_fs_list[]={
 		{0,"/","tar_fs"},  /* Make the root mount as the first entry, do not repeat the mount point entries */
 		{0,"/p9","p9_fs"},
@@ -173,7 +173,7 @@ struct page *fs_inode::fs_genericRead(unsigned long offset, int read_ahead) {
 	return page;
 }
 extern "C" {
-int g_conf_read_ahead_pages =20;
+int g_conf_read_ahead_pages  __attribute__ ((section ("confdata")))=20;
 }
 int fs_inode::read(unsigned long offset, unsigned char *data, int len, int read_flags, int opt_flags) {
 	struct page *page;

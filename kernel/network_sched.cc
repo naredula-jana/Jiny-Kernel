@@ -34,17 +34,17 @@ extern "C" {
 extern int net_bh(int full_recv_send);
 unsigned char g_mac[7];
 
-int g_conf_net_pmd=1; /* pollmode driver on/off */
-int g_conf_net_auto_intr=0; /* auto interrupts, switch on/off based on the recv packet frequency */
-int g_conf_netbh_cpu=0;
+int g_conf_net_pmd __attribute__ ((section ("confdata")))=1; /* pollmode driver on/off */
+int g_conf_net_auto_intr __attribute__ ((section ("confdata")))=0; /* auto interrupts, switch on/off based on the recv packet frequency */
+int g_conf_netbh_cpu __attribute__ ((section ("confdata")))=0;
 
-//int g_conf_net_send_int_disable __attribute__ ((section ("confdata"))) = 1;
-int g_conf_net_send_int_disable=1;
-int g_conf_net_send_dur=0;
-int g_conf_net_send_burst=128;
-int g_conf_net_recv_burst=128;
-int g_conf_netbh_dedicated=1; /* all netbh by only dedicated thread  for send and recv */
-int g_conf_net_send_shaping=0 ; /* on error or speedy sending , slowy down sending if shaping is enabled */
+int g_conf_net_send_int_disable __attribute__ ((section ("confdata"))) = 1;
+//int g_conf_net_send_int_disable=1;
+int g_conf_net_send_dur __attribute__ ((section ("confdata")))=0;
+int g_conf_net_send_burst  __attribute__ ((section ("confdata"))) =128;
+int g_conf_net_recv_burst __attribute__ ((section ("confdata")))=128;
+int g_conf_netbh_dedicated __attribute__ ((section ("confdata")))=1; /* all netbh by only dedicated thread  for send and recv */
+int g_conf_net_send_shaping __attribute__ ((section ("confdata")))=0 ; /* on error or speedy sending , slowy down sending if shaping is enabled */
 
 int g_net_interrupts_disable=1;
 unsigned long g_stat_net_send_errors;
@@ -57,7 +57,7 @@ unsigned long g_stat_net_intr_mode_toggle;
 network_scheduler net_sched;
 static int stat_from_driver = 0;
 static int stat_to_driver = 0;
-int g_net_bh_active = 0;
+int g_net_bh_active __attribute__ ((aligned (64))) = 0;
 
 static int stats_pktrecv[1024];
 extern "C"{
@@ -149,22 +149,9 @@ static int net_bh_recv() {
 	if (g_net_interrupts_disable == 1) { /* only in the poll mode */
 		g_net_bh_active = 1;
 	}
-
 	if ((g_net_bh_active == 0)) {
 		goto last;
 	}
-
-#if 0
-	/* only one cpu will be in net_bh */
-	spin_lock_irqsave(&netbh_lock, flags);
-	if (netbh_in_progress == 0) {
-		netbh_in_progress = 1;
-		spin_unlock_irqrestore(&netbh_lock, flags);
-	} else {
-		spin_unlock_irqrestore(&netbh_lock, flags);
-		goto last;
-	}
-#endif
 
 	ret_bh = net_sched.netRx_BH();
 	g_cpu_state[getcpuid()].stats.netbh_recv = g_cpu_state[getcpuid()].stats.netbh_recv + ret_bh;
@@ -185,9 +172,7 @@ int net_bh(int send_bh){
 	int ret = 0;
 
 	if (g_conf_net_pmd==1  && g_conf_netbh_cpu != getcpuid()){
-		//if (g_conf_netbh_dedicated == 1){ /* only one thread does the netbh */
-			return 0;
-		//}
+		return 0;
 	}
 	if (g_cpu_state[getcpuid()].net_bh_inprogress == 1){
 		return 0;
@@ -223,7 +208,7 @@ int net_bh(int send_bh){
 	return ret;
 }
 /*****************************************************************/
-static int sendqs_empty=1;
+static int sendqs_empty __attribute__ ((aligned (64))) =1;
 static class fifo_queue *send_queues[MAX_CPUS];
 /* from socket layer -->  NIC */
 static int sendq_add(unsigned char *buf, int len, int write_flags){
@@ -271,18 +256,8 @@ static int sendq_remove(){
 			if (send_queues[cpu]->is_empty() == JSUCCESS) {
 				continue;
 			}
-
 			ret = JSUCCESS;
-#if 0
-			while (ret==JSUCCESS && pkts<MAX_BUF_LIST_SIZE ){
-				ret = send_queues[cpu]->remove_from_queue(&driver->send_mbuf_list[pkts].buf,&driver->send_mbuf_list[pkts].len,&wr_flags);
-				if (ret == JSUCCESS){
-					pkts++;
-				}
-			}
-#else
 			pkts = pkts + send_queues[cpu]->Bulk_remove_from_queue(&driver->send_mbuf_list[pkts],MAX_BUF_LIST_SIZE-pkts);
-#endif
 			if (pkts >= MAX_BUF_LIST_SIZE){
 				goto last;
 			}
@@ -380,35 +355,7 @@ static int net_bh_send() {
 	if (sendqs_empty == 1) {
 			return JFAIL;
 	}
-#if 0
-	static int in_progress = 0;
-	static unsigned long last_active=0;
-	unsigned long ts;
 
-	if (sendqs_empty == 1  || (in_progress == 1) ) {
-		return JFAIL;
-	}
-
-	spin_lock_irqsave(&netbhsend_lock, flags);
-	if (in_progress == 0) {
-		in_progress = 1;
-		ret = JSUCCESS;
-	}
-	spin_unlock_irqrestore(&netbhsend_lock, flags);
-
-	if (ret == JFAIL) {
-		return ret;
-	}
-
-	if (duration > 0 && g_conf_net_send_shaping==1) {
-		ts = ut_get_systemtime_ns() / 1000;
-		if ((ts - last_active) < duration) {
-			in_progress = 0;
-			return JFAIL;
-		}
-		last_active = ts;
-	}
-#endif
 	int pkts=0;
 	do {
 		pkts = bulk_remove_from_send_queue();
@@ -419,8 +366,7 @@ static int net_bh_send() {
 	if (socket::net_dev != 0 ){
 		socket::net_dev->ioctl(NETDEV_IOCTL_FLUSH_SENDBUF, 0);
 	}
-last:
-//	in_progress = 0;
+
 	return ret;
 }
 int net_send_eth_frame(unsigned char *buf, int len, int write_flags) {
@@ -456,7 +402,7 @@ void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
 				send_queues[i]->stat_drop = 0;
 			}
 		}
-		ut_printf(" NNnnn MAC-ADDRESS : %x:%x:%x:%x:%x:%x current interrupt disable:%i qeuesstatus:%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],g_net_interrupts_disable,sendqs_empty);
+		ut_printf(" new MAC-ADDRESS : %x:%x:%x:%x:%x:%x current interrupt disable:%i qeuesstatus:%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],g_net_interrupts_disable,sendqs_empty);
 	}
 	socket::print_all_stats();
 

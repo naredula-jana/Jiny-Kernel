@@ -42,7 +42,7 @@ static unsigned long stored_system_times[MAX_CPUS];
 static  unsigned long __native_read_tsc(void);
 
 extern unsigned long  g_jiffie_errors;
-int g_conf_wall_clock=0;
+int g_conf_wall_clock __attribute__ ((section ("confdata"))) =0;
 int ut_get_wallclock(unsigned long *sec, unsigned long *usec) {
 	unsigned long tmp_usec;
 #if 0
@@ -79,12 +79,12 @@ static  unsigned long __native_read_tsc(void){
 }
 
 static spinlock_t	time_spinlock;
-int g_conf_hw_clock=1;  /* sometimes hw clock is very slow or not accurate , then jiffies can be used at the resoultion of 10ms */
+int g_conf_hw_clock __attribute__ ((section ("confdata")))=1;  /* sometimes hw clock is very slow or not accurate , then jiffies can be used at the resoultion of 10ms */
 
 static unsigned long last_jiffie_tsc=0;
 static unsigned long total_tsc_per_jiffie;
 
-int g_conf_ms_per_jiffie=6;/* instaed of 10ms, the apic timer interrupt generating faster , so it canged from 10 to 6*/
+int g_conf_ms_per_jiffie __attribute__ ((section ("confdata"))) =6;/* instaed of 10ms, the apic timer interrupt generating faster , so it canged from 10 to 6*/
 #define MS_PER_JIFF g_conf_ms_per_jiffie
 #define NS_PER_MS 1000000
 #define NS_PER_JIFFIE (NS_PER_MS*MS_PER_JIFF)

@@ -176,7 +176,7 @@ last:
 	return ret;
 }
 extern "C"{
-int g_conf_test_dummy_send=0;
+int g_conf_test_dummy_send __attribute__ ((section ("confdata")))=0;
 }
 int network_stack::write(network_connection *conn, uint8_t *app_data, int app_len) {
 	int ret = JFAIL;

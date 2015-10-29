@@ -397,9 +397,9 @@ int virtio_net_jdriver::burst_send() {
 	}
 
 	for (qno = 0; qno < max_vqs; qno++) {
-		pkts = queues[qno].send->BulkRemoveFromQueue(0,MAX_BUF_LIST_SIZE*4);
+		pkts = queues[qno].send->BulkRemoveFromQueue(0,MAX_BUF_LIST_SIZE * 4);
 #if 0
-		pkts = queues[qno].send->BulkRemoveFromQueue(&temp_mbuf_list[0],MAX_BUF_LIST_SIZE);
+		pkts = queues[qno].send->BulkRemoveFromQueue(&temp_mbuf_list[0], MAX_BUF_LIST_SIZE);
 		for (i = 0; i < pkts; i++) {
 			free_page(temp_mbuf_list[i].buf);
 		}
@@ -1263,7 +1263,7 @@ static int extract_reqs_from_devices(virtio_disk_jdriver *dev) {
 }
 static struct  struct_mbuf disk_mbufs[MAX_DISK_REQS];
 extern "C" {
- int g_conf_disk_bulkio=1;
+ int g_conf_disk_bulkio  __attribute__ ((section ("confdata"))) =1;
 }
 int diskio_thread(void *arg1, void *arg2) {
 	int i,j,k;
