@@ -11,13 +11,17 @@ SECTIONS
        arch/x86_64/smp/head.o(.text)
        arch/x86_64/smp/trampoline_64.o(.text)
  }
-
-   .data.head :AT(ADDR(.data.head)  ) {
+ .confdata.head :AT(ADDR(.confdata.head)  ) {
+       arch/x86_64/boot.o(.confdata)
+       arch/x86_64/smp/head.o(.confdata)
+       arch/x86_64/smp/trampoline_64.o(.confdata)
+  }
+ .data.head :AT(ADDR(.data.head)  ) {
        arch/x86_64/boot.o(.data)
        arch/x86_64/smp/head.o(.data)
        arch/x86_64/smp/trampoline_64.o(.data)
   }
-  .bss.head : AT(ADDR(.bss.head)   ) {
+ .bss.head : AT(ADDR(.bss.head)   ) {
        arch/x86_64/boot.o(.bss)
        arch/x86_64/smp/head.o(.bss)
        arch/x86_64/smp/trampoline_64.o(.bss)
@@ -32,10 +36,16 @@ SECTIONS
         __text_end = .;
  }
  
- . = kernelStart + 0x200000;   
-
+ . = kernelStart + 0x200000;
+ __data_start = .;   
+ confdata : AT(ADDR(confdata) - kernelStart ){
+ 	*(confdata)
+	
+ }
+ __confdata_end = .;
+  
  .data : AT(ADDR(.data) - kernelStart ){
-        __data_start = .;
+ 
         *(EXCLUDE_FILE (*arch/x86_64/boot.o *arch/x86_64/smp/head.o *arch/x86_64/smp/trampoline_64.o)
           .data)
         *(.rodata)

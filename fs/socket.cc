@@ -232,22 +232,7 @@ int fifo_queue::is_empty(){
 	}
 }
 unsigned long  fifo_queue::queue_size(){
-
-
 	return producer_count - consumer_count;
-#if 0
-	unsigned long qlen;
-	unsigned long flags,aflags;
-
-	spin_lock_irqsave(&(add_spin_lock), aflags);
-	spin_lock_irqsave(&(remove_spin_lock), flags);
-	qlen = producer_count - consumer_count;
-	spin_unlock_irqrestore(&(remove_spin_lock), flags);
-	spin_unlock_irqrestore(&(add_spin_lock), aflags);
-
-	return qlen;
-#endif
-
 }
 int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int read_flags, int unused_flags) {
 	int ret = 0;

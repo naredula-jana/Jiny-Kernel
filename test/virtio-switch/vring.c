@@ -15,7 +15,7 @@
 #include "vring.h"
 #include "shm.h"
 #include "vhost_user.h"
-
+//#define  DUMP_PACKETS1 1
 #define VRING_IDX_NONE          ((uint16_t)-1)
 
 /* jana Changed below */
@@ -97,7 +97,7 @@ int send_pkt(VringTable* vring_table, uint32_t v_idx,  void* input_buf, size_t s
     if (vring_table->vring[v_idx].last_used_idx == avail->idx){
     	if ((stat_send_err%2500000) ==0 ){
    // 	if (((vring_table->dropped % 200)==0) && vring_table->dropped!=0){
-    		fprintf(stdout, "%p: ERROR : NO-SPACE in Avail:%d ava  error:%d DROP:%d max_buf:%d\n",vring_table,avail->idx,stat_send_err,vring_table->dropped,MAX_BUFS);
+    		fprintf(stdout, "%p: ERROR : NO-SPACE... in Avail:%d ava  error:%d DROP:%d max_buf:%d\n",vring_table,avail->idx,stat_send_err,vring_table->dropped,MAX_BUFS);
     	}
     	stat_send_err++;
         return -1;
@@ -139,6 +139,9 @@ int send_pkt(VringTable* vring_table, uint32_t v_idx,  void* input_buf, size_t s
     // add it to the used ring
     used->ring[u_idx].id = d_idx;
     used->ring[u_idx].len = len;
+#ifdef DUMP_PACKETS1
+    fprintf(stdout, "sending the len:%d  ",len);
+#endif
     if  (used->flags == 0){
     	used->flags = 1;
     }
@@ -213,7 +216,9 @@ static int read_pkt(VhostServer* send_port,VringTable* vring_table, uint32_t v_i
         } else {
             cur = (void*) (uintptr_t) desc[i].addr;
         }
-
+#ifdef DUMP_PACKETS1
+            fprintf(stdout, " desc len: %d ", cur_len);
+#endif
         if (len + cur_len < buf_size) {
             memcpy(buf + len, cur, cur_len);
 #ifdef DUMP_PACKETS1
@@ -249,7 +254,7 @@ static int read_pkt(VhostServer* send_port,VringTable* vring_table, uint32_t v_i
     }
 
 #ifdef DUMP_PACKETS1
-    fprintf(stdout, "\n");
+    fprintf(stdout, "len: %d \n",len);
 #endif
 
     // check the header
@@ -318,6 +323,9 @@ int process_input_fromport(VhostServer* vhost_server,VhostServer* send_vhost_ser
 struct struct_mbuf{
 	void *input_buf;
 	int len;
+
+	void *raw_addr[3];
+	int raw_index[3];
 };
 //int Bulk_send_pkt(VringTable* vring_table, uint32_t v_idx,  void* input_buf, size_t size){
 int Bulk_send_pkt(VringTable* vring_table,  struct struct_mbuf *mbuf_list, int list_size){
@@ -334,13 +342,15 @@ int Bulk_send_pkt(VringTable* vring_table,  struct struct_mbuf *mbuf_list, int l
     int k;
     uint16_t pkt;
     int ret=0;
+    uint16_t avail_idx = avail->idx;
 
+    //sync_shm();
 	for (pkt = 0; pkt < list_size; pkt++) {
-		if ((vring_table->vring[VHOST_CLIENT_VRING_IDX_RX].last_used_idx +pkt) == avail->idx) {
+		if ((vring_table->vring[VHOST_CLIENT_VRING_IDX_RX].last_used_idx +pkt) == avail_idx) {
 			if ((stat_send_err % 2500000) == 0) {
 				// 	if (((vring_table->dropped % 200)==0) && vring_table->dropped!=0){
 				fprintf(stdout,
-						"%p: ERROR : NO-SPACE in Avail:%d ava  error:%d DROP:%d max_buf:%d\n",
+						"%p: ERROR : NO-SPACE.. in Avail:%d ava  error:%d DROP:%d max_buf:%d\n",
 						vring_table, avail->idx, stat_send_err,
 						vring_table->dropped, MAX_BUFS);
 			}
@@ -360,7 +370,10 @@ int Bulk_send_pkt(VringTable* vring_table,  struct struct_mbuf *mbuf_list, int l
 			} else {
 				cur = (void*) (uintptr_t) desc[i].addr;
 			}
-
+			if (desc[i].addr == 0  && k==0){
+				stat_send_err++;
+				goto last;
+			}
 			if (k == 1) {
 				memcpy(cur, mbuf_list[pkt].input_buf+hdr_len, mbuf_list[pkt].len-hdr_len );
 				cur_len = mbuf_list[pkt].len-hdr_len;
@@ -399,27 +412,27 @@ last:
 
     return ret;
 }
-#define MAX_PKT 16
+#define MAX_PKT 64
 extern int test_mode;
 extern void sigTerm(int s);
-static uint16_t Bulk_read_pkt(VhostServer* send_port,VringTable* vring_table,  uint32_t a_idx){
+static uint16_t test_Bulk_read_pkt(VhostServer* send_port,VringTable* vring_table,  uint32_t a_idx){
     struct vring_desc* desc = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].desc;
     struct vring_avail* avail = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].avail;
     struct vring_used* used = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].used;
     unsigned int num = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].num;
-    ProcessHandler* handler = &vring_table->handler;
+  //  ProcessHandler* handler = &vring_table->handler;
     uint16_t u_idx = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_used_idx % num;
     uint16_t d_idx = avail->ring[a_idx];
     uint32_t  len = 0;
     struct struct_mbuf mbuf_list[MAX_PKT];
-    struct virtio_net_hdr *hdr = 0;
+ //   struct virtio_net_hdr *hdr = 0;
     uint16_t pkt;
     uint16_t ret=0;
     uint16_t i;
-    int k;
-    void* cur = 0;
+    //int k;
+    //void* cur = 0;
 
-	for (pkt = 0; pkt < MAX_PKT; pkt++) {
+	for (pkt = 0; pkt < 64; pkt++) {
 		if ((vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_avail_idx+pkt) == avail->idx) {
 			goto last;
 		}
@@ -427,6 +440,12 @@ static uint16_t Bulk_read_pkt(VhostServer* send_port,VringTable* vring_table,  u
 		d_idx = avail->ring[a_idx];
 		i = d_idx;
 		len =0;
+
+		if (desc[i].addr == 0  ){
+						stat_recv_err++;
+						goto last;
+					}
+#if 0
 		for (k = 0; k < 2; k++) {
 			cur = 0;
 			uint32_t cur_len = desc[i].len;
@@ -476,6 +495,111 @@ static uint16_t Bulk_read_pkt(VhostServer* send_port,VringTable* vring_table,  u
 				while(1);
 				goto last;
 		}
+#endif
+		stat_recv_succ++;
+		// add it to the used ring
+		used->ring[(u_idx+pkt) % num].id = d_idx;
+		used->ring[(u_idx+pkt) % num].len = len;
+		if (used->flags == 0) {
+			used->flags = 1;
+		}
+		ret++;
+	}
+last:
+     if (ret > 0  && test_mode==0){
+    //if (ret > 0 ){
+    	 Bulk_send_pkt(&send_port->vring_table,&mbuf_list[0], pkt);
+     }
+
+    return ret;
+}static uint16_t Bulk_read_pkt(VhostServer* send_port,VringTable* vring_table,  uint32_t a_idx,uint64_t mmap_addr, uint64_t memory_size){
+    struct vring_desc* desc = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].desc;
+    struct vring_avail* avail = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].avail;
+    struct vring_used* used = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].used;
+    unsigned int num = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].num;
+    //ProcessHandler* handler = &vring_table->handler;
+    uint16_t u_idx = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_used_idx % num;
+    uint16_t d_idx = avail->ring[a_idx];
+    uint32_t  len = 0;
+    struct struct_mbuf mbuf_list[MAX_PKT+1];
+    struct virtio_net_hdr *hdr = 0;
+    uint16_t pkt;
+    uint16_t ret=0;
+    uint16_t i;
+    int k;
+    void* cur = 0;
+    uint16_t avail_idx = avail->idx;
+   // VhostServerMemoryRegion *region = &vhost_server->memory.regions[idx];
+
+    //sync_shm();
+	for (pkt = 0; pkt < MAX_PKT; pkt++) {
+		if ((vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_avail_idx+pkt) == avail_idx) {
+			goto last;
+		}
+		a_idx = (vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_avail_idx + pkt) % num;
+		d_idx = avail->ring[a_idx];
+		i = d_idx;
+		len =0;
+		for (k = 0; k < 2; k++) {
+			cur = 0;
+			uint32_t cur_len = desc[i].len;
+			mbuf_list[pkt].raw_addr[k] = (void *)desc[i].addr;
+			mbuf_list[pkt].raw_index[k] =i;
+			// map the address
+#if 0
+			if (handler && handler->map_handler) {
+				cur = (void*) handler->map_handler(handler->context,
+						mbuf_list[pkt].raw_addr[k]);
+			} else {
+				cur = (void*) (uintptr_t) desc[i].addr;
+			}
+#else
+			if ((uint64_t)mbuf_list[pkt].raw_addr[k] > memory_size){
+				fprintf(stderr, "ERROR:**** address exceeds memory size addr:%p, size:%p \n",(void *)mbuf_list[pkt].raw_addr[k],(void *)memory_size);
+				while(1);
+			}
+			cur = mmap_addr + mbuf_list[pkt].raw_addr[k] ;
+#endif
+
+			if (k == 0){
+				mbuf_list[pkt].input_buf = cur;
+				mbuf_list[pkt].len = 0;
+			}
+			if (mbuf_list[pkt].raw_addr[k] == 0  && k==0){
+				stat_recv_err++;
+				goto last;
+			}
+
+			mbuf_list[pkt].len += cur_len;
+			len += cur_len;
+
+			if (desc[i].flags & VIRTIO_DESC_F_NEXT) {
+				i = desc[i].next;
+			} else {
+				break;
+			}
+		}
+
+		if (!len) {
+			fprintf(stderr, "ERROR:**** WRONG Len\n");
+			sigTerm(1);
+			stat_recv_err++;
+			goto last;
+		}
+		// check the header
+		hdr = (struct virtio_net_hdr *) mbuf_list[pkt].input_buf;
+
+		if ((hdr->flags != 0) || (hdr->gso_type != 0) || (hdr->hdr_len != 0)
+						|| (hdr->gso_size != 0) || (hdr->csum_start != 0)
+						|| (hdr->csum_offset != 0)) {
+			char *cc= (char *)hdr;
+				fprintf(stderr, "ERROR:**** WRONG flags  DESC_index: %d   descr addr:%p cur:%p count:%d k:%d HDR:%p data:%x:%x:%x:%x len:%d\n",i,(void *)desc[i].addr,cur,pkt,k,hdr,(char )cc[0],(char )cc[1],(char )cc[2],(char )cc[3],len);
+				sigTerm(1);
+				stat_recv_err++;
+				fprintf(stderr, "..... NEW going infinite loop \n");
+				while(1);
+				goto last;
+		}
 		stat_recv_succ++;
 
 		// add it to the used ring
@@ -487,8 +611,8 @@ static uint16_t Bulk_read_pkt(VhostServer* send_port,VringTable* vring_table,  u
 		ret++;
 	}
 last:
-    // if (ret > 0  && test_mode==0){
-    if (ret > 0 ){
+     if (ret > 0  && test_mode==0){
+    //if (ret > 0 ){
     	 Bulk_send_pkt(&send_port->vring_table,&mbuf_list[0], pkt);
      }
 
@@ -509,8 +633,14 @@ int Bulk_process_input_fromport(VhostServer* vhost_server,VhostServer* send_vhos
 	if (vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_avail_idx == avail->idx) {
 		return 0;
 	}
-
-	ret = Bulk_read_pkt(send_vhost_server, vring_table, a_idx);
+	//if (test_mode == 0) {
+	if (1) {
+		uint64_t mmap_addr = vhost_server->memory.regions[0].mmap_addr;
+		uint64_t memory_size = vhost_server->memory.regions[0].memory_size;
+		ret = Bulk_read_pkt(send_vhost_server, vring_table, a_idx,mmap_addr,memory_size);
+	} else {
+		ret = test_Bulk_read_pkt(send_vhost_server, vring_table, a_idx);
+	}
 	vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_avail_idx = ret + vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_avail_idx;
 	vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_used_idx  = ret + vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_used_idx;
 

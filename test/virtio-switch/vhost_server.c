@@ -169,7 +169,7 @@ static int _set_mem_table(VhostServer* vhost_server, ServerMsg* msg)
 
 #if 1  /* JANA added temporary fix for qemu 2.3.0 */
             region->memory_size = 268435456 ;
-            printf("  Temporay FIX .... :%p \n",(void *)region->memory_size);
+
 #endif
 
             assert(idx < msg->fd_num);
@@ -177,6 +177,7 @@ static int _set_mem_table(VhostServer* vhost_server, ServerMsg* msg)
 
             region->mmap_addr =
                     (uintptr_t) init_shm_from_fd(msg->fds[idx], region->memory_size);
+            printf("  Temporay FIX .... :%p  guest addr:%p  userspace_addr:%p mmap_addr:%p\n",(void *)region->memory_size,(void *)region->guest_phys_addr,(void *)region->userspace_addr,(void *)region->mmap_addr);
 
             vhost_server->memory.nregions++;
 
@@ -423,7 +424,7 @@ void sigTerm(int s) {
 	    test_mode=1;
 	else
 		test_mode=0;
-	printf(" BULK NEWWWW send succ :%lu err:%d  recv: succ:%lu err:%lu test_mode:%d\n",stat_send_succ,stat_send_err,stat_recv_succ,stat_recv_err,test_mode);
+	printf(" SIZE=64 New Version BULK neww send succ :%lu err:%d  recv: succ:%lu err:%lu test_mode:%d\n",stat_send_succ,stat_send_err,stat_recv_succ,stat_recv_err,test_mode);
 }
 void print_rings(char *str,VhostServer* vhost_server){
 	int i;

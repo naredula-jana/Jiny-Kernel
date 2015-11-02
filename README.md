@@ -26,26 +26,26 @@ More details of the Benchmarks are available at [Jiny-Benchmarks.](../master/doc
 
 ## Features currently Available:
 
-- Page Cache:  LRU and MRU based (based on the published paper in opencirrus) 
+- Page Cache:  LRU and MRU based (based on the published paper in opencirrus for Hadoop) 
 - File Systems: 
    - TarFs : Tar file can be mounted as a root/non-root file system.
    - 9p 
-   - Host based file system based on ivshm(Inter Vm Shared Memory) 
+   - Host based file system based on IVSHM(Inter Vm Shared Memory) 
 - Virtualization Features:
-   - HighPriority Apps: very basic features is available.
+   - HighPriority Apps: very basic features is available(app to load as module).
    - Zero page optimization works along with KSM.
    - Elastic Cpu's: depending on the load, some of the cpu's will be rested.
    - Elastic Memory: depending on the load, some amount of physical memory can be disabled, so as host/other vm's can use.
 - Virtualization drivers:
     - Xen : xenbus, network driver using xen paravirtualised.
     - KVM : virtio + P9 filesystem
-    - KVM : virtio + Network (test server with udp stack(tcp/ip))
-    - KVM : virtio + block
+    - KVM : virtio + Network (vhost-net,vhost-user), with multi-queue
+    - KVM : virtio + block (vitio-disk) with multi-queue
     - KVM : virtio + Memory ballooning
     - KVM : clock
 - SMP: APIC,MSIX
 - Networking:  Third party tcp/ip stacks as kernel module.
-     - TCP/ip stack from uip ( from [AdamDunkels](https://github.com/adamdunkels/uip)  as kernel module. The above Benchamark-2 is with uip : currently only udp is supported, need to add tcp.
+     - TCP/ip stack from UIP ( from [AdamDunkels](https://github.com/adamdunkels/uip)  as kernel module. The above Benchamark-2 is with uip : currently only udp is supported, need to add tcp.
      - LWIP4.0 as a kernel module: 
 - Debugging features:
    - memoryleak detection.

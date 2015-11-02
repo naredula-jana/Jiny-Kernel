@@ -111,9 +111,17 @@ This benchmark measures the network throughput between two vm's using virtual sw
     </tr>
 </table> 
 
+##### TODO's in Jiny:
+With the below enhancements, the maximum throughput can be pushed further from the current maximum of 4.100MPPS.
+ 
+1. Low latency Notification : Monitor/wait, pause loop, posted interrupts.
+2. Multi-queue with vhost-user: code is present , but need to test. Depends vhost-user mq support from qemu.
+3. Fast-switch between vm to vm using VMFUNC. Depends on VMFUNC support from qemu/kvm.
+4. Making udp-client/server to run as High priority app, so that client,server  can process more pkts/sec. curently server is bottleneck in recving all the packets at the recving vm, it is getting dropped in the recv guest kernel itself.
+
 ##### Summary of Tests:
 1. Test-1/2 : USS versus LB with Jiny VM's: USS as outperformed when compare to LB.
-2. Test-1 : Jiny kernel versus Linux kernel using LB: Jiny as performed better when compare to linux.This can be mitigated in Linux kernel using DPDK. The application need to change accordingly when used with DPDK. Jiny does not need DPDK, linux based application can directly run on jiny kernel without DPDK.
+2. Test-1 : Jiny kernel versus Linux kernel: Jiny as performed better when compare to linux.This can be mitigated in Linux kernel using DPDK. The application need to change accordingly when used with DPDK. Jiny does not need DPDK, linux based application can directly run on jiny kernel without DPDK  and get the performance close to that.
 
 ##### Reasons for Better throughput in Jiny kernel when compare to linux kernel:
 1. Network bottom half is very thin, and entire computation of send/recv packet is done in the application context, means the network stack runs  as part of application context concurrently without locks, this makes most of the packet processing computation on the same core and avoid locking. The implementaion of network frame work is similar to [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). 
@@ -129,7 +137,8 @@ This benchmark measures the network throughput between two vm's using virtual sw
 
 ##### Conclusion :
 1. Network throughput in virtual environment  is decided by the kernel throughput and the virtual switch connecting the vm's. The shortfall in linux kernel network throughput can be mitigated by DPDK to a larger extent, but apps need to change accordingly.
-2. User Space virtual switch will outperform Kernel based switch like Linux bridge or OVS.  USS switch provide faster virtual infra when compare to linux bridge or switch inside the host kernel.
+2. User Space virtual switch will outperform Kernel based switch like Linux bridge or OVS.  USS provide faster virtual infra when compare to linux bridge or switch inside the host kernel.
+3. Changes in Jiny as suggested in TODO will improve the maximum throught from 4.1MPPS further.
 
 ##### Similar papers:
 

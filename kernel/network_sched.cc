@@ -402,7 +402,7 @@ void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
 				send_queues[i]->stat_drop = 0;
 			}
 		}
-		ut_printf(" new MAC-ADDRESS : %x:%x:%x:%x:%x:%x current interrupt disable:%i qeuesstatus:%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],g_net_interrupts_disable,sendqs_empty);
+		ut_printf(" NNEWW MAC-ADDRESS : %x:%x:%x:%x:%x:%x current interrupt disable:%i qeuesstatus:%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],g_net_interrupts_disable,sendqs_empty);
 	}
 	socket::print_all_stats();
 
