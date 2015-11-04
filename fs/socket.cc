@@ -93,10 +93,15 @@ last:
 	return JSUCCESS;
 #endif
 }
+extern "C" {
+int g_conf_fifo_max_qlen __attribute__ ((section ("confdata")))= 256;
+}
 void fifo_queue::init(unsigned char *arg_name,int wq_enable){
 	ut_snprintf(name,MAX_FILENAME,"fqueue_%s",arg_name);
-	arch_spinlock_init(&add_spin_lock, (unsigned char *)name);
-	arch_spinlock_init(&remove_spin_lock, (unsigned char *)name);
+	arch_spinlock_init(&producer.spin_lock, (unsigned char *)name);
+	arch_spinlock_init(&consumer.spin_lock, (unsigned char *)name);
+	max_queue_length = g_conf_fifo_max_qlen;
+	data = ut_calloc(sizeof(fifo_data_struct)*max_queue_length);
 	//atomic_set(&queue_len, 0);
 	waitq =0;
 	if (wq_enable){
@@ -108,8 +113,9 @@ void fifo_queue::free(){
 	if (waitq){
 		waitq->unregister();
 	}
-	arch_spinlock_free(&add_spin_lock);
-	arch_spinlock_free(&remove_spin_lock);
+	arch_spinlock_free(&producer.spin_lock);
+	arch_spinlock_free(&consumer.spin_lock);
+	ut_free(data);
 }
 int fifo_queue::add_to_queue(unsigned char *buf, int len,int data_flags, int freebuf_on_full) {
 	unsigned long flags;
@@ -118,16 +124,16 @@ int fifo_queue::add_to_queue(unsigned char *buf, int len,int data_flags, int fre
 		return ret;
 
 	//ut_log("Recevied from  network and keeping in queue: len:%d  stat count:%d prod:%d cons:%d\n",len,stat_queue_len,queue.producer,queue.consumer);
-	spin_lock_irqsave(&(add_spin_lock), flags);
-	if ((data[producer_index].len == 0)  && (data[producer_index].buf == 0)) {
-		data[producer_index].len = len;
-		data[producer_index].buf = buf;
-		data[producer_index].flags = data_flags;
-		producer_index++;
-		producer_count++;
+	spin_lock_irqsave(&(producer.spin_lock), flags);
+	if ((data[producer.index].len == 0)  && (data[producer.index].buf == 0)) {
+		data[producer.index].len = len;
+		data[producer.index].buf = buf;
+		data[producer.index].flags = data_flags;
+		producer.index++;
+		producer.count++;
 
-		if (producer_index >= MAX_SOCKET_QUEUE_LENGTH){
-			producer_index = 0;
+		if (producer.index >= max_queue_length){
+			producer.index = 0;
 		}
 		ret = JSUCCESS;
 		goto last;
@@ -135,7 +141,7 @@ int fifo_queue::add_to_queue(unsigned char *buf, int len,int data_flags, int fre
 	error_full++;
 
 last:
-	spin_unlock_irqrestore(&(add_spin_lock), flags);
+	spin_unlock_irqrestore(&(producer.spin_lock), flags);
 	if (ret == JFAIL){
 		if (freebuf_on_full){
 			jfree_page(buf);
@@ -150,15 +156,15 @@ last:
 	return ret;
 }
 int fifo_queue::peep_from_queue(unsigned char **buf, int *len,int *wr_flags) {
-	if ((data[consumer_index].buf != 0) && (data[consumer_index].len != 0)) {
+	if ((data[consumer.index].buf != 0) && (data[consumer.index].len != 0)) {
 		if (buf) {
-			*buf = data[consumer_index].buf;
+			*buf = data[consumer.index].buf;
 		}
 		if (len){
-			*len = data[consumer_index].len;
+			*len = data[consumer.index].len;
 		}
 		if (wr_flags){
-			*wr_flags = data[consumer_index].flags;
+			*wr_flags = data[consumer.index].flags;
 		}
 		return JSUCCESS;
 	}
@@ -168,24 +174,24 @@ int fifo_queue::remove_from_queue(unsigned char **buf, int *len,int *wr_flags) {
 	unsigned long flags;
 	int ret = JFAIL;
 	while (ret == JFAIL) {
-		spin_lock_irqsave(&(remove_spin_lock), flags);
-		if ((data[consumer_index].buf != 0) && (data[consumer_index].len != 0)) {
-			*buf = data[consumer_index].buf;
-			*len = data[consumer_index].len;
-			*wr_flags = data[consumer_index].flags;
+		spin_lock_irqsave(&(consumer.spin_lock), flags);
+		if ((data[consumer.index].buf != 0) && (data[consumer.index].len != 0)) {
+			*buf = data[consumer.index].buf;
+			*len = data[consumer.index].len;
+			*wr_flags = data[consumer.index].flags;
 			//	ut_log("netrecv : receving from queue len:%d  prod:%d cons:%d\n",queue.data[queue.consumer].len,queue.producer,queue.consumer);
 
-			data[consumer_index].buf = 0;
-			data[consumer_index].len = 0;
-			consumer_index++;
-			consumer_count++;
+			data[consumer.index].buf = 0;
+			data[consumer.index].len = 0;
+			consumer.index++;
+			consumer.count++;
 
-			if (consumer_index >= MAX_SOCKET_QUEUE_LENGTH){
-				consumer_index = 0;
+			if (consumer.index >= max_queue_length){
+				consumer.index = 0;
 			}
 			ret = JSUCCESS;
 		}
-		spin_unlock_irqrestore(&(remove_spin_lock), flags);
+		spin_unlock_irqrestore(&(consumer.spin_lock), flags);
 		if (ret == JFAIL){
 			if (waitq){
 				waitq->wait(500);
@@ -201,19 +207,19 @@ int fifo_queue::Bulk_remove_from_queue(struct struct_mbuf *mbufs, int mbuf_len) 
 	int ret = 0;
 	while (ret < mbuf_len) {
 	//	spin_lock_irqsave(&(remove_spin_lock), flags);
-		if ((data[consumer_index].buf != 0) && (data[consumer_index].len != 0)) {
-			mbufs[ret].buf = data[consumer_index].buf;
-			mbufs[ret].len = data[consumer_index].len;
+		if ((data[consumer.index].buf != 0) && (data[consumer.index].len != 0)) {
+			mbufs[ret].buf = data[consumer.index].buf;
+			mbufs[ret].len = data[consumer.index].len;
 			//*wr_flags = data[consumer].flags;
 			//	ut_log("netrecv : receving from queue len:%d  prod:%d cons:%d\n",queue.data[queue.consumer].len,queue.producer,queue.consumer);
 
-			data[consumer_index].buf = 0;
-			data[consumer_index].len = 0;
-			consumer_index++;
-			consumer_count++;
+			data[consumer.index].buf = 0;
+			data[consumer.index].len = 0;
+			consumer.index++;
+			consumer.count++;
 
-			if (consumer_index >= MAX_SOCKET_QUEUE_LENGTH){
-				consumer_index = 0;
+			if (consumer.index >= max_queue_length){
+				consumer.index = 0;
 			}
 			ret++;
 		}else{
@@ -225,14 +231,14 @@ int fifo_queue::Bulk_remove_from_queue(struct struct_mbuf *mbufs, int mbuf_len) 
 	return ret;
 }
 int fifo_queue::is_empty(){
-	if (producer_count == consumer_count){
+	if (producer.count == consumer.count){
 		return JSUCCESS;
 	}else{
 		return JFAIL;
 	}
 }
 unsigned long  fifo_queue::queue_size(){
-	return producer_count - consumer_count;
+	return producer.count - consumer.count;
 }
 int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int read_flags, int unused_flags) {
 	int ret = 0;

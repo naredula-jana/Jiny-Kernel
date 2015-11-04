@@ -18,7 +18,7 @@ In each benchmark the bottlenecks and corresponding optimizations were highlight
      <tr><td>Benchmark-3</td><td>Storage</td> <td> Incomplete</td> <td> - </td></tr>
      <tr><td>Benchmark-4</td><td>PageCache</td> <td> Comparisions of Read/write throughput for Hadoop workload, especially hdfs or IO centric. </td> <td> 20% </td></tr>
      <tr><td>Benchmark-5</td><td>Memory</td> <td> Memory  improvements with zero page accumulation and other related techiniques</td> <td> - </td></tr>
-      <tr><td>Benchmark-6</td><td>IPC</td> <td> locks and interrutpts improvements.</td> <td> 140% </td></tr>
+      <tr><td>Benchmark-6</td><td>IPC</td> <td> IPC and message passing.</td> <td> 140% </td></tr>
     </table>
     
 ----------------------------------------------------------------------------------
@@ -111,13 +111,15 @@ This benchmark measures the network throughput between two vm's using virtual sw
     </tr>
 </table> 
 
-##### TODO's in Jiny:
+##### TODO's :
 With the below enhancements, the maximum throughput can be pushed further from the current maximum of 4.100MPPS.
  
-1. Low latency Notification : Monitor/wait, pause loop, posted interrupts.
-2. Multi-queue with vhost-user: code is present , but need to test. Depends vhost-user mq support from qemu.
+1. Low cost or low latency Notification : using the following :Monitor/wait, pause loop, posted interrupts.
+2. Multi-queue with vhost-user: code is present, but need to test, this Depends on vhost-user mq support from qemu.
 3. Fast-switch between vm to vm using VMFUNC. Depends on VMFUNC support from qemu/kvm.
 4. Making udp-client/server to run as High priority app, so that client,server  can process more pkts/sec. curently server is bottleneck in recving all the packets at the recving vm, it is getting dropped in the recv guest kernel itself.
+5. currently  USS  cannot receive more then 4.1MPPS, USS need to improve further to forward more packets. 
+
 
 ##### Summary of Tests:
 1. Test-1/2 : USS versus LB with Jiny VM's: USS as outperformed when compare to LB.
@@ -163,15 +165,16 @@ With the below enhancements, the maximum throughput can be pushed further from t
 This benchmark measures InterProcess Communication(mutex,semphore,messages passing etc) in virtual environment. 
 
 ##### Problem Definition:
-   when CPU sleeps (Hitting "hlt" instruction) and getting awaken up by other cpu using IPI(Inter Processor Interrupt) within short period of time, this as performance implications for IPC and message passing workloads in virtual machines. The cost is more in vm when compare to metal.
+   During IPC, When cpu sleeps (blocking on "hlt" instruction) and getting awaken up by other cpu using IPI(Inter Processor Interrupt) within short period of time, this as performance implications for IPC and message passing workloads in virtual machines. The cost is more in vm when compare to metal because of vm exists in to hypervisor.
  
   
 #####Test Environment and Results
     
-  IPC Test: This is a Producer-consumer test using semaphores. Producer and consumer runs in two seperate threads. Producer is more cpu intesive when compare to consumer, this make consumer waits for producer at the end of each loop. producer wakes consumer once item is produced. In this way consumer get context switched at the end of every loop. This emulates  producer and consumer with unequal cpu computation to process every item, this is a very common case. The [source code for test available here.] (https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/expirements/sem_test4.c). If the amount of computation for producer and consumer is same then there will be minimum lock contention. 
-     **Hypervisor**: kvm/qemu-2.x
-     **host kernel version**:3.13.0-32
-     **command and arguments to run the test**:  "sem 800k 2000"  :  Here 800k represents the number of items produced and consumed, producer loops 2000 times in tight loop to emulate cpu consumption after every item, the more this value the more will be the consumer wait time.
+  IPC Test: This is a Producer-consumer test using semaphores. Producer and consumer runs in two seperate threads. Producer is more cpu intesive when compare to consumer, this make consumer waits for producer at the end of each loop. producer wakes consumer once item is produced. In this way consumer get context switched at the end of every loop. This emulates  producer and consumer with unequal computation to process every item, this is a very common case. The [source code for test available here.] (https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/expirements/sem_test4.c). If the amount of computation for producer and consumer is same then there will be minimum lock contention which will be very rare. 
+
+ - **Hypervisor**: kvm/qemu-2.x
+ - **host kernel version**:3.13.0-32
+ - **command and arguments to run the test**:  "sem 800k 2000"  :  Here 800k represents the number of items produced and consumed, producer loops 2000 times in tight loop to emulate cpu consumption after every item, the more this value the more will be the consumer wait time.
      
      
  <table border="1" style="width:100%">
@@ -215,12 +218,12 @@ This benchmark measures InterProcess Communication(mutex,semphore,messages passi
 
 Issue-1: In IPC, if there is a contention in mutext or semop or other IPC, then one of the thread will be active and other thread goes to sleep. In this situation, It will be costly to wakeup a thread under sleep in virtual environment with linux  when compare to the metal or jiny os. 
 
-##### Solution : Changes in Guest VM kernel
-1. Producer and consumer thread will be running on seperate cpu's. when consumer thread goes to sleep when ever it contents for the lock, and control goes to idle thread before hitting the "hlt" instruction, idle thread checks if there is any threads belonging to the cpu is waiting, if there is any threads under wait then it spin the cpus or does a small house keeping tasks for a short duration(10ms or 1 tick) then it goes to sleep using "hlt" instruction, In this short duration if the consumer thread got woken up then it saves IPI(interrupts) generation and exit/entry of the vcpu. In this way it saves around 800k interrupts for 800k loop in Test-2. Interrupts are costly in virtual environment when compare to metal. every interrupt causes exist and entry in the hypervisor. The "hlt" instruction casues context switch at host. 
+##### Solution : Changes in Jiny kernel
+1. In the producer and consumer test, threads will be running on seperate cpu's. when consumer thread goes to sleep due to the lock, and control goes to idle thread before hitting the "hlt" instruction, idle thread checks if there is any threads belonging to the cpu is waiting, if there is any threads under wait then sheduler spin the cpus or does a small house keeping tasks for a short duration(eg: 10ms or 1 tick) then it goes to sleep using "hlt" instruction, In this short duration if the consumer thread got woken up then it saves IPI(interrupts) generation and also exit/entry of the vcpu. In this way it saves around 800k interrupts for 800k loop in Test-2. Interrupts are costly in virtual environment when compare to metal. every interrupt causes exist and entry in the hypervisor. The "hlt" instruction casues context switch at host. 
 
 ##### When IPC based apps in linux vm can under perform due to Issue-1
 1. linux as vm and with multicore(more then one cpu). The issue will not be present in single core, to minimum level on metal( shown it is only 3 to 4% as against 140%).
-2. The issue will be more when the cpu's are idle relatively. example: only producer,consumer threads running on different cpu's.  If other app's are hogging the same vcpu as waiting thread then vcpu will not go to sleep and issue-1 will not popup.
+2. This issue will be more when the cpu's are idle relatively. example: only producer,consumer threads running on different cpu's.  If other app's are hogging the same vcpu as waiting thread then vcpu will not go to sleep and issue-1 will not popup.
 3. The issue will popup if the critical section's in the app's are small and there is contention among the threads. If the critical section are large then waiter thread goes to a long sleep, in this case receving IPI interrupts is better when compare to tight cpu spin.
 
  Monitoring Issue-1: Due to this this, IPI interrupts will be generated in large number, this can be monitered using the number of [Rescheduling Interrupts](https://help.ubuntu.com/community/ReschedulingInterrupts) in /proc/interrupts, Rescheduling interrupts are implemented using Inter Processor Interrupt(IPI). 
@@ -230,7 +233,7 @@ Same Problem was solved by changing KVM hypervisor in this [paper](http://www.li
 
 1. **Problem definition:** same in both. In this paper IPC workload is used to explain the problem, In other paper "message passing workload" is used to explain the problem.
 2. **Solution to the problem:** It was fixed in guest kernel(Jiny kernel) in this paper, and the problem was solved completely. Whereas in other paper, it is fixed in hypervisor(kvm) , due to this the problem is solved partially(slide-29). 
-3. Both solutions to the same problem can co-exist. since the problem is solved at two different layers(kernel and kypervisor) independently. 
+3. Both solutions to the same problem can co-exist. since the problem is solved at two different layers(kernel and hypervisor). 
 
 ----------------------------------------------------------------------------------
 ##Papers:

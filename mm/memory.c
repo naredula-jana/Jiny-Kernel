@@ -468,7 +468,6 @@ int Jcmd_mem(char *arg1, char *arg2) {
 	int slab=0;
 	int referenced=0;
 	int reserved=0;
-//	int free=0;
 	int dma=0;
 	unsigned long va_end=(unsigned long)__va(g_phy_mem_size);
 

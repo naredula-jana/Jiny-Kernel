@@ -70,23 +70,28 @@ public:
 	virtual int ioctl(unsigned long arg1,unsigned long arg2)=0;
 	virtual void print_stats(unsigned char *arg1,unsigned char *arg2)=0;
 };
-#define MAX_SOCKET_QUEUE_LENGTH 2500
-class fifo_queue {
-	unsigned char name[MAX_FILENAME];
-
-	int producer_index;  /* all producer related at one place */
-	unsigned long producer_count;
-	spinlock_t add_spin_lock;
-
-	struct {
+//#define MAX_SOCKET_QUEUE_LENGTH 2500
+typedef struct {
 		unsigned char *buf;
 		unsigned int len; /* actual data length , not the buf lenegth, buf always constant length */
 		int flags;
-	} data[MAX_SOCKET_QUEUE_LENGTH];
+	} fifo_data_struct;
 
-	int consumer_index;  /* all consumer related at one place */
-	unsigned long consumer_count;
-	spinlock_t remove_spin_lock; /* lock to protect while removing from queue */
+struct fifo_user{
+		int index;
+		unsigned long count;
+		spinlock_t spin_lock;
+	} __attribute__ ((aligned (128)));
+
+class fifo_queue {
+	unsigned char name[MAX_FILENAME];
+	int max_queue_length;
+
+	struct fifo_user producer;
+
+	fifo_data_struct *data;
+
+	struct fifo_user consumer;
 
 public:
 	//atomic_t queue_len;
