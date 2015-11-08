@@ -500,24 +500,24 @@ struct page_bucket{
 	int top;
 	struct page_bucket *next;
 };
-#define MAX_BUCKETS 32
+#define MAX_BUCKETS (MAX_CPUS+54)  /* each cpu will start with one empty bucket */
 static struct page_bucket *empty_buckets,*full_buckets;
 
 struct percpu_pagecache {
 	char inuse;
-    struct page_bucket *buck1,*buck2;
-	unsigned long stat_allocs,stat_frees,stat_miss_alloc,stat_miss_free;
+    struct page_bucket *bucket;
+	unsigned long stat_allocs,stat_frees,stat_miss_alloc,stat_miss_free,stat_fills,stat_emptys;
 } __attribute__ ((aligned (64)));
 
 static struct percpu_pagecache page_cache[MAX_CPUS];
 static struct page_bucket raw_buckets[MAX_BUCKETS];
-static spinlock_t jslab_cache_lock = SPIN_LOCK_UNLOCKED("jslab_cache");
-static spinlock_t vmalloc_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"vmalloc");
+static spinlock_t jslab_cache_lock ;
+static spinlock_t vmalloc_lock;
 void init_percpu_page_cache(){
 	int i;
 
-	arch_spinlock_link(&jslab_cache_lock);
-	arch_spinlock_link(&vmalloc_lock);
+	arch_spinlock_init(&jslab_cache_lock,"jslab_cache");
+	arch_spinlock_init(&vmalloc_lock,"vmalloc");
 
 	ut_memset(page_cache,0,MAX_CPUS*sizeof(struct percpu_pagecache));
 	ut_memset(&raw_buckets[0],0,MAX_BUCKETS*sizeof(struct page_bucket));
@@ -527,6 +527,13 @@ void init_percpu_page_cache(){
 		raw_buckets[i].next = empty_buckets;
 		empty_buckets = &raw_buckets[i];
 	}
+	for (i=0; i<MAX_CPUS; i++){
+		if (empty_buckets != 0){
+			page_cache[i].bucket = empty_buckets;
+			empty_buckets = empty_buckets->next;
+			page_cache[i].bucket->next = 0;
+		}
+	}
 	return;
 }
 static struct page_bucket *get_bucket(struct page_bucket *in){
@@ -534,15 +541,12 @@ static struct page_bucket *get_bucket(struct page_bucket *in){
 	int i;
 	unsigned long irq_flags;
 
-	spin_lock_irqsave(&jslab_cache_lock, irq_flags);
 	ret =in;
-	if (in == 0){/* get new empty bucket */
-		if (empty_buckets != 0){
-			ret = empty_buckets;
-			empty_buckets = empty_buckets->next;
-			ret->next =0;
-		}
-	}else if (in->top == 0){ /* get full bucket */
+	if (in == 0){
+		BRK;
+	}
+	spin_lock_irqsave(&jslab_cache_lock, irq_flags);
+	 if (in->top == 0){ /* get full bucket */
 		if (full_buckets != 0){
 			in->next = empty_buckets;
 			empty_buckets = in;
@@ -566,90 +570,83 @@ static struct page_bucket *get_bucket(struct page_bucket *in){
 	return ret;
 }
 int g_conf_percpu_pagecache  __attribute__ ((section ("confdata"))) =1;
-unsigned long jalloc_page(int flags){
-	int cpu=getcpuid(); /* local for each cpu */
+unsigned long jalloc_page(int flags) {
+	int cpu = getcpuid(); /* local for each cpu */
 
-	stat_page_allocs++;
-	if (flags&MEM_CLEAR){
+	if (flags & MEM_CLEAR) {
 		stat_page_alloc_zero++;
-	}else if (g_conf_percpu_pagecache == 1) {
-		//if (flags&MEM_NETBUF) {
-		if (1) {
-			if (page_cache[cpu].inuse == 0) {
-				struct page_bucket *bucket;
-				page_cache[cpu].inuse = 1;
-
-				bucket = page_cache[cpu].buck1;
-				if (bucket && bucket->top == 0) {
-					bucket = page_cache[cpu].buck2;
-					if (bucket && bucket->top == 0) {
-						page_cache[cpu].buck1 = get_bucket(
-								page_cache[cpu].buck1);
-						bucket = page_cache[cpu].buck1;
-					}
-				}
-
-				if (bucket && bucket->top > 0) {
-					unsigned long ret = bucket->stack[bucket->top - 1];
-					bucket->top--;
-					page_cache[cpu].inuse = 0;
-					page_cache[cpu].stat_allocs++;
-					return ret;
-				}
-				page_cache[cpu].inuse = 0;
-			}
-			page_cache[cpu].stat_miss_alloc++;
+	} else if (g_conf_percpu_pagecache == 1) {
+		struct page_bucket *bucket;
+		if (page_cache[cpu].inuse == 1) {
+			goto last;
 		}
+		page_cache[cpu].inuse = 1;
+		bucket = page_cache[cpu].bucket;
+		if (bucket && bucket->top == 0) {
+			page_cache[cpu].bucket = get_bucket(page_cache[cpu].bucket);
+			bucket = page_cache[cpu].bucket;
+			page_cache[cpu].stat_fills++;
+		}
+
+		if (bucket && bucket->top > 0) {
+			unsigned long ret = bucket->stack[bucket->top - 1];
+			bucket->top--;
+			page_cache[cpu].inuse = 0;
+			page_cache[cpu].stat_allocs++;
+			return ret;
+		}
+		page_cache[cpu].inuse = 0;
+		page_cache[cpu].stat_miss_alloc++;
 	}
 
-
+last:
 	if (g_conf_zeropage_cache==1){
 		unsigned long page;
 		page = get_from_zeropagecache(flags);
 		if (page != 0) return page;
 	}
+	stat_page_allocs++;
 	return mm_getFreePages(flags, 0);
 }
+int g_conf_jfree_check __attribute__ ((section ("confdata"))) =1;
 int jfree_page(unsigned long p){
 	int cpu = getcpuid();
 
-	if (PageNetBuf(virt_to_page(p))){
-		BRK;
-	}
-	//stat_page_frees++;
-	//ut_log(" jfree_page:%x \n",p);
-#if 1
-	if (g_conf_percpu_pagecache == 1) {/* TODO:1)  we are adding the address without validation, 2) large page also into this cache which is wrong need to avoid. */
-		if (page_cache[cpu].inuse == 0) {
-			struct page_bucket *bucket;
-			page_cache[cpu].inuse = 1;
-			if (page_cache[cpu].buck1 == 0) {
-				page_cache[cpu].buck1 = get_bucket(0);
-				page_cache[cpu].buck2 = get_bucket(0);
-			}
-
-			bucket = page_cache[cpu].buck1;
-			if (bucket && bucket->top >= MAX_STACK_SIZE) {
-				bucket = get_bucket(page_cache[cpu].buck1);
-				page_cache[cpu].buck1 = bucket;
-			}
-
-			if (bucket && bucket->top < MAX_STACK_SIZE) {
-				bucket->stack[bucket->top] = p & PAGE_MASK;
-				bucket->top++;
-				page_cache[cpu].inuse = 0;
-				page_cache[cpu].stat_frees++;
-				return 0;
-			}
-			page_cache[cpu].inuse = 0;
+	if (g_conf_jfree_check == 1) {
+		if (PageNetBuf(virt_to_page(p))) {
+			BRK;
 		}
+	}
+
+	if (g_conf_percpu_pagecache == 1) {/* TODO:1)  we are adding the address without validation, 2) large page also into this cache which is wrong need to avoid. */
+		struct page_bucket *bucket;
+		if (page_cache[cpu].inuse == 1) {
+			goto last;
+		}
+		page_cache[cpu].inuse = 1;
+
+		bucket = page_cache[cpu].bucket;
+		if (bucket && bucket->top >= MAX_STACK_SIZE) {
+			bucket = get_bucket(page_cache[cpu].bucket);
+			page_cache[cpu].bucket = bucket;
+			page_cache[cpu].stat_emptys++;
+		}
+
+		if (bucket && bucket->top < MAX_STACK_SIZE) {
+			bucket->stack[bucket->top] = p & PAGE_MASK;
+			bucket->top++;
+			page_cache[cpu].inuse = 0;
+			page_cache[cpu].stat_frees++;
+			return 0;
+		}
+		page_cache[cpu].inuse = 0;
 		page_cache[cpu].stat_miss_free++;
 	}
-#endif
-	if (g_conf_zeropage_cache==1){
-		if (insert_into_zeropagecache(p,0) == JSUCCESS)
+	last: if (g_conf_zeropage_cache == 1) {
+		if (insert_into_zeropagecache(p, 0) == JSUCCESS)
 			return 0;
 	}
+	stat_page_frees++;
 	return mm_putFreePages(p, 0);
 }
 
@@ -804,7 +801,7 @@ int Jcmd_jslab(unsigned char *arg1, unsigned char *arg2) {
 	allocs=0;
 	frees=0;
 	for (i=0; i <MAX_CPUS; i++){
-		ut_printf(" Alloc: %d Frees:%d missalloc:%d  missfrees:%d \n",page_cache[i].stat_allocs,page_cache[i].stat_frees,page_cache[i].stat_miss_alloc,page_cache[i].stat_miss_free);
+		ut_printf(" Alloc: %d Frees:%d missalloc:%d  missfrees:%d buc_fills:%d buc_empty:%d \n",page_cache[i].stat_allocs,page_cache[i].stat_frees,page_cache[i].stat_miss_alloc,page_cache[i].stat_miss_free,page_cache[i].stat_fills,page_cache[i].stat_emptys);
 		allocs=allocs+page_cache[i].stat_allocs;
 		frees=frees+page_cache[i].stat_frees;
 	}

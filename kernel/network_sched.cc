@@ -55,8 +55,8 @@ unsigned long g_stat_net_intr_mode_toggle;
 #include "network.hh"
 
 network_scheduler net_sched;
-static int stat_from_driver = 0;
-static int stat_to_driver = 0;
+//static int stat_from_driver = 0;
+//static int stat_to_driver = 0;
 int g_net_bh_active __attribute__ ((aligned (64))) = 0;
 
 static int stats_pktrecv[1024];
@@ -219,6 +219,10 @@ static int sendq_add(unsigned char *buf, int len, int write_flags){
 	}
 	return ret;
 }
+
+int check_emptyspace_net_sendq(){
+	return send_queues[getcpuid()]->check_emptyspace();
+}
 /* from NIC -->  socket layer */
 int netif_rx(unsigned char *data, unsigned int len) {
 	if (data == 0){
@@ -377,7 +381,7 @@ int net_send_eth_frame(unsigned char *buf, int len, int write_flags) {
 	}
 
 	if (ret == JFAIL){
-		g_stat_net_send_errors++;
+		STAT_INC(g_stat_net_send_errors);
 	}
 	return ret;
 }
@@ -396,13 +400,14 @@ void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
 		net_sched.device->ioctl(NETDEV_IOCTL_PRINT_STAT, arg1);
 		net_sched.device->ioctl(NETDEV_IOCTL_GETMAC, (unsigned long) &mac);
 		for (i=0; i<getmaxcpus(); i++){
-			ut_printf(" %d: sendq_attached:%d sendq_DROP:%d LEN :%d \n",i,send_queues[i]->stat_attached,send_queues[i]->stat_drop,send_queues[i]->queue_size());
+			ut_printf(" %d: sendq_attached:%d sendq_DROP:%d LEN :%d err_check_full:%d\n",i,send_queues[i]->stat_attached,send_queues[i]->stat_drop,send_queues[i]->queue_size(),send_queues[i]->error_empty_check);
 			if (arg1 && ut_strcmp(arg1,"clear")==0){
 				send_queues[i]->stat_attached = 0;
 				send_queues[i]->stat_drop = 0;
+				send_queues[i]->error_empty_check =0;
 			}
 		}
-		ut_printf(" new MAC-ADDRESS : %x:%x:%x:%x:%x:%x current interrupt disable:%i qeuesstatus:%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],g_net_interrupts_disable,sendqs_empty);
+		ut_printf(" neew MAC-ADDRESS : %x:%x:%x:%x:%x:%x current interrupt disable:%i qeuesstatus:%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],g_net_interrupts_disable,sendqs_empty);
 	}
 	socket::print_all_stats();
 

@@ -82,8 +82,8 @@ void ut_memcpy(uint8_t *dest, uint8_t *src, long len){
 		return std_rte_memcpy(dest,src,len);
 	}
 #endif
-	g_stat_memcpy_bytes = g_stat_memcpy_bytes + len;
-	g_stat_memcpy_reqs++;
+	//g_stat_memcpy_bytes = g_stat_memcpy_bytes + len;
+	STAT_INC(g_stat_memcpy_reqs);
 //	if ((((unsigned long)dp & 0x7) == 0) && (((unsigned long)sp & 0x7)==0)) {
 	if (1){
 		unsigned long *dst_p = dp;

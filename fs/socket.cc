@@ -117,6 +117,14 @@ void fifo_queue::free(){
 	arch_spinlock_free(&consumer.spin_lock);
 	ut_free(data);
 }
+int fifo_queue::check_emptyspace(){
+	if ((data[producer.index].len == 0)  && (data[producer.index].buf == 0)) {
+		return JSUCCESS;
+	}else{
+		error_empty_check++;
+		return JFAIL;
+	}
+}
 int fifo_queue::add_to_queue(unsigned char *buf, int len,int data_flags, int freebuf_on_full) {
 	unsigned long flags;
 	int ret = JFAIL;
@@ -359,9 +367,9 @@ int socket::ioctl(unsigned long arg1, unsigned long arg2) {
 }
 
 void socket::print_stats(unsigned char *arg1,unsigned char *arg2){
-	ut_printf("socket: count:%d local:%x:%x remote:%x:%x (IO: %d/%d: StatErr:out:%d in:%d Qfull:%d Qlen:%i)  %x\n",
+	ut_printf("socket: count:%d local:%x:%x remote:%x:%x (IO: %d/%d: StatErr:out:%d in:%d Qfull:%d Qlen:%i Qcheckfail:%i)  %x\n",
 			count.counter,network_conn.src_ip,network_conn.src_port,network_conn.dest_ip,network_conn.dest_port,stat_in
-	    ,stat_out,statout_err,statin_err,queue.error_full,queue.queue_size(), &network_conn);
+	    ,stat_out,statout_err,statin_err,queue.error_full,queue.error_empty_check,queue.queue_size(), &network_conn);
 }
 
 sock_list_t socket::udp_list;

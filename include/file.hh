@@ -88,21 +88,20 @@ class fifo_queue {
 	int max_queue_length;
 
 	struct fifo_user producer;
-
 	fifo_data_struct *data;
-
 	struct fifo_user consumer;
 
 public:
-	//atomic_t queue_len;
 	wait_queue *waitq;
 	unsigned long error_full;
 	unsigned long stat_attached;
 	unsigned long stat_drop;
+	unsigned long error_empty_check;
 	int remove_from_queue(unsigned char **buf, int *len,int *wr_flags);
 	int Bulk_remove_from_queue(struct struct_mbuf *mbufs, int mbuf_len);
 	int add_to_queue(unsigned char *buf, int len, int flags, int freebuf_on_full);
 	int peep_from_queue(unsigned char **buf, int *len,int *wr_flags);
+	int check_emptyspace();
 	unsigned long queue_size();
 	int is_empty();
 	void init(unsigned char *arg_name,int wq_enable);

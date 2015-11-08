@@ -53,6 +53,8 @@ extern spinlock_t g_global_lock;
 
 extern int g_init_loglevel;
 #define INIT_LOG(x...) if (g_init_loglevel > 0){ ut_log(x); }
+extern int g_conf_stat_counters_enable;
+#define STAT_INC(x) if (g_conf_stat_counters_enable==1){ x=x+1; }
 
 
 extern int brk_pnt;

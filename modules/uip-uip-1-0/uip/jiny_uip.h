@@ -22,7 +22,7 @@ struct jiny_uip{
 	unsigned char *data;
 	unsigned long data_len;
 	u8_t callback_flags;
-};
+}  __attribute__ ((aligned (64)));
 
 
 #define MAX_CPUS 10

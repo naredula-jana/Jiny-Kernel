@@ -18,6 +18,7 @@ extern "C" {
 #include "interface.h"
 
 int g_conf_debug_level __attribute__ ((section ("confdata"))) = 1;
+int g_conf_stat_counters_enable __attribute__ ((section ("confdata"))) =0 ;
 int __gxx_personality_v0=0; /*TODO:  WORKAROUND: this is to link c++ files with gcc */
 /* SLAB cache for vm_area_struct structures */
 kmem_cache_t *vm_area_cachep;
@@ -70,9 +71,10 @@ static inittable_t inittable[] = {
 #ifndef JINY_SLAB
 		{init_kmem_cache,0,       "kmem cache",0},
 #endif
+		{init_ipc,0,       "ipc",0},
 		{init_jslab,0,"Jslab initialization",0},
 		{init_syscall,0,       "syscalls",0},
-		{init_ipc,0,       "ipc",0},
+
 		{init_vfs,0,       "vfs",0},
 		{init_tasking,0,       "tasking",0},
 		{init_clock,0,       "clock",0},
@@ -82,7 +84,7 @@ static inittable_t inittable[] = {
 		{init_kmemleak,0,       "kmemleak",0},
 #endif
 #ifdef SMP
-		{init_smp_force,8,       "smp_init",0},
+		{init_smp_force, 8,       "smp_init",0},  /* TODO:  MAX CPU'S CANNOT GO BEYOND 8, IF IT GOS beyond 8 , cpu spend lot of time in init_clock  */
 #endif
 #ifdef NETWORKING
 		{init_networking,0,       "network_sched",0},  /* should be after smp,since it uses number of ax core */

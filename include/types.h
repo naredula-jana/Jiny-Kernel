@@ -27,7 +27,7 @@ __extension__
 typedef unsigned long long int  uint64_t;
 #endif
 
-#define MAX_CPUS 10
+#define MAX_CPUS 10  /* TODO: defined the same value at multiple places */
 extern int g_imps_num_cpus;
 static inline int getcpuid()  __attribute__((always_inline));
 static inline int getcpuid() {

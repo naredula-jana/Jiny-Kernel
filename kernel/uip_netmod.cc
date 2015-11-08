@@ -177,7 +177,10 @@ last:
 }
 extern "C"{
 int g_conf_test_dummy_send __attribute__ ((section ("confdata")))=0;
+extern int check_emptyspace_net_sendq();
+int ut_sleep_ns(int dur);
 }
+
 int network_stack::write(network_connection *conn, uint8_t *app_data, int app_len) {
 	int ret = JFAIL;
 	unsigned char *buf=0;
@@ -188,8 +191,14 @@ int network_stack::write(network_connection *conn, uint8_t *app_data, int app_le
 	if (uip_buf!=0){
 		while(1);
 	}
-	if (conn == 0 || conn->proto_connection == 0) {
+	if (conn == 0 || conn->proto_connection == 0 ) {
 		goto last;
+	}
+	if (check_emptyspace_net_sendq()==JFAIL){
+		ut_sleep_ns(10);
+		if (check_emptyspace_net_sendq()==JFAIL){
+			goto last;
+		}
 	}
 
 	buf = (unsigned long) jalloc_page(MEM_NETBUF);

@@ -131,6 +131,13 @@ static unsigned long get_percpu_ns() { /* get percpu nano seconds */
 	g_cpu_state[cpu].system_times_ns = time_ns;
 	return time_ns;
 }
+int ut_sleep_ns(int dur_ns){
+	unsigned long ns=get_percpu_ns()+dur_ns;
+	while(get_percpu_ns() < ns){
+
+	}
+	return JSUCCESS;
+}
 extern int g_conf_hw_clock;
 unsigned long ut_get_systemtime_ns(){ /* returns nano seconds */
 	unsigned long ns;

@@ -630,7 +630,7 @@ void sc_after_syscall() {
 	/* Handle any pending signal */
 	//SYSCALL_DEBUG("syscall ret  state:%x\n",g_current_task->state);
 	net_bh(1);
-	g_stat_syscall_count++;
+	STAT_INC(g_stat_syscall_count);
 
 	g_cpu_state[getcpuid()].stats.syscalls++;
 
