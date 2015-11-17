@@ -39,7 +39,7 @@ static volatile struct pvclock_vcpu_time_info vcpu_time[MAX_CPUS];
 static int kvm_clock_available = 0;
 static uint64_t start_time, curr_system_time = 0; /* updated by the boot cpu */
 static unsigned long stored_system_times[MAX_CPUS];
-static  unsigned long __native_read_tsc(void);
+unsigned long ar_read_tsc(void);
 
 extern unsigned long  g_jiffie_errors;
 int g_conf_wall_clock __attribute__ ((section ("confdata"))) =0;
@@ -72,7 +72,7 @@ int ut_get_wallclock(unsigned long *sec, unsigned long *usec) {
 #define DECLARE_ARGS(val, low, high)    unsigned low, high
 #define EAX_EDX_RET(val, low, high)     "=a" (low), "=d" (high)
 #define EAX_EDX_VAL(val, low, high)     ((low) | ((uint64_t)(high) << 32))
-static  unsigned long __native_read_tsc(void){
+unsigned long ar_read_tsc(void){
          DECLARE_ARGS(val, low, high);
          asm volatile("rdtsc" : EAX_EDX_RET(val, low, high));
          return EAX_EDX_VAL(val, low, high);
@@ -81,10 +81,12 @@ static  unsigned long __native_read_tsc(void){
 static spinlock_t	time_spinlock;
 int g_conf_hw_clock __attribute__ ((section ("confdata")))=1;  /* sometimes hw clock is very slow or not accurate , then jiffies can be used at the resoultion of 10ms */
 
-static unsigned long last_jiffie_tsc=0;
-static unsigned long total_tsc_per_jiffie;
+unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles per second  */
+unsigned long g_jiffie_errors = 0;
+unsigned long g_jiffie_tsc = 0;
+static unsigned long total_tsc_per_jiffie =0 ;
 
-int g_conf_ms_per_jiffie __attribute__ ((section ("confdata"))) =6;/* instaed of 10ms, the apic timer interrupt generating faster , so it canged from 10 to 6*/
+int g_conf_ms_per_jiffie __attribute__ ((section ("confdata"))) =6;/* instead of 10ms, the apic timer interrupt generating faster , so it canged from 10 to 6*/
 #define MS_PER_JIFF g_conf_ms_per_jiffie
 #define NS_PER_MS 1000000
 #define NS_PER_JIFFIE (NS_PER_MS*MS_PER_JIFF)
@@ -101,7 +103,7 @@ static unsigned long get_percpu_ns() { /* get percpu nano seconds */
 	if (g_conf_hw_clock == 1) {
 		do {
 			version = vcpu_time[cpu].version;
-			time_ns = (__native_read_tsc() - vcpu_time[cpu].tsc_timestamp);
+			time_ns = (ar_read_tsc() - vcpu_time[cpu].tsc_timestamp);
 			if (vcpu_time[cpu].tsc_shift >= 0) {
 				time_ns <<= vcpu_time[cpu].tsc_shift;
 			} else {
@@ -112,11 +114,11 @@ static unsigned long get_percpu_ns() { /* get percpu nano seconds */
 		} while ((vcpu_time[cpu].version & 0x1)
 				|| (version != vcpu_time[cpu].version));
 	} else {
-		unsigned long tsc = __native_read_tsc();
+		unsigned long tsc = ar_read_tsc();
 
-		signed long delta_ns = (((tsc - (stored_start_times[cpu] - stored_start_times[0]) - last_jiffie_tsc)*NS_PER_JIFFIE)/total_tsc_per_jiffie);
+		signed long delta_ns = (((tsc - (stored_start_times[cpu] - stored_start_times[0]) - g_jiffie_tsc)*NS_PER_JIFFIE)/total_tsc_per_jiffie);
 		if (delta_ns < 0) {
-			ut_log(" ERROR NEGAT:  cpu :%d  delta:%x(%d) tsc:%d last_jiffie:%d diff:%d per_jiffie:%d \n",cpu,delta_ns,delta_ns,tsc,last_jiffie_tsc,tsc-last_jiffie_tsc,total_tsc_per_jiffie);
+			ut_log(" ERROR NEGAT:  cpu :%d  delta:%x(%d) tsc:%d last_jiffie:%d diff:%d per_jiffie:%d \n",cpu,delta_ns,delta_ns,tsc,g_jiffie_tsc,tsc-g_jiffie_tsc,total_tsc_per_jiffie);
 			delta_ns =0;
 		}
 		if (delta_ns > (2*NS_PER_JIFFIE)){
@@ -178,13 +180,13 @@ void ar_update_jiffie() {
 	}else{
 		g_jiffies++;
 	}
-	unsigned long curr_tsc =__native_read_tsc();
+	unsigned long curr_tsc =ar_read_tsc();
 
 	if (count_for_tsc < 300){  /* this is to make sure total_tsc_per_jiffie will be constant after the initial period */
-		total_tsc_per_jiffie = curr_tsc - last_jiffie_tsc;
+		total_tsc_per_jiffie = curr_tsc - g_jiffie_tsc;
 		count_for_tsc++;
 	}
-	last_jiffie_tsc = curr_tsc;
+	g_jiffie_tsc = curr_tsc;
 
 	return;
 }
@@ -241,10 +243,10 @@ int init_clock(int cpu_id) {
 	if (g_boot_completed == 1){
 		static int cpus_started=0;
 		int cpu_count = getmaxcpus();
-		stored_start_times[cpu_id] = __native_read_tsc();
+		stored_start_times[cpu_id] = ar_read_tsc();
 		cpus_started++;
 		while(cpus_started < cpu_count){
-			stored_start_times[cpu_id] = __native_read_tsc();
+			stored_start_times[cpu_id] = ar_read_tsc();
 		}
 	}
 	return JSUCCESS;
@@ -259,7 +261,7 @@ int Jcmd_clock() {
 	nsec= get_percpu_ns();
 	usec = nsec/1000;
 	sec = usec/1000000;
-	ut_printf(" BOOTCPU tsc : %x  currcpu_ts: %x \n)",last_jiffie_tsc, __native_read_tsc());
+	ut_printf(" BOOTCPU tsc : %x  currcpu_ts: %x \n)",g_jiffie_tsc, ar_read_tsc());
 	ut_printf("jiffies :%d errors:%d   ns:%d \n", g_jiffies,  g_jiffie_errors,get_percpu_ns());
 	ut_printf("system time  ns:%d(%x) usec: %d(%x)  sec:%d\n",nsec,nsec,usec,usec,sec);
 	nsec= ut_get_systemtime_ns();

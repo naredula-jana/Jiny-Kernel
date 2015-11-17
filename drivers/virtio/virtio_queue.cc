@@ -30,7 +30,7 @@ void virtio_queue::sync_avial_idx(struct vring_queue *vq) {
 	uint16_t old;
 	/* Descriptors and available array need to be set before we expose the
 	 * new available array entries. */
-	virtio_wmb();
+	//virtio_wmb();
 	virtio_mb();
 
 	old = vq->vring.avail->idx;
@@ -41,9 +41,8 @@ void virtio_queue::sync_avial_idx(struct vring_queue *vq) {
 	virtio_mb();
 }
 
-void virtio_queue::detach_buf(unsigned int head) {
+static inline void detach_buf(struct vring_queue *vq, unsigned int head) {
 	unsigned int i;
-	struct vring_queue *vq = this->queue;
 
 	/* Put back on free list: find end */
 	i = head;
@@ -160,7 +159,6 @@ bool virtio_queue::virtqueue_enable_cb_delayed() {
 void virtio_queue::notify() {
 	struct vring_queue *vq = this->queue;
 
-	//atomic_inc(&g_conf_stat_pio);
 	outw(vq->pci_ioaddr + VIRTIO_PCI_QUEUE_NOTIFY, vq->queue_number);
 }
 int virtio_queue::virtio_queuekick() {
@@ -307,7 +305,7 @@ void *virtio_queue::virtio_removeFromQueue(unsigned int *len){
 
 	/* detach_buf clears data, so grab it now. */
 	vq->stat_free++;
-	detach_buf(i);
+	detach_buf(vq, i);
 	vq->last_used_idx++;
 	/* If we expect an interrupt for the next entry, tell host
 	 * by writing event index and flush out the write before
@@ -401,7 +399,7 @@ add_head:
 int virtio_queue::BulkRemoveFromQueue(struct struct_mbuf *mbuf_list, int list_len) {
 	struct vring_queue *vq = this->queue;
 	int ret = 0;
-	unsigned int i;
+	unsigned int i,head;
 	uint16_t pkts_length;
 	int count;
 
@@ -435,7 +433,7 @@ int virtio_queue::BulkRemoveFromQueue(struct struct_mbuf *mbuf_list, int list_le
 			BRK;
 			return 0;
 		}
-		if (vq->vring.desc[i].addr == 0) { /* TODO: Hitting this POINT IN THE LATEST*/
+		if (vq->vring.desc[i].addr == 0) {
 			BRK;
 		}
 		if (mbuf_list !=0 ){
@@ -444,9 +442,33 @@ int virtio_queue::BulkRemoveFromQueue(struct struct_mbuf *mbuf_list, int list_le
 		}else{
 			free_page(__va(vq->vring.desc[i].addr));
 		}
-
 		vq->stat_free++;
-		detach_buf(i);
+#if 1
+		head = i;
+		/* Free the indirect table */
+		if (vq->vring.desc[i].flags & VRING_DESC_F_INDIRECT) {
+			BRK; /* currently we are not supporting this */
+		}
+
+		while (vq->vring.desc[i].flags & VRING_DESC_F_NEXT) {
+			vq->vring.desc[i].addr = 0;
+			i = vq->vring.desc[i].next;
+			vq->num_free++;
+		}
+		vq->vring.desc[i].addr = 0;
+
+		if (vq->free_head == -1){
+			vq->free_head = head;
+		}else{
+			vq->vring.desc[vq->free_tail].next = head;
+		}
+		vq->free_tail = i;
+
+		/* Plus final descriptor */
+		vq->num_free++;
+#else
+		//detach_buf(vq, i);
+#endif
 		vq->last_used_idx++;
 		ret++;
 	}
@@ -493,6 +515,7 @@ int virtio_queue::BulkAddToQueue(struct struct_mbuf *mbuf_list, int list_len,
 		} else {
 			data = (unsigned char *) jalloc_page(MEM_NETBUF);
 			len = 4096; /* page size */
+			ut_memset(data, 0, 10);
 		}
 		if (data == 0) {
 			stat_error_empty_bufs++;
@@ -503,18 +526,18 @@ int virtio_queue::BulkAddToQueue(struct struct_mbuf *mbuf_list, int list_len,
 			if (mbuf_list){
 				data = data - 10;
 			}
-			ut_memset(data, 0, 10);
 			if (read_only == 1){
 				out = total_bufs;
 			}else{
 				out = 0;
 			}
 			if (total_bufs != 2) {BUG();}
+
 			scatter_list[0].addr= __pa(data);
 			scatter_list[0].length = 10;
-
-			scatter_list[1].addr= __pa(data+10);
+			scatter_list[1].addr= scatter_list[0].addr+10;
 			scatter_list[1].length = len;
+
 		} else if (virtio_type == VIRTIO_ID_BLOCK){
 			struct virtio_blk_req *disk_req=(struct virtio_blk_req *)data;
 			if (total_bufs != 3){ BUG(); }
@@ -537,7 +560,6 @@ int virtio_queue::BulkAddToQueue(struct struct_mbuf *mbuf_list, int list_len,
 				len = 512;
 			}
 			scatter_list[1].length = len;
-
 			scatter_list[2].addr= __pa(data+16);
 			scatter_list[2].length = 1;
 		}
@@ -584,6 +606,7 @@ int virtio_queue::BulkAddToQueue(struct struct_mbuf *mbuf_list, int list_len,
 last:
 	if (ret > 0) {
 		sync_avial_idx(vq);
+		notify_needed = (!(vq->vring.used->flags & VRING_USED_F_NO_NOTIFY));
 		stat_add_success++;
 		stat_add_pkts = stat_add_pkts+ret;
 	}else{

@@ -31,6 +31,7 @@ typedef struct {  /* Do not change the order , initilization will break */
         unsigned long pid;
         unsigned long contention;
         unsigned int log_length;
+//#ifdef SPINLOCK_DEBUG_LOG
         struct {
             int line;
             unsigned int pid;
@@ -38,6 +39,7 @@ typedef struct {  /* Do not change the order , initilization will break */
             unsigned long spins;
             unsigned char *name;
         }log[MAX_SPIN_LOG];
+//#endif /* end of SPINLOCK_DEBUG_LOG */
 #endif
 } spinlock_t __attribute__ ((aligned (64)));
 
@@ -184,6 +186,7 @@ struct task_struct {
 		int syscall_count;
 		unsigned long ticks_consumed;
 		unsigned long start_time;
+		unsigned long start_tsc;
 #if 1
 		struct syscall_stat *syscalls;
 #endif

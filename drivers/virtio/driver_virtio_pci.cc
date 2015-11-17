@@ -103,6 +103,7 @@ extern "C" {
 extern int  virtio_check_recv_pkt(void *);
 }
 int virtio_net_jdriver::check_for_pkts(){
+	/* TODO :   checking only one queue: need to check other queues also */
 	return queues[0].recv->check_recv_pkt();
 }
 int virtio_net_jdriver::burst_recv(int total_pkts){
@@ -385,7 +386,9 @@ int virtio_net_jdriver::dettach_device(jdevice *jdev) {
 int virtio_net_jdriver::read(unsigned char *buf, int len, int rd_flags, int opt_flags) {
 	return 0;
 }
-
+extern "C" {
+int Bulk_free_pages(struct struct_mbuf *mbufs, int list_len);
+}
 int virtio_net_jdriver::burst_send() {
 	int qno,i, ret=0;
 	int qret;
@@ -396,25 +399,29 @@ int virtio_net_jdriver::burst_send() {
 		return ret;
 	}
 
+	/* remove the used buffers from the previous send cycle */
 	for (qno = 0; qno < max_vqs; qno++) {
-		pkts = queues[qno].send->BulkRemoveFromQueue(0,MAX_BUF_LIST_SIZE * 4);
-#if 0
+#if 1
 		pkts = queues[qno].send->BulkRemoveFromQueue(&temp_mbuf_list[0], MAX_BUF_LIST_SIZE);
-		for (i = 0; i < pkts; i++) {
-			free_page(temp_mbuf_list[i].buf);
+		if (pkts > 0){
+			Bulk_free_pages(temp_mbuf_list,pkts);
 		}
+#else
+		pkts = queues[qno].send->BulkRemoveFromQueue(0,MAX_BUF_LIST_SIZE * 4);
 #endif
 	}
 
-	spin_lock_irqsave(&virtionet_lock, flags);
+//	spin_lock_irqsave(&virtionet_lock, flags);
+	ret=0;
 	for (qno=0; qno<max_vqs; qno++){  /* try to send from the same queue , if it full then try on the subsequent one, in this way kicks will be less */
 		qret = queues[qno].send->BulkAddToQueue( &send_mbuf_list[send_mbuf_start+ret],send_mbuf_len-ret,1);
-
 		if (qret == 0){
 			continue;
 		}
-		queues[qno].pending_send_kick = 1;
-		//break;
+		if (queues[qno].send->notify_needed){
+			queues[qno].pending_send_kick = 1;
+			pending_kick_onsend = 1;
+		}
 		ret=ret+qret;
 		if (ret == send_mbuf_len){
 			break;
@@ -432,11 +439,10 @@ int virtio_net_jdriver::burst_send() {
 			send_mbuf_start = send_mbuf_start + ret;
 			send_mbuf_len = send_mbuf_len - ret;
 		}
-		pending_kick_onsend = 1;
 		stat_sends++;
 	}
-	spin_unlock_irqrestore(&virtionet_lock, flags);
-	return ret;  /* Here Sucess indicates the buffer is freed or consumed */
+//	spin_unlock_irqrestore(&virtionet_lock, flags);
+	return ret;  /* Here Success indicates the buffer is freed or consumed */
 }
 int virtio_net_jdriver::write(unsigned char *data, int len, int wr_flags) {
 	BUG();

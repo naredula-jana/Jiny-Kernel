@@ -609,47 +609,78 @@ last:
 	return mm_getFreePages(flags, 0);
 }
 int g_conf_jfree_check __attribute__ ((section ("confdata"))) =1;
-int jfree_page(unsigned long p){
+int Bulk_free_pages(struct struct_mbuf *mbufs, int list_len){
 	int cpu = getcpuid();
+	int index =0;
+	int ret;
+	unsigned long p;
 
-	if (g_conf_jfree_check == 1) {
-		if (PageNetBuf(virt_to_page(p))) {
-			BRK;
-		}
-	}
+	while (index < list_len) {
+		p=mbufs[index].buf;
 
-	if (g_conf_percpu_pagecache == 1) {/* TODO:1)  we are adding the address without validation, 2) large page also into this cache which is wrong need to avoid. */
-		struct page_bucket *bucket;
-		if (page_cache[cpu].inuse == 1) {
-			goto last;
-		}
-		page_cache[cpu].inuse = 1;
-
-		bucket = page_cache[cpu].bucket;
-		if (bucket && bucket->top >= MAX_STACK_SIZE) {
-			bucket = get_bucket(page_cache[cpu].bucket);
-			page_cache[cpu].bucket = bucket;
-			page_cache[cpu].stat_emptys++;
+		if (g_conf_jfree_check == 1) {
+			if (PageNetBuf(virt_to_page(p))) {
+				BRK;
+			}
 		}
 
-		if (bucket && bucket->top < MAX_STACK_SIZE) {
-			bucket->stack[bucket->top] = p & PAGE_MASK;
-			bucket->top++;
+		if (g_conf_percpu_pagecache == 1) {/* TODO:1)  we are adding the address without validation, 2) large page also into this cache which is wrong need to avoid. */
+			struct page_bucket *bucket;
+			int count=0;
+			if (page_cache[cpu].inuse == 1) {
+				goto last;
+			}
+			page_cache[cpu].inuse = 1;
+
+			bucket = page_cache[cpu].bucket;
+			if (bucket && bucket->top >= MAX_STACK_SIZE) {
+				bucket = get_bucket(page_cache[cpu].bucket);
+				page_cache[cpu].bucket = bucket;
+				page_cache[cpu].stat_emptys++;
+			}
+
+			while (bucket && bucket->top < MAX_STACK_SIZE) {
+				bucket->stack[bucket->top] = p & PAGE_MASK;
+				bucket->top++;
+				page_cache[cpu].inuse = 0;
+				page_cache[cpu].stat_frees++;
+				if ((index+1) < list_len){
+					index++;
+					p=mbufs[index].buf;
+					page_cache[cpu].inuse = 1;
+				}else{
+					goto success;
+				}
+				count++;
+			}
+			if (count>0){ /* not fully done but bucket is full */
+				index--;
+				page_cache[cpu].inuse = 0;
+				goto success;
+			}
 			page_cache[cpu].inuse = 0;
-			page_cache[cpu].stat_frees++;
-			return 0;
+			page_cache[cpu].stat_miss_free++;
 		}
-		page_cache[cpu].inuse = 0;
-		page_cache[cpu].stat_miss_free++;
-	}
-	last: if (g_conf_zeropage_cache == 1) {
-		if (insert_into_zeropagecache(p, 0) == JSUCCESS)
-			return 0;
-	}
-	stat_page_frees++;
-	return mm_putFreePages(p, 0);
+   last:
+        if (g_conf_zeropage_cache == 1) {
+			if (insert_into_zeropagecache(p, 0) == JSUCCESS){
+				goto success;
+			}
+		}
+		stat_page_frees++;
+		ret = mm_putFreePages(p, 0);
+success:
+	      index++;
+	}/* end of while */
 }
 
+int jfree_page(unsigned long p){
+	struct struct_mbuf mbufs;
+	mbufs.buf = p;
+	mbufs.len = 4096;
+
+	return Bulk_free_pages(&mbufs, 1);
+}
 void *ut_calloc(size_t size){
 	void *addr = ut_malloc(size);
 	ut_memset(addr,0,size);

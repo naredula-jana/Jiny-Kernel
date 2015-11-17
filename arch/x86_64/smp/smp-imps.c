@@ -70,7 +70,7 @@ static int lapic_dummy = 0;
 
 volatile int imps_release_cpus = 0;
 int imps_enabled = 0;
-int g_imps_num_cpus = 1;
+int g_imps_num_cpus __attribute__ ((section ("confdata"))) = 1;  /* all read only data is kept in this section to have better cache friendly */
 unsigned long imps_lapic_addr = ((unsigned long) (&lapic_dummy)) - LAPIC_ID;
 unsigned long imps_ioapic_addr = 0;
 unsigned char imps_cpu_apic_map[IMPS_MAX_CPUS];

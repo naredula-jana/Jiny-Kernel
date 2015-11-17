@@ -80,7 +80,7 @@ This benchmark measures the network throughput between two vm's using virtual sw
     <td> 2 </td>
     <td>vm1- USS -vm2</td>
     <td> ???? </td>
-    <td><b>Throughput</b>(halfway: from vm to switch) : 4.50 MPPS ,<br> <b>Bottleneck</b>: USS/Jiny os start dropping, both need to improve further. <hr> <b>Throughput</b>(one way: from first vm to second vm through switch): 1.800 MPPS ,<br> <b>Bottleneck</b> : USS is a single thread and fetch one packet from queue.  <hr><b>Throughput</b>(two way: from first vm to senond vm through switch, and back to first vm): 0.366 MPPS  ,<br> <b>Bottleneck:</b> udpserver on recv side is single thread. 
+    <td><b>Throughput</b>(halfway: from vm to switch) : 6.50 MPPS ,<br> <b>Bottleneck</b>: USS/Jiny os start dropping, both need to improve further. <hr> <b>Throughput</b>(one way: from first vm to second vm through switch): 2.500 MPPS ,<br> <b>Bottleneck</b> : USS is a single thread and fetch one packet from queue.  <hr><b>Throughput</b>(two way: from first vm to senond vm through switch, and back to first vm): 0.400 MPPS  ,<br> <b>Bottleneck:</b> udpserver on recv side is single thread. 
         </td>
    </tr>  
    <tr>
@@ -112,13 +112,13 @@ This benchmark measures the network throughput between two vm's using virtual sw
 </table> 
 
 ##### TODO's :
-With the below enhancements, the maximum throughput can be pushed further from the current maximum of 4.50 MPPS.
+With the below enhancements, the maximum throughput can be pushed further.
  
 1. Low cost or low latency Notification : using the following :Monitor/wait, pause loop, posted interrupts.
 2. Multi-queue with vhost-user: code is present, but need to test, this Depends on vhost-user mq support from qemu.
-3. Fast-switch between vm to vm using VMFUNC. Depends on VMFUNC support from qemu/kvm.
+3. Fast-switch between vm to vm using VMFUNC. Depends on VMFUNC support from qemu/kvm and cpu support.
 4. Making udp-client/server to run as High priority app, so that client,server  can process more pkts/sec. curently server is bottleneck in recving all the packets at the recving vm, it is getting dropped in the recv guest kernel itself.
-5. currently  USS  cannot receive more then 4.50 MPPS, USS need to improve further to forward more packets. 
+5. currently USS is a single thread app,  USS need to improve further to forward more packets. 
 
 
 ##### Summary of Tests:

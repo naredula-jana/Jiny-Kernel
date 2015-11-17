@@ -63,8 +63,7 @@ int jfree_page(unsigned long p);
 #define ut_free mm_free
 #define ut_malloc(x) mm_malloc(x,0)
 int vfree(addr_t addr);
-unsigned long __va(unsigned long addr);
-unsigned long __pa(unsigned long addr);
+
 
 /* vm */
 int Jcmd_vmaps_stat(char *arg1,char *arg2);
@@ -164,6 +163,7 @@ int ar_archSetUserFS(unsigned long addr);
 void ar_setupTssStack(unsigned long stack);
 int ar_addInputKey(int device_id,uint8_t c);
 int ar_check_valid_address(unsigned long addr, int len);
+unsigned long ar_read_tsc(void);
 
 /**************** misc functions ********/
 int getmaxcpus();

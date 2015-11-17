@@ -255,7 +255,7 @@ class virtio_queue: public jobject {
 public:
 	bool virtqueue_enable_cb_delayed();
 	void sync_avial_idx(struct vring_queue *vq);
-	void detach_buf( unsigned int head);
+	//void detach_buf( unsigned int head);
 	void notify();
 	void init_virtqueue(unsigned int num,  unsigned int vring_align,  unsigned long pci_ioaddr, void *pages,
 					      void (*callback)(struct virtio_queue *), const char *name, int queue_number);
@@ -268,12 +268,14 @@ public:
 	int qType;
 	int virtio_type;
 	int scatter_list_size;
+	int notify_needed;
 
 	void print_stats(unsigned char *arg1,unsigned char *arg2);
 	int check_recv_pkt();
 	int virtio_disable_cb();
 	bool virtio_enable_cb();
 	int virtio_queuekick();
+
 	virtio_queue(jdevice *device, uint16_t index, int type);
 	int virtio_add_buf_to_queue(struct scatterlist sg[], unsigned int out,
 				  unsigned int in, void *data, int gfp);

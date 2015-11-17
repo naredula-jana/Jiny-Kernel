@@ -16,15 +16,14 @@
 extern "C" {
 #include "common.h"
 #include "descriptor_tables.h"
-extern int net_bh(int force_read);
+extern int net_bh();
 extern int clock_test();
 static int get_free_cpu();
 unsigned char g_idle_stack[MAX_CPUS + 2][TASK_SIZE] __attribute__ ((aligned (4096)));
 struct mm_struct *g_kernel_mm = 0;
 task_queue_t g_task_queue;
 spinlock_t g_global_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"global");
-unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles per second  */
-unsigned long g_jiffie_errors = 0;
+
 unsigned long g_stat_idle_avoided ;
 
 void ar_update_jiffie();
@@ -336,6 +335,7 @@ static void init_task_struct(struct task_struct *p, struct mm_struct *mm, struct
 	p->pid = free_pid_no;
 	p->stats.syscalls = mm_malloc(sizeof(struct syscall_stat)*MAX_SYSCALL, MEM_CLEAR);
 	p->stats.start_time = g_jiffies;
+	p->stats.start_tsc = ar_read_tsc();
 }
 
 static int release_resources(struct task_struct *child_task, int attach_to_parent) {
@@ -592,7 +592,8 @@ void sc_delete_task(struct task_struct *task) {
 
 	if (1){
 		unsigned long life_length = g_jiffies - task->stats.start_time;
-		ut_log("DELETING TASK :%d(%x) st:%d dur:%d cont:%d tick:%d name:%s cpu:%i\n", task->pid,task->pid,task->stats.start_time,life_length,task->stats.total_contexts,task->stats.ticks_consumed,task->name, task->allocated_cpu);
+		unsigned long tsc_diff = (ar_read_tsc() - task->stats.start_tsc)/1000000;
+		ut_log("DELETING TASK :%d(%x) st:%d dur:%d (diff_tsc:%d) cont:%d tick:%d name:%s cpu:%i\n", task->pid,task->pid,task->stats.start_time,life_length,tsc_diff,task->stats.total_contexts,task->stats.ticks_consumed,task->name, task->allocated_cpu);
 	}
 
 	free_mm(task->mm);
@@ -629,7 +630,7 @@ unsigned long g_stat_syscall_count;
 void sc_after_syscall() {
 	/* Handle any pending signal */
 	//SYSCALL_DEBUG("syscall ret  state:%x\n",g_current_task->state);
-	net_bh(1);
+	net_bh();
 	STAT_INC(g_stat_syscall_count);
 
 	g_cpu_state[getcpuid()].stats.syscalls++;
@@ -851,7 +852,7 @@ int do_softirq() {
 
 	if (cpuid == g_conf_netbh_cpu){
 	//if (1){
-		net_bh(1);
+		net_bh();
 	}
 	if (g_current_task->counter <= 0 ) {
 		sc_schedule();
@@ -1305,7 +1306,8 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 		SYS_sc_exit(703);
 		return;
 	}
-	ut_log(" execve : %s  pid :%d(%x) task:%x \n",g_current_task->name,g_current_task->pid,g_current_task->pid, g_current_task);
+	ut_log(" execve : %s  pid :%d(%x) task:%x CPU:%d \n",g_current_task->name,g_current_task->pid,g_current_task->pid, g_current_task,getcpuid());
+	g_current_task->stats.start_tsc = ar_read_tsc();
 
 	g_current_task->thread.userland.ip = main_func;
 	g_current_task->thread.userland.sp = t_argv;
@@ -1353,12 +1355,12 @@ int SYS_sc_kill(unsigned long pid, unsigned long signal) {
 extern int init_code_readonly(unsigned long arg1);
 extern int g_fault_stop_allcpu;
 
-int cpuspin_before_halt(){
+static int cpuspin_before_halt(int cpuid){
 /*
  * spin for some time, this to avoid waking to recv interrupts, time to take interrupt is slow if it is in idle state
  */
  /* initialize */
-	int cpuid=getcpuid();
+
 	if (g_conf_idle_cpuspin == 0){
 		return 0;
 	}
@@ -1376,7 +1378,7 @@ repeat:
  	 g_cpu_state[cpuid].cpu_spinstate.clock_interrupts = 0;
  	 g_cpu_state[cpuid].cpu_spinstate.nonclock_interrupts = 0;
  	 while(g_cpu_state[cpuid].cpu_spinstate.clock_interrupts < 3){
- 		 net_bh(1);
+ 		 net_bh();
  		 if (g_cpu_state[cpuid].run_queue_length > 0){
  			g_cpu_state[cpuid].task_on_wait = 0;
  			sc_schedule();
@@ -1410,7 +1412,7 @@ void idleTask_func() {
 		//if (g_conf_net_pmd == 1 && g_net_interrupts_disable==1) {
 		if (g_conf_net_pmd == 1 && cpu == g_conf_netbh_cpu) {
 			while (1) {
-				net_bh(1);
+				net_bh();
 				g_cpu_state[cpu].idle_state = 0;
 				if (g_cpu_state[cpu].run_queue_length != 0) {
 					//curr_cpu_tightloop = -1;
@@ -1420,8 +1422,8 @@ void idleTask_func() {
 		}
 #endif
 
-		net_bh(1);
-		cpuspin_before_halt();
+		net_bh();
+		cpuspin_before_halt(cpu);
 
 		if (g_cpu_state[cpu].run_queue_length == 0) {/* TODO: there is a chance that someone insert in to runqueue */
 			g_cpu_state[cpu].idle_state = 1;

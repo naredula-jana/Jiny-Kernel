@@ -20,7 +20,7 @@ extern "C"{
 #include "network.hh"
 
 extern "C"{
-extern int net_bh(int force_read);
+extern int net_bh();
 int g_conf_eat_udp=0;
 
 static spinlock_t _netstack_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"netstack");
@@ -239,11 +239,19 @@ int fifo_queue::Bulk_remove_from_queue(struct struct_mbuf *mbufs, int mbuf_len) 
 	return ret;
 }
 int fifo_queue::is_empty(){
+#if 0
 	if (producer.count == consumer.count){
 		return JSUCCESS;
 	}else{
 		return JFAIL;
 	}
+#else /* this is more cpu cache friendly then above */
+	if ((data[consumer.index].buf==0) && (data[consumer.index].len==0)){
+		return JSUCCESS;
+	}else{
+		return JFAIL;
+	}
+#endif
 }
 unsigned long  fifo_queue::queue_size(){
 	return producer.count - consumer.count;
@@ -253,7 +261,7 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int
 	unsigned char *buf = 0;
 	int buf_len=0;
 
-	net_bh(0);  /* check te packets if there and to pending recv from driver */
+	net_bh();  /* check te packets if there and to pending recv from driver */
 
 	/* if the message is peeked, then get the message from the peeked buf*/
 	if (peeked_msg_len != 0){

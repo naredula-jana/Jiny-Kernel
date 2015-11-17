@@ -31,7 +31,7 @@
 
 extern "C" {
 #include "common.h"
-extern int net_bh(int full_recv_send);
+extern int net_bh();
 unsigned char g_mac[7];
 
 int g_conf_net_pmd __attribute__ ((section ("confdata")))=1; /* pollmode driver on/off */
@@ -167,35 +167,21 @@ last:
 	return 1;
 }
 extern int g_conf_test_dummy_send;
-/* TODO : currently it is assumed for 1 nic, later this need to be extended for multiple nics*/
-int net_bh(int send_bh){
+/* TODO -1 : currently it is assumed for 1 nic, later this need to be extended for multiple nics*/
+/* TODO -2 : all sending and recv is done by only one cpu any time, this minimises the locks */
+int net_bh(){
 	int ret = 0;
+	int cpu = getcpuid();
 
-	if (g_conf_net_pmd==1  && g_conf_netbh_cpu != getcpuid()){
+	if (g_conf_net_pmd==1  && g_conf_netbh_cpu != cpu){
 		return 0;
 	}
-	if (g_cpu_state[getcpuid()].net_bh_inprogress == 1){
+	if (g_cpu_state[cpu].net_bh_inprogress == 1){
 		return 0;
 	}
-	/* TODO : currently one cpu can enter */
-	g_cpu_state[getcpuid()].net_bh_inprogress =1;
-	if (send_bh) {
-		net_bh_send();
-	}
-#if 0
-	if (g_conf_net_pmd==1 && g_conf_net_auto_intr==1 && g_jiffies>last_jiffies){
-		last_jiffies = g_jiffies;
-		if (recvied_pkts > 100){
-			g_net_interrupts_disable = 1;
-		}else{  /* enable interrupts  */
-			if (g_net_interrupts_disable == 1){
-				g_stat_net_intr_mode_toggle++;
-			}
-			g_net_interrupts_disable = 0;
-		}
-		recvied_pkts =0;
-	}
-#endif
+	g_cpu_state[cpu].net_bh_inprogress =1;  /* this is to protect to enter this function by the same thread during soft interrupts */
+	net_bh_send();
+
 #if 1 /* for test purpose, to bypass the recv */
 	if (g_conf_test_dummy_send > 0){
 		goto last;
@@ -203,8 +189,8 @@ int net_bh(int send_bh){
 #endif
 	ret = net_bh_recv();
 
-	last:
-	g_cpu_state[getcpuid()].net_bh_inprogress = 0;
+last:
+	g_cpu_state[cpu].net_bh_inprogress = 0;
 	return ret;
 }
 /*****************************************************************/
@@ -235,7 +221,7 @@ int netif_rx(unsigned char *data, unsigned int len) {
 	return JSUCCESS;
 }
 static int sendq_remove(){
-	static int last_q=0;
+	static int last_q __attribute__ ((aligned (64)))=0;
 	int i,cpu;
 	int ret=JFAIL;
 	int outer;
@@ -257,10 +243,11 @@ static int sendq_remove(){
 			if (cpu >= maxcpu) {
 				cpu = 0;
 			}
+#if 1
 			if (send_queues[cpu]->is_empty() == JSUCCESS) {
 				continue;
 			}
-			ret = JSUCCESS;
+#endif
 			pkts = pkts + send_queues[cpu]->Bulk_remove_from_queue(&driver->send_mbuf_list[pkts],MAX_BUF_LIST_SIZE-pkts);
 			if (pkts >= MAX_BUF_LIST_SIZE){
 				goto last;
@@ -278,7 +265,6 @@ last:
 	}else{
 		return JFAIL;
 	}
-	return ret;
 }
 
 /*******************************************************************/
@@ -309,62 +295,42 @@ int init_network_stack() { /* this should be initilised once the devices are up 
 	return JSUCCESS;
 }
 
-
-static unsigned long last_fail_send_ts_us = 0;
 static int put_to_send_queue(unsigned char *buf, int len, int write_flags){
 	return sendq_add(buf,len,write_flags);
 }
 
 static int bulk_remove_from_send_queue() {  /* under lock */
 	int i,ret;
-	unsigned char *buf;
-	int len,wr_flags;
 
 	virtio_net_jdriver *driver = (virtio_net_jdriver *)socket::net_dev->driver;
 	if (sendqs_empty == 1 && driver->send_mbuf_len == 0) {
 		return 0;
 	}
-
-#if 1
-	if (last_fail_send_ts_us > 0  && (g_conf_net_send_shaping==1)){  /* give a gap of 10us if the virtio ring is full */
-		if (((ut_get_systemtime_ns()/1000) - last_fail_send_ts_us) < 100){
-			return 0;
-		}
-		last_fail_send_ts_us = 0;
-	}
-#endif
 	if (driver->send_mbuf_len != 0){
 		ret = driver->burst_send();
 		return ret;
 	}
-
 	ret = sendq_remove();
-
 	if (ret == JSUCCESS) {
 		ret = driver->burst_send();
-		if (ret == 0 && g_conf_net_send_shaping==1) {
-			last_fail_send_ts_us = ut_get_systemtime_ns() / 1000;
-		}
 	}
 	return ret;
 }
 
 static int net_bh_send() {
-	int duration = g_conf_net_send_dur;
-	int max_pkts_tosend =  g_conf_net_send_burst;
 	unsigned long flags;
 	int ret = JFAIL;
 	int pkt_send = 0;
 
 	if (sendqs_empty == 1) {
-			return JFAIL;
+		return JFAIL;
 	}
 
 	int pkts=0;
 	do {
 		pkts = bulk_remove_from_send_queue();
 		pkt_send = pkt_send + pkts;
-	}while(pkts > 0  && (pkt_send < max_pkts_tosend));
+	}while(pkts > 0  && (pkt_send < g_conf_net_send_burst));
 
 	g_cpu_state[getcpuid()].stats.netbh_send = g_cpu_state[getcpuid()].stats.netbh_send + pkt_send;
 	if (socket::net_dev != 0 ){
@@ -379,7 +345,6 @@ int net_send_eth_frame(unsigned char *buf, int len, int write_flags) {
 	if (socket::net_dev != 0) {
 		ret = put_to_send_queue(buf, len, write_flags);
 	}
-
 	if (ret == JFAIL){
 		STAT_INC(g_stat_net_send_errors);
 	}
@@ -407,7 +372,7 @@ void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
 				send_queues[i]->error_empty_check =0;
 			}
 		}
-		ut_printf(" neew MAC-ADDRESS : %x:%x:%x:%x:%x:%x current interrupt disable:%i qeuesstatus:%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],g_net_interrupts_disable,sendqs_empty);
+		ut_printf(" .. MAC-ADDRESS : %x:%x:%x:%x:%x:%x current interrupt disable:%i qeuesstatus:%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],g_net_interrupts_disable,sendqs_empty);
 	}
 	socket::print_all_stats();
 

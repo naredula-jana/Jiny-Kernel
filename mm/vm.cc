@@ -334,10 +334,10 @@ void * SYS_vm_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
 	struct file *file;
 	void *ret;
 	unsigned long irq_flags;
-
+//BRK;
 	SYSCALL_DEBUG("mmap fd:%x addr:%x len:%x prot:%x flags:%x pgpff:%x \n",fd,addr,len,prot,flags,pgoff);
 	file = fd_to_file(fd);
-
+//BRK;
 	//spin_lock_irqsave(&vmm_lock, irq_flags);
 	ret = vm_mmap(file, addr, len, prot, flags, pgoff,"syscall");
 	//spin_unlock_irqrestore(&vmm_lock, irq_flags);

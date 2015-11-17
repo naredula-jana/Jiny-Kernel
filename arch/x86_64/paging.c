@@ -72,24 +72,26 @@ static void mk_pde(pde_t *pde, addr_t fr,int large_page,int global,int user)
 	pde->frame = fr;
 }
 
-static unsigned long g_kernel_address_space_starts=1;
+unsigned long g_kernelspace_starting_address  __attribute__ ((section ("confdata")))=1; /* initial value */
+#if 0
 unsigned long __va(unsigned long addr){
-	if (g_kernel_address_space_starts==1){
+	if (g_kernelspace_starting_address==1){
 		return ((void *)((unsigned long)(addr)+KERNEL_CODE_START));
 	}else{
-		return ((void *)((unsigned long)(addr)+g_kernel_address_space_starts));
+		return ((void *)((unsigned long)(addr)+g_kernelspace_starting_address));
 	}
 }
 unsigned long __pa(unsigned long addr){
-	if (g_kernel_address_space_starts==1){
+	if (g_kernelspace_starting_address==1){
 		return ((unsigned long)(addr)-KERNEL_CODE_START);
 	}else{
 		if (addr > KERNEL_CODE_START)
 			return ((unsigned long)(addr)-KERNEL_CODE_START);
 		else
-			return ((unsigned long)(addr)-g_kernel_address_space_starts);
+			return ((unsigned long)(addr)-g_kernelspace_starting_address);
 	}
 }
+#endif
 /* stich the page tables for entire kernel address space */
 addr_t initialise_paging_new(addr_t physical_mem_size, unsigned long virt_image_end, unsigned long *virt_addr_start, unsigned long *virt_addr_end) {
 	unsigned long virt_addr;
@@ -162,7 +164,7 @@ last:
 	flush_tlb(0x101000);
 	INIT_LOG("		END address :%x fr:%x j:%x level3:%x(%d) level2:%x(%d) 2mptes:%d 4kptes:%d\n",curr_virt_end_addr,fr,j,level2_index,level2_index,level3_index,level3_index,stat_ptes2m,stat_ptes4k);
 
-	g_kernel_address_space_starts = *virt_addr_start;
+	g_kernelspace_starting_address = *virt_addr_start;
 	virt_addr = virt_addr + (curr_virt_end_addr-KERNEL_CODE_START);
 
 /* remove unnecessary hardcoded pagetable created at boot up time */
