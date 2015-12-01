@@ -68,20 +68,17 @@ enter_userspace:
 /*	addq $0x70,%rsp */
 	popq %rax
 
-
           /* Now restore user %gs */
-        cli
-        RESTORE_USER_SEGMENT_REGISTERS 
-        pushq %rax
-        movl %gs:(CPU_STATE_USER_GS_OFFSET), %eax
-        swapgs
-        movl %eax, %gs
-        popq %rax 
+    cli
+    RESTORE_USER_SEGMENT_REGISTERS
+    pushq %rax
+    movl %gs:(CPU_STATE_USER_GS_OFFSET), %eax
+    swapgs
+    movl %eax, %gs
+    popq %rax
 
-
-        orq $(1 << 9),IRET_OFFSET_RFLAGS(%rsp)
-        iretq
-
+    orq $(1 << 9),IRET_OFFSET_RFLAGS(%rsp)
+    iretq
 	
 syscall_entry:
         /* Local interrupts are disabled upon entering the entrypoint.
@@ -99,9 +96,6 @@ syscall_entry:
         movq $(GDT_SEL(UCODE_DESCR) | SEG_DPL_USER),IRET_OFFSET_CS(%rsp)
         movq $(GDT_SEL(UDATA_DESCR) | SEG_DPL_USER),IRET_OFFSET_SS(%rsp)
  
-/*        movq $(GDT_SEL(KCODE_DESCR) | SEG_DPL_KERNEL),IRET_OFFSET_CS(%rsp)
-        movq $(GDT_SEL(KDATA_DESCR) | SEG_DPL_KERNEL),IRET_OFFSET_SS(%rsp) 
-*/
         movq %gs:CPU_STATE_USER_STACK_OFFSET,%rcx
         movq %rcx,IRET_OFFSET_RSP(%rsp)
 
@@ -117,10 +111,6 @@ syscall_entry:
         jmp syscall_done
 
 good_syscall_number:
-        /* Since %rcx contains the return address, we should reload
-         * %rcx from %r10.
-         */
-        movq %r10,%rcx
 
         pushq %rax
         pushq %rdx
@@ -128,6 +118,10 @@ good_syscall_number:
         call sc_before_syscall
         popq %rdx
         popq %rax
+        /* Since %rcx contains the return address, we should reload
+         * %rcx from %r10.   rcx contains syscall arguments
+         */
+        movq %r10,%rcx
 
         call *syscalltable(,%rax,8)
 

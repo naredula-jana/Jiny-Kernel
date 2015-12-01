@@ -251,10 +251,12 @@ int kshell::main(void *arg) {
 	if (ret != 0) {
 //		fs_close(ret);
 		ret = sh_create((unsigned char *) USERLEVEL_SHELL,(unsigned char *) "sh", 0, DEVICE_SERIAL1); // start the user level shell
+#if 1
 		if (serial2_device != 0 && serial2_device->driver != 0) {
 			sc_sleep(2000);
 			ret = sh_create((unsigned char *) USERLEVEL_SHELL,(unsigned char *) "sh", 0, DEVICE_SERIAL2);
 		}
+#endif
 	}
 
 	ut_log(" user shell thread creation ret :%x\n", ret);

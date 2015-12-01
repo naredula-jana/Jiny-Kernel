@@ -539,7 +539,7 @@ int socket::default_pkt_thread(void *arg1, void *arg2){
 		if (ret == JSUCCESS) {
 			default_socket->read(0,0,0,0,0);
 		}else{
-			sc_sleep(5);
+			sc_sleep(500);
 		}
 	}
 	return 1;

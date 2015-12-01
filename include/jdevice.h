@@ -49,14 +49,29 @@ public:
 	virtual int ioctl(unsigned long arg1,unsigned long arg2)=0;
 };
 
+class jnetdriver: public jdriver {
+public:
+#define MAX_BUF_LIST_SIZE 64
+	struct struct_mbuf recv_mbuf_list[MAX_BUF_LIST_SIZE];
+	struct struct_mbuf send_mbuf_list[MAX_BUF_LIST_SIZE];
+	int send_mbuf_start;
+	int send_mbuf_len;
+	struct struct_mbuf temp_mbuf_list[MAX_BUF_LIST_SIZE]; /* used to remove the send bufs to free */
+
+	virtual int burst_recv(int total_pkts)=0;
+	virtual int burst_send()=0;
+	virtual int check_for_pkts()=0;
+};
+
 #define COPY_OBJ(CLASS_NAME,OBJECT_NAME, NEW_OBJ, jdev) jdriver *NEW_OBJ; NEW_OBJ=(jdriver *)ut_calloc(sizeof(CLASS_NAME)); \
 	ut_memcpy((unsigned char *)NEW_OBJ,(unsigned char *) (OBJECT_NAME), sizeof(CLASS_NAME)); \
 	NEW_OBJ->device = jdev;
 
-class virtio_net_jdriver: public jdriver {
+class virtio_net_jdriver: public jnetdriver {
 	int net_attach_device();
 	int free_send_bufs();
 	int fill_empty_buffers(net_virtio_queue *queue);
+
 public:
 #define MAX_VIRT_QUEUES 10
 	struct virt_queue{
@@ -71,15 +86,8 @@ public:
 	spinlock_t virtionet_lock;
 	unsigned char pending_kick_onsend;
 
-#define MAX_BUF_LIST_SIZE 64
-	struct struct_mbuf recv_mbuf_list[MAX_BUF_LIST_SIZE];
-	struct struct_mbuf send_mbuf_list[MAX_BUF_LIST_SIZE];
-	int send_mbuf_start;
-	int send_mbuf_len;
-	struct struct_mbuf temp_mbuf_list[MAX_BUF_LIST_SIZE]; /* used to remove the send bufs to free */
-
-	int burst_recv(int total_pkts);  /* new version */
-	int burst_send();  /* new version */
+	int burst_recv(int total_pkts);
+	int burst_send();
 	int check_for_pkts();
 
 	void print_stats(unsigned char *arg1,unsigned char *arg2);
@@ -96,10 +104,18 @@ public:
 	int send_kick_needed;
 };
 
-#define IOCTL_DISK_SIZE 1
-class virtio_disk_jdriver: public jdriver {
-	unsigned long disk_size,blk_size;
+class jdiskdriver: public jdriver {
+public:
+	int interrupts_disabled;
+	wait_queue *waitq;
+	virtual void burst_send(struct struct_mbuf *mbuf, int len)=0;
+	virtual int burst_recv(struct struct_mbuf *mbuf, int len)=0;
+	virtual int MaxBufsSpace()=0;
+};
 
+#define IOCTL_DISK_SIZE 1
+class virtio_disk_jdriver: public jdiskdriver {
+	unsigned long disk_size,blk_size;
 	int disk_attach_device(jdevice *dev);
 	struct virtio_blk_req *createBuf(int type, unsigned char *buf,uint64_t sector,uint64_t data_len);
 
@@ -109,15 +125,12 @@ public:
 	struct virt_queue{
 		disk_virtio_queue *send;
 	}queues[MAX_VIRT_QUEUES];
-
 	uint16_t max_vqs;
-	int interrupts_disabled;
-
 	unsigned char *unfreed_req;
-	wait_queue *waitq;
 
-	void addBufListToQueue(struct struct_mbuf *mbuf, int len);
 	int MaxBufsSpace();
+	void burst_send(struct struct_mbuf *mbuf, int len);
+	int burst_recv(struct struct_mbuf *mbuf, int len);
 
 	void print_stats(unsigned char *arg1,unsigned char *arg2);
 	int probe_device(jdevice *dev);

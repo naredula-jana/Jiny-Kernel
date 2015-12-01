@@ -71,7 +71,7 @@ class network_scheduler {
 	int stat_netrx_bh_recvs;
 
 public:
-	virtio_net_jdriver *device_list[MAX_NET_DEVICES];
+	jnetdriver *device_list[MAX_NET_DEVICES];
 	int device_count;
 
 	jdevice *device;

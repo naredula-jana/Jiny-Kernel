@@ -36,8 +36,8 @@
  * SUCH DAMAGE.
  */
 
-#ifndef _LINUX_VIRTIO_PCI_H
-#define _LINUX_VIRTIO_PCI_H
+#ifndef VIRTIO_PCI_H
+#define VIRTIO_PCI_H
 
 /* Status byte for guest to report progress, and synchronize features. */
 /* We have seen device and processed generic fields (VIRTIO_CONFIG_F_VIRTIO) */
@@ -112,4 +112,12 @@
 #define VIRTIO_PCI_VRING_ALIGN		4096
 
 
+
+void virtio_set_pcistatus(unsigned long pci_ioaddr, unsigned char status);
+unsigned char virtio_get_pcistatus(unsigned long pci_ioaddr);
+struct virtio_feature_desc {
+	int feature_bit;
+	const char *name;
+};
+void display_virtiofeatures(unsigned long feature, struct virtio_feature_desc *desc) ;
 #endif

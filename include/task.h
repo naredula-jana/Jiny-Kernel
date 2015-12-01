@@ -26,12 +26,12 @@ typedef struct {  /* Do not change the order , initilization will break */
         unsigned long stat_unlocks;
         unsigned long stat_recursive_locks;
         unsigned long recursive_count;
-        int linked; /* linked this structure to stats */
         int recursion_allowed;
         unsigned long pid;
         unsigned long contention;
         unsigned int log_length;
-//#ifdef SPINLOCK_DEBUG_LOG
+        unsigned long stat_cpu_used[MAX_CPUS];
+#ifdef SPINLOCK_DEBUG_LOG
         struct {
             int line;
             unsigned int pid;
@@ -39,7 +39,7 @@ typedef struct {  /* Do not change the order , initilization will break */
             unsigned long spins;
             unsigned char *name;
         }log[MAX_SPIN_LOG];
-//#endif /* end of SPINLOCK_DEBUG_LOG */
+#endif /* end of SPINLOCK_DEBUG_LOG */
 #endif
 } spinlock_t __attribute__ ((aligned (64)));
 
@@ -230,12 +230,6 @@ struct cpu_state {
 		unsigned long netbh_send;
 		unsigned long rip;
 		unsigned long netbh;
-#if 1  /* TODO (high priority ): there is bug here if the below unused struct is removed, user level program crashes at mmap*/
-		struct {
-			unsigned long prev,next;
-			int state;
-		}task[100];
-#endif
 	} stats;
 } __attribute__ ((aligned (64))) ;
 
@@ -244,8 +238,6 @@ extern struct cpu_state g_cpu_state[];
 #define is_kernelThread(task) (task->mm == g_kernel_mm)
 #define IPI_INTERRUPT 200
 #define IPI_CLEARPAGETABLE 201
-//extern int getcpuid();
-
 
 static inline struct task_struct *bootup_task(void)
 {

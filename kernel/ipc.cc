@@ -179,7 +179,8 @@ int SYS_futex(int *uaddr, int op, int val, unsigned long timeout,
 		spin_unlock(&futex_p->spin_lock);
 		return ret;
 	default:
-		ut_printf("ERROR : Unimplemented futex() OP %x\n", op);
+		ut_printf("ERROR : fake sucess return=1 Unimplemented futex() OP %x\n", op);
+		return 1;
 	}
 	return -1;
 }
@@ -379,7 +380,7 @@ spinlock_t *g_spinlocks[MAX_SPINLOCKS];
 int g_spinlock_count = 0;
 
 int Jcmd_locks(char *arg1, char *arg2) {
-	int i;
+	int i,k;
 	unsigned long flags;
 	struct list_head *pos;
 	struct task_struct *task;
@@ -393,11 +394,15 @@ int Jcmd_locks(char *arg1, char *arg2) {
 		if (g_spinlocks[i]->stat_locks !=0){
 			rate = g_spinlocks[i]->contention / g_spinlocks[i]->stat_locks;
 		}
-		ut_printf(" %9s %3x %5d %5d(%d) %3d\n", g_spinlocks[i]->name,
+		ut_printf(" %9s %3x %5d %5d(%d) %3d", g_spinlocks[i]->name,
 				g_spinlocks[i]->pid, g_spinlocks[i]->stat_locks,
 				g_spinlocks[i]->contention,
 				rate,
 				g_spinlocks[i]->stat_recursive_locks);
+		for (k=0; k<getmaxcpus(); k++){
+			ut_printf(" %d,",g_spinlocks[i]->stat_cpu_used[k]);
+		}
+		ut_printf("\n");
 	}
 
 	ut_printf("WAIT QUEUES: name: [owner pid] (wait_ticks/count:recursive_count) : waiting pid(name-line_no)\n");

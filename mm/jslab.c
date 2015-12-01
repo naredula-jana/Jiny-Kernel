@@ -538,7 +538,7 @@ void init_percpu_page_cache(){
 }
 static struct page_bucket *get_bucket(struct page_bucket *in){
 	struct page_bucket *ret;
-	int i;
+//	int i;
 	unsigned long irq_flags;
 
 	ret =in;

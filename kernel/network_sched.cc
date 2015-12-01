@@ -88,7 +88,7 @@ int network_scheduler::init() {
 }
 
 int register_netdevice(jdevice *device) {
-	net_sched.device_list[net_sched.device_count] = (virtio_net_jdriver *)device->driver;
+	net_sched.device_list[net_sched.device_count] = (jnetdriver *)device->driver;
 	net_sched.device_count++;
 
 	net_sched.device = device;
@@ -199,6 +199,7 @@ static class fifo_queue *send_queues[MAX_CPUS];
 /* from socket layer -->  NIC */
 static int sendq_add(unsigned char *buf, int len, int write_flags){
 	int ret = send_queues[getcpuid()]->add_to_queue(buf,len,write_flags,0);
+
 	if (sendqs_empty == 1 && ret==JSUCCESS){
 		sendqs_empty = 0;
 //		PageSetNetBuf(virt_to_page(buf));
@@ -228,7 +229,8 @@ static int sendq_remove(){
 	int pkts=0;
 	int wr_flags;
 	int maxcpu=getmaxcpus();
-	virtio_net_jdriver *driver = (virtio_net_jdriver *)socket::net_dev->driver;
+
+	jnetdriver *driver = (jnetdriver *)socket::net_dev->driver;
 
 	if (sendqs_empty == 1){
 		return ret;
@@ -299,10 +301,10 @@ static int put_to_send_queue(unsigned char *buf, int len, int write_flags){
 	return sendq_add(buf,len,write_flags);
 }
 
-static int bulk_remove_from_send_queue() {  /* under lock */
+static int bulk_remove_from_send_queue() {
 	int i,ret;
 
-	virtio_net_jdriver *driver = (virtio_net_jdriver *)socket::net_dev->driver;
+	jnetdriver *driver = (jnetdriver *)socket::net_dev->driver;
 	if (sendqs_empty == 1 && driver->send_mbuf_len == 0) {
 		return 0;
 	}
@@ -372,7 +374,7 @@ void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
 				send_queues[i]->error_empty_check =0;
 			}
 		}
-		ut_printf(" .. MAC-ADDRESS : %x:%x:%x:%x:%x:%x current interrupt disable:%i qeuesstatus:%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],g_net_interrupts_disable,sendqs_empty);
+		ut_printf("virtio MAC-ADDRESS : %x:%x:%x:%x:%x:%x current interrupt disable:%i qeuesstatus:%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],g_net_interrupts_disable,sendqs_empty);
 	}
 	socket::print_all_stats();
 

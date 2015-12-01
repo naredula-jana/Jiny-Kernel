@@ -201,8 +201,8 @@ virtio_queue::virtio_queue(jdevice *device, uint16_t index, int queue_type) {
 		qname="recv_queue";
 	}
 	/* create the vring */
-	INIT_LOG("		virtioqueuec++  Creating queue:%x(pa:%x) size-order:%x  size:%x\n",
-			ring_addr, __pa(ring_addr), get_order(size), size);
+	INIT_LOG("		virtioqueuec++  Creating queue:%x(pa:%x) size-order:%x  size:%x  pcioaddr:%x\n",
+			ring_addr, __pa(ring_addr), get_order(size), size,pci_ioaddr);
 	init_virtqueue(num, VIRTIO_PCI_VRING_ALIGN, device->pci_device.pci_ioaddr,
 			(void *) ring_addr,  0, qname, index);
 	virtqueue_enable_cb_delayed();
@@ -505,13 +505,13 @@ int virtio_queue::BulkAddToQueue(struct struct_mbuf *mbuf_list, int list_len,
 	START_USE(vq);
 	for (index = 0; index < list_len; index++) {
 		unsigned int total_bufs = scatter_list_size;
-		if (vq->num_free < (total_bufs)) {
+		if (vq->num_free < (scatter_list_size)) {
 			goto last;
 		}
 		if (mbuf_list) {
 			data = mbuf_list[index].buf;
 			len = mbuf_list[index].len;
-			mbuf_list[index].buf = 0;
+			//mbuf_list[index].buf = 0;
 		} else {
 			data = (unsigned char *) jalloc_page(MEM_NETBUF);
 			len = 4096; /* page size */
@@ -522,16 +522,15 @@ int virtio_queue::BulkAddToQueue(struct struct_mbuf *mbuf_list, int list_len,
 			continue;
 		}
 		if (virtio_type == VIRTIO_ID_NET){
-			//ut_memset(data, 0, sizeof(struct virtio_net_hdr));
 			if (mbuf_list){
 				data = data - 10;
 			}
 			if (read_only == 1){
-				out = total_bufs;
+				out = scatter_list_size;
 			}else{
 				out = 0;
 			}
-			if (total_bufs != 2) {BUG();}
+			//if (total_bufs != 2) {BUG();}
 
 			scatter_list[0].addr= __pa(data);
 			scatter_list[0].length = 10;
@@ -540,7 +539,7 @@ int virtio_queue::BulkAddToQueue(struct struct_mbuf *mbuf_list, int list_len,
 
 		} else if (virtio_type == VIRTIO_ID_BLOCK){
 			struct virtio_blk_req *disk_req=(struct virtio_blk_req *)data;
-			if (total_bufs != 3){ BUG(); }
+			//if (total_bufs != 3){ BUG(); }
 			if (disk_req->type == VIRTIO_BLK_T_IN){
 				out = 1;
 				in = 2;
@@ -565,7 +564,7 @@ int virtio_queue::BulkAddToQueue(struct struct_mbuf *mbuf_list, int list_len,
 		}
 
 		/* We're about to use some buffers from the free list. */
-		vq->num_free -= (total_bufs);
+		vq->num_free -= (scatter_list_size);
 		head = vq->free_head;
 		ar_prefetch0(&vq->vring.desc[head]);
 

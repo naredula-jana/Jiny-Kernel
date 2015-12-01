@@ -28,14 +28,14 @@
 //#define SPINLOCK_DEBUG_LOG 1
 
 #ifdef SPINLOCK_DEBUG
-#define SPIN_LOCK_UNLOCKED(x) (spinlock_t) { __SPINLOCK_UNLOCKED,0,x,0,0,0,0,-1,1,0,0,0}
+#define SPIN_LOCK_UNLOCKED(x) (spinlock_t) { __SPINLOCK_UNLOCKED,0,x,0,0,0,0,1,0,0,0}
 #define MAX_SPINLOCKS 100
 extern spinlock_t *g_spinlocks[MAX_SPINLOCKS];
 extern int g_spinlock_count;
 #else
 #define SPIN_LOCK_UNLOCKED (spinlock_t) { __SPINLOCK_UNLOCKED }
 #endif
-
+extern int g_boot_completed ;
 static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 #ifdef SPINLOCK_DEBUG
 #ifdef RECURSIVE_SPINLOCK
@@ -65,6 +65,9 @@ static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 			: "%rax","%rbx", "memory" );
 #ifdef SPINLOCK_DEBUG
 	lock->stat_locks++;
+	if (g_boot_completed){
+		lock->stat_cpu_used[getcpuid()]++;
+	}
 
 
 #ifdef SPINLOCK_DEBUG_LOG
@@ -106,7 +109,7 @@ static inline void arch_spinlock_link(spinlock_t *lock){ /* this is for logging 
 	for (i=0; i<MAX_SPINLOCKS; i++) {
 			if (g_spinlocks[i]==0) {
 				g_spinlocks[i]=lock;
-				lock->linked = 0;
+				//lock->linked = 0;
 				if (i>g_spinlock_count){
 					g_spinlock_count = i+1;
 				}

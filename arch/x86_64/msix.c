@@ -51,8 +51,6 @@ int pci_read_msi(pci_addr_t *addr, pci_dev_header_t *pci_hdr,pci_bar_t *bars, ui
 	uint32_t bar_offset;
 
 	uint8_t pos=pci_hdr->capabilities_pointer;
-//	pci_bar_t *bars=&dev->pci_bars[0];
-	//uint32_t bars_total = dev->pci_bar_count;
 
 	ret = pci_read(addr, pos, 2, &buf);
 	ret = pci_read(addr, pos + PCIR_MSIX_CTRL, 2, &msix->msix_ctrl);
@@ -69,19 +67,10 @@ int pci_read_msi(pci_addr_t *addr, pci_dev_header_t *pci_hdr,pci_bar_t *bars, ui
 	msix->msix_table_bar = PCIR_BAR(bar_offset & PCIM_MSIX_BIR_MASK);
 	if (bar_offset >= bars_total) return 0;
 	msix->msix_table_res = bars[bar_offset].addr;
-//	msix->msix_table = __dev_va(msix->msix_table_res);
-
 
 	msix->msix_table  = vm_create_kmap("msix",0x1000,PROT_WRITE,MAP_FIXED,msix->msix_table_res);
-	ut_log(" msix table :%x\n",msix->msix_table);
-#if 0
-	if ((ret = vm_mmap(0, (unsigned long)__dev_va(msix->msix_table_res), 0x1000, PROT_WRITE,
-			MAP_FIXED, msix->msix_table_res,"msix")) == 0) /* TODO: need clear solution, this is for SMP */
-	{
-		ut_log("ERROR : PCI mmap fails for \n");
-		return 0;
-	}
-#endif
+	ut_log(" msix table :%x  bar addr:%x  baroffset:%d \n",msix->msix_table,bars[bar_offset].addr,bar_offset);
+
 	ret = pci_read(addr, pos + PCIR_MSIX_PBA, 4, &val);
 	msix->msix_pba_bar = PCIR_BAR(val & PCIM_MSIX_BIR_MASK);
 	return msix->isr_vector;

@@ -428,7 +428,7 @@ unsigned long SYS_fs_fstat(int fd, struct stat *buf) {
 	struct file *fp;
 	int ret;
 	SYSCALL_DEBUG("fstat  fd:%x buf:%x \n", fd, buf);
-
+//BRK;
 	fp = fd_to_file(fd);
 	if (fp <= 0 || buf == 0)
 		return -1;
