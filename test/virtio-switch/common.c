@@ -17,8 +17,16 @@ const char* cmd_from_vhostmsg(const VhostUserMsg* msg)
     switch (msg->request) {
     case VHOST_USER_NONE:
         return "VHOST_USER_NONE";
+    case VHOST_USER_VRING_ENABLE:
+        return "VHOST_USER_VRING_ENABLE";
     case VHOST_USER_GET_FEATURES:
         return "VHOST_USER_GET_FEATURES";
+    case VHOST_USER_GET_QNUMBER:
+        return "VHOST_USER_GET_QNUMBER";
+    case VHOST_USER_GET_protocol_FEATURES:
+        return "VHOST_USER_GET_protocol_FEATURES";
+    case VHOST_USER_NOTDEFINED2:
+        return "VHOST_USER_NOTDEFINED2";
     case VHOST_USER_SET_FEATURES:
         return "VHOST_USER_SET_FEATURES";
     case VHOST_USER_SET_OWNER:
@@ -49,18 +57,32 @@ const char* cmd_from_vhostmsg(const VhostUserMsg* msg)
         return "VHOST_USER_MAX";
     }
 
-    return "UNDEFINED";
+    return "UNDEFINED_REQUEST";
 }
 
 void dump_vhostmsg(const VhostUserMsg* msg)
 {
     int i = 0;
+    fprintf(stdout,
+               "................................................................................\n");
     fprintf(stdout, "Cmd: %s (0x%x)\n", cmd_from_vhostmsg(msg), msg->request);
     fprintf(stdout, "Flags: 0x%x\n", msg->flags);
 
     // command specific `dumps`
     switch (msg->request) {
+    case VHOST_USER_VRING_ENABLE:
+        fprintf(stdout, "u64: 0x%"PRIx64"\n", msg->u64);
+        break;
     case VHOST_USER_GET_FEATURES:
+        fprintf(stdout, "u64: 0x%"PRIx64"\n", msg->u64);
+        break;
+    case VHOST_USER_GET_protocol_FEATURES:
+        fprintf(stdout, "u64: 0x%"PRIx64"\n", msg->u64);
+        break;
+    case VHOST_USER_NOTDEFINED2:
+        fprintf(stdout, "u64: 0x%"PRIx64"\n", msg->u64);
+        break;
+    case VHOST_USER_GET_QNUMBER:
         fprintf(stdout, "u64: 0x%"PRIx64"\n", msg->u64);
         break;
     case VHOST_USER_SET_FEATURES:
@@ -113,8 +135,7 @@ void dump_vhostmsg(const VhostUserMsg* msg)
         break;
     }
 
-    fprintf(stdout,
-            "................................................................................\n");
+
 }
 
 void dump_buffer(uint8_t* p, size_t len)

@@ -22,6 +22,8 @@ typedef struct {
 	  uint16_t device_id;
 }pci_device_vendor_t ;
 
+#define PCI_VENDOR_ID_VMWARE        0x15ad
+#define PCI_DEVICE_ID_VMWARE_VMXNET3     0x07B0
 pci_device_vendor_t pci_device_vendor_list []={
 		{"PIIX3 IDE Interface (Triton II)",0x8086,0x7010},
 		{"PIIX3 PCI-to-ISA Bridge (Triton II)", 0x8086,0x7000},
@@ -30,12 +32,13 @@ pci_device_vendor_t pci_device_vendor_list []={
 		{"PCI & Memory", 0x8086, 0x1237},
 		{"VGA controller",0x1013,0xb8},
 		{"Intel(R) 82371AB/EB PCI Bus Master IDE Controller",0x8086,0x7111},
-		{"virtio disk device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_BLOCK_DEVICE_ID},
-		{"virtio scsi device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_SCSI_DEVICE_ID},
-		{"virtio console device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_CONSOLE_DEVICE_ID},
-		{"virtio net device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_NET_DEVICE_ID},
-		{"virtio p9 device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_9P_DEVICE_ID},
-		{"virtio ballon device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_BALLOON_DEVICE_ID},
+		{"Virtio disk device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_BLOCK_DEVICE_ID},
+		{"Virtio scsi device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_SCSI_DEVICE_ID},
+		{"Virtio console device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_CONSOLE_DEVICE_ID},
+		{"Virtio net device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_NET_DEVICE_ID},
+		{"Virtio p9 device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_9P_DEVICE_ID},
+		{"Virtio ballon device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_BALLOON_DEVICE_ID},
+		{"VMWARE net device vmxnet3",PCI_VENDOR_ID_VMWARE,PCI_DEVICE_ID_VMWARE_VMXNET3},
 		{0,0,0}
 };
 jdevice::jdevice(unsigned char *arg_name, int arg_type){
@@ -111,7 +114,7 @@ void jdevice::print_stats(unsigned char *arg1,unsigned char *arg2) {
 			return;
 		}
 		for (i=0; pci_device.pci_bars[i].addr!=0 && i<MAX_PCI_BARS; i++)
-			ut_printf("   addr :%x (%d) \n",pci_device.pci_bars[i].addr,pci_device.pci_bars[i].len);
+			ut_printf("   Bar addr(%d) :%x (%d) \n",i,pci_device.pci_bars[i].addr,pci_device.pci_bars[i].len);
 	}
 	if (driver != 0) {
 		driver->print_stats(arg1,arg2);

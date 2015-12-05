@@ -118,7 +118,7 @@ void fifo_queue::free(){
 	ut_free(data);
 }
 int fifo_queue::check_emptyspace(){
-	if ((data[producer.index].len == 0)  && (data[producer.index].buf == 0)) {
+	if ((data[producer.index].buf == 0)) {
 		return JSUCCESS;
 	}else{
 		error_empty_check++;
@@ -133,7 +133,7 @@ int fifo_queue::add_to_queue(unsigned char *buf, int len,int data_flags, int fre
 
 	//ut_log("Recevied from  network and keeping in queue: len:%d  stat count:%d prod:%d cons:%d\n",len,stat_queue_len,queue.producer,queue.consumer);
 	spin_lock_irqsave(&(producer.spin_lock), flags);
-	if ((data[producer.index].len == 0)  && (data[producer.index].buf == 0)) {
+	if (data[producer.index].buf == 0) {
 		data[producer.index].len = len;
 		data[producer.index].buf = buf;
 		data[producer.index].flags = data_flags;
@@ -215,14 +215,12 @@ int fifo_queue::Bulk_remove_from_queue(struct struct_mbuf *mbufs, int mbuf_len) 
 	int ret = 0;
 	while (ret < mbuf_len) {
 	//	spin_lock_irqsave(&(remove_spin_lock), flags);
-		if ((data[consumer.index].buf != 0) && (data[consumer.index].len != 0)) {
+		if (data[consumer.index].buf != 0) {
 			mbufs[ret].buf = data[consumer.index].buf;
 			mbufs[ret].len = data[consumer.index].len;
-			//*wr_flags = data[consumer].flags;
-			//	ut_log("netrecv : receving from queue len:%d  prod:%d cons:%d\n",queue.data[queue.consumer].len,queue.producer,queue.consumer);
 
 			data[consumer.index].buf = 0;
-			data[consumer.index].len = 0;
+			//data[consumer.index].len = 0;
 			consumer.index++;
 			consumer.count++;
 
@@ -246,7 +244,7 @@ int fifo_queue::is_empty(){
 		return JFAIL;
 	}
 #else /* this is more cpu cache friendly then above */
-	if ((data[consumer.index].buf==0) && (data[consumer.index].len==0)){
+	if (data[consumer.index].buf==0){
 		return JSUCCESS;
 	}else{
 		return JFAIL;

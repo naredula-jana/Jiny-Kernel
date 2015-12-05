@@ -9,7 +9,7 @@ HEADERS+=packet.h
 
 BIN=vhost
 CFLAGS += -Wall -Werror
-CFLAGS += -ggdb3 -O0
+CFLAGS += -ggdb
 LFLAGS = -lrt
 
 all: ${BIN}

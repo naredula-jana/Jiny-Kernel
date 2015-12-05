@@ -187,6 +187,7 @@ int loop_server(Server* port,Server* other_port,int sleep)
 	int i=0;
 
     ret = traverse_fd_list(&port->fd_list,sleep);
+    ret = traverse_fd_list(&other_port->fd_list,sleep);
 
     while(i<5000000){
         ret = ret + poll_server(port->handlers.context,other_port->handlers.context);

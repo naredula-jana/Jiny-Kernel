@@ -123,20 +123,59 @@ static uintptr_t _map_user_addr(VhostServer* vhost_server, uint64_t addr)
 
     return result;
 }
-
+/*
+ * enum VhostUserProtocolFeature {
+32    VHOST_USER_PROTOCOL_F_MQ = 0,
+33    VHOST_USER_PROTOCOL_F_LOG_SHMFD = 1,
+34    VHOST_USER_PROTOCOL_F_RARP = 2,
+35
+36    VHOST_USER_PROTOCOL_F_MAX
+37};
+ */
 static int _get_features(VhostServer* vhost_server, ServerMsg* msg)
 {
     fprintf(stdout, "%s\n", __FUNCTION__);
 
-    msg->msg.u64 = 0; // no features
+   // msg->msg.u64 = 0; // no features
+   msg->msg.u64 =  (1ULL << 30) | 0X400000 ; // PROTOCOL features
     msg->msg.size = MEMB_SIZE(VhostUserMsg,u64);
-
+printf(" Get feature as enabled: SIZE: %d  value:%x\n",msg->msg.size,(unsigned int)msg->msg.u64);
     return 1; // should reply back
 }
+static int _get_proto_features(VhostServer* vhost_server, ServerMsg* msg)
+{
+    fprintf(stdout, "%s\n", __FUNCTION__);
 
+  //  msg->msg.u64 = 0; // no features
+    msg->msg.u64 = (1ULL << 0)  ; // mq features
+    msg->msg.size = MEMB_SIZE(VhostUserMsg,u64);
+printf(" Get PROTOCOL feature : SIZE: %d  value:%x\n",msg->msg.size,(unsigned int)msg->msg.u64);
+    return 1; // should reply back
+}
+static int _vring_enable(VhostServer* vhost_server, ServerMsg* msg)
+{
+    fprintf(stdout, "%s\n", __FUNCTION__);
+
+ //   msg->msg.u64 = 0; // no features
+
+ //   msg->msg.size = MEMB_SIZE(VhostUserMsg,u64);
+printf("  SET vring enable: size: %d  value:%x\n",msg->msg.size,(unsigned int)msg->msg.u64);
+    return 0; // should reply back
+}
+static int _get_qnumber(VhostServer* vhost_server, ServerMsg* msg)
+{
+    fprintf(stdout, "%s\n", __FUNCTION__);
+
+  //  msg->msg.u64 = 0; // no features
+    msg->msg.u64 = 3 ; // qnumber
+    msg->msg.size = MEMB_SIZE(VhostUserMsg,u64);
+printf(" Get Qnumber, size: %d  value:%x\n",msg->msg.size,(unsigned int)msg->msg.u64);
+    return 1; // should reply back
+}
 static int _set_features(VhostServer* vhost_server, ServerMsg* msg)
 {
     fprintf(stdout, "%s\n", __FUNCTION__);
+    printf(" set  features SIZE: %d  value:%x\n",msg->msg.size,(unsigned int)msg->msg.u64);
     return 0;
 }
 
@@ -380,6 +419,10 @@ static MsgHandler msg_handlers[VHOST_USER_MAX] = {
         _set_vring_kick,    // VHOST_USER_SET_VRING_KICK
         _set_vring_call,    // VHOST_USER_SET_VRING_CALL
         _set_vring_err,     // VHOST_USER_SET_VRING_ERR
+        _get_proto_features,     // VHOST_USER_GET_protocol_FEATURES
+        _set_features,     // dummy
+        _get_qnumber,     // _get_qnumber
+        _vring_enable,     // vring_enable
         };
 
 static int in_msg_server(void* context, ServerMsg* msg)
@@ -398,14 +441,40 @@ static int in_msg_server(void* context, ServerMsg* msg)
     return result;
 }
 int send_cached_pkts(VhostServer* port,  void* input_buf, size_t size);
-int Bulk_process_input_fromport(VhostServer* vhost_server,VhostServer* send_vhost_server);
+int Bulk_process_input_fromport(VhostServer* vhost_server,VhostServer* send_vhost_server,int qno);
+int new_poll_server(Server* port,Server* send_port)
+{
+	int ret =0;
+	VhostServer *vhost =port->handlers.context;
+	VhostServer *send_vhost =send_port->handlers.context;
+
+    while(1){
+    	if (vhost->vring_table.vring[VHOST_CLIENT_VRING_IDX_RX].desc && send_vhost->vring_table.vring[VHOST_CLIENT_VRING_IDX_RX].desc){
+    		ret =Bulk_process_input_fromport(vhost,send_vhost,0);
+    		if (ret ==0){
+    		//	ret =Bulk_process_input_fromport(vhost,send_vhost,4);
+    		}
+
+    		ret =Bulk_process_input_fromport(send_vhost,vhost,0);
+    		if (ret ==0){
+    		 //   	ret =Bulk_process_input_fromport(send_vhost,vhost,4);
+    		 }
+
+    	}
+    }
+
+    return ret;
+}
 int poll_server(void* context, void *send_context){
 	int ret=0;
     VhostServer* port = (VhostServer*) context;
     VhostServer* send_port = (VhostServer*) send_context;
 
     if (port->vring_table.vring[VHOST_CLIENT_VRING_IDX_RX].desc) {
-        	ret =Bulk_process_input_fromport(port,send_port);
+        	ret =Bulk_process_input_fromport(port,send_port,2);
+        	if (ret ==0){
+        		ret =Bulk_process_input_fromport(port,send_port,4);
+        	}
         	//ret =process_input_fromport(port,send_port);
     }
    //ret = ret + send_cached_pkts(send_port,0,0);
@@ -432,7 +501,7 @@ if (vhost_server ==0){
 	printf("vhost server is EMPTY\n");
 	return;
 }
-	for (i=0; i<2; i++){
+	for (i=0; i<VHOST_CLIENT_VRING_NUM; i++){
 		struct vring_avail *avail=vhost_server->vring_table.vring[i].avail;
 		struct vring_used *used=vhost_server->vring_table.vring[i].used;
 		//printf(" avail :%p used:%p \n",avail,used);
@@ -444,10 +513,10 @@ if (vhost_server ==0){
 
 VhostServer* g_ports[10];
 void *thr_server(void *unused){
-	int sleep=0;
 
 	while (app_running) {
-		 loop_server(g_ports[1]->server,g_ports[0]->server,sleep);
+		 new_poll_server(g_ports[1]->server,g_ports[0]->server);
+		 new_poll_server(g_ports[0]->server,g_ports[1]->server);
 	}
 	return 0;
 }
@@ -479,9 +548,9 @@ g_ports[0] = port1;
 
     while (app_running) {
         loop_server(g_ports[0]->server,g_ports[1]->server,sleep);
-    	if (thr_mode == 0){
+    	//if (thr_mode == 0){
     		loop_server(g_ports[1]->server,g_ports[0]->server,sleep);
-    	}
+    	//}
     }
     stop_stat(&port1->stat);
     stop_stat(&port2->stat);

@@ -403,17 +403,17 @@ int virtio_queue::BulkRemoveFromQueue(struct struct_mbuf *mbuf_list, int list_le
 	uint16_t pkts_length;
 	int count;
 
+	pkts_length = vq->vring.used->idx - vq->last_used_idx;
+	if (pkts_length == 0) {
+		return 0;
+	}
+
 	START_USE(vq);
 	if ((vq->broken)) {
 		END_USE(vq);
 		return 0;
 	}
-	pkts_length = vq->vring.used->idx - vq->last_used_idx;
 
-	if (pkts_length == 0) {
-		END_USE(vq);
-		return 0;
-	}
 	/* Prefetch available ring to retrieve head indexes. */
 	ar_prefetch0(&vq->vring.used->ring[vq->last_used_idx % vq->vring.num]);
 

@@ -78,7 +78,8 @@ struct VhostUserMemory;
 // TODO: these are NET specific
 #define VHOST_CLIENT_VRING_IDX_RX   0
 #define VHOST_CLIENT_VRING_IDX_TX   1
-#define VHOST_CLIENT_VRING_NUM      2
+//#define VHOST_CLIENT_VRING_NUM      2
+#define VHOST_CLIENT_VRING_NUM      6 /* jana changed for 3 queues*/
 
 
 int vring_table_from_memory_region(struct vhost_vring* vring_table[], size_t vring_table_num,

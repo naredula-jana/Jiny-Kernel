@@ -415,6 +415,7 @@ last:
 #define MAX_PKT 64
 extern int test_mode;
 extern void sigTerm(int s);
+#if 0
 static uint16_t test_Bulk_read_pkt(VhostServer* send_port,VringTable* vring_table,  uint32_t a_idx){
     struct vring_desc* desc = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].desc;
     struct vring_avail* avail = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].avail;
@@ -512,13 +513,15 @@ last:
      }
 
     return ret;
-}static uint16_t Bulk_read_pkt(VhostServer* send_port,VringTable* vring_table,  uint32_t a_idx,uint64_t mmap_addr, uint64_t memory_size){
-    struct vring_desc* desc = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].desc;
-    struct vring_avail* avail = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].avail;
-    struct vring_used* used = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].used;
-    unsigned int num = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].num;
+}
+#endif
+static uint16_t Bulk_read_pkt(VhostServer* send_port,VringTable* vring_table,  uint32_t a_idx,uint64_t mmap_addr, uint64_t memory_size, int qno){
+    struct vring_desc* desc = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX+qno].desc;
+    struct vring_avail* avail = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX+qno].avail;
+    struct vring_used* used = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX+qno].used;
+    unsigned int num = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX+qno].num;
     //ProcessHandler* handler = &vring_table->handler;
-    uint16_t u_idx = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_used_idx % num;
+    uint16_t u_idx = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX+qno].last_used_idx % num;
     uint16_t d_idx = avail->ring[a_idx];
     uint32_t  len = 0;
     struct struct_mbuf mbuf_list[MAX_PKT+1];
@@ -533,10 +536,10 @@ last:
 
     //sync_shm();
 	for (pkt = 0; pkt < MAX_PKT; pkt++) {
-		if ((vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_avail_idx+pkt) == avail_idx) {
+		if ((vring_table->vring[VHOST_CLIENT_VRING_IDX_TX+qno].last_avail_idx+pkt) == avail_idx) {
 			goto last;
 		}
-		a_idx = (vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_avail_idx + pkt) % num;
+		a_idx = (vring_table->vring[VHOST_CLIENT_VRING_IDX_TX+qno].last_avail_idx + pkt) % num;
 		d_idx = avail->ring[a_idx];
 		i = d_idx;
 		len =0;
@@ -618,37 +621,35 @@ last:
 
     return ret;
 }
-int Bulk_process_input_fromport(VhostServer* vhost_server,VhostServer* send_vhost_server){
+int Bulk_process_input_fromport(VhostServer* vhost_server,VhostServer* send_vhost_server,int qno){
 	VringTable* vring_table= &vhost_server->vring_table;
-    struct vring_avail* avail = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].avail;
-    struct vring_used* used = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].used;
-    unsigned int num = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].num;
+    struct vring_avail* avail = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX+qno].avail;
+    struct vring_used* used = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX+qno].used;
+    unsigned int num = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX+qno].num;
     uint16_t ret;
-    if (avail==0 || vhost_server->vring_table.vring[VHOST_CLIENT_VRING_IDX_TX].avail==0){
+    if (avail==0 || vhost_server->vring_table.vring[VHOST_CLIENT_VRING_IDX_TX+qno].avail==0){
     	return 0;
     }
-    uint16_t a_idx = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_avail_idx % num;
+    uint16_t a_idx = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX+qno].last_avail_idx % num;
 
         /* we reached the end of avail */
-	if (vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_avail_idx == avail->idx) {
+	if (vring_table->vring[VHOST_CLIENT_VRING_IDX_TX+qno].last_avail_idx == avail->idx) {
 		return 0;
 	}
 	//if (test_mode == 0) {
-	if (1) {
-		uint64_t mmap_addr = vhost_server->memory.regions[0].mmap_addr;
-		uint64_t memory_size = vhost_server->memory.regions[0].memory_size;
-		ret = Bulk_read_pkt(send_vhost_server, vring_table, a_idx,mmap_addr,memory_size);
-	} else {
-		ret = test_Bulk_read_pkt(send_vhost_server, vring_table, a_idx);
-	}
-	vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_avail_idx = ret + vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_avail_idx;
-	vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_used_idx  = ret + vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_used_idx;
+
+	uint64_t mmap_addr = vhost_server->memory.regions[0].mmap_addr;
+	uint64_t memory_size = vhost_server->memory.regions[0].memory_size;
+
+	ret = Bulk_read_pkt(send_vhost_server, vring_table, a_idx,mmap_addr,memory_size,qno);
+	vring_table->vring[VHOST_CLIENT_VRING_IDX_TX+qno].last_avail_idx = ret + vring_table->vring[VHOST_CLIENT_VRING_IDX_TX+qno].last_avail_idx;
+	vring_table->vring[VHOST_CLIENT_VRING_IDX_TX+qno].last_used_idx  = ret + vring_table->vring[VHOST_CLIENT_VRING_IDX_TX+qno].last_used_idx;
 
     if (ret==0){
     	return 0;
     }
 	sync_shm();  /* all memory buffers are seen before used-idx is seen */
-    used->idx = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX].last_used_idx;
+    used->idx = vring_table->vring[VHOST_CLIENT_VRING_IDX_TX+qno].last_used_idx;
     sync_shm();  /* used->idx  need to seen by others */
 
     return ret;

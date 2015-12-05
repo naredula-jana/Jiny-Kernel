@@ -56,7 +56,7 @@ int virtio_net_jdriver::check_for_pkts() {
 	return queues[0].recv->check_recv_pkt();
 }
 int virtio_net_jdriver::burst_recv(int total_pkts) {
-	unsigned char *addr;
+	//unsigned char *addr;
 	unsigned int list_len = MAX_BUF_LIST_SIZE;
 	int i;
 	int ret = 0;
@@ -207,12 +207,13 @@ int virtio_net_jdriver::net_attach_device() {
 	addr = pci_ioaddr + VIRTIO_PCI_HOST_FEATURES;
 	features = inl(addr);
 	guest_features = features;
-	mask_features = (0x4000ff);
+//	mask_features = (0x4000ff);
+	mask_features = (0x7000ff);
 
 	guest_features = guest_features & mask_features;
 
 	INIT_LOG(
-			"	VirtioNet:  HOSTfeatures :%x:  capabilitie:%x guestfeatures:%x mask_features:%x\n",
+			"	VirtioNet:  HOSTfeatures :%x:  pci capabilities:%x GUESTfeatures:%x mask_features:%x \n",
 			features, pci_hdr->capabilities_pointer, guest_features,
 			mask_features);
 	display_virtiofeatures(features, vtnet_feature_desc);
@@ -254,12 +255,9 @@ int virtio_net_jdriver::net_attach_device() {
 			addr, this->mac[0], this->mac[1], this->mac[2], this->mac[3],
 			this->mac[4], this->mac[5], msi_vector, this->max_vqs);
 
-#if 1
 	if (msi_vector > 0) {
 		outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 1);
-		//	outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, 0xffff);
 	}
-#endif
 
 	INIT_LOG("	VIRTIONET: initializing MAX VQ's:%d\n", max_vqs);
 	for (i = 0; i < max_vqs; i++) {
@@ -271,20 +269,16 @@ int virtio_net_jdriver::net_attach_device() {
 				//break;
 			}
 		}
-		queues[i].recv = jnew_obj(net_virtio_queue, device, 2 * i, VQTYPE_RECV)
-		;
+		queues[i].recv = jnew_obj(net_virtio_queue, device, 2 * i, VQTYPE_RECV);
 		//ut_log(" virtio_queue obj: %x\n",queues[i].recv );
 		if (msi_vector > 0) {
 			outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, (2 * i) + 0);
 		}
-		queues[i].send = jnew_obj(net_virtio_queue, device, (2 * i) + 1,
-				VQTYPE_SEND)
-		;
+		queues[i].send = jnew_obj(net_virtio_queue, device, (2 * i) + 1, VQTYPE_SEND);
 		if (msi_vector > 0) {
 			outw(pci_ioaddr + VIRTIO_MSI_QUEUE_VECTOR, (2 * i) + 1);
 		}
 	}
-
 	send_waitq = jnew_obj(wait_queue, "waitq_net", 0);
 
 	if (g_conf_net_send_int_disable == 1) {
@@ -367,22 +361,16 @@ int virtio_net_jdriver::burst_send() {
 
 	/* remove the used buffers from the previous send cycle */
 	for (qno = 0; qno < max_vqs; qno++) {
-#if 1
-		pkts = queues[qno].send->BulkRemoveFromQueue(&temp_mbuf_list[0],
-				MAX_BUF_LIST_SIZE);
+		pkts = queues[qno].send->BulkRemoveFromQueue(&temp_mbuf_list[0], MAX_BUF_LIST_SIZE);
 		if (pkts > 0) {
 			Bulk_free_pages(temp_mbuf_list, pkts);
 		}
-#else
-		pkts = queues[qno].send->BulkRemoveFromQueue(0,MAX_BUF_LIST_SIZE * 4);
-#endif
 	}
 
 //	spin_lock_irqsave(&virtionet_lock, flags);
 	ret = 0;
 	for (qno = 0; qno < max_vqs; qno++) { /* try to send from the same queue , if it full then try on the subsequent one, in this way kicks will be less */
-		qret = queues[qno].send->BulkAddToQueue(
-				&send_mbuf_list[send_mbuf_start + ret], send_mbuf_len - ret, 1);
+		qret = queues[qno].send->BulkAddToQueue(&send_mbuf_list[send_mbuf_start + ret], send_mbuf_len - ret, 1);
 		if (qret == 0) {
 			continue;
 		}
