@@ -277,7 +277,7 @@ unsigned long sc_createKernelThread(int (*fn)(void *, void *), void **args, unsi
 	struct list_head *pos;
 	struct task_struct *task;
 
-	pid = SYS_sc_clone(CLONE_VM | CLONE_KERNEL_THREAD | clone_flags, 0, 0, fn, args);
+	pid = SYS_sc_clone(CLONE_VM | CLONE_KERNEL_THREAD | clone_flags, 0, 0, fn, args,0);
 
 	if (thread_name == 0)
 		return pid;
@@ -516,6 +516,8 @@ int init_tasking(unsigned long unused) {
 		g_cpu_state[i].active = 1; /* by default when the system starts all the cpu are in active state */
 		ut_strncpy(g_cpu_state[i].idle_task->name, (unsigned char *) "idle", MAX_TASK_NAME);
 	}
+	g_cpu_state[0].net_bh.pmd_active = 1;
+
 	g_current_task->current_cpu = 0;
 
 	INIT_LOG("		Cpu Struct size: %d \n", sizeof(struct cpu_state));
@@ -864,6 +866,16 @@ void timer_callback(void *unused_args) {
 	/* 1. increment timestamp */
 	if (getcpuid() == 0) {
 		ar_update_jiffie();
+		g_cpu_state[0].net_bh.ticks++;
+		if (g_conf_net_pmd==1 && (g_cpu_state[0].net_bh.ticks>5) ){
+			if (g_cpu_state[0].net_bh.pkts_processed<10000){
+				g_cpu_state[0].net_bh.pmd_active = 0;
+			}else{
+				g_cpu_state[0].net_bh.pmd_active = 1;
+			}
+			g_cpu_state[0].net_bh.pkts_processed=0;
+			g_cpu_state[0].net_bh.ticks=0;
+		}
 	}
 
 	if (g_jiffies > g_current_task->last_jiffie){
@@ -1081,7 +1093,8 @@ void sc_disable_nonpreemptive(){
 	g_current_task->state = g_current_task->state & (~TASK_NONPREEMPTIVE);
 
 }
-unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*fn)(void *, void *), void **args) {
+extern int Jcmd_maps(char *arg1, char *arg2);
+unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*fn)(void *, void *), void **args, unsigned long tls_area) {
 	struct task_struct *p;
 	struct mm_struct *mm;
 	struct fs_struct *fs;
@@ -1089,8 +1102,9 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	//void *fn=fd_p;
 	unsigned long ret_pid = 0;
 	int i;
-
-	ut_log("clone ctid:%x child_stack:%x flags:%x args:%x \n", fn, child_stack, clone_flags, args);
+	//Jcmd_maps(0,0);
+	SYSCALL_DEBUG("clone fn:%x child_stack:%x flags:%x args:%x pid:%x tls_area:%x\n", fn, child_stack, clone_flags, args,pid,tls_area);
+	ut_log("clone FN:%x child_stack:%x flags:%x args:%x \n", fn, child_stack, clone_flags, args,pid);
 
 	/* Initialize the stack  */
 	p = alloc_task_struct();
@@ -1121,12 +1135,10 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 		SYSCALL_DEBUG("clone  CLONE_VM the mm :%x counter:%x \n", mm, mm->count.counter);
 	} else {
 		mm = create_mm();
-		DEBUG("BEFORE duplicating pagetables and vmaps \n");
 		ar_dup_pageTable(g_current_task->mm, mm);
 		vm_dup_vmaps(g_current_task->mm, mm);
 		mm->brk_addr = g_current_task->mm->brk_addr;
 		mm->brk_len = g_current_task->mm->brk_len;
-		DEBUG("AFTER duplicating pagetables and vmaps\n");
 		mm->exec_fp = 0; // TODO : need to be cloned
 	}
 
@@ -1137,12 +1149,14 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 		ut_memcpy((uint8_t *) &(p->thread.user_regs),
 				(uint8_t *) g_cpu_state[getcpuid()].md_state.kernel_stack - sizeof(struct user_regs), sizeof(struct user_regs));
 
-		DEBUG(" userland  ip :%x \n", p->thread.userland.ip);
 		p->thread.userland.sp = (unsigned long) child_stack;
 		p->thread.userland.user_stack = (unsigned long) child_stack;
+		if (clone_flags & CLONE_SETTLS){
+			p->thread.userland.user_fs_base = tls_area;
+		}
 
-		DEBUG(" child ip:%x stack:%x \n", p->thread.userland.ip, p->thread.userland.sp);
-		DEBUG("userspace rip:%x rsp:%x \n", p->thread.user_regs.isf.rip, p->thread.user_regs.isf.rsp);
+		SYSCALL_DEBUG(" child ip:%x stack:%x \n", p->thread.userland.ip, p->thread.userland.sp);
+		SYSCALL_DEBUG("userspace rip:%x rsp:%x \n", p->thread.user_regs.isf.rip, p->thread.user_regs.isf.rsp);
 		//p->thread.userland.argc = 0;/* TODO */
 		//p->thread.userland.argv = 0; /* TODO */
 		save_flags(p->flags);
@@ -1174,17 +1188,17 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 		sc_schedule();
 	}
 
-	SYSCALL_DEBUG("clone return pid :%d \n", ret_pid);
+	SYSCALL_DEBUG("clone return pid :%d(%x) \n", ret_pid,ret_pid);
 
 	return ret_pid;
 }
 unsigned long SYS_sc_fork() {
 	SYSCALL_DEBUG("fork \n");
-	return SYS_sc_clone(0, 0, 0, 0, 0);
+	return SYS_sc_clone(0, 0, 0, 0, 0,0);
 }
 unsigned long SYS_sc_vfork() {
 	SYSCALL_DEBUG("vfork \n");
-	return SYS_sc_clone(CLONE_VFORK, 0, 0, 0, 0);
+	return SYS_sc_clone(CLONE_VFORK, 0, 0, 0, 0,0);
 }
 unsigned long SYS_sched_yield(){
 	SYSCALL_DEBUG("sched_yield \n");
@@ -1411,13 +1425,14 @@ void idleTask_func() {
 #if 1
 		//if (g_conf_net_pmd == 1 && g_net_interrupts_disable==1) {
 		if (g_conf_net_pmd == 1 && cpu == g_conf_netbh_cpu) {
-			while (1) {
+			while (g_cpu_state[0].net_bh.pmd_active==1) {
 				net_bh();
 				g_cpu_state[cpu].idle_state = 0;
 				if (g_cpu_state[cpu].run_queue_length != 0) {
 					//curr_cpu_tightloop = -1;
 					sc_schedule();
 				}
+
 			}
 		}
 #endif
@@ -1433,7 +1448,6 @@ void idleTask_func() {
 		}else{
 			g_stat_idle_avoided++;
 		}
-
 		sc_schedule();
 	}
 }

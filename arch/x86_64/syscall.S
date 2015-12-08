@@ -58,7 +58,7 @@
     popq %r9;                                   \
     popq %r8;                                   \
 
-#define TOTAL_SYSCALLS  250
+#define TOTAL_SYSCALLS  400
 
 
 enter_userspace:
@@ -83,55 +83,53 @@ enter_userspace:
 syscall_entry:
         /* Local interrupts are disabled upon entering the entrypoint.
          */
-        swapgs
-        movq %rsp,%gs:CPU_STATE_USER_STACK_OFFSET
-        movq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rsp
-        SAVE_AND_LOAD_SEGMENT_REGISTERS
+    swapgs
+    movq %rsp,%gs:CPU_STATE_USER_STACK_OFFSET
+    movq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rsp
+    SAVE_AND_LOAD_SEGMENT_REGISTERS
 
 /* enter using syscall but exit using iret, so we need to setup the stack accordingly */
 	subq $IRET_OFFSET_SIZE,%rsp
-        movq %rcx,IRET_OFFSET_RIP(%rsp)
-        movq %r11,IRET_OFFSET_RFLAGS(%rsp)
-        movq %rcx,%gs:CPU_STATE_USER_IP
-        movq $(GDT_SEL(UCODE_DESCR) | SEG_DPL_USER),IRET_OFFSET_CS(%rsp)
-        movq $(GDT_SEL(UDATA_DESCR) | SEG_DPL_USER),IRET_OFFSET_SS(%rsp)
+    movq %rcx,IRET_OFFSET_RIP(%rsp)
+    movq %r11,IRET_OFFSET_RFLAGS(%rsp)
+    movq %rcx,%gs:CPU_STATE_USER_IP
+    movq $(GDT_SEL(UCODE_DESCR) | SEG_DPL_USER),IRET_OFFSET_CS(%rsp)
+    movq $(GDT_SEL(UDATA_DESCR) | SEG_DPL_USER),IRET_OFFSET_SS(%rsp)
  
-        movq %gs:CPU_STATE_USER_STACK_OFFSET,%rcx
-        movq %rcx,IRET_OFFSET_RSP(%rsp)
+    movq %gs:CPU_STATE_USER_STACK_OFFSET,%rcx
+    movq %rcx,IRET_OFFSET_RSP(%rsp)
 
         /* After changing stack pointer, we can enable IRQs */
-        sti
+    sti
 	pushq %rax
-        SAVE_GPRS
+    SAVE_GPRS
 
-        cmp $TOTAL_SYSCALLS,%rax
-        jb good_syscall_number
+    cmp $TOTAL_SYSCALLS,%rax
+    jb good_syscall_number
 
-        movq $-35,%rax
-        jmp syscall_done
+    movq $-35,%rax
+tight_loop_error:
+    jmp tight_loop_error
 
 good_syscall_number:
 
-        pushq %rax
-        pushq %rdx
-        movq %rax,%gs:CPU_STATE_SYSCALLID
-        call sc_before_syscall
-        popq %rdx
-        popq %rax
+    pushq %rax
+    pushq %rdx
+    movq %rax,%gs:CPU_STATE_SYSCALLID
+    call sc_before_syscall
+    popq %rdx
+    popq %rax
         /* Since %rcx contains the return address, we should reload
          * %rcx from %r10.   rcx contains syscall arguments
          */
-        movq %r10,%rcx
-
-        call *syscalltable(,%rax,8)
-
-        pushq %rax
-        call sc_after_syscall
-        popq %rax
+    movq %r10,%rcx
+    call *syscalltable(,%rax,8)
+    pushq %rax
+    call sc_after_syscall
+    popq %rax
 
 syscall_done:
 	RESTORE_GPRS
-
           /* Now restore user %gs */
 	cli
 	addq $8,%rsp /* Simulate our extra 'push %rax' */

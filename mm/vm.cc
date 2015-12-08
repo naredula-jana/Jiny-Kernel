@@ -335,6 +335,10 @@ void * SYS_vm_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
 	void *ret;
 	unsigned long irq_flags;
 //BRK;
+	if (flags & MAP_STACK){
+		prot = prot | PROT_READ ;
+		prot =prot & (~PROT_EXEC);
+	}
 	SYSCALL_DEBUG("mmap fd:%x addr:%x len:%x prot:%x flags:%x pgpff:%x \n",fd,addr,len,prot,flags,pgoff);
 	file = fd_to_file(fd);
 //BRK;

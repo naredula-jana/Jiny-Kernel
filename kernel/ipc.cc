@@ -179,8 +179,8 @@ int SYS_futex(int *uaddr, int op, int val, unsigned long timeout,
 		spin_unlock(&futex_p->spin_lock);
 		return ret;
 	default:
-		ut_printf("ERROR : fake sucess return=1 Unimplemented futex() OP %x\n", op);
-		return 1;
+		ut_printf("ERROR : fake return=-1 Unimplemented futex() OP %x\n", op);
+		return -1;
 	}
 	return -1;
 }

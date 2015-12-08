@@ -109,9 +109,7 @@ int network_scheduler::netRx_BH() {
 		int total_pkts = 0;
 		int pkts = 0;
 		while (ret < g_conf_net_recv_burst) {
-
 			pkts = device_list[i]->burst_recv(max_pkts);
-
 			if (pkts == 0) {
 				return ret;
 			}
@@ -170,27 +168,32 @@ extern int g_conf_test_dummy_send;
 /* TODO -1 : currently it is assumed for 1 nic, later this need to be extended for multiple nics*/
 /* TODO -2 : all sending and recv is done by only one cpu any time, this minimises the locks */
 int net_bh(){
-	int ret = 0;
+
 	int cpu = getcpuid();
 
 	if (g_conf_net_pmd==1  && g_conf_netbh_cpu != cpu){
 		return 0;
 	}
-	if (g_cpu_state[cpu].net_bh_inprogress == 1){
+	if (g_cpu_state[cpu].net_bh.inprogress == 1){
 		return 0;
 	}
-	g_cpu_state[cpu].net_bh_inprogress =1;  /* this is to protect to enter this function by the same thread during soft interrupts */
-	net_bh_send();
+	g_cpu_state[cpu].net_bh.inprogress =1;  /* this is to protect to enter this function by the same thread during soft interrupts */
 
+	int ret = 0;
+	do {
+		ret = 0;
+		ret = net_bh_send();
 #if 1 /* for test purpose, to bypass the recv */
-	if (g_conf_test_dummy_send > 0){
-		goto last;
-	}
+		if (g_conf_test_dummy_send > 0) {
+			//goto last;
+		}else{
 #endif
-	ret = net_bh_recv();
+			ret = ret + net_bh_recv();
+		}
+		g_cpu_state[cpu].net_bh.pkts_processed = g_cpu_state[cpu].net_bh.pkts_processed + ret;
+	} while (ret > 0);
 
-last:
-	g_cpu_state[cpu].net_bh_inprogress = 0;
+	g_cpu_state[cpu].net_bh.inprogress = 0;
 	return ret;
 }
 /*****************************************************************/
@@ -321,11 +324,10 @@ static int bulk_remove_from_send_queue() {
 
 static int net_bh_send() {
 	unsigned long flags;
-	int ret = JFAIL;
 	int pkt_send = 0;
 
 	if (sendqs_empty == 1) {
-		return JFAIL;
+		return pkt_send;
 	}
 
 	int pkts=0;
@@ -339,7 +341,7 @@ static int net_bh_send() {
 		socket::net_dev->ioctl(NETDEV_IOCTL_FLUSH_SENDBUF, 0);
 	}
 
-	return ret;
+	return pkt_send;
 }
 int net_send_eth_frame(unsigned char *buf, int len, int write_flags) {
 	int ret = JFAIL;

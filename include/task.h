@@ -121,13 +121,16 @@ enum {
 	THREAD_HIGH_PRIORITY=1
 };
 /* standard parameters compatabile with linux */
-#define CLONE_VM 0x100
-#define CLONE_FS 0x200
-#define CLONE_VFORK 0x4000
+#define CLONE_VM             0x100
+#define CLONE_FS             0x200
+#define CLONE_VFORK         0x4000
+#define CLONE_THREAD    0x00010000      /* Same thread group? */
+#define CLONE_NEWNS     0x00020000      /* New mount namespace group */
+#define CLONE_SYSVSEM   0x00040000      /* share system V SEM_UNDO semantics */
+#define CLONE_SETTLS    0x00080000      /* create a new TLS for the child */
 
 #define CLONE_KERNEL_THREAD 0x80000000 /* proparatory */
-/*
- - task can be on run queue or in wait queues */
+/* - task can be on run queue or in wait queues */
 #define MAX_SYSCALL 255
 struct syscall_stat{
 	int count;
@@ -203,7 +206,12 @@ struct cpu_state {
 	task_queue_t run_queue;
 	volatile int run_queue_length;
 	int net_BH; /* enable if the net_RX BH need to be kept on the cpu on a priority basis */
-	int net_bh_inprogress;
+	struct {
+		int inprogress;
+		int pmd_active;  /* poll mode driver active */
+		unsigned long pkts_processed;
+		unsigned long ticks;
+	}net_bh;
 	spinlock_t *sched_lock; /* lock to relase after schedule, it is filled before the schedule */
 	unsigned long system_times_ns;
 

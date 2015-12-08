@@ -23,7 +23,7 @@ unsigned long ut_get_systemtime_ns();
 int sc_sleep( long ticks); /* each tick is 100HZ or 10ms */
 unsigned long SYS_sc_fork();
 unsigned long SYS_sc_vfork();
-unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid,  int(*fn)(void *, void *),  void **args) ;
+unsigned long SYS_sc_clone( int clone_flags, void *child_stack, void *pid,  int(*fn)(void *, void *),  void **args,unsigned long tls_area) ;
 int SYS_sc_exit(int status);
 void sc_delete_task(struct task_struct *task);
 int sc_task_stick_to_cpu(unsigned long pid, int cpu_id);

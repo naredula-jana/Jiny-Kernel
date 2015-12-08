@@ -600,6 +600,40 @@ int SYS_tgkill(int tid, int sig){
 	ut_printf(" TODO: tg kill not yet supported \n");
 	return -1;
 }
+/* TODO */
+long SYS_get_robust_list(int pid, struct robust_list_head **head_ptr, size_t *st){
+	SYSCALL_DEBUG(" get_robust_list : not supported\n");
+	return 0;
+}
+/* TODO */
+long SYS_set_robust_list(struct robust_list_head *head, size_t len){
+	SYSCALL_DEBUG(" set_robust_list : not supported\n");
+	return 0;
+}
+#define MADV_NORMAL     0               /* no further special treatment */
+#define MADV_RANDOM     1               /* expect random page references */
+#define MADV_SEQUENTIAL 2               /* expect sequential page references */
+#define MADV_WILLNEED   3               /* will need these pages */
+#define MADV_DONTNEED   4               /* don't need these pages */
+ /* common parameters: try to keep these consistent across architectures */
+#define MADV_REMOVE     9               /* remove these pages & resources */
+#define MADV_DONTFORK   10              /* don't inherit across fork */
+#define MADV_DOFORK     11              /* do inherit across fork */
+#define MADV_HWPOISON   100             /* poison a page for testing */
+#define MADV_SOFT_OFFLINE 101           /* soft offline page for testing */
+#define MADV_MERGEABLE   12             /* KSM may merge identical pages */
+#define MADV_UNMERGEABLE 13             /* KSM may not merge identical pages */
+#define MADV_HUGEPAGE   14              /* Worth backing with hugepages */
+#define MADV_NOHUGEPAGE 15              /* Not worth backing with hugepages */
+#define MADV_DONTDUMP   16              /* Explicity exclude from the core dump,
+                                            overrides the coredump filter bits */
+#define MADV_DODUMP     17              /* Clear the MADV_DONTDUMP flag */
+
+/* TODO */
+int SYS_madvise(void *addr, size_t length, int advise){
+	SYSCALL_DEBUG("TODO  madvise : addr:%x lenght: %d  advise:%d \n",addr,length,advise);
+	return 0;
+}
 extern unsigned long SYS_sched_yield();
 syscalltable_t syscalltable[] = {
 /* 0 */
@@ -608,7 +642,7 @@ syscalltable_t syscalltable[] = {
 { SYS_vm_munmap }, { SYS_vm_brk }, { SYS_rt_sigaction }, { SYS_rt_sigprocmask }, { snull }, /* 15 */
 { SYS_ioctl }, { snull }, { snull }, { SYS_fs_readv }, { SYS_fs_writev }, /* 20 */
 { SYS_fs_access }, { SYS_pipe }, { SYS_select }, { SYS_sched_yield }, { snull }, /* 25 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 30 */
+{ snull }, { snull }, { SYS_madvise }, { snull }, { snull }, /* 30 */
 { snull }, { SYS_fs_dup }, { SYS_fs_dup2 }, { snull }, { SYS_nanosleep }, /* 35 = nanosleep */
 { snull }, { SYS_alarm }, { snull }, { SYS_getpid }, { snull }, /* 40 */
 { SYS_socket }, { SYS_connect }, { SYS_accept }, { SYS_sendto }, { SYS_recvfrom }, /* 45 */
@@ -652,7 +686,38 @@ syscalltable_t syscalltable[] = {
 { SYS_exit_group }, { snull }, { snull }, { SYS_tgkill }, { snull }, /* 235 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 240 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 245 */
-{ snull }, { snull }, { snull }, { snull }, };
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 250 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 255 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 260 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 265 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 270 */
+{ snull }, { snull }, { SYS_set_robust_list }, { SYS_get_robust_list }, { snull }, /* 275 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 280 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 285 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 290 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 295 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 300 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 305 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 310 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 315 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 320 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 325 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 330 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 335 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 340 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 345 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 350 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 355 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 360 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 365 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 370 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 375 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 380 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 385 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 390 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 395 */
+{ snull }, { snull }, { snull }, { snull }, { snull }, /* 400 */
+{ snull }, { snull }, { snull }, { snull },  { snull }};
 /****************************************** syscall debug *********************************************/
 
 void print_syscall_stat(struct task_struct *task, int output){
