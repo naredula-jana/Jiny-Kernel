@@ -146,9 +146,12 @@ int virtio_p9_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 /*************************************************************************************************/
 static virtio_p9_jdriver *p9_jdriver;
 static virtio_net_jdriver *net_jdriver;
+
 static virtio_disk_jdriver *disk_jdriver;
+
 extern int diskio_thread(void *arg1, void *arg2);
 extern "C"{
+extern int init_vmxnet3();
 void init_virtio_drivers() {
 	int pid,i;
 
@@ -159,14 +162,16 @@ void init_virtio_drivers() {
 
 	/* init net */
 	net_jdriver = jnew_obj(virtio_net_jdriver);
-	net_jdriver->name = (unsigned char *) "net_driver";
+	net_jdriver->name = (unsigned char *) "net_virtio_driver";
 	register_jdriver(net_jdriver);
+
+	init_vmxnet3();
 
 	pid = sc_createKernelThread(diskio_thread, 0, (unsigned char *) "disk_io", 0);
 
 	/* init disk */
 	disk_jdriver = jnew_obj(virtio_disk_jdriver);
-	disk_jdriver->name = (unsigned char *) "disk_driver";
+	disk_jdriver->name = (unsigned char *) "disk_virtio_driver";
 	register_jdriver(disk_jdriver);
 }
 

@@ -104,6 +104,7 @@ public:
 	int send_kick_needed;
 };
 
+
 class jdiskdriver: public jdriver {
 public:
 	int interrupts_disabled;

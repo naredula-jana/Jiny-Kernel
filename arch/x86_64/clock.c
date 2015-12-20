@@ -80,13 +80,13 @@ unsigned long ar_read_tsc(void){
 
 static spinlock_t	time_spinlock;
 int g_conf_hw_clock __attribute__ ((section ("confdata")))=1;  /* sometimes hw clock is very slow or not accurate , then jiffies can be used at the resoultion of 10ms */
+int g_conf_ms_per_jiffie __attribute__ ((section ("confdata"))) =6;/* instead of 10ms, the apic timer interrupt generating faster , so it canged from 10 to 6*/
 
 unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles per second  */
 unsigned long g_jiffie_errors = 0;
 unsigned long g_jiffie_tsc = 0;
-static unsigned long total_tsc_per_jiffie =0 ;
+static unsigned long total_tsc_per_jiffie __attribute__ ((section ("confdata")))=0 ; /* this data is also like read only data */
 
-int g_conf_ms_per_jiffie __attribute__ ((section ("confdata"))) =6;/* instead of 10ms, the apic timer interrupt generating faster , so it canged from 10 to 6*/
 #define MS_PER_JIFF g_conf_ms_per_jiffie
 #define NS_PER_MS 1000000
 #define NS_PER_JIFFIE (NS_PER_MS*MS_PER_JIFF)
@@ -127,7 +127,6 @@ static unsigned long get_percpu_ns() { /* get percpu nano seconds */
 			g_stat_clock_errors++;
 		}
 		time_ns = (g_jiffies*NS_PER_JIFFIE) +  delta_ns;
-
 	}
 	//stored_system_times_ns[cpu] = time_ns;
 	g_cpu_state[cpu].system_times_ns = time_ns;
@@ -169,7 +168,7 @@ unsigned long ut_get_systemtime_ns(){ /* returns nano seconds */
 }
 
 void ar_update_jiffie() {
-	static int count_for_tsc=0;
+	static int count_for_tsc __attribute__ ((section ("confdata")))=0;
 	if ( g_conf_hw_clock == 1) {
 		unsigned long ms_10 = ut_get_systemtime_ns()/10000000;
 		if (ms_10 > g_jiffies) {
@@ -214,6 +213,7 @@ int init_clock(int cpu_id) {
 		signature[12] = 0;
 		if (ut_strcmp(signature, "KVMKVMKVM") != 0) {
 			ut_log("	FAILED : KVM Clock Signature :%s: \n", signature);
+			g_conf_hw_clock = 0;
 			return JFAIL;
 		}
 		do_cpuid(KVM_CPUID_FEATURES, &cpuid_ret[0]);

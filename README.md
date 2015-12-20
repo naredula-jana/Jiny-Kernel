@@ -43,6 +43,7 @@ More details of the Benchmarks are available at [Jiny-Benchmarks.](../master/doc
     - KVM : virtio + block (vitio-disk) with multi-queue
     - KVM : virtio + Memory ballooning
     - KVM : clock
+    - Vmware : vmxnet3
 - SMP: APIC,MSIX
 - Networking:  Third party tcp/ip stacks as kernel module.
      - TCP/ip stack from UIP ( from [AdamDunkels](https://github.com/adamdunkels/uip)  as kernel module. The above Benchamark-2 is with uip : currently only udp is supported, need to add tcp.

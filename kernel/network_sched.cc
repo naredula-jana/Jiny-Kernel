@@ -59,8 +59,9 @@ network_scheduler net_sched;
 //static int stat_to_driver = 0;
 int g_net_bh_active __attribute__ ((aligned (64))) = 0;
 
-static int stats_pktrecv[1024];
+//static int stats_pktrecv[1024];
 extern "C"{
+#if 0
 void Jcmd_netbhstat(void *arg1,void *arg2){
 	int i;
 	int total=0;
@@ -73,7 +74,7 @@ void Jcmd_netbhstat(void *arg1,void *arg2){
 	}
 	ut_printf("\n total pkts: %d total calls:%d  AVG pkts per call:%d\n",total,count,total/count);
 }
-
+#endif
 }
 
 int network_scheduler::init() {
@@ -100,27 +101,7 @@ int register_netdevice(jdevice *device) {
 	ut_log(" register netdev : %x \n", g_mac[5]);
 	return JSUCCESS;
 }
-int network_scheduler::netRx_BH() {
-	int i, j;
-	int ret = 0;
 
-	for (i = 0; i < device_count; i++) {
-		int max_pkts = g_conf_net_recv_burst;
-		int total_pkts = 0;
-		int pkts = 0;
-		while (ret < g_conf_net_recv_burst) {
-			pkts = device_list[i]->burst_recv(max_pkts);
-			if (pkts == 0) {
-				return ret;
-			}
-			if (pkts < 900 && pkts > 0) {
-				stats_pktrecv[pkts]++;
-			}
-			ret = ret + pkts;
-		}
-	}
-	return ret;
-}
 extern "C" {
 static int net_bh_send();
 extern int init_udpstack();
@@ -131,15 +112,26 @@ static spinlock_t netbhsend_lock;
 static int net_bh_recv() {
 	unsigned long flags;
 	int pkt_consumed = 0;
-	int ret_bh = 0;
+	//int ret_bh = 0;
 	int i;
 
 	for (i = 0; i < net_sched.device_count; i++) {
 		if (net_sched.device_list[i]->check_for_pkts() == 0){
 			continue;
+		} else {
+			int pkts = 0;
+			int ret=0;
+			while (ret < g_conf_net_recv_burst) {
+				pkts = net_sched.device_list[i]->burst_recv(g_conf_net_recv_burst);
+				if (pkts == 0) {
+					break;
+				}
+				ret = ret + pkts;
+			}
+			pkt_consumed=pkt_consumed+ret;
 		}
-		break;
 	}
+#if 0
 	if (i == net_sched.device_count){
 		return 0;
 	}
@@ -160,9 +152,9 @@ static int net_bh_recv() {
 		net_sched.device->ioctl(NETDEV_IOCTL_ENABLE_RECV_INTERRUPTS, 0);
 		pkt_consumed = net_sched.netRx_BH();
 	}
-
+#endif
 last:
-	return 1;
+	return pkt_consumed;
 }
 extern int g_conf_test_dummy_send;
 /* TODO -1 : currently it is assumed for 1 nic, later this need to be extended for multiple nics*/
@@ -376,7 +368,7 @@ void Jcmd_network(unsigned char *arg1, unsigned char *arg2) {
 				send_queues[i]->error_empty_check =0;
 			}
 		}
-		ut_printf(" Mac-address : %x:%x:%x:%x:%x:%x current interrupt disable:%i qeuesstatus:%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],g_net_interrupts_disable,sendqs_empty);
+		ut_printf(" new Mac-address : %x:%x:%x:%x:%x:%x current interrupt disable:%i qeuesstatus:%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],g_net_interrupts_disable,sendqs_empty);
 	}
 	socket::print_all_stats();
 

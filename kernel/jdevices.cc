@@ -22,8 +22,6 @@ typedef struct {
 	  uint16_t device_id;
 }pci_device_vendor_t ;
 
-#define PCI_VENDOR_ID_VMWARE        0x15ad
-#define PCI_DEVICE_ID_VMWARE_VMXNET3     0x07B0
 pci_device_vendor_t pci_device_vendor_list []={
 		{"PIIX3 IDE Interface (Triton II)",0x8086,0x7010},
 		{"PIIX3 PCI-to-ISA Bridge (Triton II)", 0x8086,0x7000},
@@ -38,7 +36,7 @@ pci_device_vendor_t pci_device_vendor_list []={
 		{"Virtio net device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_NET_DEVICE_ID},
 		{"Virtio p9 device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_9P_DEVICE_ID},
 		{"Virtio ballon device",VIRTIO_PCI_VENDOR_ID,VIRTIO_PCI_BALLOON_DEVICE_ID},
-		{"VMWARE net device vmxnet3",PCI_VENDOR_ID_VMWARE,PCI_DEVICE_ID_VMWARE_VMXNET3},
+		{"Vmxnet3",PCI_VENDOR_ID_VMWARE,PCI_DEVICE_ID_VMWARE_VMXNET3},
 		{0,0,0}
 };
 jdevice::jdevice(unsigned char *arg_name, int arg_type){

@@ -254,13 +254,12 @@ class virtio_queue: public jobject {
 
 public:
 	bool virtqueue_enable_cb_delayed();
-	void sync_avial_idx(struct vring_queue *vq);
-	//void detach_buf( unsigned int head);
+	void sync_avial_idx();
 	void notify();
 	void init_virtqueue(unsigned int num,  unsigned int vring_align,  unsigned long pci_ioaddr, void *pages,
 					      void (*callback)(struct virtio_queue *), const char *name, int queue_number);
 
-	struct vring_queue *queue;
+	struct vring_queue queue;
 	unsigned long stat_add_success,stat_add_fails,stat_add_pkts;
 	unsigned long stat_rem_success,stat_rem_fails,stat_rem_pkts;
 	unsigned long stat_error_empty_bufs;

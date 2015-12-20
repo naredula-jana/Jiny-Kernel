@@ -33,7 +33,7 @@ OBJ_ARCH=  arch/$(ARCH_DIR)/vsyscall_emu_64.o \
 	arch/$(ARCH_DIR)/paging.o \
 	arch/$(ARCH_DIR)/interrupt.o  
 	
-OBJ_DRIVER = drivers/display.o drivers/driver_keyboard.o drivers/driver_serial.o 
+OBJ_DRIVER = drivers/display.o drivers/driver_keyboard.o drivers/driver_serial.o drivers/vmware/vmxnet3_main.o
 
 OBJ_KERNEL = kernel/debug.o kernel/jdevices.o kernel/init.o  kernel/acpi.o kernel/ipc.o  kernel/network_sched.o kernel/kshell.o  kernel/symbol_table.o  kernel/syscall.o  kernel/sched_task.o  kernel/util.o kernel/module_app.o kernel/blk_sched.o
 	
@@ -99,6 +99,7 @@ endif
 	make SOURCE_ROOT=$$PWD -C modules/uip-uip-1-0/uip
 	make SOURCE_ROOT=$$PWD -C drivers/virtio
 	make SOURCE_ROOT=$$PWD -C drivers/virtio/9p
+	make SOURCE_ROOT=$$PWD -C drivers/vmware
 	make SOURCE_ROOT=$$PWD -C arch/$(ARCH_DIR)
 	make SOURCE_ROOT=$$PWD -C arch/$(ARCH_DIR)/smp
 	make SOURCE_ROOT=$$PWD -C mm

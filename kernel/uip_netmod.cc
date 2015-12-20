@@ -253,10 +253,13 @@ int network_stack::write(network_connection *conn, uint8_t *app_data, int app_le
 						ut_memset(test_dbuf,0,10);
 						test_dbuf = test_dbuf +10;
 						ut_memcpy(test_dbuf, send_buf, send_len+50);
-						ret = net_send_eth_frame(test_dbuf, send_len, WRITE_SLEEP_TILL_SEND);
-						if (ret == JFAIL) {
-							jfree_page(test_dbuf);
-						}
+						do {
+							ret = net_send_eth_frame(test_dbuf, send_len, WRITE_SLEEP_TILL_SEND);
+							if (ret == JFAIL) {
+								//jfree_page(test_dbuf);
+								ut_sleep_ns(20);
+							}
+						}while(ret == JFAIL);
 					}
 				}
 			}
