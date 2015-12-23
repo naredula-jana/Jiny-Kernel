@@ -1,0 +1,9 @@
+jana@jana-VirtualBox:/opt_src/Jiny-Kernel/test/tree_lib$ ./a.out 
+insert boy ret:1  
+insert apple ret:1  
+insert cat ret:1  
+insert apple ret:-1  
+search cat :1
+search apple :1
+search dog :0
+
