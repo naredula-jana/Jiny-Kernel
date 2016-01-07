@@ -156,6 +156,7 @@ int enable_msix(device_t *dev);
 
 #define PCI_VENDOR_ID_VMWARE        0x15ad
 #define PCI_DEVICE_ID_VMWARE_VMXNET3     0x07B0
+#define PCI_DEVICE_ID_VMWARE_PVSCSI 0x07C0
 
 void init_pci_device(uint16_t vendor_id, uint16_t device_id, int msi_enabled , int *(init)(pci_dev_header_t pci,pci_bar_t bars[], uint32_t len,uint32_t *msi_vector));
 int init_virtio_pci(pci_dev_header_t *pci_hdr, pci_bar_t bars[], uint32_t len,uint32_t *msi_vector);

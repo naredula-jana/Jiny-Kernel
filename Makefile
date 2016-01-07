@@ -33,7 +33,7 @@ OBJ_ARCH=  arch/$(ARCH_DIR)/vsyscall_emu_64.o \
 	arch/$(ARCH_DIR)/paging.o \
 	arch/$(ARCH_DIR)/interrupt.o  
 	
-OBJ_DRIVER = drivers/display.o drivers/driver_keyboard.o drivers/driver_serial.o drivers/vmware/vmxnet3_main.o
+OBJ_DRIVER = drivers/display.o drivers/driver_keyboard.o drivers/driver_serial.o drivers/vmware/vmxnet3_main.o drivers/vmware/pvscsi.o
 
 OBJ_KERNEL = kernel/debug.o kernel/jdevices.o kernel/init.o  kernel/acpi.o kernel/ipc.o  kernel/network_sched.o kernel/kshell.o  kernel/symbol_table.o  kernel/syscall.o  kernel/sched_task.o  kernel/util.o kernel/module_app.o kernel/blk_sched.o
 	

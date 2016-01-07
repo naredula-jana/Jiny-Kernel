@@ -20,10 +20,6 @@ extern "C" {
 
 }
 /*****************************  Virtio Disk ********************************************/
-
-#define DISK_READ 0
-#define DISK_WRITE 1
-
 #define VIRTIO_BLK_S_OK 0
 #define VIRTIO_BLK_S_IOERR 1
 #define VIRTIO_BLK_S_UNSUPP 2
@@ -47,7 +43,7 @@ static int virtio_disk_interrupt(void *private_data) {
 	}
 	return 0;
 }
-
+#if 1
 struct virtio_scsi_blk_req {
 	/* out hdr-1, common to block and scsi */
 	uint32_t type;
@@ -85,6 +81,7 @@ enum {
 	SCSI_CMD_SYNCHRONIZE_CACHE_16 = 0x91,
 	SCSI_CMD_REPORT_LUNS = 0xA0,
 };
+#endif
 struct cdb_readwrite_16 {
 	uint8_t command;
 	uint8_t flags;
@@ -113,124 +110,12 @@ static void req_construct(unsigned char *buf, unsigned long offset,
 	req->count = bswap32(count);
 	req->command = SCSI_CMD_READ_16;
 }
-void *virtio_disk_jdriver::scsi_addBufToQueue(int type, unsigned char *buf_arg,
-		uint64_t len, uint64_t sector, uint64_t data_len) {
-#if 0
-	struct virtqueue *tmp_vq = this->queues[0].send;
-	struct virtio_scsi_blk_req *req;
-	struct scatterlist sg[8];
-	int ret;
-	int transfer_len=len;
-	int out,in;
-	unsigned char *buf=0;
-	ut_printf("Sending the SCSI request sector:%x len:%d  :%d \n",sector,len,data_len);
-	if (buf == 0) {
-		//buf = (unsigned char *) jalloc_page(0);
-		buf = mm_getFreePages(0,1); /* TODO: for write request does not work, need to copy the data buf */
-	}
-	if (buf == 0 ) {
-		BRK;
-	}
 
-	req = (struct virtio_scsi_blk_req *)buf;
-	ut_memset(buf, 0, sizeof(struct virtio_scsi_blk_req));
-	req->sector = sector;
-	if (type == DISK_READ) {
-		req->type = VIRTIO_BLK_T_SCSI_CMD;
-		out = 2;
-		in = 4;
-	} else {
-		req->type = VIRTIO_BLK_T_OUT;
-		if (data_len>VIRTIO_BLK_DATA_SIZE) {
-			ut_memcpy(buf+16, buf_arg, VIRTIO_BLK_DATA_SIZE);
-		} else {
-			ut_memcpy(buf+16, buf_arg, data_len);
-		}
-		out = 2;
-		in = 1;
-
-	}
-	req->status = 0xff;
-	int cmd_len=100;
-	int scsi_sense_hdr = SCSI_SENSE_BUFFERSIZE;
-	int resp_len=4*4; /* scsi response */
-	if (transfer_len < blk_size) {
-		transfer_len=blk_size;
-	}
-
-	sg[0].page_link = (unsigned long) buf;
-	sg[0].length = 16;
-	sg[0].offset = 0;
-
-	req_construct(buf+16, sector*512, len );
-	sg[1].page_link = (unsigned long) buf + 16;
-	sg[1].length = 16;
-	sg[1].offset = 0;
-
-	sg[2].page_link = (unsigned long) (buf + 16 + cmd_len);
-	sg[2].length = transfer_len;
-	sg[2].offset = 0;
-
-	sg[3].page_link = (unsigned long) (buf + 16 + cmd_len + VIRTIO_BLK_DATA_SIZE);
-	sg[3].length = scsi_sense_hdr;
-	sg[3].offset = 0;
-
-	sg[4].page_link = (unsigned long) (buf + 16 + cmd_len + VIRTIO_BLK_DATA_SIZE + scsi_sense_hdr);
-	sg[4].length = resp_len;
-	sg[4].offset = 0;
-
-	sg[5].page_link = (unsigned long) (buf + 16 + cmd_len + VIRTIO_BLK_DATA_SIZE + scsi_sense_hdr + resp_len);
-	sg[5].length = 1;
-	sg[5].offset = 0;
-
-	//DEBUG(" scatter gather-0: %x:%x sg-1 :%x:%x \n",sg[0].page_link,__pa(sg[0].page_link),sg[1].page_link,__pa(sg[1].page_link));
-
-	virtio_disable_cb(tmp_vq);
-	ret = virtio_add_buf_to_queue(tmp_vq, sg, out, in, (void *) sg[0].page_link, 0);/* send q */
-	queue_kick(queues[0].send);
-
-	virtio_enable_cb(tmp_vq);
-	sc_sleep(2000);
-	return 0; /* remove later */
-#endif
-	//return (void *)buf;
-}
 void virtio_disk_jdriver::print_stats(unsigned char *arg1,
 		unsigned char *arg2) {
 	queues[0].send->print_stats(0, 0);
 }
-struct virtio_blk_req *virtio_disk_jdriver::createBuf(int type,
-		unsigned char *user_buf, uint64_t sector, uint64_t data_len) {
-	unsigned char *buf = 0;
-	struct virtio_blk_req *req;
-	int donot_copy = 0;
 
-	if (user_buf >= pc_startaddr && user_buf < pc_endaddr) {
-		donot_copy = 1;
-		buf = mm_getFreePages(0, 0);
-		req = (struct virtio_blk_req *) buf;
-		ut_memset(buf, 0, sizeof(struct virtio_blk_req));
-		req->user_data = user_buf;
-	} else {
-		buf = mm_getFreePages(0, 1);
-		req = (struct virtio_blk_req *) buf;
-		ut_memset(buf, 0, sizeof(struct virtio_blk_req));
-		req->user_data = 0;
-	}
-
-	req->sector = sector;
-	if (type == DISK_READ) {
-		req->type = VIRTIO_BLK_T_IN;
-	} else {
-		req->type = VIRTIO_BLK_T_OUT;
-		if (donot_copy == 0) {
-			ut_memcpy(&req->data[0], user_buf, data_len);
-		}
-	}
-	req->status = 0xff;
-	req->len = data_len;
-	return req;
-}
 int virtio_disk_jdriver::MaxBufsSpace() {
 	return queues[0].send->MaxBufsSpace();
 }
@@ -315,7 +200,7 @@ static uint16_t virtio_config16(unsigned long pcio_addr) {
  __u16 num_queues;
  }
  */
-int virtio_disk_jdriver::disk_attach_device(class jdevice *jdev) {
+int virtio_disk_jdriver::init_device(class jdevice *jdev) {
 	auto pci_ioaddr = jdev->pci_device.pci_ioaddr;
 	pci_dev_header_t *pci_hdr = &device->pci_device.pci_header;
 	uint32_t features;
@@ -435,16 +320,12 @@ int virtio_disk_jdriver::probe_device(class jdevice *jdev) {
 	}
 	return JFAIL;
 }
-extern "C" {
-extern int init_tarfs(jdriver *driver_arg);
-}
 extern jdriver *disk_drivers[];
-
 jdriver *virtio_disk_jdriver::attach_device(class jdevice *jdev) {
 	int i;
 
 	COPY_OBJ(virtio_disk_jdriver, this, new_obj, jdev);
-	((virtio_disk_jdriver *) new_obj)->disk_attach_device(jdev);
+	((virtio_disk_jdriver *) new_obj)->init_device(jdev);
 	for (i = 0; i < 5; i++) {
 		if (disk_drivers[i] == 0) {
 			disk_drivers[i] = (jdriver *) new_obj;
@@ -465,72 +346,18 @@ int virtio_disk_jdriver::dettach_device(jdevice *jdev) {
 	return JFAIL;
 }
 
-#define MAX_REQS 10
-int diskio_submit_requests(struct virtio_blk_req **buf, int len,
-		virtio_disk_jdriver *dev, unsigned char *user_buf, int user_len,
-		int intial_skip, int read_ahead);
-int virtio_disk_jdriver::disk_io(int type, unsigned char *buf, int len,
-		int offset, int read_ahead) {
-	struct virtio_blk_req *reqs[MAX_REQS], *tmp_req;
-	int sector;
-	int i, req_count, data_len, curr_len, max_reqs;
-	int initial_skip, blks;
-	unsigned long addr, flags;
-	int qlen, ret;
-	ret = 0;
-	int curr_offset;
-	int scsi_type = 0;
-
-	if (device->pci_device.pci_header.device_id == VIRTIO_PCI_SCSI_DEVICE_ID) {
-		scsi_type = 1;
-		ut_printf(" scsi reading ..\n");
-		//BRK;
-	}
-
-	sector = offset / blk_size;
-	initial_skip = offset - sector * blk_size;
-
-	data_len = len + initial_skip;
-	curr_offset = offset - initial_skip;
-	curr_len = data_len;
-	max_reqs = 5;
-
-	for (req_count = 0; req_count < max_reqs && curr_len > 0; req_count++) {
-		int req_len = curr_len;
-		if (req_len > VIRTIO_BLK_DATA_SIZE) {
-			req_len = VIRTIO_BLK_DATA_SIZE;
-		}
-		if ((req_len + curr_offset) >= disk_size) {
-			req_len = disk_size - curr_offset;
-		}
-
-		blks = req_len / blk_size;
-		if ((blks * blk_size) != req_len) {
-			req_len = (blks + 1) * blk_size;
-		}
-		reqs[req_count] = createBuf(type,
-				buf + (req_count * VIRTIO_BLK_DATA_SIZE), sector, req_len);
-		curr_offset = curr_offset + VIRTIO_BLK_DATA_SIZE;
-		curr_len = curr_len - VIRTIO_BLK_DATA_SIZE;
-	}
-	ret = diskio_submit_requests(reqs, req_count, this, buf, len, initial_skip,
-			read_ahead);
-
-//		ut_printf("%d -> %d  DATA :%x :%x  disksize:%d blksize:%d\n",i,disk_bufs[i]->status,disk_bufs[i]->data[0],disk_bufs[i]->data[1],disk_size,blk_size);
-	return ret;
-}
 
 int virtio_disk_jdriver::read(unsigned char *buf, int len, int offset,
 		int read_ahead) {
 	int ret;
 //ut_log(" read len :  %d offset:%d \n",len, offset);
-	ret = disk_io(DISK_READ, buf, len, offset, read_ahead);
+	ret = disk_io(DISK_READ, buf, len, offset, read_ahead, this);
 	return ret;
 }
 int virtio_disk_jdriver::write(unsigned char *buf, int len, int offset) {
 	int ret;
 
-	ret = disk_io(DISK_WRITE, buf, len, offset, 0);
+	ret = disk_io(DISK_WRITE, buf, len, offset, 0, this);
 	return ret;
 }
 int virtio_disk_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {

@@ -152,6 +152,7 @@ static virtio_disk_jdriver *disk_jdriver;
 extern int diskio_thread(void *arg1, void *arg2);
 extern "C"{
 extern int init_vmxnet3();
+extern int init_pvscsi_driver();
 void init_virtio_drivers() {
 	int pid,i;
 
@@ -173,6 +174,7 @@ void init_virtio_drivers() {
 	disk_jdriver = jnew_obj(virtio_disk_jdriver);
 	disk_jdriver->name = (unsigned char *) "disk_virtio_driver";
 	register_jdriver(disk_jdriver);
+	init_pvscsi_driver();
 }
 
 virtio_queue *virtio_jdriver_getvq(void *driver, int index) {

@@ -104,24 +104,26 @@ public:
 	int send_kick_needed;
 };
 
-
 class jdiskdriver: public jdriver {
 public:
 	int interrupts_disabled;
+	unsigned long disk_size,blk_size;
+	uint16_t max_vqs;
 	wait_queue *waitq;
 	virtual void burst_send(struct struct_mbuf *mbuf, int len)=0;
 	virtual int burst_recv(struct struct_mbuf *mbuf, int len)=0;
 	virtual int MaxBufsSpace()=0;
+	int init_device(jdevice *dev);
 };
-
+extern "C" {
+extern int init_tarfs(jdriver *driver_arg);
+}
+int disk_io(int type, unsigned char *buf, int len, int offset, int read_ahead, jdiskdriver *driver) ;
+#define DISK_READ 0
+#define DISK_WRITE 1
 #define IOCTL_DISK_SIZE 1
 class virtio_disk_jdriver: public jdiskdriver {
-	unsigned long disk_size,blk_size;
-	int disk_attach_device(jdevice *dev);
-	struct virtio_blk_req *createBuf(int type, unsigned char *buf,uint64_t sector,uint64_t data_len);
 
-	void *scsi_addBufToQueue(int type, unsigned char *buf, uint64_t len, uint64_t sector,uint64_t data_len);
-	int disk_io(int type,unsigned char *buf, int len, int offset,int read_ahead);
 public:
 	struct virt_queue{
 		disk_virtio_queue *send;
@@ -132,6 +134,7 @@ public:
 	int MaxBufsSpace();
 	void burst_send(struct struct_mbuf *mbuf, int len);
 	int burst_recv(struct struct_mbuf *mbuf, int len);
+	int init_device(jdevice *dev);
 
 	void print_stats(unsigned char *arg1,unsigned char *arg2);
 	int probe_device(jdevice *dev);

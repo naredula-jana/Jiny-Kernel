@@ -180,7 +180,79 @@ int diskio_submit_requests(struct virtio_blk_req **reqs, int req_count, virtio_d
 	}
 	return ret;
 }
+struct virtio_blk_req *createBuf(int type, unsigned char *user_buf, uint64_t sector, uint64_t data_len) {
+	unsigned char *buf = 0;
+	struct virtio_blk_req *req;
+	int donot_copy = 0;
 
+	if (user_buf >= pc_startaddr && user_buf < pc_endaddr) {
+		donot_copy = 1;
+		buf = mm_getFreePages(0, 0);
+		req = (struct virtio_blk_req *) buf;
+		ut_memset(buf, 0, sizeof(struct virtio_blk_req));
+		req->user_data = user_buf;
+	} else {
+		buf = mm_getFreePages(0, 1);
+		req = (struct virtio_blk_req *) buf;
+		ut_memset(buf, 0, sizeof(struct virtio_blk_req));
+		req->user_data = 0;
+	}
+
+	req->sector = sector;
+	if (type == DISK_READ) {
+		req->type = VIRTIO_BLK_T_IN;
+	} else {
+		req->type = VIRTIO_BLK_T_OUT;
+		if (donot_copy == 0) {
+			ut_memcpy(&req->data[0], user_buf, data_len);
+		}
+	}
+	req->status = 0xff;
+	req->len = data_len;
+	return req;
+}
+#define MAX_REQS 10
+int disk_io(int type, unsigned char *buf, int len, int offset, int read_ahead, jdiskdriver *driver) {
+	struct virtio_blk_req *reqs[MAX_REQS], *tmp_req;
+	int sector;
+	int i, req_count, data_len, curr_len, max_reqs;
+	int initial_skip, blks;
+	unsigned long addr, flags;
+	int qlen, ret;
+	ret = 0;
+	int curr_offset;
+
+
+	sector = offset / driver->blk_size;
+	initial_skip = offset - sector * driver->blk_size;
+
+	data_len = len + initial_skip;
+	curr_offset = offset - initial_skip;
+	curr_len = data_len;
+	max_reqs = 5;
+
+	for (req_count = 0; req_count < max_reqs && curr_len > 0; req_count++) {
+		int req_len = curr_len;
+		if (req_len > VIRTIO_BLK_DATA_SIZE) {
+			req_len = VIRTIO_BLK_DATA_SIZE;
+		}
+		if ((req_len + curr_offset) >= driver->disk_size) {
+			req_len = driver->disk_size - curr_offset;
+		}
+
+		blks = req_len / driver->blk_size;
+		if ((blks * driver->blk_size) != req_len) {
+			req_len = (blks + 1) * driver->blk_size;
+		}
+		reqs[req_count] = createBuf(type, buf + (req_count * VIRTIO_BLK_DATA_SIZE), sector, req_len);
+		curr_offset = curr_offset + VIRTIO_BLK_DATA_SIZE;
+		curr_len = curr_len - VIRTIO_BLK_DATA_SIZE;
+	}
+	ret = diskio_submit_requests(reqs, req_count, driver, buf, len, initial_skip,
+			read_ahead);
+
+	return ret;
+}
 static int extract_reqs_from_devices(virtio_disk_jdriver *dev) {
 	int ret = 0;
 	int loop = 10;

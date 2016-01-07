@@ -908,7 +908,7 @@ unsigned char *g_conf_tarfs_dummy_prefix  __attribute__ ((section ("confdata")))
 int init_tarfs(jdriver *driver_arg) {
 	tarfs_obj = jnew_obj(tar_fs);
 	if (tarfs_obj->init(driver_arg, g_conf_tarfs_extent_size, g_conf_tarfs_dummy_prefix) == JFAIL) return JFAIL;
-	if (driver_arg->device->pci_device.pci_header.device_id == VIRTIO_PCI_SCSI_DEVICE_ID){
+	if (driver_arg->device->pci_device.pci_header.device_id == PCI_DEVICE_ID_VMWARE_PVSCSI){
 		return fs_registerFileSystem(tarfs_obj, (unsigned char *)"tar_fs1");
 	}else{
 		return fs_registerFileSystem(tarfs_obj, (unsigned char *)"tar_fs");
