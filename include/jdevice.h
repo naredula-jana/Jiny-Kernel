@@ -110,7 +110,7 @@ public:
 	unsigned long disk_size,blk_size;
 	uint16_t max_vqs;
 	wait_queue *waitq;
-	virtual void burst_send(struct struct_mbuf *mbuf, int len)=0;
+	virtual int burst_send(struct struct_mbuf *mbuf, int len)=0;
 	virtual int burst_recv(struct struct_mbuf *mbuf, int len)=0;
 	virtual int MaxBufsSpace()=0;
 	int init_device(jdevice *dev);
@@ -132,7 +132,7 @@ public:
 	unsigned char *unfreed_req;
 
 	int MaxBufsSpace();
-	void burst_send(struct struct_mbuf *mbuf, int len);
+	int burst_send(struct struct_mbuf *mbuf, int len);
 	int burst_recv(struct struct_mbuf *mbuf, int len);
 	int init_device(jdevice *dev);
 

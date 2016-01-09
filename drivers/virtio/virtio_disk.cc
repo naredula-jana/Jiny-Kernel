@@ -55,7 +55,7 @@ int virtio_disk_jdriver::MaxBufsSpace() {
 int virtio_disk_jdriver::burst_recv(struct struct_mbuf *mbuf_list, int len) {
 	return queues[0].send->BulkRemoveFromQueue(mbuf_list, len);
 }
-void virtio_disk_jdriver::burst_send(struct struct_mbuf *mbuf, int len) {
+int virtio_disk_jdriver::burst_send(struct struct_mbuf *mbuf, int len) {
 	int ret;
 
 	queues[0].send->virtio_disable_cb();
@@ -65,7 +65,7 @@ void virtio_disk_jdriver::burst_send(struct struct_mbuf *mbuf, int len) {
 	if (interrupts_disabled == 0) {
 		queues[0].send->virtio_enable_cb();
 	}
-	return;
+	return ret;
 }
 
 static uint64_t virtio_config64(unsigned long pcio_addr) {
@@ -267,7 +267,7 @@ jdriver *virtio_disk_jdriver::attach_device(class jdevice *jdev) {
 	}
 
 	((virtio_disk_jdriver *) new_obj)->waitq = jnew_obj(wait_queue,
-			"waitq_disk", 0)
+			"waitq_cirtio_disk", 0)
 	;
 	//spin_lock_init(&((virtio_disk_jdriver *)new_obj)->io_lock);
 	init_tarfs((jdriver *) new_obj);

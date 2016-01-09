@@ -111,6 +111,7 @@ static int get_from_diskreq(int i, unsigned long req_no) {
 			stat_read_ahead_txts++;
 			disk_reqs[i].read_ahead = 0;
 		}
+		disk_reqs[i].state = 0;
 		disk_reqs[i].buf = 0;
 	}
 
@@ -140,6 +141,7 @@ int diskio_submit_requests(struct virtio_blk_req **reqs, int req_count, virtio_d
 	}
 	current_req_no++;
 	req_no = current_req_no;
+	ret = -1;
 	for (i=0; i<MAX_DISK_REQS && k<req_count; i++){
 		if (disk_reqs[i].buf!=0) { continue; }
 		disk_reqs[i].dev = dev;
@@ -164,7 +166,7 @@ int diskio_submit_requests(struct virtio_blk_req **reqs, int req_count, virtio_d
 	}
 	spin_unlock_irqrestore(&diskio_lock, flags);
 	if (ret >= 0){
-		if (read_ahead == 1){
+		if (read_ahead == 1){ /* user of disk request does not wait */
 			int count=0;
 			for (i=0; i<MAX_DISK_REQS ; i++){
 				if (disk_reqs[i].buf!=0 && disk_reqs[i].state==0) { count++; }
@@ -260,33 +262,36 @@ static int extract_reqs_from_devices(jdiskdriver *dev) {
 	int i, qlen;
 	struct struct_mbuf mbuf_list[64];
 	unsigned char *req;
-	int k;
+	int k,found;
 
 	ret = dev->burst_recv(&mbuf_list[0], 63);
 	for (k=0;  k < ret; k++) {
 		loop--;
 		req = mbuf_list[k].buf;
 		qlen = mbuf_list[k].len;
+		mbuf_list[k].buf =0;
 
 		if (req == 0 ) {
 			BUG();
 		}
+		found=0;
 		for (i = 0; i < MAX_DISK_REQS; i++) {
 			if (disk_reqs[i].buf == 0) {
 				continue;
 			}
 			if (disk_reqs[i].buf == req) {
 				disk_reqs[i].state = STATE_REQ_COMPLETED;
+				found=1;
 				break;
 			}
 		}
-		if ( i==MAX_DISK_REQS ){
+		if ( found==0 ){
 			BUG();
 		}
 	}
 	return ret;
 }
-static struct  struct_mbuf disk_mbufs[MAX_DISK_REQS];
+static struct  struct_mbuf mbufs[MAX_DISK_REQS];
 extern "C" {
  int g_conf_disk_bulkio  __attribute__ ((section ("confdata"))) =1;
 }
@@ -328,15 +333,27 @@ int diskio_thread(void *arg1, void *arg2) {
 				k = 0;
 				for (j = i; j < MAX_DISK_REQS && k < bufs_space; j++) {
 					if (disk_reqs[j].buf != 0 && disk_reqs[j].state == 0 && disk_reqs[j].dev == disk_reqs[i].dev) {
-						disk_mbufs[k].buf = (unsigned char *) disk_reqs[j].buf;
-						disk_mbufs[k].len = disk_reqs[j].data_len;
+						mbufs[k].buf = (unsigned char *) disk_reqs[j].buf;
+						mbufs[k].len = disk_reqs[j].data_len;
 						disk_reqs[j].state = STATE_REQ_QUEUED;
 						progress++;
 						k++;
 					}
 				}
 				if (k > 0) {
-					disk_reqs[i].dev->burst_send(&disk_mbufs[0], k);
+					int ret;
+					ret = disk_reqs[i].dev->burst_send(&mbufs[0], k);
+					if (ret < k){ /* revert the queued status of the buf */
+						int m;
+						for (j=ret; j<k; j++){
+							for (m=0; m<MAX_DISK_REQS; m++){
+								if (disk_reqs[m].buf == mbufs[j].buf){
+									disk_reqs[m].state =0 ;/* revert the state */
+									break;
+								}
+							}
+						}
+					}
 				}
 			}
 			if (disk_reqs[i].state == STATE_REQ_QUEUED){
