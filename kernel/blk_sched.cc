@@ -222,10 +222,8 @@ int disk_io(int type, unsigned char *buf, int len, int offset, int read_ahead, j
 	ret = 0;
 	int curr_offset;
 
-
 	sector = offset / driver->blk_size;
 	initial_skip = offset - sector * driver->blk_size;
-
 	data_len = len + initial_skip;
 	curr_offset = offset - initial_skip;
 	curr_len = data_len;
@@ -235,6 +233,9 @@ int disk_io(int type, unsigned char *buf, int len, int offset, int read_ahead, j
 		int req_len = curr_len;
 		if (req_len > VIRTIO_BLK_DATA_SIZE) {
 			req_len = VIRTIO_BLK_DATA_SIZE;
+		}
+		if (curr_offset > driver->disk_size){
+			break;
 		}
 		if ((req_len + curr_offset) >= driver->disk_size) {
 			req_len = driver->disk_size - curr_offset;
@@ -253,7 +254,7 @@ int disk_io(int type, unsigned char *buf, int len, int offset, int read_ahead, j
 
 	return ret;
 }
-static int extract_reqs_from_devices(virtio_disk_jdriver *dev) {
+static int extract_reqs_from_devices(jdiskdriver *dev) {
 	int ret = 0;
 	int loop = 10;
 	int i, qlen;
