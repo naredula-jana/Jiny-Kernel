@@ -180,7 +180,7 @@ struct class_types {
 	int count; /* currently active objects */
 	jobject *list;   /* list of objects */
 	unsigned char *name;
-	int sz;
+	unsigned long sz;
 	unsigned long stat_add,stat_remove;
 };
 //#define CLASS_ID_START 0x5 /* this is to avoid 0 index */
@@ -192,6 +192,7 @@ static unsigned long curr_obj_id=1; /* running serial number */
 int ut_obj_add(jobject *obj,unsigned char *name, int sz) {
 	/* Note: constructor is needed for every class, otherwise entire object initiazed by c++ with zero after new, during that all the entries created in obj class willbe erased. */
 	int i;
+	int found=0;
 	unsigned long flags;
 
 	spin_lock_irqsave(&g_global_lock, flags);
@@ -206,11 +207,18 @@ int ut_obj_add(jobject *obj,unsigned char *name, int sz) {
 			obj->jclass_id = i;
 			curr_obj_id++;
 			classtype_list[i].stat_add++;
+			found=1;
 			break;
 		}
 	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
-
+#if 1
+	if (found==0){
+		ut_log("%d: ERROR Class NOT found:%s \n",curr_obj_id,name);
+	}else{
+	//	ut_log("%d: Class found:%s \n",curr_obj_id,name);
+	}
+#endif
 	return 0;
 }
 int ut_obj_free(jobject *obj) {

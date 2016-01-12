@@ -77,7 +77,7 @@ static int get_from_diskreq(int i, unsigned long req_no) {
 	int initial_skip;
 	int tlen;
 	struct virtio_blk_req *req;
-
+	virtio_disk_jdriver *driver=disk_reqs[i].dev;
 	ret = 0;
 	if (disk_reqs[i].buf == 0) {
 		return ret;
@@ -92,14 +92,14 @@ static int get_from_diskreq(int i, unsigned long req_no) {
 		}
 		initial_skip = disk_reqs[i].initial_skip;
 		req = disk_reqs[i].buf;
-		if ((VIRTIO_BLK_DATA_SIZE - initial_skip) > disk_reqs[i].user_len) {
+		if ((driver->req_blk_size - initial_skip) > disk_reqs[i].user_len) {
 			tlen = disk_reqs[i].user_len;
 		} else {
-			tlen = VIRTIO_BLK_DATA_SIZE - initial_skip;
+			tlen = driver->req_blk_size - initial_skip;
 		}
 		if (req->user_data == 0) {
-			ut_memcpy(disk_reqs[i].user_buf + (i * VIRTIO_BLK_DATA_SIZE),
-					&req->data[initial_skip], tlen);
+			// TODO: ut_memcpy(disk_reqs[i].user_buf + (i * driver->req_blk_size), &req->data[initial_skip], tlen);
+			ut_memcpy(disk_reqs[i].user_buf, &req->data[initial_skip], tlen);
 			stat_diskcopy_txts++;
 			mm_putFreePages(disk_reqs[i].buf, 1);
 		} else {
@@ -229,12 +229,15 @@ int disk_io(int type, unsigned char *buf, int len, int offset, int read_ahead, j
 	data_len = len + initial_skip;
 	curr_offset = offset - initial_skip;
 	curr_len = data_len;
-	max_reqs = 5;
+	//max_reqs = 5;
+	max_reqs = 1; /* TODO : need a fox to support multiple reqs in function diskio_submit_requests */
 
 	for (req_count = 0; req_count < max_reqs && curr_len > 0; req_count++) {
 		int req_len = curr_len;
-		if (req_len > VIRTIO_BLK_DATA_SIZE) {
-			req_len = VIRTIO_BLK_DATA_SIZE;
+		int req_blk_size=driver->req_blk_size;
+
+		if (req_len > req_blk_size) {
+			req_len = req_blk_size;
 		}
 		if (curr_offset > driver->disk_size){
 			break;
@@ -247,9 +250,10 @@ int disk_io(int type, unsigned char *buf, int len, int offset, int read_ahead, j
 		if ((blks * driver->blk_size) != req_len) {
 			req_len = (blks + 1) * driver->blk_size;
 		}
-		reqs[req_count] = createBuf(type, buf + (req_count * VIRTIO_BLK_DATA_SIZE), sector, req_len);
-		curr_offset = curr_offset + VIRTIO_BLK_DATA_SIZE;
-		curr_len = curr_len - VIRTIO_BLK_DATA_SIZE;
+		reqs[req_count] = createBuf(type, buf + (req_count * req_blk_size), sector, req_len);
+		curr_offset = curr_offset + req_blk_size;
+		curr_len = curr_len - req_blk_size;
+		sector = sector + (req_len/driver->blk_size);
 	}
 	ret = diskio_submit_requests(reqs, req_count, driver, buf, len, initial_skip,
 			read_ahead);

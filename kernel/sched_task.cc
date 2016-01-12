@@ -547,6 +547,10 @@ static int continue_parent_task(unsigned long ppid){
 	spin_unlock_irqrestore(&g_global_lock, flags);
 	return JSUCCESS;
 }
+//extern "c" {
+extern int Jcmd_maps(char *arg1, char *arg2);
+extern int Jcmd_pt(char *arg1, char *arg2);
+//}
 /* This function should not block, if it block then the idle thread may block */
 void sc_delete_task(struct task_struct *task) {
 	unsigned long intr_flags;
@@ -597,7 +601,8 @@ void sc_delete_task(struct task_struct *task) {
 		unsigned long tsc_diff = (ar_read_tsc() - task->stats.start_tsc)/1000000;
 		ut_log("DELETING TASK :%d(%x) st:%d dur:%d (diff_tsc:%d) cont:%d tick:%d name:%s cpu:%i\n", task->pid,task->pid,task->stats.start_time,life_length,tsc_diff,task->stats.total_contexts,task->stats.ticks_consumed,task->name, task->allocated_cpu);
 	}
-
+	//Jcmd_pt(0,0);
+	//Jcmd_maps(0,0);
 	free_mm(task->mm);
 	free_task_struct(task);
 }
@@ -1093,7 +1098,7 @@ void sc_disable_nonpreemptive(){
 	g_current_task->state = g_current_task->state & (~TASK_NONPREEMPTIVE);
 
 }
-extern int Jcmd_maps(char *arg1, char *arg2);
+
 unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*fn)(void *, void *), void **args, unsigned long tls_area) {
 	struct task_struct *p;
 	struct mm_struct *mm;

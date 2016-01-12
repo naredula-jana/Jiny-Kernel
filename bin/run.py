@@ -129,7 +129,7 @@ if (__name__ == "__main__"):
                         help="serial port")
     parser.add_argument("-v", "--vm_instance", action="store", default="1",
                         help="vm instance")
-    parser.add_argument("-m", "--memory_size", action="store", default="128M",
+    parser.add_argument("-m", "--memory_size", action="store", default="256M",
                         help="memory")
     parser.add_argument("-k", "--kernel_args", action="store", default="ipaddr=192.168.0.8 gw=192.168.0.1",
                         help="kernel arguments")

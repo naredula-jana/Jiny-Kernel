@@ -18,7 +18,7 @@ extern "C" {
 #include "mach_dep.h"
 }
 #include "pvscsi.h"
-#define DEBUG_SCSI 1
+//#define DEBUG_SCSI 1
 
 struct cdb_rwdata_10{
     u8 command;
@@ -40,17 +40,21 @@ class pvscsi_jdriver: public jdiskdriver {
     u64 context_id;
     u8 dev_target; /* target id */
     unsigned char *debug_scsi_type;
+#define MAX_PVSCSI_DESCS 500
+    unsigned char *req_mbufs[MAX_PVSCSI_DESCS];
 
 	int disk_attach_device(jdevice *dev);
 	int setup_rings();
 	void write_cmd_desc(u32 cmd, const void *desc, size_t len);
 	void fill_req(struct PVSCSIRingReqDesc *req,void *cdbcmd, unsigned long addr,int data_len);
 	int get_response();
-	int send_req(int type, unsigned long addr, int len,u32 sector);
+	int send_req(int type, unsigned long addr, int len,u32 sector, unsigned long mbuf_buf);
+	void kick_io();
 
-	unsigned long stat_success_sends,stat_err_sends,stat_err_outoforder;
+	unsigned long stat_success_sends,stat_err_sends,stat_err_outoforder,stat_kicks;
 
 public:
+	pvscsi_jdriver(class jdevice *jdev);
 	int MaxBufsSpace();
 	int burst_send(struct struct_mbuf *mbuf, int len);
 	int burst_recv(struct struct_mbuf *mbuf, int len);
@@ -85,6 +89,7 @@ void pvscsi_jdriver::write_cmd_desc(u32 cmd, const void *desc, size_t len)
 
 #define SIMPLE_QUEUE_TAG 0x20
 #define MASK(n) ((1 << (n)) - 1)
+
 int pvscsi_jdriver::setup_rings() {
 	struct PVSCSICmdDescSetupRings cmd = { 0, };
 
@@ -106,7 +111,12 @@ int pvscsi_jdriver::setup_rings() {
 }
 void pvscsi_jdriver::print_stats(unsigned char *arg1,
 		unsigned char *arg2) {
-	ut_printf(" sends err:%d success:%d  reqProdId:%d reqConsId:%d \n",stat_err_sends,stat_success_sends,ring_state->reqProdIdx,ring_state->reqConsIdx);
+	if (device ==0){
+		ut_printf(" Driver not attached to device \n");
+		return;
+	}
+	ut_printf(" sends success:%d  reqProdId:%d reqConsId:%d kicks:%d \n",stat_success_sends,ring_state->reqProdIdx,ring_state->reqConsIdx,stat_kicks);
+	ut_printf(" Error: outoforder:%d send:%d\n",stat_err_outoforder,stat_err_sends);
 }
 
 int pvscsi_jdriver::MaxBufsSpace() {
@@ -118,8 +128,10 @@ static __inline uint32_t bswap32(uint32_t __x) {
 	return (__x >> 24) | (__x >> 8 & 0xff00) | (__x << 8 & 0xff0000)
 			| (__x << 24);
 }
-void pvscsi_jdriver::fill_req(struct PVSCSIRingReqDesc *req,void *cdbcmd, unsigned long addr, int data_len)
-{
+static __inline uint16_t bswap16(uint16_t __x) {
+	return (__x >> 8) | (__x << 8 & 0xff00) ;
+}
+void pvscsi_jdriver::fill_req(struct PVSCSIRingReqDesc *req,void *cdbcmd, unsigned long addr, int data_len){
 #if DEBUG_SCSI
 	ut_log(" SCSI Req: id:%d  type:%s  addr:%x len:%d\n",context_id,debug_scsi_type,addr,data_len);
 #endif
@@ -145,8 +157,14 @@ void pvscsi_jdriver::fill_req(struct PVSCSIRingReqDesc *req,void *cdbcmd, unsign
     	req->dataAddr = 0;
     }
 }
+void pvscsi_jdriver::kick_io(){
+	unsigned char *mmio_addr = mmio_bar;
 
-int pvscsi_jdriver::send_req(int type, unsigned long addr, int len, u32 sector) {
+	mmio_addr = mmio_addr + PVSCSI_REG_OFFSET_KICK_RW_IO;
+	*mmio_addr = 0;
+	stat_kicks++;
+}
+int pvscsi_jdriver::send_req(int type, unsigned long addr, int len, u32 sector,unsigned long mbuf_addr) {
 	struct cdb_rwdata_10 cmd;
 	struct PVSCSIRingReqDesc *req;
 	unsigned char *mmio_addr = mmio_bar;
@@ -154,7 +172,7 @@ int pvscsi_jdriver::send_req(int type, unsigned long addr, int len, u32 sector) 
     u32 req_entries = ring_state->reqNumEntriesLog2;
 
 #if DEBUG_SCSI
-//	ut_log("SCSCI req addr:%x len:%d  sector:%d \n", addr, len,sector);
+	ut_log("SCSCI req addr:%x len:%d  sector:%d blk_size:%d\n", addr, len,sector,blk_size);
 #endif
 	req = ring_reqs + (ring_state->reqProdIdx & MASK(req_entries));
 	if (req->dataAddr != 0){
@@ -165,6 +183,7 @@ int pvscsi_jdriver::send_req(int type, unsigned long addr, int len, u32 sector) 
 	if (type == CDB_CMD_READ_10){
 		cmd.lba =bswap32( sector);
 		cmd.count = len/blk_size;
+		//cmd.count = bswap16(len/blk_size);
 		if (cmd.count ==0){
 			cmd.count =1;
 		}
@@ -178,12 +197,13 @@ int pvscsi_jdriver::send_req(int type, unsigned long addr, int len, u32 sector) 
 		debug_scsi_type = "cmd_capacity";
 		data_len = len;
 	}
+	req_mbufs[(ring_state->reqProdIdx & MASK(req_entries))] = mbuf_addr;
 	fill_req(req, &cmd, addr,data_len);
-
 	ring_state->reqProdIdx++;
+
 	/* TODO:   this should not be done for every request */
-	mmio_addr = mmio_addr + PVSCSI_REG_OFFSET_KICK_RW_IO;
-	*mmio_addr = 0;
+	kick_io();
+
 	stat_success_sends++;
 	return JSUCCESS;
 }
@@ -196,9 +216,15 @@ int pvscsi_jdriver::burst_send(struct struct_mbuf *mbuf, int list_len) {
 		struct virtio_blk_req *req;
 		unsigned long addr = mbuf[i].buf;
 		int len = mbuf[i].len;
+		unsigned char *data;
 
 		req = addr;
-		if (send_req(CDB_CMD_READ_10, (unsigned long) &req->data[0], req->len,req->sector)==JFAIL){
+		if (req->user_data != 0){
+			data = req->user_data;
+		}else{
+			data = &req->data[0];
+		}
+		if (send_req(CDB_CMD_READ_10, (unsigned long) data, req->len,req->sector,addr)==JFAIL){
 			stat_err_sends++;
 			goto last;
 		}
@@ -237,9 +263,10 @@ int pvscsi_jdriver::burst_recv(struct struct_mbuf *mbuf_list, int list_len) {
 		}
 		mbuf_list[i].buf =0;
 		if (req->dataAddr != 0){
-			mbuf_list[i].buf = __va(req->dataAddr) - 32;
+			//mbuf_list[i].buf = __va(req->dataAddr) - 32;
+			mbuf_list[i].buf = req_mbufs[((id) & MASK(req_entries))];
 #if DEBUG_SCSI
-			ut_log(" SCSI removed from queue context:%d  addr:%x: \n",req->context,mbuf_list[i].buf);
+			ut_log(" SCSI removed from queue context:%d  addr:%x: return:%d :%d\n",req->context,mbuf_list[i].buf,res->hostStatus,res->scsiStatus);
 #endif
 			i++;
 		}
@@ -305,10 +332,10 @@ int pvscsi_jdriver::init_device(jdevice *jdev) {
 	context_id = 1;
     for (i = 0; i < 1; i++){
     	dev_target = i;
-    	send_req(CDB_CMD_TEST_UNIT_READY, 0, 0,0);
+    	send_req(CDB_CMD_TEST_UNIT_READY, 0, 0,0,0);
     	get_response();
     	ut_memset((unsigned char *)&cdrres_cap,0,sizeof(struct cdbres_read_capacity));
-    	send_req(CDB_CMD_READ_CAPACITY, (unsigned long)&cdrres_cap, sizeof(struct cdbres_read_capacity),0);
+    	send_req(CDB_CMD_READ_CAPACITY, (unsigned long)&cdrres_cap, sizeof(struct cdbres_read_capacity),0,0);
     	if (get_response()> 0){
     		disk_size = bswap32(cdrres_cap.sectors)*512;
     		blk_size = bswap32(cdrres_cap.blksize);
@@ -318,20 +345,26 @@ int pvscsi_jdriver::init_device(jdevice *jdev) {
 
     	}
     }
+#if 0
+	pci_enable_msix(device->pci_device.pci_bars[0].addr+(PVSCSI_MEM_SPACE_MSIX_TABLE_PAGE*PAGE_SIZE), &device->pci_device.msix_cfg,
+			device->pci_device.pci_header.capabilities_pointer);
+#endif
     INIT_LOG("PVSCSI initialization completed disk_size:%d blksize:%d \n",disk_size,blk_size);
 	return 0;
 }
-
+pvscsi_jdriver::pvscsi_jdriver(class jdevice *jdev) {
+	device = jdev;
+	if (jdev != 0) {
+		init_device(jdev);
+		//req_blk_size = blk_size;
+		req_blk_size = PAGE_SIZE;
+		waitq = jnew_obj(wait_queue, "waitq_pvscsi_disk", 0);
+		init_tarfs((jdriver *) this);
+		ut_log(" PVSCISS Driver installation completed \n");
+	}
+}
 jdriver *pvscsi_jdriver::attach_device(class jdevice *jdev) {
-	int i;
-
-	COPY_OBJ(pvscsi_jdriver, this, new_obj, jdev);
-	((pvscsi_jdriver *) new_obj)->init_device(jdev);
-
-	((pvscsi_jdriver *) new_obj)->waitq = jnew_obj(wait_queue,
-			"waitq_pvscsi_disk", 0);
-	//spin_lock_init(&((virtio_disk_jdriver *)new_obj)->io_lock);
-	init_tarfs((jdriver *) new_obj);
+	pvscsi_jdriver *new_obj = jnew_obj(pvscsi_jdriver,jdev);
 	debug_scsi = new_obj;
 	return (jdriver *) new_obj;
 }
@@ -361,7 +394,7 @@ static pvscsi_jdriver *disk_jdriver;
 extern "C" {
 int init_pvscsi_driver(){
 	/* init disk */
-	disk_jdriver = jnew_obj(pvscsi_jdriver);
+	disk_jdriver = jnew_obj(pvscsi_jdriver,0);
 	disk_jdriver->name = (unsigned char *) "disk_pvscsi_driver";
 	register_jdriver(disk_jdriver);
 }

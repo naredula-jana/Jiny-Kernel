@@ -173,6 +173,7 @@ struct page *fs_inode::fs_genericRead(unsigned long offset, int read_ahead) {
 	return page;
 }
 extern "C" {
+// TODO: fix need to read partial pages: if disk_blk_side is 512  for pvscsi
 int g_conf_read_ahead_pages  __attribute__ ((section ("confdata")))=20;
 }
 int fs_inode::read(unsigned long offset, unsigned char *data, int len, int read_flags, int opt_flags) {

@@ -104,10 +104,16 @@ public:
 	int recv_interrupt_disabled;
 	int send_kick_needed;*/
 };
-void vmxnet3_jdriver::print_stats(unsigned char *arg1,unsigned char *arg2) {
+void vmxnet3_jdriver::print_stats(unsigned char *arg1, unsigned char *arg2) {
 	ut_printf(" VMXNET3 :  ");
-	ut_printf(" Recv refills:%d completes:%d\n",adapter->rx_queues[0].stat_refills,adapter->rx_queues[0].stat_completes);
-	ut_printf("          Tx refills:%d completes:%d\n",adapter->tx_queues[0].stat_refills,adapter->tx_queues[0].stat_completes);
+	if (adapter != 0) {
+		ut_printf(" Recv refills:%d completes:%d\n",
+				adapter->rx_queues[0].stat_refills,
+				adapter->rx_queues[0].stat_completes);
+		ut_printf("          Tx refills:%d completes:%d\n",
+				adapter->tx_queues[0].stat_refills,
+				adapter->tx_queues[0].stat_completes);
+	}
 }
 
 int vmxnet3_jdriver::check_for_pkts() {

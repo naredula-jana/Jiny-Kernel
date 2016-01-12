@@ -558,6 +558,9 @@ int virtio_queue::BulkAddToQueue(struct struct_mbuf *mbuf_list, int list_len,
 			scatter_list[1].length = len;
 			scatter_list[2].addr= __pa(data+16);
 			scatter_list[2].length = 1;
+			if (mbuf_list) {
+				mbuf_list[index].buf = 0;
+			}
 		}
 
 		/* We're about to use some buffers from the free list. */

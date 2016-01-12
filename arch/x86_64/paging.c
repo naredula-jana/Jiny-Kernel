@@ -578,6 +578,7 @@ int ar_pageTableCleanup(struct mm_struct *mm,unsigned long addr, unsigned long l
 	DEBUG("Pagetable Start Page : %x len:%x\n",mm->pgd,length);
 	//if (length == ~0)
 	//     pagetable_walk(4,mm->pgd);
+	//Jcmd_maps(0,0);
 	if (clear_pagetable(mm,4,mm->pgd,addr,length,0) == 1)
 	{
 		mm->pgd=0;

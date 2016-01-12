@@ -192,6 +192,7 @@ static int scan_pci_devices() {
 					return JSUCCESS;
 
 				jdevice_list[device_count] = jnew_obj(jdevice,"pci", 0) ;
+				//jdevice_list[device_count] = ut_calloc(sizeof(jdevice));
 
 				if (jdevice_list[device_count]->init_pci(i, j, k) == JFAIL) {
 					jfree_obj(jdevice_list[device_count]);

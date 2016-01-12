@@ -171,7 +171,7 @@ void init_virtio_drivers() {
 	pid = sc_createKernelThread(diskio_thread, 0, (unsigned char *) "disk_io", 0);
 
 	/* init disk */
-	disk_jdriver = jnew_obj(virtio_disk_jdriver);
+	disk_jdriver = jnew_obj(virtio_disk_jdriver, 0);
 	disk_jdriver->name = (unsigned char *) "disk_virtio_driver";
 	register_jdriver(disk_jdriver);
 	init_pvscsi_driver();

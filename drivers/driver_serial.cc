@@ -125,12 +125,14 @@ int serial_jdriver::probe_device(class jdevice *jdev) {
 	return JFAIL;
 }
 jdriver *serial_jdriver::attach_device(class jdevice *jdev) {
+	serial_jdriver *new_obj = jnew_obj(serial_jdriver);
+	new_obj->device = jdev;
+
 	if (ut_strcmp(jdev->name, (unsigned char *) "/dev/serial1") == 0){
-		serial_driver->serial_device_no = DEVICE_SERIAL1;
+		new_obj->serial_device_no = DEVICE_SERIAL1;
 	}else{
-		serial_driver->serial_device_no = DEVICE_SERIAL2;
+		new_obj->serial_device_no = DEVICE_SERIAL2;
 	}
-	COPY_OBJ(serial_jdriver, serial_driver, new_obj, jdev);
 
 	return (jdriver *) new_obj;
 }

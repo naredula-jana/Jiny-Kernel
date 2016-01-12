@@ -217,7 +217,8 @@ int keyboard_jdriver::probe_device(class jdevice *jdev) {
 	return JFAIL;
 }
 jdriver *keyboard_jdriver::attach_device(class jdevice *jdev) {
-	COPY_OBJ(keyboard_jdriver,keyboard_driver,new_obj,jdev);
+	keyboard_jdriver *new_obj = jnew_obj(keyboard_jdriver);
+	new_obj->device = jdev;
 	return (jdriver *)new_obj;
 }
 int keyboard_jdriver::dettach_device(class jdevice *jdev) {

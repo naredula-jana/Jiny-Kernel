@@ -108,6 +108,7 @@ class jdiskdriver: public jdriver {
 public:
 	int interrupts_disabled;
 	unsigned long disk_size,blk_size;
+	int req_blk_size; /* maximum size of the request */
 	uint16_t max_vqs;
 	wait_queue *waitq;
 	virtual int burst_send(struct struct_mbuf *mbuf, int len)=0;
@@ -131,6 +132,7 @@ public:
 	uint16_t max_vqs;
 	unsigned char *unfreed_req;
 
+	virtio_disk_jdriver(class jdevice *jdev);
 	int MaxBufsSpace();
 	int burst_send(struct struct_mbuf *mbuf, int len);
 	int burst_recv(struct struct_mbuf *mbuf, int len);

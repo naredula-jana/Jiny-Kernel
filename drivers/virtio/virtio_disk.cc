@@ -46,6 +46,10 @@ static int virtio_disk_interrupt(void *private_data) {
 
 void virtio_disk_jdriver::print_stats(unsigned char *arg1,
 		unsigned char *arg2) {
+	if (device ==0){
+		ut_printf(" driver not attached to device \n");
+		return;
+	}
 	queues[0].send->print_stats(0, 0);
 }
 
@@ -253,12 +257,21 @@ int virtio_disk_jdriver::probe_device(class jdevice *jdev) {
 	}
 	return JFAIL;
 }
+virtio_disk_jdriver::virtio_disk_jdriver(class jdevice *jdev){
+	device = jdev;
+	if (jdev != 0){
+		init_device(jdev);
+		req_blk_size = PAGE_SIZE;
+		//req_blk_size = 512;
+		waitq = jnew_obj(wait_queue,"waitq_cirtio_disk", 0);
+		init_tarfs((jdriver *) this);
+	}
+}
 extern jdriver *disk_drivers[];
 jdriver *virtio_disk_jdriver::attach_device(class jdevice *jdev) {
 	int i;
+	virtio_disk_jdriver *new_obj = jnew_obj(virtio_disk_jdriver,jdev);
 
-	COPY_OBJ(virtio_disk_jdriver, this, new_obj, jdev);
-	((virtio_disk_jdriver *) new_obj)->init_device(jdev);
 	for (i = 0; i < 5; i++) {
 		if (disk_drivers[i] == 0) {
 			disk_drivers[i] = (jdriver *) new_obj;
@@ -266,11 +279,6 @@ jdriver *virtio_disk_jdriver::attach_device(class jdevice *jdev) {
 		}
 	}
 
-	((virtio_disk_jdriver *) new_obj)->waitq = jnew_obj(wait_queue,
-			"waitq_cirtio_disk", 0)
-	;
-	//spin_lock_init(&((virtio_disk_jdriver *)new_obj)->io_lock);
-	init_tarfs((jdriver *) new_obj);
 	return (jdriver *) new_obj;
 }
 
