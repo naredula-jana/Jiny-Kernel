@@ -439,6 +439,7 @@ int virtio_queue::BulkRemoveFromQueue(struct struct_mbuf *mbuf_list, int list_le
 		if (mbuf_list !=0 ){
 			mbuf_list[count].buf = __va(queue.vring.desc[i].addr);
 			mbuf_list[count].len = queue.vring.used->ring[queue.last_used_idx % queue.vring.num].len;
+			mbuf_list[count].ret_code = 0;
 		}else{
 			free_page(__va(queue.vring.desc[i].addr));
 		}

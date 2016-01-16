@@ -258,6 +258,7 @@ int virtio_disk_jdriver::probe_device(class jdevice *jdev) {
 	return JFAIL;
 }
 virtio_disk_jdriver::virtio_disk_jdriver(class jdevice *jdev){
+	name = "virtio";
 	device = jdev;
 	if (jdev != 0){
 		init_device(jdev);
@@ -267,18 +268,9 @@ virtio_disk_jdriver::virtio_disk_jdriver(class jdevice *jdev){
 		init_tarfs((jdriver *) this);
 	}
 }
-extern jdriver *disk_drivers[];
+
 jdriver *virtio_disk_jdriver::attach_device(class jdevice *jdev) {
-	int i;
 	virtio_disk_jdriver *new_obj = jnew_obj(virtio_disk_jdriver,jdev);
-
-	for (i = 0; i < 5; i++) {
-		if (disk_drivers[i] == 0) {
-			disk_drivers[i] = (jdriver *) new_obj;
-			break;
-		}
-	}
-
 	return (jdriver *) new_obj;
 }
 

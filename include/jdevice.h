@@ -170,6 +170,6 @@ public:
 void register_jdriver(class jdriver *driver);
 #define MAX_DISK_DEVICES 5
 extern "C" {
-extern jdriver *disk_drivers[];
+
 }
 #endif

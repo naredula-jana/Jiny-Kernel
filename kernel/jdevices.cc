@@ -174,7 +174,7 @@ void jfree_obj(unsigned long addr){
     }
 	ut_free(addr);
 }
-
+extern int diskio_thread(void *arg1, void *arg2);
 /*********************************************************************************/
 extern "C" {
 
@@ -220,16 +220,19 @@ extern void init_serial_jdriver();
 static struct jdevice *keyboard_device;
 struct jdevice *serial1_device,*serial2_device;
 static struct jdevice *vga_device;
+extern int init_vmxnet3();
+extern int init_pvscsi_driver();
 
-jdriver *disk_drivers[MAX_DISK_DEVICES];
+
 int init_jdevices(unsigned long unused_arg1) {
 	device_count = 0;
-	int d,k,i;
+	int d,k,i,pid;
 
-	for (i=0; i<MAX_DISK_DEVICES; i++){
-		disk_drivers[i]=0;
-	}
+	pid = sc_createKernelThread(diskio_thread, 0, (unsigned char *) "disk_io", 0);
+
 	init_virtio_drivers();
+	init_pvscsi_driver();
+	init_vmxnet3();
 
 	init_keyboard_jdriver();
 	init_serial_jdriver();
@@ -290,16 +293,6 @@ void Jcmd_jdevices(unsigned char *arg1,unsigned char *arg2) {
 		ut_printf("%s(%d) : \n",jdriver_list[i]->name,jdriver_list[i]->instances);
 	}
 }
-int test_i=0;
-void Jcmd_read() {
-	unsigned char buf[800];
-	int ret;
-	if (disk_drivers[0] != 0) {
-		ret = disk_drivers[0]->read(buf, 50, test_i,0);
-		test_i = test_i + 50;
-		buf[50] = 0;
-		ut_printf(" Read from disk ret:%d: :%s: \n", ret, buf);
-	}
-}
+
 extern "C" void __cxa_pure_virtual() { while (1); }  /* TODO : to avoid compilation error */
 }

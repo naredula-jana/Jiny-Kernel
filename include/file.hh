@@ -254,7 +254,7 @@ public:
 	virtual void print_stat()=0;
 };
 
-unsigned long fs_registerFileSystem(filesystem *fs, unsigned char *mnt_pnt);
+unsigned long fs_registerFileSystem(filesystem *fs, unsigned char *fs_type, unsigned char *device_name);
 #endif
 #define fd_to_file(fd) (fd >= 0 && g_current_task->fs->total > fd) ? (g_current_task->fs->filep[fd]) : ((struct file *)0)
 

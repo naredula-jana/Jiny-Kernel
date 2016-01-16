@@ -460,7 +460,7 @@ void proc_fs::set_mount_pnt(unsigned char *mnt_pnt){
 static class proc_fs *proc_fs_obj;
 int init_procfs(unsigned long unused) {
 	proc_fs_obj = jnew_obj(proc_fs);
-	fs_registerFileSystem(proc_fs_obj,(unsigned char *)"proc");
+	fs_registerFileSystem(proc_fs_obj,(unsigned char *)"proc","procfs");
 	return 1;
 }
 

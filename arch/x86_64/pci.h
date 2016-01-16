@@ -175,6 +175,7 @@ typedef struct pci_device {
 	unsigned char *description;
 }pci_device_t;
 int read_pci_info_new(pci_device_t *dev);
+int pci_read_msi_withoutbars(pci_addr_t *addr, pci_dev_header_t *pci_hdr, struct pcicfg_msix *msix,unsigned long msix_table_res);
 int pci_enable_msix(pci_addr_t *addr,struct pcicfg_msix *msix,uint8_t capabilities_pointer);
 int pci_read_msi(pci_addr_t *addr,pci_dev_header_t *pci_hdr, pci_bar_t *bars, uint32_t bars_count,  struct pcicfg_msix *msix);
 

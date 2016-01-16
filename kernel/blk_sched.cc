@@ -59,15 +59,6 @@ void Jcmd_stat_diskio(unsigned char *arg1, unsigned char *arg2){
 		if (disk_reqs[i].buf == 0 && disk_reqs[i].hits==0) continue;
 		ut_printf(" %d: buf:%x hits:%d req_no:%d \n",i,disk_reqs[i].buf,disk_reqs[i].hits,disk_reqs[i].req_no);
 	}
-
-	ut_printf("  disk devices: \n");
-	for (i=0; i<5; i++){
-		if (disk_drivers[i]!=0){
-			virtio_disk_jdriver *dev=disk_drivers[i];
-			//print_vq(dev->queues[0].send);
-			dev->queues[0].send->print_stats(0,0);
-		}
-	}
 }
 extern int pc_read_ahead_complete(unsigned long addr);
 }
@@ -77,7 +68,7 @@ static int get_from_diskreq(int i, unsigned long req_no) {
 	int initial_skip;
 	int tlen;
 	struct virtio_blk_req *req;
-	virtio_disk_jdriver *driver=disk_reqs[i].dev;
+	jdiskdriver *driver=disk_reqs[i].dev;
 	ret = 0;
 	if (disk_reqs[i].buf == 0) {
 		return ret;
@@ -118,7 +109,7 @@ static int get_from_diskreq(int i, unsigned long req_no) {
 	return ret;
 }
 
-int diskio_submit_requests(struct virtio_blk_req **reqs, int req_count, virtio_disk_jdriver *dev, unsigned char *user_buf,int user_len,int initial_skip, int read_ahead){
+int diskio_submit_requests(struct virtio_blk_req **reqs, int req_count, jdiskdriver *dev, unsigned char *user_buf,int user_len,int initial_skip, int read_ahead){
 	int i,k;
 	int ret = -1;
 	unsigned long flags;
@@ -284,7 +275,13 @@ static int extract_reqs_from_devices(jdiskdriver *dev) {
 				continue;
 			}
 			if (disk_reqs[i].buf == req) {
-				disk_reqs[i].state = STATE_REQ_COMPLETED;
+				if (mbuf_list[k].ret_code != 0){
+					ut_log(" Disk Error: Resubmitting the request sector:%d error:%d\n",disk_reqs[i].buf->sector,mbuf_list[k].ret_code);
+					disk_reqs[i].state = 0; /* resubmitting the request */
+					//BRK;
+				}else{
+					disk_reqs[i].state = STATE_REQ_COMPLETED;
+				}
 				found=1;
 				break;
 			}
@@ -316,7 +313,11 @@ int diskio_thread(void *arg1, void *arg2) {
 				//disk_thread_waitq->wait(1);
 				sc_schedule(); /* give chance other threads to run */
 			}else{
-				disk_thread_waitq->wait(50);
+				if (pending_req == 0){
+					disk_thread_waitq->wait(50);
+				}else{
+					disk_thread_waitq->wait(1);
+				}
 			}
 		}
 

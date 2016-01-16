@@ -43,6 +43,37 @@ static void update_msix_table(struct pcicfg_msix *msix, int mask) {
 }
 #define MSI_VECTORS_START 101
 static int msi_start_vector = MSI_VECTORS_START;
+int pci_read_msi_withoutbars(pci_addr_t *addr, pci_dev_header_t *pci_hdr, struct pcicfg_msix *msix,unsigned long msix_table_res ) {
+	uint32_t ret;
+	uint16_t buf;
+	uint32_t val;
+	uint32_t bar_offset;
+
+	uint8_t pos=pci_hdr->capabilities_pointer;
+
+	ret = pci_read(addr, pos, 2, &buf);
+	ret = pci_read(addr, pos + PCIR_MSIX_CTRL, 2, &msix->msix_ctrl);
+
+	msix->msix_msgnum = (msix->msix_ctrl & PCIM_MSIXCTRL_TABLE_SIZE) + 1;
+	if (msix->msix_msgnum > 0) {
+		msix->isr_vector = msi_start_vector;
+		msi_start_vector = msi_start_vector + msix->msix_msgnum;
+		ut_log(" msi vector start :%d num:%d msiztableres: %x\n",msix->isr_vector,msix->msix_msgnum,msix_table_res);
+	} else {
+		msix->isr_vector = 0;
+	}
+	//ret = pci_read(addr, pos + PCIR_MSIX_TABLE, 4, &bar_offset);
+	//msix->msix_table_bar = PCIR_BAR(bar_offset & PCIM_MSIX_BIR_MASK);
+	//if (bar_offset >= bars_total) return 0;
+	msix->msix_table_res =msix_table_res;
+
+	msix->msix_table  = vm_create_kmap("msix",0x1000,PROT_WRITE,MAP_FIXED,msix->msix_table_res);
+	//ut_log(" msix table :%x  bar addr:%x  baroffset:%d \n",msix->msix_table,bars[bar_offset].addr,bar_offset);
+
+	ret = pci_read(addr, pos + PCIR_MSIX_PBA, 4, &val);
+	msix->msix_pba_bar = PCIR_BAR(val & PCIM_MSIX_BIR_MASK);
+	return msix->isr_vector;
+}
 
 int pci_read_msi(pci_addr_t *addr, pci_dev_header_t *pci_hdr,pci_bar_t *bars, uint32_t bars_total,  struct pcicfg_msix *msix) {
 	uint32_t ret;
@@ -69,7 +100,7 @@ int pci_read_msi(pci_addr_t *addr, pci_dev_header_t *pci_hdr,pci_bar_t *bars, ui
 	msix->msix_table_res = bars[bar_offset].addr;
 
 	msix->msix_table  = vm_create_kmap("msix",0x1000,PROT_WRITE,MAP_FIXED,msix->msix_table_res);
-	ut_log(" msix table :%x  bar addr:%x  baroffset:%d \n",msix->msix_table,bars[bar_offset].addr,bar_offset);
+	ut_log(" msix table :%x  bar addr:%x  baroffset:%d msix tableres:%x\n",msix->msix_table,bars[bar_offset].addr,bar_offset,msix->msix_table_res);
 
 	ret = pci_read(addr, pos + PCIR_MSIX_PBA, 4, &val);
 	msix->msix_pba_bar = PCIR_BAR(val & PCIM_MSIX_BIR_MASK);

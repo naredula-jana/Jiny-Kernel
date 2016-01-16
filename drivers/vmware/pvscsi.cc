@@ -51,7 +51,7 @@ class pvscsi_jdriver: public jdiskdriver {
 	int send_req(int type, unsigned long addr, int len,u32 sector, unsigned long mbuf_buf);
 	void kick_io();
 
-	unsigned long stat_success_sends,stat_err_sends,stat_err_outoforder,stat_kicks;
+	unsigned long stat_success_sends,stat_err_sends,stat_err_outoforder,stat_kicks,stat_error_hoststatus,stat_error_scsistatus;
 
 public:
 	pvscsi_jdriver(class jdevice *jdev);
@@ -116,12 +116,18 @@ void pvscsi_jdriver::print_stats(unsigned char *arg1,
 		return;
 	}
 	ut_printf(" sends success:%d  reqProdId:%d reqConsId:%d kicks:%d \n",stat_success_sends,ring_state->reqProdIdx,ring_state->reqConsIdx,stat_kicks);
-	ut_printf(" Error: outoforder:%d send:%d\n",stat_err_outoforder,stat_err_sends);
+	ut_printf(" Error: outoforder:%d send:%d hoststatus:%d scsistatus:%d\n",stat_err_outoforder,stat_err_sends,stat_error_hoststatus,stat_error_scsistatus);
 }
 
 int pvscsi_jdriver::MaxBufsSpace() {
-	/* TODO:   currently only one buf, this change will improve the speed */
-	return 1;
+	int ret;
+	u32 req_entries = MASK(ring_state->reqNumEntriesLog2);
+
+	ret = req_entries - (ring_state->reqProdIdx - ring_state->reqConsIdx);
+	if (ret > 0){
+		return ret-1;
+	}
+	return 0;
 }
 
 static __inline uint32_t bswap32(uint32_t __x) {
@@ -183,7 +189,10 @@ int pvscsi_jdriver::send_req(int type, unsigned long addr, int len, u32 sector,u
 	if (type == CDB_CMD_READ_10){
 		cmd.lba =bswap32( sector);
 		cmd.count = len/blk_size;
-		//cmd.count = bswap16(len/blk_size);
+		if (len == PAGE_SIZE){ /* TODO : need to swap the bytes, but it looks corrupting the memory if the len is non PAGE_SIZE */
+			cmd.count = bswap16(len/blk_size);
+		}
+
 		if (cmd.count ==0){
 			cmd.count =1;
 		}
@@ -200,9 +209,6 @@ int pvscsi_jdriver::send_req(int type, unsigned long addr, int len, u32 sector,u
 	req_mbufs[(ring_state->reqProdIdx & MASK(req_entries))] = mbuf_addr;
 	fill_req(req, &cmd, addr,data_len);
 	ring_state->reqProdIdx++;
-
-	/* TODO:   this should not be done for every request */
-	kick_io();
 
 	stat_success_sends++;
 	return JSUCCESS;
@@ -232,8 +238,38 @@ int pvscsi_jdriver::burst_send(struct struct_mbuf *mbuf, int list_len) {
 		ret = i+1;
 	}
 last:
+	if (ret > 0){
+		kick_io();
+	}
 	return ret;
 }
+/*
+ *  scsi Status codes
+ */
+#if 0
+#define GOOD                 0x00
+#define CHECK_CONDITION      0x01
+#define CONDITION_GOOD       0x02
+#define BUSY                 0x04
+#define INTERMEDIATE_GOOD    0x08
+#define INTERMEDIATE_C_GOOD  0x0a
+#define RESERVATION_CONFLICT 0x0c
+#define COMMAND_TERMINATED   0x11
+#define QUEUE_FULL           0x14
+
+#define GOOD                 0x00
+#define CHECK_CONDITION      0x02
+#define CONDITION_GOOD       0x04
+#define BUSY                 0x08
+#define INTERMEDIATE_GOOD    0x10
+#define INTERMEDIATE_C_GOOD  0x14
+#define RESERVATION_CONFLICT 0x18
+#define COMMAND_TERMINATED   0x22
+#define TASK_SET_FULL        0x28
+#define ACA_ACTIVE           0x30
+#define TASK_ABORTED         0x40
+#endif
+
 int pvscsi_jdriver::burst_recv(struct struct_mbuf *mbuf_list, int list_len) {
 	int i,id;
 	u32 req_entries = ring_state->reqNumEntriesLog2;
@@ -262,6 +298,7 @@ int pvscsi_jdriver::burst_recv(struct struct_mbuf *mbuf_list, int list_len) {
 			break;
 		}
 		mbuf_list[i].buf =0;
+		mbuf_list[i].ret_code = 0;
 		if (req->dataAddr != 0){
 			//mbuf_list[i].buf = __va(req->dataAddr) - 32;
 			mbuf_list[i].buf = req_mbufs[((id) & MASK(req_entries))];
@@ -269,6 +306,14 @@ int pvscsi_jdriver::burst_recv(struct struct_mbuf *mbuf_list, int list_len) {
 			ut_log(" SCSI removed from queue context:%d  addr:%x: return:%d :%d\n",req->context,mbuf_list[i].buf,res->hostStatus,res->scsiStatus);
 #endif
 			i++;
+			mbuf_list[i].ret_code = 0;
+			if (res->hostStatus != 18){
+				stat_error_hoststatus++;
+			}
+			if (res->scsiStatus != 0){
+				stat_error_scsistatus++;
+				mbuf_list[i].ret_code = res->scsiStatus;
+			}
 		}
 		req->dataAddr = 0;
 		ring_state->cmpConsIdx++;
@@ -319,8 +364,13 @@ int pvscsi_jdriver::get_response() {
 	}
 	return 0;
 }
+static int pvscsi_disk_interrupt(void *private_data) {
+	jdevice *dev;
+	//pvscsi_jdriver *driver = (virtio_disk_jdriver *) private_data;
+	return 1;
+}
 int pvscsi_jdriver::init_device(jdevice *jdev) {
-	int i;
+	int i,msi_vector;
 	struct cdbres_read_capacity cdrres_cap;
 
 	INIT_LOG(" pvscsi: Bar0:%x  Bar1:%x \n",device->pci_device.pci_bars[0].addr,device->pci_device.pci_bars[1].addr);
@@ -330,12 +380,44 @@ int pvscsi_jdriver::init_device(jdevice *jdev) {
 	blk_size = 512;
 	disk_size = 0;
 	context_id = 1;
+
+#if 0
+	//pci_enable_msix(device->pci_device.pci_bars[0].addr+(PVSCSI_MEM_SPACE_MSIX_TABLE_PAGE*PAGE_SIZE), &device->pci_device.msix_cfg,
+	//		device->pci_device.pci_header.capabilities_pointer);
+	msi_vector = pci_read_msi_withoutbars(&device->pci_device.pci_addr,
+			&device->pci_device.pci_header, &device->pci_device.msix_cfg,device->pci_device.pci_bars[0].addr+(PVSCSI_MEM_SPACE_MSIX_TABLE_PAGE*PAGE_SIZE));
+	if (msi_vector > 0) {
+		pci_enable_msix(&device->pci_device.pci_addr,&device->pci_device.msix_cfg,
+						device->pci_device.pci_header.capabilities_pointer);
+	}
+#else
+	unsigned char *mmio_addr = mmio_bar;
+	uint32_t *intr_addr,val_intr;
+
+	mmio_addr = mmio_addr + PVSCSI_REG_OFFSET_INTR_STATUS;
+	intr_addr = (uint32_t *)mmio_addr;
+	val_intr = *intr_addr ;
+	*intr_addr = 1;
+
+	u32 intr_bits;
+	intr_bits = PVSCSI_INTR_CMPL_MASK;
+	mmio_addr = mmio_addr + PVSCSI_REG_OFFSET_INTR_MASK;
+	intr_addr = (uint32_t *)mmio_addr;
+	*intr_addr = intr_bits;
+
+	ut_log(" New pcscsi inteerupt registration :%d \n",val_intr);
+	ar_registerInterrupt(32 + jdev->pci_device.pci_header.interrupt_line,
+			pvscsi_disk_interrupt, "pvscsi_irq", (void *) this);
+#endif
+
     for (i = 0; i < 1; i++){
     	dev_target = i;
     	send_req(CDB_CMD_TEST_UNIT_READY, 0, 0,0,0);
+    	kick_io();
     	get_response();
     	ut_memset((unsigned char *)&cdrres_cap,0,sizeof(struct cdbres_read_capacity));
     	send_req(CDB_CMD_READ_CAPACITY, (unsigned long)&cdrres_cap, sizeof(struct cdbres_read_capacity),0,0);
+    	kick_io();
     	if (get_response()> 0){
     		disk_size = bswap32(cdrres_cap.sectors)*512;
     		blk_size = bswap32(cdrres_cap.blksize);
@@ -345,14 +427,11 @@ int pvscsi_jdriver::init_device(jdevice *jdev) {
 
     	}
     }
-#if 0
-	pci_enable_msix(device->pci_device.pci_bars[0].addr+(PVSCSI_MEM_SPACE_MSIX_TABLE_PAGE*PAGE_SIZE), &device->pci_device.msix_cfg,
-			device->pci_device.pci_header.capabilities_pointer);
-#endif
     INIT_LOG("PVSCSI initialization completed disk_size:%d blksize:%d \n",disk_size,blk_size);
 	return 0;
 }
 pvscsi_jdriver::pvscsi_jdriver(class jdevice *jdev) {
+	name = "pvscsi";
 	device = jdev;
 	if (jdev != 0) {
 		init_device(jdev);
@@ -360,7 +439,6 @@ pvscsi_jdriver::pvscsi_jdriver(class jdevice *jdev) {
 		req_blk_size = PAGE_SIZE;
 		waitq = jnew_obj(wait_queue, "waitq_pvscsi_disk", 0);
 		init_tarfs((jdriver *) this);
-		ut_log(" PVSCISS Driver installation completed \n");
 	}
 }
 jdriver *pvscsi_jdriver::attach_device(class jdevice *jdev) {

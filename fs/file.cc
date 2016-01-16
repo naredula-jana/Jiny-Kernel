@@ -30,14 +30,15 @@ typedef struct {
 	struct filesystem *fs;
 	unsigned char *mount_pnt;
 	unsigned char *type;
+	unsigned char *device_name;
 } filesystem_list_t;
-int g_conf_tarfs_as_root  __attribute__ ((section ("confdata")))=1;
+int g_conf_root_dev_scsi  __attribute__ ((section ("confdata")))=1;
 filesystem_list_t g_fs_list[]={
-		{0,"/","tar_fs"},  /* Make the root mount as the first entry, do not repeat the mount point entries */
-		{0,"/p9","p9_fs"},
-		{0,"/proc/","proc"},
-		{0,"/data","tar_fs1"},
-		{0,0}
+		{0,"/","tar_fs",0},  /* Make the root mount as the first entry, do not repeat the mount point entries */
+		{0,"/p9","p9_fs",0},
+		{0,"/proc/","proc",0},
+		{0,"/data","tar_fs",0},
+		{0,0,0,0}
 };
 kmem_cache_t *fs_inode::slab_objects = 0;
 
@@ -308,21 +309,19 @@ int fs_inode::ioctl(unsigned long arg1,unsigned long arg2) {
 void fs_inode::print_stats(unsigned char *arg1,unsigned char *arg2){
 
 }
-unsigned long fs_registerFileSystem(filesystem *fs,unsigned char *type) {
+unsigned long fs_registerFileSystem(filesystem *fs,unsigned char *fs_type, unsigned char *device_name) {
 	int i=0;
-	if (type == 0) return JFAIL;
-	INIT_LOG("		Registering files system of type :%s: \n",type);
+	if (fs_type == 0) return JFAIL;
+	INIT_LOG("		Registering files system of type :%s: \n",fs_type);
 
-	if (g_fs_list[0].fs == 0) {
-		if (g_conf_tarfs_as_root == 1) {
-			g_fs_list[0].type = "tar_fs";
-		} else {
-			g_fs_list[0].type = "p9_fs";
-		}
-	}
 	while(g_fs_list[i].type != 0){
-		if (g_fs_list[i].fs==0 &&  ut_strcmp(g_fs_list[i].type,type)==0){
+		if (i==0 && g_conf_root_dev_scsi==0 &&  ut_strcmp(device_name,"pvscsi")==0){
+			i++;
+			continue;
+		}
+		if (g_fs_list[i].fs==0 &&  ut_strcmp(g_fs_list[i].type,fs_type)==0){
 			g_fs_list[i].fs = fs;
+			g_fs_list[i].device_name = device_name;
 			INIT_LOG("		file system %s  mounted @ %s\n",g_fs_list[i].type,g_fs_list[i].mount_pnt);
 			fs->set_mount_pnt(g_fs_list[i].mount_pnt);
 			return JSUCCESS;
@@ -340,7 +339,7 @@ int Jcmd_mount(uint8_t *arg1, uint8_t *arg2){
 
 	while(g_fs_list[i].type != 0){
 		if (g_fs_list[i].fs != 0){
-			ut_printf(" type: %s-> :%s  read_bytes: %xK read reqs:%x rerr:%x  disk_size:%d fs_size:%d",g_fs_list[i].type,g_fs_list[i].mount_pnt,g_fs_list[i].fs->stat_byte_reads/1000,
+			ut_printf(" type: %s-> :%s devicename:%s read_bytes: %xK read reqs:%x rerr:%x  disk_size:%d fs_size:%d",g_fs_list[i].type,g_fs_list[i].mount_pnt, g_fs_list[i].device_name, g_fs_list[i].fs->stat_byte_reads/1000,
 					g_fs_list[i].fs->stat_read_req, g_fs_list[i].fs->stat_read_errors ,g_fs_list[i].fs->device_size,g_fs_list[i].fs->filesystem_size);
 			ut_printf("write_bytes: %xK write reqs:%x werr:%x\n",g_fs_list[i].fs->stat_byte_writes/1000,g_fs_list[i].fs->stat_write_req, g_fs_list[i].fs->stat_write_errors );
 			if (arg1 != 0 && i!=0){

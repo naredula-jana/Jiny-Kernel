@@ -655,7 +655,7 @@ int p9_initFs(void *p9driver) {
 //	p9ClientInit(); /* TODO need to include here */
 
 	p9_fs_obj = jnew_obj(p9_fs);
-	fs_registerFileSystem(p9_fs_obj,(unsigned char *)"p9_fs");
+	fs_registerFileSystem(p9_fs_obj,(unsigned char *)"p9_fs","p9_fs");
 	p9_dev = p9driver;
 
 	return 1;

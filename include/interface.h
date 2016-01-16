@@ -294,7 +294,8 @@ static inline void __attribute__((always_inline)) ar_prefetch0(volatile void *p)
 }
 struct struct_mbuf{
 		unsigned char *buf;
-		int len;
+		uint32_t len;
+		uint32_t ret_code;
 };
 
 
