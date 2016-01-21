@@ -115,7 +115,7 @@ void pvscsi_jdriver::print_stats(unsigned char *arg1,
 		ut_printf(" Driver not attached to device \n");
 		return;
 	}
-	ut_printf(" sends success:%d  reqProdId:%d reqConsId:%d kicks:%d \n",stat_success_sends,ring_state->reqProdIdx,ring_state->reqConsIdx,stat_kicks);
+	ut_printf(" sends success:%d  reqProdId:%d reqConsId:%d kicks:%d disk_copys:%d\n",stat_success_sends,ring_state->reqProdIdx,ring_state->reqConsIdx,stat_kicks,stat_diskcopy_reqs);
 	ut_printf(" Error: outoforder:%d send:%d hoststatus:%d scsistatus:%d\n",stat_err_outoforder,stat_err_sends,stat_error_hoststatus,stat_error_scsistatus);
 }
 
@@ -188,16 +188,14 @@ int pvscsi_jdriver::send_req(int type, unsigned long addr, int len, u32 sector,u
 	cmd.command = type;
 	if (type == CDB_CMD_READ_10){
 		cmd.lba =bswap32( sector);
-		cmd.count = len/blk_size;
-		if (len == PAGE_SIZE){ /* TODO : need to swap the bytes, but it looks corrupting the memory if the len is non PAGE_SIZE */
-			cmd.count = bswap16(len/blk_size);
-		}
+		cmd.count = bswap16(len/blk_size);
+		 if (cmd.count ==0){
+			cmd.count =bswap16(1);
+		 }
 
-		if (cmd.count ==0){
-			cmd.count =1;
-		}
-		data_len = cmd.count*blk_size;
+		data_len = len;
 		debug_scsi_type = "cmd_Read";
+		//ut_log(" sector:%x no of sector: %x \n",cmd.lba,cmd.count);
 	}else if (type==CDB_CMD_TEST_UNIT_READY){
 		cmd.lba = 0;
 		cmd.count = 0;
@@ -216,7 +214,7 @@ int pvscsi_jdriver::send_req(int type, unsigned long addr, int len, u32 sector,u
 /* TODO:  burst_send and burst_recv need share the lock */
 int pvscsi_jdriver::burst_send(struct struct_mbuf *mbuf, int list_len) {
 	int i;
-	int ret=0;
+	int ret = 0;
 
 	for (i = 0; i < list_len; i++) {
 		struct virtio_blk_req *req;
@@ -225,20 +223,20 @@ int pvscsi_jdriver::burst_send(struct struct_mbuf *mbuf, int list_len) {
 		unsigned char *data;
 
 		req = addr;
-		if (req->user_data != 0){
+		if (req->user_data != 0) {
 			data = req->user_data;
-		}else{
+		} else {
 			data = &req->data[0];
 		}
-		if (send_req(CDB_CMD_READ_10, (unsigned long) data, req->len,req->sector,addr)==JFAIL){
+		if (send_req(CDB_CMD_READ_10, (unsigned long) data, req->len,
+				req->sector, addr) == JFAIL) {
 			stat_err_sends++;
 			goto last;
 		}
-		mbuf[i].buf =0 ;
-		ret = i+1;
+		mbuf[i].buf = 0;
+		ret = i + 1;
 	}
-last:
-	if (ret > 0){
+	last: if (ret > 0) {
 		kick_io();
 	}
 	return ret;
@@ -286,7 +284,7 @@ int pvscsi_jdriver::burst_recv(struct struct_mbuf *mbuf_list, int list_len) {
 
 		count=0;
 		res = ring_cmps+((ring_state->cmpConsIdx) & MASK(cmp_entries));
-		for (id=ring_state->reqConsIdx  ; count<MASK(req_entries); id--,count++){
+		for (id=ring_state->cmpConsIdx  ; count< (MASK(req_entries)+4); id++,count++){
 			req = ring_reqs+((id) & MASK(req_entries));
 			if (req->context == res->context){
 				break;
@@ -300,20 +298,20 @@ int pvscsi_jdriver::burst_recv(struct struct_mbuf *mbuf_list, int list_len) {
 		mbuf_list[i].buf =0;
 		mbuf_list[i].ret_code = 0;
 		if (req->dataAddr != 0){
-			//mbuf_list[i].buf = __va(req->dataAddr) - 32;
 			mbuf_list[i].buf = req_mbufs[((id) & MASK(req_entries))];
 #if DEBUG_SCSI
 			ut_log(" SCSI removed from queue context:%d  addr:%x: return:%d :%d\n",req->context,mbuf_list[i].buf,res->hostStatus,res->scsiStatus);
 #endif
-			i++;
 			mbuf_list[i].ret_code = 0;
-			if (res->hostStatus != 18){
+			if (res->hostStatus != 0){
 				stat_error_hoststatus++;
 			}
 			if (res->scsiStatus != 0){
 				stat_error_scsistatus++;
-				mbuf_list[i].ret_code = res->scsiStatus;
+				ut_log(" SCSI error :%d(%x) \n",res->scsiStatus,res->scsiStatus);
+				//mbuf_list[i].ret_code = res->scsiStatus;
 			}
+			i++;
 		}
 		req->dataAddr = 0;
 		ring_state->cmpConsIdx++;
@@ -446,14 +444,23 @@ jdriver *pvscsi_jdriver::attach_device(class jdevice *jdev) {
 	debug_scsi = new_obj;
 	return (jdriver *) new_obj;
 }
+static int debug_seq=0;
 int pvscsi_jdriver::read(unsigned char *buf, int len, int offset,
 		int read_ahead) {
 	int ret;
 	if (disk_size ==0){
 		return 0;
 	}
-//ut_log(" read len :  %d offset:%d \n",len, offset);
+#if 0 /*  debugging purpose */
+	if (len == PAGE_SIZE){
+		ut_memset(buf,0,PAGE_SIZE);
+	}
+#endif
 	ret = disk_io(DISK_READ, buf, len, offset, read_ahead, this);
+#if 0
+ut_log("%d: read len :  %d offset:%d read_ahead:%d err:%d\n",debug_seq,len, offset,read_ahead,stat_error_scsistatus);
+debug_seq++;
+#endif
 	return ret;
 }
 int pvscsi_jdriver::write(unsigned char *buf, int len, int offset) {

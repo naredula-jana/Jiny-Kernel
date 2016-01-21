@@ -521,6 +521,7 @@ int SYS_sync(){
 }
 
 extern struct list_head fs_inode_list;
+void pc_printInodePages(struct fs_inode *inode);
 int Jcmd_ls(uint8_t *arg1, uint8_t *arg2) {
 	struct fs_inode *tmp_inode;
 	struct list_head *p;
@@ -558,12 +559,13 @@ int Jcmd_ls(uint8_t *arg1, uint8_t *arg2) {
 		} else {
 			len = len
 					- ut_snprintf(buf + max_len - len, len,
-							"%d: %4d %4d(%2d) %8d %8d %2x/%x %s vfs:%x", i,
+							"%d:%d: %4d %4d(%2d) %8d %8d %2x/%x %s vfs:%x", i,tmp_inode->jobject_id,
 							tmp_inode->count, tmp_inode->nrpages,
 							tmp_inode->stat_locked_pages.counter,
 							tmp_inode->fileStat.st_size,
 							tmp_inode->fileStat.inode_no, tmp_inode->file_type,
 							tmp_inode->flags, type,tmp_inode->vfs );
+			//pc_printInodePages(tmp_inode);
 		}
 		len = len - ut_snprintf(buf + max_len - len, len,"(%d/%d/OE:%d IE:%d-%s\n",tmp_inode->stat_in,tmp_inode->stat_out,tmp_inode->statout_err,tmp_inode->statin_err,tmp_inode->filename);
 		total_pages = total_pages + tmp_inode->nrpages;

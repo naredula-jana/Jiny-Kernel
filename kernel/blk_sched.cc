@@ -54,7 +54,7 @@ enum {
 extern "C" {
 void Jcmd_stat_diskio(unsigned char *arg1, unsigned char *arg2){
 	int i;
-	ut_printf(" current req_no:%d  txt+no: %d diskcopies: %d read_ahead:%d \n",current_req_no,current_req_no,stat_diskcopy_txts,stat_read_ahead_txts);
+	ut_printf(" current req_no:%d  txt+no: %d read_ahead:%d \n",current_req_no,current_req_no,stat_read_ahead_txts);
 	for (i=0; i<MAX_DISK_REQS; i++){
 		if (disk_reqs[i].buf == 0 && disk_reqs[i].hits==0) continue;
 		ut_printf(" %d: buf:%x hits:%d req_no:%d \n",i,disk_reqs[i].buf,disk_reqs[i].hits,disk_reqs[i].req_no);
@@ -77,7 +77,7 @@ static int get_from_diskreq(int i, unsigned long req_no) {
 		unsigned long start_time = g_jiffies;
 		while (disk_reqs[i].state != STATE_REQ_COMPLETED) {
 			disk_reqs[i].dev->waitq->wait(5);
-			if ((g_jiffies-start_time) > 300) { /* if it more then 3 seconds */
+			if ((g_jiffies-start_time) > 400) { /* if it more then 4 seconds */
 				return -1;
 			}
 		}
@@ -91,7 +91,7 @@ static int get_from_diskreq(int i, unsigned long req_no) {
 		if (req->user_data == 0) {
 			// TODO: ut_memcpy(disk_reqs[i].user_buf + (i * driver->req_blk_size), &req->data[initial_skip], tlen);
 			ut_memcpy(disk_reqs[i].user_buf, &req->data[initial_skip], tlen);
-			stat_diskcopy_txts++;
+			driver->stat_diskcopy_reqs++;
 			mm_putFreePages(disk_reqs[i].buf, 1);
 		} else {
 			mm_putFreePages(disk_reqs[i].buf, 0);
@@ -115,7 +115,6 @@ int diskio_submit_requests(struct virtio_blk_req **reqs, int req_count, jdiskdri
 	unsigned long flags;
 	unsigned long req_no=0;
 
-	k=0;
 	if (read_ahead == 1 ){
 		if ( req_count > 1){
 			return 0;
@@ -133,6 +132,7 @@ int diskio_submit_requests(struct virtio_blk_req **reqs, int req_count, jdiskdri
 	current_req_no++;
 	req_no = current_req_no;
 	ret = -1;
+	k=0;
 	for (i=0; i<MAX_DISK_REQS && k<req_count; i++){
 		if (disk_reqs[i].buf!=0) { continue; }
 		disk_reqs[i].dev = dev;
@@ -222,6 +222,9 @@ int disk_io(int type, unsigned char *buf, int len, int offset, int read_ahead, j
 	curr_len = data_len;
 	//max_reqs = 5;
 	max_reqs = 1; /* TODO : need a fox to support multiple reqs in function diskio_submit_requests */
+#if 0
+	ut_log(" initialskip : %d offset:%d data_len:%d \n",initial_skip,offset,data_len);
+#endif
 
 	for (req_count = 0; req_count < max_reqs && curr_len > 0; req_count++) {
 		int req_len = curr_len;
@@ -278,6 +281,7 @@ static int extract_reqs_from_devices(jdiskdriver *dev) {
 				if (mbuf_list[k].ret_code != 0){
 					ut_log(" Disk Error: Resubmitting the request sector:%d error:%d\n",disk_reqs[i].buf->sector,mbuf_list[k].ret_code);
 					disk_reqs[i].state = 0; /* resubmitting the request */
+					mbuf_list[k].ret_code =0;
 					//BRK;
 				}else{
 					disk_reqs[i].state = STATE_REQ_COMPLETED;

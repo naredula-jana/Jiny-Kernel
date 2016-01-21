@@ -714,7 +714,7 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 			//Jcmd_maps(0,0);
 			//ut_log("ERROR: user Segmentation fault page fault addr:%x ip:%x  \n",addr,faulting_ip);
 			//Jcmd_lsmod(0,0);
-			BUG();
+			//BUG();
 			//ut_showTrace(&stack_var);
 			SYS_sc_exit(902);
 			return 1;

@@ -111,6 +111,7 @@ public:
 	int req_blk_size; /* maximum size of the request */
 	uint16_t max_vqs;
 	wait_queue *waitq;
+	unsigned long stat_diskcopy_reqs;
 	virtual int burst_send(struct struct_mbuf *mbuf, int len)=0;
 	virtual int burst_recv(struct struct_mbuf *mbuf, int len)=0;
 	virtual int MaxBufsSpace()=0;

@@ -60,6 +60,7 @@ def start_jiny(options):
 #        "-drive", "file=%s,if=virtio,cache=%s" % (options.image_file, cache)]
     print args
     serial_port = int(options.serial_port)- 1 + int(options.vm_instance)
+    serial_port2 = 41090
     if (options.networking_with_vhost):
 # for netmap do insmod ./netmap_lin.ko 
 #        args += ["-netdev","netmap,id=guest0,ifname=vale0.%s" %(options.vm_instance), "-device","virtio-net-pci,mac=00:30:48:DB:5E:0%s,netdev=guest0" % (options.vm_instance)]
@@ -72,6 +73,7 @@ def start_jiny(options):
         if (options.with_p9):
             args += ["-fsdev","local,security_model=passthrough,id=fsdev0,path=/opt/jiny_root/","-device","virtio-9p-pci,id=fs0,fsdev=fsdev0,mount_tag=hostshare"]
         args += ["-vnc", ":%d" % (vnc_port),"-serial", "telnet::%d,server,nowait" % (serial_port)] 
+        args += ["-serial", "telnet::%d,server,nowait" % (serial_port2)] 
         if (options.daemonize):
             args += ["-daemonize"]
     else:
@@ -131,7 +133,7 @@ if (__name__ == "__main__"):
                         help="vm instance")
     parser.add_argument("-m", "--memory_size", action="store", default="256M",
                         help="memory")
-    parser.add_argument("-k", "--kernel_args", action="store", default="ipaddr=192.168.0.8 gw=192.168.0.1",
+    parser.add_argument("-k", "--kernel_args", action="store", default="root_dev_scsi=1 ipaddr=192.168.0.8 gw=192.168.0.1",
                         help="kernel arguments")
     parser.add_argument("-r", "--command", action="store", default="date",
                         help="command to run: example \"ls -l \"")

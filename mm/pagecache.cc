@@ -385,7 +385,35 @@ int pc_pagecleaned(struct page *page) {
 
 	return 1;
 }
+void pc_printInodePages(struct fs_inode *inode) {
+	struct list_head *p;
+	struct page *page = NULL;
+	int k,i,list_index;
+	unsigned long *addr;
+	unsigned long cksum;
 
+	i = 0;
+	ut_printf(" file: %s \n",inode->filename);
+	mutexLock(g_inode_lock);
+	//list_index=get_pagelist_index(offset);
+	for (list_index=0; list_index<PAGELIST_HASH_SIZE; list_index++){
+		list_for_each(p, &(inode->page_list[list_index])) {
+			page = list_entry(p, struct page, list);
+			i++;
+		//	DEBUG(" %d: get page address: %x  addr:%x offset :%d \n",i,page,to_ptr(page),page->offset);
+			addr = (unsigned long *)pcPageToPtr(page);
+			cksum=0;
+			for (k=0; k<PAGE_SIZE; k=k+8){
+				cksum = cksum+*addr;
+				addr++;
+			}
+			ut_printf("   %d : offset:%d cksum:%d\n",i,page->offset,cksum);
+		}
+	}
+	mutexUnLock(g_inode_lock);
+
+	return ;
+}
 struct page *pc_getInodePage(struct fs_inode *inode, unsigned long offset) {
 	struct list_head *p;
 	struct page *page = NULL;
@@ -414,7 +442,6 @@ last:
 	mutexUnLock(g_inode_lock);
 	//ut_log(" list index : %x offset: %x\n",list_index,offset);
 	return page;
-
 }
 struct fs_inode *latest_inode;
 extern "C" {
