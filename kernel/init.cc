@@ -64,7 +64,7 @@ typedef struct {
 } inittable_t;
 
 static inittable_t inittable[] = {
-		{init_physical_memory,0,"PhysicalMemory and Symbol table",0},
+		{init_physical_memory,0,"PhysicalMemory and Symbol table",1},
 		{init_descriptor_tables,0,"ISR and Descriptors",0},
 		{init_kernel_args,0, "Kernel Args",0},
 		{init_memory,0,           "Main memory",0},
@@ -110,14 +110,20 @@ unsigned long g_phy_mem_size=0;
 extern int _edata; // data and bsss start
 extern addr_t end; // end of code and data region
 unsigned char kernel_args[1024];
+unsigned long g_multiboot_info_ptr;
+unsigned long g_multiboot_magic;
+unsigned long g_multiboot_module_start,g_multiboot_module_end;
+
 int init_physical_memory(unsigned long unused){
 	multiboot_info_t *mbi;
+	multiboot_mod_t *mod_p;
 	unsigned long *mbi_ptr,*magic_ptr;
 	unsigned long max_addr;
 
 	mbi_ptr =__va(0x4000);
 	magic_ptr = __va(0x4010);
 	mbi=__va(*mbi_ptr);
+	mod_p = __va(mbi->mods_addr);
 
 	if (*magic_ptr != MULTIBOOT_BOOTLOADER_MAGIC){
 		BUG();
@@ -126,7 +132,9 @@ int init_physical_memory(unsigned long unused){
 	/* Set MBI to the address of the Multiboot information structure.  */
 	ut_log("		mbi: %x mem_lower = %x(%d)KB , mem_upper=%x(%d)KB mod count:%d addr:%x mmaplen:%d mmpaddr:%x Flags:%x\n", mbi, mbi->mem_lower, mbi->mem_lower, mbi->mem_upper, mbi->mem_upper,
 			mbi->mods_count, mbi->mods_addr, mbi->mmap_length, mbi->mmap_addr, mbi->flags);
-	INIT_LOG("		mbi: syms[0]:%x syms[1]:%x  syms[2]:%x syms[3]:%x cmdline:%x\n",mbi->syms[0],mbi->syms[1],mbi->syms[2],mbi->syms[3],mbi->cmdline);
+
+	INIT_LOG("	mod start_addr:%x end_addr:%x vamod :%x-%x	\nmbi: syms[0]:%x syms[1]:%x  syms[2]:%x syms[3]:%x cmdline:%x\n",
+			mod_p->mod_start, mod_p->mod_end,__va(mod_p->mod_start), __va(mod_p->mod_end),mbi->syms[0],mbi->syms[1],mbi->syms[2],mbi->syms[3],mbi->cmdline);
 
 	/* Are mmap_* valid?  */
 	if (CHECK_FLAG (mbi->flags, 6)) {
@@ -142,12 +150,18 @@ int init_physical_memory(unsigned long unused){
 		}
 	}
 
+	g_multiboot_module_start = __va(mod_p->mod_start);
+	g_multiboot_module_end = __va(mod_p->mod_end);
 	g_phy_mem_size = max_addr;
 	INIT_LOG("		Physical memory size :%x (%d)  magic_ptr :%x cmdline: %x :%s\n",g_phy_mem_size,g_phy_mem_size,magic_ptr,mbi->cmdline,__va(mbi->cmdline));
 	INIT_LOG("		end of data :%x  image end:%x\n",&_edata, &end);
 	ut_memcpy(&kernel_args[0], __va(mbi->cmdline),1023);
-	init_symbol_table(&_edata, &end);
-	INIT_LOG("		End of smybol processing \n");
+	max_addr = &end;
+	if (max_addr < __va(mod_p->mod_end)){
+		max_addr = __va(mod_p->mod_end);
+	}
+	init_symbol_table(&_edata, max_addr);
+	INIT_LOG("	    After of symbol processing:  \n");
 	//while(1);
 	return JSUCCESS;
 }
@@ -232,7 +246,7 @@ int init_kernel_vmaps(unsigned long arg1){
 	return JSUCCESS;
 }
 extern int g_conf_func_debug;
-int g_init_loglevel=0;
+int g_init_loglevel=1;
 void cmain() {  /* This is the first c function to be executed */
 	int i,ret;
 

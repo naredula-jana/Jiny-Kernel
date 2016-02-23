@@ -118,7 +118,7 @@ public:
 	int init_device(jdevice *dev);
 };
 extern "C" {
-extern int init_tarfs(jdriver *driver_arg);
+extern int init_tarfs(jdriver *driver_arg,int enable_read_ahead);
 }
 int disk_io(int type, unsigned char *buf, int len, int offset, int read_ahead, jdiskdriver *driver) ;
 #define DISK_READ 0

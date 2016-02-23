@@ -265,7 +265,7 @@ virtio_disk_jdriver::virtio_disk_jdriver(class jdevice *jdev){
 		req_blk_size = PAGE_SIZE;
 		//req_blk_size = 512;
 		waitq = jnew_obj(wait_queue,"waitq_cirtio_disk", 0);
-		init_tarfs((jdriver *) this);
+		init_tarfs((jdriver *) this,1);
 	}
 }
 

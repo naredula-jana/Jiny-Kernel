@@ -115,7 +115,7 @@ typedef struct multiboot_info {
   uint32_t mem_lower;     /* amount of lower memory 0M - 640M */
   uint32_t mem_upper;     /* amount of upper memory 1G - NG */
   uint32_t boot_device;   /* indicates BIOS disk device */
-  uint32_t cmdline;       /* physical address of the passed kernel comand line */
+  uint32_t cmdline;       /* physical address of the passed kernel command line */
   uint32_t mods_count;    /* number of loaded modules */
   uint32_t mods_addr;     /* physical address of first module structure */
   uint32_t syms[4];

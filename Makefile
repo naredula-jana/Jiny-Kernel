@@ -21,7 +21,7 @@ OBJ_VIRTIO=  \
 
 OBJ_MEMLEAK=mm/memleak/memleak.o mm/memleak/os_dep.o mm/memleak/prio_tree.o  mm/memleak/memleak_hook.o
 
-OBJ_32CODE= arch/$(ARCH_DIR)/boot.o arch/$(ARCH_DIR)/smp/head.o arch/$(ARCH_DIR)/smp/trampoline_64.o 
+OBJ_32CODE= arch/$(ARCH_DIR)/boot.o arch/$(ARCH_DIR)/end.o arch/$(ARCH_DIR)/smp/head.o arch/$(ARCH_DIR)/smp/trampoline_64.o 
 OBJ_ARCH=  arch/$(ARCH_DIR)/vsyscall_emu_64.o \
 	arch/$(ARCH_DIR)/init.o \
 	arch/$(ARCH_DIR)/syscall.o \

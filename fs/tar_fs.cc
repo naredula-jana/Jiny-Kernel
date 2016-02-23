@@ -127,6 +127,7 @@ class tar_fs :public filesystem {
 	int write_file_contents(unsigned char * filename, unsigned char *buf, int len, int offset);
 
 public:
+	int enable_read_ahead;
 	int init(jdriver *driver_arg, unsigned long extent_size_arg,unsigned char *prefixx);
 	 int open(fs_inode *inode, int flags, int mode);
 	 int lseek(struct file *file,  unsigned long offset, int whence);
@@ -643,7 +644,9 @@ int tar_fs::read_file_contents(unsigned char *filename, unsigned char *buf, int 
 	int ret_len=0;
 	int tmp_ret;
 	struct tar_file *filep = get_file(filename);
-
+	if (enable_read_ahead ==0){
+		read_ahead =0;
+	}
 	if (read_ahead == 1){
 		len_arg=4096;
 	}
@@ -905,10 +908,10 @@ extern "C" {
 //unsigned long g_conf_tarfs_extent_size=20000 ; /* 20k */
 unsigned long g_conf_tarfs_extent_size  __attribute__ ((section ("confdata"))) =512*8000 ; /* 512k */
 unsigned char *g_conf_tarfs_dummy_prefix  __attribute__ ((section ("confdata"))) = ".dummy_file";
-int init_tarfs(jdriver *driver_arg) {
+int init_tarfs(jdriver *driver_arg, int enable_read_ahead) {
 	tarfs_obj = jnew_obj(tar_fs);
 	if (tarfs_obj->init(driver_arg, g_conf_tarfs_extent_size, g_conf_tarfs_dummy_prefix) == JFAIL) return JFAIL;
-
+	tarfs_obj->enable_read_ahead = enable_read_ahead;
 	return fs_registerFileSystem(tarfs_obj, (unsigned char *)"tar_fs",driver_arg->name);
 
 }

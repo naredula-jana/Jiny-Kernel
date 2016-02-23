@@ -31,7 +31,7 @@ SECTIONS
  . = ALIGN(4096 ); 
  .text : AT(ADDR(.text) - kernelStart ) {
         __text_start = . ;
-        *(EXCLUDE_FILE (*arch/x86_64/boot.o *arch/x86_64/smp/head.o *arch/x86_64/smp/trampoline_64.o)
+        *(EXCLUDE_FILE (*arch/x86_64/boot.o *arch/x86_64/smp/head.o *arch/x86_64/smp/trampoline_64.o *arch/x86_64/end.o)
           .text)
         __text_end = .;
  }
@@ -39,14 +39,14 @@ SECTIONS
  . = kernelStart + 0x200000;
  __data_start = .;   
  confdata : AT(ADDR(confdata) - kernelStart ){
- 	*(confdata)
+ 	*(EXCLUDE_FILE (*arch/x86_64/end.o)confdata)
 	
  }
  __confdata_end = .;
   
  .data : AT(ADDR(.data) - kernelStart ){
  
-        *(EXCLUDE_FILE (*arch/x86_64/boot.o *arch/x86_64/smp/head.o *arch/x86_64/smp/trampoline_64.o)
+        *(EXCLUDE_FILE (*arch/x86_64/boot.o *arch/x86_64/smp/head.o *arch/x86_64/smp/trampoline_64.o *arch/x86_64/end.o)
           .data)
         *(.rodata)
         __data_end = .;
@@ -56,10 +56,11 @@ SECTIONS
  __bss_start = .;
   
  .bss : AT(ADDR(.bss) - kernelStart ){
-        *(EXCLUDE_FILE (*arch/x86_64/boot.o *arch/x86_64/smp/head.o *arch/x86_64/smp/trampoline_64.o)
+        *(EXCLUDE_FILE (*arch/x86_64/boot.o *arch/x86_64/smp/head.o *arch/x86_64/smp/trampoline_64.o *arch/x86_64/end.o)
           .bss)
-        *(EXCLUDE_FILE (*arch/x86_64/boot.o *arch/x86_64/smp/head.o *arch/x86_64/smp/trampoline_64.o)
+        *(EXCLUDE_FILE (*arch/x86_64/boot.o *arch/x86_64/smp/head.o *arch/x86_64/smp/trampoline_64.o *arch/x86_64/end.o)
           COMMON)
+/*        *arch/x86_64/end.o(.text) */
  }
  _end = .;
  end = .;

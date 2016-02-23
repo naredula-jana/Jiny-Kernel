@@ -436,7 +436,7 @@ pvscsi_jdriver::pvscsi_jdriver(class jdevice *jdev) {
 		//req_blk_size = blk_size;
 		req_blk_size = PAGE_SIZE;
 		waitq = jnew_obj(wait_queue, "waitq_pvscsi_disk", 0);
-		init_tarfs((jdriver *) this);
+		init_tarfs((jdriver *) this,1);
 	}
 }
 jdriver *pvscsi_jdriver::attach_device(class jdevice *jdev) {

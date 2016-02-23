@@ -8,9 +8,9 @@
 #define _EFER_LME 8  /* Long mode enable */
 #define CR0_PG 0x80000000 /* Paging */	
 #define CR0_RW 0x10000 /* write protect, enables accedental writes by supervisor mode */	
-/*extern unsigned long  multiboot_info_ptr;
-extern unsigned long  multiboot_magic;
-*/
+//extern unsigned long  multiboot_info_ptr;
+//extern unsigned long  multiboot_magic;
+
 #define BOOT_SHIFT 0x40000000
 
 .set KTEXT_SEG,   8
@@ -19,7 +19,7 @@ extern unsigned long  multiboot_magic;
 	.text
 	.code32
 
-	.globl	start, _start
+	.globl	start, _start, jiny_kernel_end
 start:
 _start:
 	jmp	multiboot_entry
@@ -40,13 +40,12 @@ multiboot_header:
 	.long	0x100004
 	/* load_addr */
 	.long	0x100024
-
-	.long   0
-	.long   0
-	/* load_end_addr */
-//	.long	0x20d730
+/* load_end_addr */
+	.long   0x520000  /* TODO: hard coded address: end address */
+//	.long   jiny_kernel_end / 0x32
 	/* bss_end_addr */
-//	.long	0x42fe68
+	.long   0
+
 	/* entry_addr */
 	.long	0x100024
 /* #endif  ! __ELF__ */ 
@@ -63,14 +62,7 @@ multiboot_entry:
 
 	movl %ebx, (0x4000)
 	movl %eax, (0x4010)
-	/* save multiboot info pointer */
- #       movl %ebx, g_multiboot_info_ptr-BOOT_SHIFT
-        /* and multiboot magic value */
- #       movl %eax, g_multiboot_magic-BOOT_SHIFT
-	/*pushl   $0
-	pushl   %ebx
-	pushl   $0
-	pushl   %eax */
+
 tloop:	
 #	jmp tloop
 
@@ -114,8 +106,6 @@ t1:
         orl $CR0_PG, %eax
 	orl $CR0_RW, %eax
 	movl %eax, %cr0
-    /*    movl $kernel_jump_addr-BOOT_SHIFT, %edx
-        movl $(cmain), 0(%edx)*/
 	jmpl $KTEXT_SEG, $start64
 	
 /* Now enter the C main function...  */
@@ -130,9 +120,6 @@ start64:
    //     movq kernel_jump_addr, %rax
         callq *%rax
 
-	/* Halt.  */
-	#pushl	$halt_message
-#	call	EXT_C(printf)
 .code32	
 loop:	hlt
 	jmp	loop

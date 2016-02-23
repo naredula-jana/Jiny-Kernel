@@ -175,6 +175,79 @@ void jfree_obj(unsigned long addr){
 	ut_free(addr);
 }
 extern int diskio_thread(void *arg1, void *arg2);
+/******************************************************************
+ *    ramdisk driver
+ */
+class ramdisk_jdriver: public jdriver {
+public:
+	unsigned long disk_size,blk_size;
+	ramdisk_jdriver(class jdevice *jdev);
+
+	void print_stats(unsigned char *arg1,unsigned char *arg2);
+	int probe_device(jdevice *dev);
+	jdriver *attach_device(jdevice *dev);
+	int dettach_device(jdevice *dev);
+	int read(unsigned char *buf, int len, int flags, int opt_flags);
+	int write(unsigned char *buf, int len, int flags);
+	int ioctl(unsigned long arg1,unsigned long arg2);
+};
+ramdisk_jdriver *ramdisk_driver;
+//ramdisk_jdriver::ramdisk_jdriver(){
+	//blk_size=512;
+//}
+ramdisk_jdriver::ramdisk_jdriver(class jdevice *jdev){
+	blk_size=512;
+}
+void ramdisk_jdriver::print_stats(unsigned char *arg1,unsigned char *arg2){
+
+}
+extern unsigned long g_multiboot_module_start,g_multiboot_module_end;
+int ramdisk_jdriver::probe_device(jdevice *dev){
+	if (g_multiboot_module_end>(g_multiboot_module_start+512)){ /* should have atleast one block*/
+		return JSUCCESS;
+	}else{
+		return JFAIL;
+	}
+}
+int ramdisk_jdriver::dettach_device(jdevice *dev){
+	return 0;
+}
+jdriver *ramdisk_jdriver::attach_device(class jdevice *jdev) {
+	ramdisk_jdriver *new_obj = jnew_obj(ramdisk_jdriver,jdev);
+	new_obj->blk_size = 512;
+	new_obj->disk_size = g_multiboot_module_end-g_multiboot_module_start;
+	new_obj->name = "ramdisk";
+	if (new_obj->disk_size > 512){
+		init_tarfs((jdriver *) new_obj,0);
+	}
+	return (jdriver *) new_obj;
+}
+
+int ramdisk_jdriver::read(unsigned char *buf, int len, int offset,
+		int read_ahead) {
+	int  i;
+	unsigned char *p = (unsigned char *)g_multiboot_module_start;
+	if (disk_size ==0 || offset>disk_size){
+		return 0;
+	}
+
+	for (i=offset; (i-offset)<len && i<disk_size; i++){
+		buf[i-offset] = p[i];
+	}
+	//ut_log(" ramdisk read length :%d\n",i-offset);
+	return i-offset;
+
+}
+int ramdisk_jdriver::write(unsigned char *buf, int len, int offset) {
+	return 0;
+}
+int ramdisk_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
+	if (arg1 == IOCTL_DISK_SIZE) {
+		return disk_size;
+	}
+	return JSUCCESS;
+}
+/* end of ramdisk driver */
 /*********************************************************************************/
 extern "C" {
 
@@ -185,6 +258,10 @@ static int scan_pci_devices() {
 #define MAX_PCI_DEV 32
 #define MAX_PCI_FUNC 32
 
+	ramdisk_driver = jnew_obj(ramdisk_jdriver,0);
+	if (ramdisk_driver->probe_device(0)==JSUCCESS){
+		ramdisk_driver->attach_device(0);
+	}
 	for (i = 0; i < MAX_BUS && i < 2; i++) {
 		for (j = 0; j < MAX_PCI_DEV; j++) {
 			for (k = 0; k < MAX_PCI_FUNC; k++) {
@@ -211,6 +288,7 @@ static int scan_pci_devices() {
 			}
 		}
 	}
+
 	return JSUCCESS;
 }
 extern void init_virtio_drivers();

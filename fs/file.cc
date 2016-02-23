@@ -319,6 +319,10 @@ unsigned long fs_registerFileSystem(filesystem *fs,unsigned char *fs_type, unsig
 			i++;
 			continue;
 		}
+	/*	if (i==0 &&  ut_strcmp(device_name,"ramdisk")==0){
+			i++;
+			continue;
+		}*/
 		if (g_fs_list[i].fs==0 &&  ut_strcmp(g_fs_list[i].type,fs_type)==0){
 			g_fs_list[i].fs = fs;
 			g_fs_list[i].device_name = device_name;
