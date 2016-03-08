@@ -82,6 +82,9 @@ enum {
 #define F_DUPFD         0       /* dup */
 #define F_GETFD         1       /*getfd flags */
 #define F_SETFD         2       /*setfd for close on exec */
+#define F_GETFL         3       /* get file->f_flags */
+#define F_SETFL         4       /* set file->f_flags */
+
 #define FD_CLOSEXEC      1
 
 enum {
@@ -107,20 +110,21 @@ enum { /* Inode types*/
 	OUT_PIPE_FILE=0x8,
 	IN_PIPE_FILE=0x10,
 	DEV_NULL_FILE=0x20,
+	EVENT_POLL_FILE=0x40,
+	SOCKETPAIR_FILE=0x80,
 
 	REGULAR_FILE=0x8000,
 	DIRECTORY_FILE=0x4000,
 	SYM_LINK_FILE=0xA000
 };
 
+
 struct file {
 	unsigned char filename[MAX_FILENAME];
 	int type;
 	uint64_t offset;
 	int flags;
-
 	void *vinode;
-//	void *private_pipe;
 };
 struct fileStat {
 	uint32_t mode;

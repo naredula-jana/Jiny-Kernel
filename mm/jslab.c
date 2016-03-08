@@ -733,10 +733,14 @@ void *vmalloc(int size, int flags){ /* TODO locks need to be addedd */
 
 	spin_lock_irqsave(&vmalloc_lock, intr_flags);
 	for (i=0; i<MAX_VBLOCKS && i<total_blocks; i++){
-		if (vblocks[i].vaddr == 0 ) return 0;
+		if (vblocks[i].vaddr == 0 ) {
+			ret =0 ;
+			goto last;
+		}
 		if (vblocks[i].size > size && vblocks[i].is_free == 1){
 			vblocks[i].is_free = 0;
 
+			spin_unlock_irqrestore(&vmalloc_lock, intr_flags);
 			/* touch the memory mouch so that page faults will not happend when a nonrecursive global spin lock is taken */
 			unsigned char *p=vblocks[i].vaddr;
 			for (j=0; j<vblocks[i].size; j=j+PAGE_SIZE){
@@ -746,13 +750,13 @@ void *vmalloc(int size, int flags){ /* TODO locks need to be addedd */
 				ut_memset(vblocks[i].vaddr,0,size);
 			}
 			ret = vblocks[i].vaddr;
-			goto last;
+			return ret;
 		}
 	}
 
 last:
 	spin_unlock_irqrestore(&vmalloc_lock, intr_flags);
-	return ret;;
+	return ret;
 }
 int  vfree(addr_t addr){
 	int i;

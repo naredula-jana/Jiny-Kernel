@@ -52,17 +52,30 @@ public:
 
 #include "ipc.hh"
 
+#define MAX_EPOLL_FDS 20
+struct epoll_struct{
+	int count;
+	int fds[MAX_EPOLL_FDS];
+	int fd_waiting;
+	wait_queue *waitq;
+};
+#define MAX_EFDS_PER_FD 5
 class vinode: public jobject {
 public:
 	atomic_t count; /* usage count */
 	unsigned char filename[MAX_FILENAME];
 	int file_type; /* type of file */
 
+	int data_available_for_consumption; /* set when there is atleast one packet for consumption, clear when it empty */
+	struct epoll_struct *epoll_list[MAX_EFDS_PER_FD];
+
 	unsigned long stat_out,stat_in,statout_err,statin_err;
 	unsigned long stat_in_bytes,stat_out_bytes;
 
 	void update_stat_in(int in_req,int in_byte);
 	void update_stat_out(int out_req,int out_byte);
+
+	void epoll_fd_wakeup();
 
 	virtual int read(unsigned long offset, unsigned char *data, int len, int flags, int opt_flags)=0;
 	virtual int write(unsigned long offset, unsigned char *data, int len, int flags)=0;
@@ -133,6 +146,12 @@ typedef struct sock_list_type{
 	class socket *list[MAX_SOCKETS];
 	int size;
 }sock_list_t;
+struct tcp_data{  /* this is for tcp connections */
+	int len;
+	int consumed;
+	unsigned char data[1];
+};
+
 class socket: public vinode {
 public:
 	class network_connection network_conn;
@@ -140,6 +159,7 @@ public:
 	class fifo_queue queue;
 	unsigned char *peeked_msg;
 	int peeked_msg_len;
+	class fifo_queue tcpdata_queue;
 
 	static unsigned long stat_raw_attached;
 	static unsigned long  stat_raw_drop;
@@ -147,6 +167,8 @@ public:
 
 	socket(){
 	}
+	void default_pkt_process();
+	int write_iov(struct iovec *msg_iov, int iov_len);
 
 	int read(unsigned long offset, unsigned char *data, int len, int flags, int unused_flags);
 	int write(unsigned long offset, unsigned char *data, int len, int flags);

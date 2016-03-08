@@ -19,7 +19,7 @@ extern int net_send_eth_frame(unsigned char *buf, int len, int write_flags);
 extern unsigned char *jalloc_page(int flags);
 extern int jfree_page(unsigned char *p);
 #define MEM_NETBUF     0x0200000  /* TODO : need to remove later */
-int g_conf_zerocopy=0;  /* TODO: temporary variable : need to remove later */
+//int g_conf_zerocopy=0;  /* TODO: temporary variable : need to remove later */
 }
 
 #include "network_stack.hh"
@@ -64,6 +64,7 @@ int network_stack::read(network_connection *conn, uint8_t *raw_data, int raw_len
 	int ret = JFAIL;
 	int pkt_len;
 	unsigned char *jbuf=0;
+	int tret;
 
 	netstack_lock();
 	DEBUG("new UIP raw received length :%d  conn:%x   ..... :uip_conn:%x \n", raw_len,conn,uip_conn);
@@ -81,9 +82,9 @@ int network_stack::read(network_connection *conn, uint8_t *raw_data, int raw_len
 		uip_input();
 		if (uip_appdata) {
 			ret = pkt_len - (UIP_LLH_LEN + UIP_IPUDPH_LEN);
-			if (g_conf_zerocopy == 0){
+			//if (g_conf_zerocopy == 0){
 				ut_memcpy(app_data, uip_appdata, ret);
-			}
+			//}
 			conn->dest_port = UDPBUF->srcport;
 			ut_memcpy((unsigned char *)&(conn->src_ip), (unsigned char *)&(UDPBUF->destipaddr[0]),4);
 			ut_memcpy((unsigned char *)&(conn->dest_ip), (unsigned char *)&(UDPBUF->srcipaddr[0]),4);
@@ -113,26 +114,26 @@ int network_stack::read(network_connection *conn, uint8_t *raw_data, int raw_len
 		if (jiny_uip_data != 0 ) {
 			ret = jiny_uip_dlen;
 			if (app_data != 0){
-				ut_memcpy(app_data, jiny_uip_data, ret);
+				ut_memcpy(app_data, jiny_uip_data, ret); /*TODO: If the recv packet data is more then app_max_len , then data will be lost*/
 			}
 		}
 		if (jiny_uip_callback_flags == UIP_CLOSE){
 			ret = -1;
 		}
 		if (jiny_uip_callback_flags == UIP_CONNECTED){
-			network_connection *new_conn = conn->child_connection;
-			ut_printf(" New connection details : %x \n",new_conn);
-			if (new_conn != 0){
-				new_conn->dest_port = UDPBUF->srcport;
-				ut_memcpy((unsigned char *)&(new_conn->dest_ip), (unsigned char *)&(UDPBUF->srcipaddr[0]),4);
-				ut_printf(" New connection port : ip : %x:%x \n",new_conn->dest_port,new_conn->dest_ip);
-			}
+			//network_connection *new_conn = conn->child_connection;
+			ut_printf(" New connection details  \n");
+			//if (new_conn != 0){
+			conn->new_child_connection.dest_port = UDPBUF->srcport;
+			ut_memcpy((unsigned char *)&(conn->new_child_connection.dest_ip), (unsigned char *)&(UDPBUF->srcipaddr[0]),4);
+			ut_printf(" New connection port : ip : %x:%x \n",conn->new_child_connection.dest_port,conn->new_child_connection.dest_ip);
+			//}
 			ret = -2;
 		}
 		if (uip_len > 0) {
 			uip_arp_out();
-			ret = net_send_eth_frame(uip_buf, uip_len, 0);
-			if (ret != JFAIL) {
+			tret = net_send_eth_frame(uip_buf, uip_len, 0);
+			if (tret != JFAIL) {
 				jbuf = 0;
 			}
 			uip_len = 0;
@@ -180,12 +181,13 @@ int g_conf_test_dummy_send __attribute__ ((section ("confdata")))=0;
 extern int check_emptyspace_net_sendq();
 int ut_sleep_ns(int dur);
 }
-
-int network_stack::write(network_connection *conn, uint8_t *app_data, int app_len) {
+int network_stack::write(network_connection *conn, struct iovec *msg_iov, int iov_len) {
+//int network_stack::write(network_connection *conn, uint8_t *app_data, int app_len) {
 	int ret = JFAIL;
 	unsigned char *buf=0;
 	uint16_t port;
 	uint32_t ip;
+	int i,tmp_len;
 
 	netstack_lock();
 	if (uip_buf!=0){
@@ -222,18 +224,23 @@ int network_stack::write(network_connection *conn, uint8_t *app_data, int app_le
 
 		uip_udp_conn->ripaddr[0] = ip & 0xffff;
 		uip_udp_conn->ripaddr[1] = (ip >> 16) & 0xffff;
-
-		uip_slen = app_len;
-		uip_process(UIP_UDP_SEND_CONN);
-		if (g_conf_zerocopy == 0){
-			ut_memcpy(uip_appdata, app_data, app_len);
+#if 1
+		for (i=0; i<iov_len; i++){
+			uip_slen = uip_slen+msg_iov[i].iov_len;
 		}
-
+		//uip_slen = app_len;
+		uip_process(UIP_UDP_SEND_CONN);
+		tmp_len=0;
+		for (i=0; i<iov_len; i++){
+			ut_memcpy(uip_appdata+tmp_len, (unsigned char *)msg_iov[i].iov_base, (int)msg_iov[i].iov_len);
+			tmp_len=tmp_len+msg_iov[i].iov_len;
+		}
+#endif
 		send_buf = uip_buf;
 		send_len = 0;
 		if (uip_len > 0) {
 			uip_arp_out();
-			DEBUG("FROM WRITE ... - uip SENDTO pkt: buf: %x  %d applen :%d \n", uip_buf, uip_len, app_len);
+			DEBUG("FROM WRITE ... - uip SENDTO pkt: buf: %x  %d applen  \n", uip_buf, uip_len);
 			send_len = uip_len;
 			//ret = net_send_eth_frame(uip_buf, uip_len,WRITE_BUF_CREATED);
 		}
@@ -244,7 +251,7 @@ int network_stack::write(network_connection *conn, uint8_t *app_data, int app_le
 		if (send_len > 0){
 			uip_buf=0;
 			netstack_unlock();
-#if 1
+#if 0
 			if (g_conf_test_dummy_send > 0) {
 				int i;
 				for (i=0; i<g_conf_test_dummy_send; i++) {
@@ -268,6 +275,9 @@ int network_stack::write(network_connection *conn, uint8_t *app_data, int app_le
 			if ((ret == JFAIL) && send_buf){
 					jfree_page(send_buf);
 					buf =0 ;
+			}
+			if (ret == JSUCCESS){
+				ret = send_len;
 			}
 			return ret;
 		}
@@ -354,8 +364,8 @@ void uip_mod_appcall(void) {
 
 	return;
 }
-unsigned char g_conf_ipaddr[40];
-unsigned char g_conf_gw[40];
+unsigned char g_conf_ipaddr[40]="192.168.122.2";
+unsigned char g_conf_gw[40]="192.168.122.1";
 uint8_t *ut_strcpy(uint8_t *dest, const uint8_t *src);
 unsigned int ut_atoi(uint8_t *p, int format);
 int get_ip(unsigned char *str, int loc) {

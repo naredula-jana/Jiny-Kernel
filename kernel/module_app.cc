@@ -840,7 +840,7 @@ void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
 		cpu=ut_atoi(arg2,FORMAT_DECIMAL);
 	}
 	ut_snprintf(buf, bsize, " Stats for cpu: %d \n",cpu);
-	SYS_fs_write(1, buf, ut_strlen(buf));
+	fs_fd_write(1, buf, ut_strlen(buf));
 	for (i = 0; i < total_modules; i++) {
 		modulep = g_modules[i];
 		modulep->use_count++;
@@ -848,7 +848,7 @@ void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
 		for (j = 0; j < SEC_TOTAL; j++) {
 			ut_snprintf(buf, bsize, "	%2d: addr:%5x - %5x \n", modulep->secs[j].sec_index, modulep->secs[j].addr,
 					modulep->secs[j].addr + modulep->secs[j].length);
-			SYS_fs_write(1, buf, ut_strlen(buf));
+			fs_fd_write(1, buf, ut_strlen(buf));
 		}
 		if (option == 2) {
 			int max_ranks=20;
@@ -870,7 +870,7 @@ void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
 						modulep->symbol_table[j].type, modulep->symbol_table[j].total_hits,modulep->symbol_table[j].stats[0].hits,modulep->symbol_table[j].stats[1].hits,
 						modulep->symbol_table[j].stats[0].rip, modulep->symbol_table[j].name, modulep->symbol_table[j].address,
 						modulep->symbol_table[j].len);
-				SYS_fs_write(1, buf, ut_strlen(buf));
+				fs_fd_write(1, buf, ut_strlen(buf));
 				//total_hits = total_hits + hits;
 			}
 		}else if (option == 1){
@@ -879,7 +879,7 @@ void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
 									modulep->symbol_table[j].type, modulep->symbol_table[j].sec_index, modulep->symbol_table[j].total_hits,
 									modulep->symbol_table[j].stats[0].rip, modulep->symbol_table[j].name, modulep->symbol_table[j].address,
 									modulep->symbol_table[j].len);
-				SYS_fs_write(1, buf, ut_strlen(buf));
+				fs_fd_write(1, buf, ut_strlen(buf));
 			}
 		}else if (option == 3){
 			for (j = 0; modulep->symbol_table[j].name != 0; j++){
@@ -892,11 +892,11 @@ void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
 	}
 	for (j=0; j<func_hits_count; j++){
 		ut_snprintf(buf, bsize, " addr: %p  hits:%d\n",func_hits[j].addr,func_hits[j].hits);
-		SYS_fs_write(1, buf, ut_strlen(buf));
+		fs_fd_write(1, buf, ut_strlen(buf));
 	}
 	ut_snprintf(buf, bsize, " Total modules: %d total Hits:%d  unknownhits:%d unown ip:%p \n", total_modules, total_hits,
 			stat_cpu_rip_unknown_hit,stat_unknown_ip);
-	SYS_fs_write(1, buf, ut_strlen(buf));
+	fs_fd_write(1, buf, ut_strlen(buf));
 
 	mm_free(buf);
 	return;

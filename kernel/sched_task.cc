@@ -23,7 +23,7 @@ unsigned char g_idle_stack[MAX_CPUS + 2][TASK_SIZE] __attribute__ ((aligned (409
 struct mm_struct *g_kernel_mm = 0;
 task_queue_t g_task_queue;
 spinlock_t g_global_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"global");
-
+spinlock_t g_userspace_stdio_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"userspacelock");
 unsigned long g_stat_idle_avoided ;
 
 void ar_update_jiffie();
@@ -989,6 +989,8 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 		all =2;
 	}else if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "cpu") == 0) {
 		all =3;
+	}else if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "fd") == 0) {
+		all =4;
 	}
 	len = PAGE_SIZE * 100;
 	max_len = len;
@@ -1024,6 +1026,11 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 				}
 			}else if (all == 2){
 				print_syscall_stat(task,0);
+			}else if (all == 4){
+				for (j=0; j<task->fs->total; j++){
+					if (task->fs->filep[j] != 0)
+					len = len - ut_snprintf(buf + max_len - len, len, "    %d: fd:%s type:%d \n", j,task->fs->filep[j]->filename,task->fs->filep[j]->type);
+				}
 			}
 		}
 
@@ -1048,7 +1055,7 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	if (g_current_task->mm == g_kernel_mm)
 		ut_printf("%s", buf);
 	else
-		SYS_fs_write(1, buf, len);
+		fs_fd_write(1, buf, len);
 
 	vfree((unsigned long) buf);
 
@@ -1122,7 +1129,8 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 		atomic_inc(&fs->count);
 	} else {
 		fs = create_fs();
-		for (i = 0; i < g_current_task->fs->total && i < 3; i++) {
+		//for (i = 0; i < g_current_task->fs->total && i < 3; i++) {
+		for (i = 0; i < g_current_task->fs->total ; i++) {
 			fs->filep[i] = fs_dup(g_current_task->fs->filep[i], 0);
 		}
 		fs->total = g_current_task->fs->total;
@@ -1194,6 +1202,7 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	}
 
 	SYSCALL_DEBUG("clone return pid :%d(%x) \n", ret_pid,ret_pid);
+	sc_schedule();  /* TODO :this is temporary fix for memcached program, looks like futex is not working as expected for new thread in memcached, not if this is correct, giving chance to run new task */
 
 	return ret_pid;
 }

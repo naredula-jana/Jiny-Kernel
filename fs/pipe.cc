@@ -22,6 +22,7 @@ struct {
 	} bufs[MAX_PIPE_BUFS];
 	int in_index, out_index;
 	int count;
+	class pipe *recv_inode; /* to send notification */
 } pipes[MAX_PIPES];
 static int init_pipe_done = 0;
 static void init_pipes(){
@@ -68,6 +69,7 @@ static int fs_create_pipe(struct pipe *wpipe, struct pipe *rpipe) {
 				pipes[i].bufs[j].start_offset = 0;
 			}
 			ret = SYSCALL_SUCCESS;
+			pipes[i].recv_inode = rpipe;
 			goto last;
 		}
 	}
@@ -137,6 +139,9 @@ restart:
 			pipes[i].bufs[in].start_offset = 0;
 			pipes[i].bufs[in].size = 0;
 			pipes[i].in_index = (pipes[i].in_index + 1) % MAX_PIPE_BUFS;
+			if (pipes[i].in_index == pipes[i].out_index){
+				pipes[i].recv_inode->data_available_for_consumption = 0;
+			}
 		}
 		ret = max_size;
 	} else {
@@ -201,7 +206,11 @@ restart:
 		goto restart;
 	}
 	//ut_printf(" sending in :%s: to pipe-%d : %d\n",g_current_task->name, i,ret);
-
+	if (consumed_len > 0){
+		if (pipes[i].recv_inode != 0){
+			pipes[i].recv_inode->epoll_fd_wakeup();
+		}
+	}
 	return consumed_len;
 }
 static int fs_destroy_pipe(long pipe_index) {

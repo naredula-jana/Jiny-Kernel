@@ -21,7 +21,7 @@ OBJ_VIRTIO=  \
 
 OBJ_MEMLEAK=mm/memleak/memleak.o mm/memleak/os_dep.o mm/memleak/prio_tree.o  mm/memleak/memleak_hook.o
 
-OBJ_32CODE= arch/$(ARCH_DIR)/boot.o arch/$(ARCH_DIR)/end.o arch/$(ARCH_DIR)/smp/head.o arch/$(ARCH_DIR)/smp/trampoline_64.o 
+OBJ_32CODE= arch/$(ARCH_DIR)/boot.o arch/$(ARCH_DIR)/smp/head.o arch/$(ARCH_DIR)/smp/trampoline_64.o 
 OBJ_ARCH=  arch/$(ARCH_DIR)/vsyscall_emu_64.o \
 	arch/$(ARCH_DIR)/init.o \
 	arch/$(ARCH_DIR)/syscall.o \
@@ -38,7 +38,7 @@ OBJ_DRIVER = drivers/display.o drivers/driver_keyboard.o drivers/driver_serial.o
 OBJ_KERNEL = kernel/debug.o kernel/jdevices.o kernel/init.o  kernel/acpi.o kernel/ipc.o  kernel/network_sched.o kernel/kshell.o  kernel/symbol_table.o  kernel/syscall.o  kernel/sched_task.o  kernel/util.o kernel/module_app.o kernel/blk_sched.o
 	
 OBJ_MEM= mm/memory.o mm/jslab.o mm/pagecache.o mm/vm.o
-OBJ_FS=	fs/binfmt_elf.o fs/pipe.o fs/file.o fs/fs_api.o fs/socket.o fs/proc_fs.o fs/tar_fs.o
+OBJ_FS=	fs/binfmt_elf.o fs/epoll.o fs/pipe.o fs/file.o fs/fs_api.o fs/socket.o fs/proc_fs.o fs/tar_fs.o
 OBJ_SMP = arch/$(ARCH_DIR)/smp/smp-imps.o  arch/$(ARCH_DIR)/smp/apic.o arch/$(ARCH_DIR)/smp/mptables.o
 
 

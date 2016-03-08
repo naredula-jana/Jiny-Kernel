@@ -15,6 +15,7 @@
 #define JFS 1
 #if JFS
 #include "file.hh"
+extern int epoll_close(struct file *filep);
 extern "C" {
 struct page *pc_getInodePage(struct fs_inode *inode, unsigned long offset);
 int pc_insertPage(struct fs_inode *inode, struct page *page);
@@ -177,7 +178,7 @@ extern "C" {
 // TODO: fix need to read partial pages: if disk_blk_side is 512  for pvscsi
 int g_conf_read_ahead_pages  __attribute__ ((section ("confdata")))=20;
 }
-int fs_inode::read(unsigned long offset, unsigned char *data, int len, int read_flags, int opt_flags) {
+int fs_inode::read(unsigned long offset, unsigned char *data, int len, int unused_read_flags, int opt_flags) {
 	struct page *page;
 	int i;
 
@@ -624,6 +625,7 @@ struct file *fs_open(uint8_t *filename, int flags, int mode) {
 			inode_sync(inodep, 1); /* truncate the file */
 		}
 	}
+	filep->flags = flags;
 	return filep;
 
 error:
@@ -636,7 +638,7 @@ error:
 }
 
 
-long fs_read(struct file *filep, uint8_t *buff, unsigned long len) {
+int fs_read(struct file *filep, uint8_t *buff, unsigned long len) {
 	int ret;
 
 	ret = 0;
@@ -647,7 +649,7 @@ long fs_read(struct file *filep, uint8_t *buff, unsigned long len) {
 		BUG();
 	}
 	if (buff == 0 || len == 0) return 0;
-	if (filep->type == OUT_FILE || filep->type == OUT_PIPE_FILE) {
+	if (filep->type == OUT_FILE || filep->type == OUT_PIPE_FILE || filep->type==EVENT_POLL_FILE) {
 		ut_log(" ERROR: read on OUT_FILE : name: %s type:%d\n", g_current_task->name,filep->type);
 		//return -1;
 		BUG();
@@ -660,7 +662,7 @@ long fs_read(struct file *filep, uint8_t *buff, unsigned long len) {
 		BUG();
 	}
 	//ut_log("VFS: read len :  %d  \n",len);
-	ret = vinode->read(filep->offset, buff, len,0,0);
+	ret = vinode->read(filep->offset, buff, len,filep->flags,0);
 	if (ret > 0) {
 		filep->offset = filep->offset + ret;
 	}
@@ -680,7 +682,8 @@ int fs_write(struct file *filep, uint8_t *buff, unsigned long len) {
 		return len;
 	}
 	struct vinode *inode = (struct vinode *) filep->vinode;
-	if (inode ==0 || !(inode->file_type&filep->type) ){
+	//if (inode ==0 || !(inode->file_type&filep->type) ){
+	if (inode ==0){
 		return 0;
 		//BUG();
 	}
@@ -730,7 +733,7 @@ struct file *fs_dup(struct file *old_filep, struct file *new_filep) {
 	}
 	return new_filep;
 }
-
+extern int socketpair_close(struct file *filep);
 int fs_close(struct file *filep) {
 	if (filep == 0 )
 		return 0;
@@ -742,8 +745,12 @@ int fs_close(struct file *filep) {
 			BUG();
 		}
 	}  else if ((filep->type == OUT_FILE) || (filep->type == IN_FILE)
-			|| (filep->type == DEV_NULL_FILE)) { /* nothng todo */
+			|| (filep->type == DEV_NULL_FILE)) { /* nothing todo */
 		//ut_log("Closing the IO file :%x name :%s: \n",filep,g_current_task->name);
+	} else if (filep->type == EVENT_POLL_FILE){
+		epoll_close(filep);
+	} else if (filep->type == SOCKETPAIR_FILE){
+		socketpair_close(filep);
 	}
 	filep->vinode = 0;
 	mm_slab_cache_free(g_slab_filep, filep);

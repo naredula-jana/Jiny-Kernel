@@ -8,10 +8,7 @@
 #include "jiny_api.h"
 #define MAX_AUX_VEC_ENTRIES 25 
 
-struct iovec {                    /* Scatter/gather array items */
-    void  *iov_base;              /* Starting address */
-    size_t iov_len;               /* Number of bytes to transfer */
-};
+
 /* Naming : SYS : system call
  *
  */
@@ -104,7 +101,7 @@ unsigned long fs_putInode(void *fs_inode);
 int Jcmd_ls(uint8_t *arg1,uint8_t *arg2);
 struct file *fs_open(uint8_t *filename,int mode,int flags);
 int fs_close(struct file *file);
-long fs_read(struct file *fp ,uint8_t *buff ,unsigned long len);
+int fs_read(struct file *fp ,uint8_t *buff ,unsigned long len);
 unsigned long fs_fadvise(void *inode,unsigned long offset, unsigned long len,int advise);
 unsigned long fs_lseek(struct file *fp ,unsigned long offset, int whence);
 //unsigned long fs_loadElfLibrary(struct file  *file,unsigned long tmp_stack, unsigned long stack_len,unsigned long aux_addr);
@@ -128,6 +125,7 @@ int fs_get_inode_type(void *inodep);
 int fs_set_offset(void *inodep, unsigned long offset);
 void fs_set_inode_used(void *inodep);
 int fs_get_inode_flags(void *inodep);
+int fs_fd_write(unsigned long fd ,uint8_t *buff ,unsigned long len);
 
 long SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt);
 long SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt);
@@ -224,13 +222,14 @@ int socket_read(struct file *file, uint8_t *buff, unsigned long len);
 int socket_write(struct file *file, uint8_t *buff, unsigned long len);
 int SYS_socket(int family,int type, int z);
 int SYS_listen(int fd,int length);
-int SYS_accept(int fd);
+int SYS_accept(int fd, unsigned long sockaddr, unsigned long addrlen);
+int SYS_accept4(int fd, unsigned long sockaddr, unsigned long addrlen, int flags);
 int SYS_bind(int fd, struct sockaddr  *addr, int len);
 int SYS_connect(int fd, struct sockaddr  *addr, int len);
 unsigned long SYS_sendto(int sockfd,  void *buf, size_t len, int flags,
                 struct sockaddr *dest_addr, int addrlen);
 int SYS_recvfrom(int sockfd,  void *buf, size_t len, int flags,  struct sockaddr *dest_addr, int addrlen);
-int SYS_sendmsg();
+int SYS_sendmsg(int sockfd, struct msghdr *msg, int flags);
 int SYS_recvmsg(int sockfd, struct msghdr *msg, int flags);
 /* Utilities */
 void ut_showTrace(unsigned long *stack_top);

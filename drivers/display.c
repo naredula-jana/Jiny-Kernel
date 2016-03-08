@@ -258,7 +258,7 @@ static void putchar(unsigned char c) {
 
 	buf[0]=c;
 	if (!g_boot_completed) return ut_putchar_vga(c,DEVICE_DISPLAY_VGI);
-	return SYS_fs_write(1,buf,1);
+	return fs_fd_write(1,buf,1);
 }
 
 struct writer_struct{

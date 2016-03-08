@@ -55,8 +55,8 @@ int SYS_fs_dup(int fd1);
 unsigned long SYS_fs_unlink(uint8_t *path);
 unsigned long SYS_fs_readlink(uint8_t *path, char *buf, int bufsiz);
 unsigned long SYS_fs_mkdir(unsigned char *name, int mode);
+int SYS_getpeername(int sockfd, struct sockaddr *addr, int *addrlen);
 int SYS_getsockname(int sockfd, struct sockaddr *addr, int *addrlen);
-
 unsigned long SYS_rt_sigaction();
 unsigned long SYS_getuid();
 unsigned long SYS_getgid();
@@ -520,6 +520,17 @@ unsigned long SYS_poll(struct pollfd *fds, int nfds, struct timeval *timeout) {
 	}
 	return SYSCALL_SUCCESS;
 }
+int SYS_socketpair(int domain,int type, int protocol, int *fd_pair){
+	struct file *filep1,*filep2;
+	SYSCALL_DEBUG("socketpair call \n");
+	if (fd_pair==0) return -1;
+	filep1 = fs_create_filep(&fd_pair[0], 0);
+	filep2 = fs_create_filep(&fd_pair[1], 0);
+	filep1->type = SOCKETPAIR_FILE;
+	filep2->type = SOCKETPAIR_FILE;
+
+	return 0;/* on success */
+}
 unsigned long SYS_setsockopt(int sockfd, int level, int optname,
 		const void *optval, int optlen) {
 	SYSCALL_DEBUG(
@@ -530,7 +541,16 @@ unsigned long SYS_setsockopt(int sockfd, int level, int optname,
 	}
 	return SYSCALL_SUCCESS;
 }
+unsigned long SYS_getsockopt(int sockfd, int level, int optname,
+		const void *optval, int optlen) {
+	SYSCALL_DEBUG(
+			"Getsocklopt (TODO) fd:%d level:%d optname:%d optval:%x optlen:%d\n", sockfd, level, optname, optval, optlen);
+	if (optname == 8) /* SO_RECVBUF */
+	{
 
+	}
+	return SYSCALL_SUCCESS;
+}
 unsigned long SYS_exit_group() {
 	SYSCALL_DEBUG("exit_group :\n");
 	SYS_sc_exit(103);
@@ -606,6 +626,17 @@ long SYS_get_robust_list(int pid, struct robust_list_head **head_ptr, size_t *st
 	return 0;
 }
 /* TODO */
+long SYS_setrlimit(unsigned int resource, void *rlim){
+	SYSCALL_DEBUG(" set_rlimit : not supported\n");
+		return 0;
+}
+/* TODO */
+long SYS_clock_gettime(unsigned int arg1, int arg2){
+	SYSCALL_DEBUG(" clock_gettime : not supported\n");
+		return -1;
+}
+
+/* TODO */
 long SYS_set_robust_list(struct robust_list_head *head, size_t len){
 	SYSCALL_DEBUG(" set_robust_list : not supported\n");
 	return 0;
@@ -634,6 +665,9 @@ int SYS_madvise(void *addr, size_t length, int advise){
 	SYSCALL_DEBUG("TODO  madvise : addr:%x lenght: %d  advise:%d \n",addr,length,advise);
 	return 0;
 }
+extern int SYS_epoll_create(int flags);
+extern int SYS_epoll_ctl(uint32_t  efd, uint32_t op, uint32_t fd, struct epoll_event *event);
+extern int SYS_epoll_wait(uint32_t efd, struct epoll_event *events, uint32_t maxevents, uint32_t timeout);
 extern unsigned long SYS_sched_yield();
 syscalltable_t syscalltable[] = {
 /* 0 */
@@ -647,7 +681,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { SYS_alarm }, { snull }, { SYS_getpid }, { snull }, /* 40 */
 { SYS_socket }, { SYS_connect }, { SYS_accept }, { SYS_sendto }, { SYS_recvfrom }, /* 45 */
 { SYS_sendmsg }, { SYS_recvmsg }, { snull }, { SYS_bind }, { SYS_listen }, /* 50 */
-{ SYS_getsockname }, { snull }, { snull }, { SYS_setsockopt }, { snull }, /* 55 */
+{ SYS_getsockname }, { SYS_getpeername }, { SYS_socketpair }, { SYS_setsockopt }, { SYS_getsockopt }, /* 55 */
 { SYS_sc_clone }, { SYS_sc_fork }, { SYS_sc_vfork }, { SYS_sc_execve }, { SYS_sc_exit }, /* 60 */
 { SYS_wait4 }, { SYS_sc_kill }, { SYS_uname }, { snull }, { snull }, /* 65 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 70 */
@@ -668,7 +702,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 145 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 150 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 155 */
-{ SYS_sysctl }, { snull }, { SYS_arch_prctl }, { snull }, { snull }, /* 160 */
+{ SYS_sysctl }, { snull }, { SYS_arch_prctl }, { snull }, { SYS_setrlimit }, /* 160 */
 { SYS_chroot }, { SYS_sync }, { snull }, { snull }, { snull }, /* 165 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 170 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 175 */
@@ -679,11 +713,11 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 200 */
 { SYS_time }, { SYS_futex }, { snull }, { snull }, { snull }, /* 205 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 210 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 215 */
+{ snull }, { snull }, { SYS_epoll_create }, { snull }, { snull }, /* 215 */
 { snull }, { snull }, { SYS_set_tid_address }, { snull }, { snull }, /* 220 */
 { SYS_fs_fadvise }, { snull }, { snull }, { snull }, { snull }, /* 225 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 230  */
-{ SYS_exit_group }, { snull }, { snull }, { SYS_tgkill }, { snull }, /* 235 */
+{ snull }, { snull }, { SYS_clock_gettime }, { snull }, { snull }, /* 230  */
+{ SYS_exit_group }, { SYS_epoll_wait }, { SYS_epoll_ctl }, { SYS_tgkill }, { snull }, /* 235 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 240 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 245 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 250 */
@@ -694,7 +728,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { SYS_set_robust_list }, { SYS_get_robust_list }, { snull }, /* 275 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 280 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 285 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 290 */
+{ snull }, { snull }, { SYS_accept4 }, { snull }, { snull }, /* 290 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 295 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 300 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 305 */

@@ -28,7 +28,7 @@ struct timeval {
 
 /* TODO : locking need to added */
 struct file *fs_create_filep(int *fd, struct file *in_fp) {
-	int i;
+	int i,k;
 	struct file *fp;
 
 	for (i = 3; i < MAX_FDS; i++) {
@@ -37,9 +37,11 @@ struct file *fs_create_filep(int *fd, struct file *in_fp) {
 				fp = in_fp;
 			}else{
 				fp = (struct file *)mm_slab_cache_alloc(g_slab_filep, 0);
+				if (fp == 0){
+					return 0;
+				}
 			}
-			if (fp == 0)
-				return 0;
+
 			if (i >= g_current_task->fs->total) {
 				g_current_task->fs->total = i + 1;
 			}
@@ -116,6 +118,7 @@ last:
 int SYS_fs_dup2(int fd_old, int fd_new);
 int SYS_fs_dup(int fd_old) {
 	int i;
+	SYSCALL_DEBUG("dup   fd_old:%x \n", fd_old);
 	for (i = 3; i < MAX_FDS; i++) { /* fds: 0,1,2 are for in/out/error */
 		if (g_current_task->fs->filep[i] == 0) {
 			break;
@@ -139,9 +142,12 @@ int SYS_fs_dup2(int fd_old, int fd_new) {
 		ret = SYSCALL_FAIL;
 	}
 	g_current_task->fs->filep[fd_new] = fp_new;
+	if (fd_new >= g_current_task->fs->total) {
+			g_current_task->fs->total = fd_new + 1;
+	}
 
 last:
-	//SYSCALL_DEBUG("dup2 Return ret:%d new_fd:%d \n",ret,fd_new);
+	SYSCALL_DEBUG("dup2 Return ret:%d(%x) new_fd:%d \n",ret,ret,fd_new);
 	return ret;
 }
 int SYS_fs_read(unsigned long fd, uint8_t *buff, unsigned long len) {
@@ -162,7 +168,7 @@ int SYS_fs_read(unsigned long fd, uint8_t *buff, unsigned long len) {
 	}
 
 	ret = fs_read(file, buff, len);
-	SYSCALL_DEBUG("read ret :%d\n",ret);
+	SYSCALL_DEBUG("read ret :%d (%x)\n",ret,ret);
 	return ret;
 }
 long SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt) {
@@ -182,7 +188,7 @@ long SYS_fs_readv(int fd, const struct iovec *iov, int iovcnt) {
 	}
 	last: return ret;
 }
-int SYS_fs_write(unsigned long fd, uint8_t *buff, unsigned long len) {
+int fs_fd_write(unsigned long fd, uint8_t *buff, unsigned long len) {
 	struct file *file;
 	int ret;
 
@@ -198,6 +204,14 @@ int SYS_fs_write(unsigned long fd, uint8_t *buff, unsigned long len) {
 	}
 	ret = fs_write(file, buff, len);
 	//SYSCALL_DEBUG("write return : fd:%d ret:%d \n",fd,ret);
+	return ret;
+}
+int SYS_fs_write(unsigned long fd, uint8_t *buff, unsigned long len) {
+	int ret;
+
+	SYSCALL_DEBUG("write fd:%d buff:%x len:%x data:%s:\n", fd, buff, len,buff);
+	ret = fs_fd_write(fd, buff, len);
+	SYSCALL_DEBUG("write return : fd:%d ret:%d \n",fd,ret);
 	return ret;
 }
 long SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt) {
@@ -318,7 +332,8 @@ unsigned long SYS_fs_readlink(uint8_t *path, uint8_t *buf, int bufsiz) {
 	struct file *fp;
 	int ret = -2; /* no such file exists */
 
-	SYSCALL_DEBUG("readlink (ppath:%x(%s) buf:%x \n", path, path, buf);
+	//SYSCALL_DEBUG("readlink (ppath:%x(%s) buf:%x \n", path, path, buf);
+	SYSCALL_DEBUG("readlink (ppath:\n");
 
 	if (path == 0 || buf == 0)
 		return ret;
@@ -334,7 +349,7 @@ unsigned long SYS_fs_readlink(uint8_t *path, uint8_t *buf, int bufsiz) {
 	}
 	fs_close(fp);
 
-	SYSCALL_DEBUG("RET readlink (ppath:%x(%s) buf:%s: \n", path, path, buf);
+	//SYSCALL_DEBUG("RET readlink (ppath:%x(%s) buf:%s: \n", path, path, buf);
 	return ut_strlen((const uint8_t *)buf);
 }
 struct stat {
@@ -401,7 +416,8 @@ unsigned long SYS_fs_stat(const char *path, struct stat *buf) {
 	struct fileStat fstat;
 	int ret = -2; /* no such file exists */
 
-	SYSCALL_DEBUG("Stat (ppath:%x(%s) buf:%x size:%d\n", path, path, buf, sizeof(struct stat));
+	//SYSCALL_DEBUG("Stat (ppath:%x(%s) buf:%x size:%d\n", path, path, buf, sizeof(struct stat));
+	SYSCALL_DEBUG("Stat (ppath)\n");
 
 	if (path == 0 || buf == 0)
 		return ret;
@@ -465,7 +481,7 @@ unsigned long SYS_getdents(unsigned int fd, uint8_t *user_buf, int size) {
 
 
 unsigned long SYS_fs_fcntl(int fd, int cmd, int args) {
-	struct file *fp_old,*fp_new;
+	struct file *fp_old,*fp_new,*fp;
 	int i;
 	int new_fd=args;
 	int ret = SYSCALL_FAIL;
@@ -509,6 +525,13 @@ unsigned long SYS_fs_fcntl(int fd, int cmd, int args) {
 		fp_old = fd_to_file(fd);
 		if (fp_old==0 ) return SYSCALL_FAIL;
 		ret = fp_old->flags;
+	}else if (cmd == F_SETFL){
+		fp = fd_to_file(fd);
+		fp->flags =  args;
+		ret = SYSCALL_SUCCESS;
+	}else if (cmd == F_GETFL){
+		fp = fd_to_file(fd);
+		ret = fp->flags;
 	}
 last:
 	SYSCALL_DEBUG("fcntlret  fd:%x ret:%x(%d)\n",fd,ret,ret);
@@ -577,7 +600,7 @@ int Jcmd_ls(uint8_t *arg1, uint8_t *arg2) {
 	len = len - ut_snprintf(buf+max_len-len, len,"Total pages :%d\n", total_pages);
 
 	len = ut_strlen(buf);
-	SYS_fs_write(1,buf,len);
+	fs_fd_write(1,buf,len);
 
 	vfree((unsigned long)buf);
 	return 1;

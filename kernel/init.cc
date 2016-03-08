@@ -157,7 +157,7 @@ int init_physical_memory(unsigned long unused){
 	INIT_LOG("		end of data :%x  image end:%x\n",&_edata, &end);
 	ut_memcpy(&kernel_args[0], __va(mbi->cmdline),1023);
 	max_addr = &end;
-	if (max_addr < __va(mod_p->mod_end)){
+	if ((max_addr < __va(mod_p->mod_end)) && (mbi->mods_count!=0)){
 		max_addr = __va(mod_p->mod_end);
 	}
 	init_symbol_table(&_edata, max_addr);

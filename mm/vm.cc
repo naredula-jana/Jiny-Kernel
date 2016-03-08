@@ -349,7 +349,7 @@ void * SYS_vm_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
 	SYSCALL_DEBUG("mmap ret :%x \n",ret);
 	if (g_conf_syscall_debug == 1){
 		//spin_lock_irqsave(&vmm_lock, irq_flags);
-		Jcmd_maps(0,0);
+		//Jcmd_maps(0,0);
 		//spin_unlock_irqrestore(&vmm_lock, irq_flags);
 	}
 	return ret;

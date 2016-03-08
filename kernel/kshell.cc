@@ -43,7 +43,7 @@ enum {
 int putchar(unsigned char c){
 	unsigned char buf[10];
 	buf[0]=c;
-	return SYS_fs_write(1,buf,1);
+	return fs_fd_write(1,buf,1);
 }
 void kshell::tokenise(unsigned char *p, unsigned char *tokens[]) {
 	int i, k, j;
