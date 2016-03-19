@@ -776,6 +776,7 @@ int  vfree(addr_t addr){
 		}
 	}
 	ut_log(" ERROR: vfree failed : %x \n",addr);
+	while(1);
 last:
 	spin_unlock_irqrestore(&vmalloc_lock, intr_flags);
 	return ret;

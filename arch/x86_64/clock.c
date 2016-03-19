@@ -79,7 +79,7 @@ unsigned long ar_read_tsc(void){
 }
 
 static spinlock_t	time_spinlock;
-int g_conf_hw_clock __attribute__ ((section ("confdata")))=1;  /* sometimes hw clock is very slow or not accurate , then jiffies can be used at the resoultion of 10ms */
+int g_conf_hw_clock __attribute__ ((section ("confdata")))=0;  /* sometimes hw clock is very slow or not accurate , then jiffies can be used at the resoultion of 10ms */
 int g_conf_ms_per_jiffie __attribute__ ((section ("confdata"))) =6;/* instead of 10ms, the apic timer interrupt generating faster , so it canged from 10 to 6*/
 
 unsigned long g_jiffies = 0; /* increments for every 10ms =100HZ = 100 cycles per second  */
@@ -134,7 +134,7 @@ static unsigned long get_percpu_ns() { /* get percpu nano seconds */
 }
 int ut_sleep_ns(int dur_ns){
 	unsigned long ns=get_percpu_ns()+dur_ns;
-	while(get_percpu_ns() < ns){
+	while(get_percpu_ns() < ns){ /* TODO: hitting infinite loop, with get_percpu_ns hitting zero */
 
 	}
 	return JSUCCESS;

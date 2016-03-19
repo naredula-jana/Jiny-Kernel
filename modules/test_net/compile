@@ -1,0 +1,2 @@
+gcc -D_KERNEL -I../../include/ -mcmodel=large -c ./test_net.c -o ./test_net.o
+gcc  -static -I../../include/ -mcmodel=large ./test_net.c -o ./test_udp_server

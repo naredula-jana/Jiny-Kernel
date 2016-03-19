@@ -13,7 +13,7 @@ extern "C" {
 #include "interface.h"
 #include "elf.h"
 #include "symbol_table.h"
-
+#define MODULE_DEBUG 1
 static int complete_read(struct file *file, unsigned char *buf, int total_size);
 typedef struct {
 	struct file *file;
@@ -121,10 +121,11 @@ unsigned long module_t::_get_symbol_addr(unsigned char *name) {
 }
 char* module_t::do_relocation(struct file *file, Elf64_Sym *symb, int total_symbols, Elf64_Shdr *sec_rel,int sec_type) {
 	const char *ret = 0;
-	Elf64_Rela *reloc = 0;
+	Elf64_Rela *org_reloc=0,*reloc = 0;
 	int i;
 
 	reloc = (Elf64_Rela *) vmalloc(sec_rel->sh_size, 0);
+	org_reloc=reloc;
 	if (reloc == 0) {
 		ret = "getting memory to reloc fails";
 		goto out;
@@ -184,13 +185,13 @@ char* module_t::do_relocation(struct file *file, Elf64_Sym *symb, int total_symb
 
 			if (type == R_X86_64_PC32) {
 				*v = (int32_t) ((symbol_value) & 0xffffffff) - (int32_t) (addr & 0xffffffff) + reloc->r_addend;
-			} else {
+			} else{
 				*v = (int32_t) ((symbol_value) & 0xffffffff) + reloc->r_addend;
 			}
 #ifdef MODULE_DEBUG
 			ut_printf("		1-New addr: %x  after int value:%x  addedend :%x(%d) \n",v,*v,reloc->r_addend);
 #endif
-		} else if ((type == R_X86_64_64)) {
+		} else if ((type == R_X86_64_64) ) {
 			unsigned char *p = addr;
 			signed long *v = (signed long *) p;
 			*v = (int32_t) ((symbol_value) & 0xffffffff) + reloc->r_addend;
@@ -202,7 +203,7 @@ char* module_t::do_relocation(struct file *file, Elf64_Sym *symb, int total_symb
 		}
 	}
 
-	out: vfree(reloc);
+	out: vfree(org_reloc);
 	return ret;
 }
 int module_t::update_symboltable(Elf64_Sym *symb, int total_symb) {
@@ -271,8 +272,8 @@ int module_t::update_symboltable(Elf64_Sym *symb, int total_symb) {
 
 #ifdef MODULE_DEBUG
 			ut_printf("		%d: symbol name:%s value:%x type:%x length:%x(%d)\n", j,
-					module->symbol_table[j].name,
-					module->symbol_table[j].address, module->symbol_table[j].type, tsemb->st_size );
+					symbol_table[j].name,
+					symbol_table[j].address, symbol_table[j].type, tsemb->st_size );
 #endif
 			j++;
 		}
@@ -560,6 +561,7 @@ symb_table_t *module_load_kernel_symbols(unsigned char *start_addr, unsigned lon
 }
 #endif
 void Jcmd_insmod(unsigned char *filename, unsigned char *arg);
+//unsigned char test_code[2*4096]; /* TODO remove later */
 void Jcmd_insmod(unsigned char *filename, unsigned char *arg) {
 	struct file *file = 0;
 	struct elfhdr elf_ex;
@@ -715,7 +717,12 @@ void Jcmd_insmod(unsigned char *filename, unsigned char *arg) {
 	}
 
 	modulep->secs[SEC_TEXT].length = file_max_offset; /* this will cover text+rodata+data */
-	modulep->secs[SEC_TEXT].addr = mm_malloc(modulep->secs[SEC_TEXT].length + modulep->secs[SEC_BSS].length, MEM_CLEAR);
+	//modulep->secs[SEC_TEXT].addr = mm_malloc(modulep->secs[SEC_TEXT].length + modulep->secs[SEC_BSS].length, MEM_CLEAR);
+
+	modulep->secs[SEC_TEXT].addr = HIGHPRIORITY_APP_START;
+	modulep->secs[SEC_TEXT].addr[0]=0;/* touching memory */
+
+//	modulep->secs[SEC_TEXT].addr = &test_code[0];
 	if (modulep->secs[SEC_TEXT].addr == 0) {
 		error = "allocating code";
 		goto out;
@@ -996,7 +1003,7 @@ int perf_stat_rip_hit(unsigned long rip) {
 		int max;
 
 		modulep = g_modules[j];
-		max = modulep->symb_table_length - 3;
+		max = modulep->symb_table_length - 4;
 		if (max < 0)
 			max = 0;
 		curr = max / 2;

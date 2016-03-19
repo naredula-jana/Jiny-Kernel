@@ -86,7 +86,7 @@ void fifo_queue::init(unsigned char *arg_name,int wq_enable){
 	//atomic_set(&queue_len, 0);
 	waitq =0;
 	if (wq_enable){
-		waitq = jnew_obj(wait_queue, "socket_waitq", 0);
+		waitq = jnew_obj(wait_queue, "socket_waitq", WAIT_QUEUE_WAKEUP_ONE);
 		ut_log(" INitilizing the default socket waitQ\n");
 	}
 }
@@ -114,7 +114,7 @@ int fifo_queue::add_to_queue(unsigned char *buf, int len,int data_flags, int fre
 
 	//ut_log("Recevied from  network and keeping in queue: len:%d  stat count:%d prod:%d cons:%d\n",len,stat_queue_len,queue.producer,queue.consumer);
 	spin_lock_irqsave(&(producer.spin_lock), flags);
-	if (data[producer.index].buf == 0) {
+	if (data[producer.index].buf == 0 && data[producer.index].len== 0) {
 		data[producer.index].len = len;
 		data[producer.index].buf = buf;
 		data[producer.index].flags = data_flags;
@@ -170,8 +170,9 @@ int fifo_queue::remove_from_queue(unsigned char **buf, int *len,int *wr_flags) {
 			*wr_flags = data[consumer.index].flags;
 			//	ut_log("netrecv : receving from queue len:%d  prod:%d cons:%d\n",queue.data[queue.consumer].len,queue.producer,queue.consumer);
 
-			data[consumer.index].buf = 0;
 			data[consumer.index].len = 0;
+			data[consumer.index].buf = 0;
+
 			consumer.index++;
 			consumer.count++;
 
@@ -186,7 +187,7 @@ int fifo_queue::remove_from_queue(unsigned char **buf, int *len,int *wr_flags) {
 		}
 		if (ret == JFAIL){
 			if (waitq){
-				waitq->wait(500);
+				waitq->wait(5000);
 			}else{
 				return ret;
 			}
@@ -203,8 +204,9 @@ int fifo_queue::Bulk_remove_from_queue(struct struct_mbuf *mbufs, int mbuf_len) 
 			mbufs[ret].buf = data[consumer.index].buf;
 			mbufs[ret].len = data[consumer.index].len;
 
+			data[consumer.index].len = 0;
 			data[consumer.index].buf = 0;
-			//data[consumer.index].len = 0;
+
 			consumer.index++;
 			consumer.count++;
 
@@ -315,7 +317,7 @@ last:
 	}
 	return;
 }
-#define EAGAIN 35
+
 int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int read_flags, int unused_flags) {
 	int ret = 0;
 	unsigned char *buf = 0;
@@ -665,7 +667,8 @@ void socket::init_socket_layer(){
 
 /* API calls */
 extern "C" {
-static int sock_check(int sockfd) {
+static inline int sock_check(int sockfd)  __attribute__((always_inline));
+static inline int sock_check(int sockfd) {
 	if ((sockfd < 0 || sockfd > MAX_FDS)) {
 		SYSCALL_DEBUG("ERROR: socket CHECK1 FAILED fd :%x \n", sockfd);
 		return JFAIL;
@@ -888,8 +891,9 @@ int SYS_recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *
 	int ret;
 	SYSCALL_DEBUG("RECVfrom fd:%d  buf:%x dest_addr:%x\n", sockfd, buf, dest_addr);
 	//ut_log("RECVfrom fd:%d  buf:%x dest_addr:%x\n", sockfd, buf, dest_addr);
-	if (sock_check(sockfd) == JFAIL || g_current_task->fs->filep[sockfd] == 0)
+	if (sock_check(sockfd) == JFAIL){
 		return 0;
+	}
 
 	struct file *file = g_current_task->fs->filep[sockfd];
 	struct socket *sock = (struct socket *) file->vinode;
@@ -924,7 +928,7 @@ int SYS_recvmsg(int sockfd, struct msghdr *msg, int flags){
 	SYSCALL_DEBUG("  name: %x namelen:%x msg_iov:%x iovlen:%d control:%x controllen:%x flags:%x\n",
 			msg->msg_name,msg->msg_namelen, msg->msg_iov, msg->msg_iovlen, msg->msg_control,msg->msg_controllen,msg->msg_flags);
 
-	if (sock_check(sockfd) == JFAIL || g_current_task->fs->filep[sockfd] == 0)
+	if (sock_check(sockfd) == JFAIL )
 		return 0;
 
 	struct file *file = g_current_task->fs->filep[sockfd];
@@ -947,31 +951,25 @@ int SYS_recvmsg(int sockfd, struct msghdr *msg, int flags){
 	return 0;
 }
 int SYS_sendmsg(int sockfd, struct msghdr *msg, int flags) {
-	int i, tret=0, ret=0;
+	int i, ret=0;
 
 	SYSCALL_DEBUG(" SendMSG fd :%d  msg :%x flags:%x \n", sockfd, msg, flags);
 	if (msg == 0) {
 		return 0;
 	}
-	SYSCALL_DEBUG(
-			"  name: %x namelen:%x msg_iov:%x iovlen:%d control:%x controllen:%x flags:%x\n",
+#if 0
+	SYSCALL_DEBUG("  name: %x namelen:%x msg_iov:%x iovlen:%d control:%x controllen:%x flags:%x\n",
 			msg->msg_name, msg->msg_namelen, msg->msg_iov, msg->msg_iovlen,
 			msg->msg_control, msg->msg_controllen, msg->msg_flags);
-
-	if (sock_check(sockfd) == JFAIL || g_current_task->fs->filep[sockfd] == 0)
-		return 0;
+#endif
+	if (sock_check(sockfd) == JFAIL){
+		return -1;
+	}
 
 	struct file *file = g_current_task->fs->filep[sockfd];
 	struct socket *sock = (struct socket *) file->vinode;
 	ret = sock->write_iov(msg->msg_iov,msg->msg_iovlen);
-#if 0
-	for (i=0; i<msg->msg_iovlen; i++){
-		tret= fs_fd_write(sockfd,(unsigned char *)msg->msg_iov[i].iov_base,msg->msg_iov[i].iov_len);
-		if (tret > 0){
-			ret= ret + tret;
-		}
-	}
-#endif
+
 	SYSCALL_DEBUG(" sendMsg ret : %d \n",ret);
 	return ret;
 }

@@ -10,15 +10,18 @@
  */
 #include "file.hh"
 #include "ipc.hh"
+#include "futex.h"
 
 enum {
 FUTEX_WAIT = 0,
 FUTEX_WAKE = 1,
+FUTEX_WAKE_OP = 5,
+FUTEX_WAIT_BITSET =9,
 FUTEX_PRIVATE_FLAG = 128,
 FUTEX_CLOCK_REALTIME = 256,
 FUTEX_CMD_MASK = ~(FUTEX_PRIVATE_FLAG|FUTEX_CLOCK_REALTIME),
 };
-
+#define FUTEX_BITSET_MATCH_ANY  0xffffffff
 
 #define MAX_FUTEXS 100
 int total_futexs=0;
@@ -135,13 +138,14 @@ int destroy_futex(struct mm_struct *mm) {
 	}
 }
 /* TODO: other op need to implement
- *
+ *    hitting operation 0x85 is hitting  i.e : FUTEX_WAKE_OP with provate flag set is hitting in memcached
  */
 int SYS_futex(int *uaddr, int op, int val, unsigned long timeout,
 		unsigned long addr2, int val2) {
 	unsigned long irq_flags;
 	int retries=0;
 	int ret=0;
+	int op_ret;
 	futex *futex_p;
 	SYSCALL_DEBUG("futex uaddr: %x op:%x val:%x\n", uaddr, op, val);
 
@@ -152,11 +156,14 @@ int SYS_futex(int *uaddr, int op, int val, unsigned long timeout,
 	//ut_printf("futex uaddr: %x op:%x val:%x waits:%d wakeups:%d\n", uaddr, op, val,futex_p->stat_waits,futex_p->stat_wakeups);
 	switch (op & FUTEX_CMD_MASK) {
 	case FUTEX_WAIT:
+//		  val2 = FUTEX_BITSET_MATCH_ANY;
+//	case FUTEX_WAIT_BITSET:  /*TODO: needed for multi cpu application */
 		assert(timeout == 0);
 		retries=0;
 		while (retries < 1000) {
 			if (*uaddr != val) {
 				futex_p->stat_nowaits++;
+				SYSCALL_DEBUG("futex uaddr: not match ret=0\n");
 				return 0;
 			}
 			spin_lock(&futex_p->spin_lock);
@@ -166,11 +173,15 @@ int SYS_futex(int *uaddr, int op, int val, unsigned long timeout,
 			} else {
 				spin_unlock(&futex_p->spin_lock);
 				futex_p->stat_lnowaits++;
+				SYSCALL_DEBUG("futex uaddr: ret =0\n");
 				return 0;
 			}
 			retries++;
 		}
+		SYSCALL_DEBUG("futex uaddr: count exceed ret=0\n");
 		return 0;
+	case FUTEX_WAKE_OP : /* TODO need to do additional operations */
+		op_ret = futex_atomic_op_inuser(val2, (unsigned int *)addr2);
 	case FUTEX_WAKE:
 		spin_lock(&futex_p->spin_lock);
 		futex_p->stat_wakeups_reqs++;
@@ -179,10 +190,10 @@ int SYS_futex(int *uaddr, int op, int val, unsigned long timeout,
 		spin_unlock(&futex_p->spin_lock);
 		return ret;
 	default:
-		ut_printf("ERROR : fake return=-1 Unimplemented futex() OP %x\n", op);
-		return -1;
+		ut_printf("ERROR : fake return= - %d Unimplemented futex() OP %x\n", ENOSYS,op);
+		return -ENOSYS;
 	}
-	return -1;
+	return -EINVAL;
 }
 /************************************  end of futex ******************************/
 #define MAX_MUTEXS 100
@@ -492,7 +503,7 @@ wait_queue::wait_queue( char *arg_name, unsigned long arg_flags) {
 			name = arg_name;
 
 			wait_queue::wait_queues[i] = this;
-			ut_log(" Initalled new waitqueue at:%d %s \n",i,arg_name);
+			ut_log(" Initalled new waitqueue at:%d %s flags:%x\n",i,arg_name,arg_flags);
 			used_for = 0;
 			flags = arg_flags;
 			goto last;

@@ -234,6 +234,13 @@ int init_kernel_vmaps(unsigned long arg1){
 	}else{
 		ut_log("	Kernel vmap: physical ram: %x-%x size:%dM\n",KADDRSPACE_START,KADDRSPACE_START+g_phy_mem_size,g_phy_mem_size/1000000);
 	}
+
+	if (vm_mmap(0, HIGHPRIORITY_APP_START, HIGHPRIORITY_APP_LEN, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS, 0,"highpriority")==0){
+		ut_log("	ERROR: kernel highpriority address map Fails \n");
+	}else{
+		ut_log("	Kernel high priority map:%x len:%d \n",HIGHPRIORITY_APP_START, HIGHPRIORITY_APP_LEN);
+	}
+
 #endif
 	g_video_ram = vm_create_kmap("videoram",0x8000000,PROT_WRITE,MAP_FIXED,VIDEO);
 	g_vmalloc_size=0x8000000;

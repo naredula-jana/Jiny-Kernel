@@ -27,7 +27,7 @@ int duration = 30;
 int error_in_time=0;
 int total_thds=0;
 struct sockaddr_in server, client;
-unsigned long g_send_pkts[MAX_THREADS], recv_pkts, pkt_size, total_pkts;
+unsigned long g_send_pkts[MAX_THREADS], recv_pkts, pkt_size, total_pkts,total_records,print_pkts;
 int recv_touch=0;
 void recv_func(int total_pkts) {
 	char buf[1424] = "";
@@ -52,7 +52,8 @@ void recv_func(int total_pkts) {
 			ret = recvfrom(sfd, buf, 1024, 0, (struct sockaddr *) &client, &l);
 			recv_pkts++;
 //buf[15]=0;
-			printf("MESSAGE FROM memcached:%s ret:%d\n", &buf[8],ret );
+			if ( (recv_pkts % print_pkts) ==0)
+			printf("%d : MESSAGE FROM memcached:%s ret:%d\n", recv_pkts, &buf[8],ret );
 
 		} else {
 			return 0;
@@ -170,6 +171,9 @@ send_func(int th_id) {
 
 		sprintf(&buf[8], "set TST%d 0 200 5\r\n12345\r\n", serial_no);
 		serial_no++;
+		if (serial_no > total_records){
+			serial_no = 0;
+		}
 		pkt->tot1 =0;
 		pkt->tot2 = 1;
 		pkt->seq = serial_no;
@@ -183,7 +187,7 @@ send_func(int th_id) {
 		//sendto(sfd, &buf[8], len, 0, (struct sockaddr *) &server,sizeof(server));
 
 //#ifdef DEBUG
-		printf("packet send : currtime:%d len:%d\n",curr_t,len);
+	//	printf("packet send : currtime:%d len:%d\n",curr_t,len);
 //#endif
 		g_send_pkts[th_id]++;
 
@@ -219,7 +223,7 @@ main(int argc, char *argv[]) {
 	port = 8100;
 
 	if (argc < 4) {
-		printf("./udp_client <server_ip>  <total_pkts> <threads>\n");
+		printf("./memc <server_ip>  <total_pkts> <total_records>  <print_pkt>\n");
 		return 1;
 	}
 	inet_aton(argv[1], &server.sin_addr);
@@ -227,11 +231,13 @@ main(int argc, char *argv[]) {
 
 	pkt_size = 100;
 	total_pkts = atoi(argv[2]);
-	total_thds = atoi(argv[3]);
+	total_thds = 1;
+	total_records = atoi(argv[3]);
+	print_pkts = atoi(argv[4]);
 	int newMaxBuff = 0;
 	int len = sizeof(newMaxBuff);
 
-	printf("sock buf size :%d  port :%d\n", newMaxBuff,port);
+	printf("Memc sock buf size :%d  port :%d\n", newMaxBuff,port);
 	newMaxBuff = 1024000;
 	setsockopt(sfd, SOL_SOCKET, SO_SNDBUF, &newMaxBuff, sizeof(newMaxBuff));
 //getsockopt(sfd, SOL_SOCKET, SO_SNDBUF, &newMaxBuff, &len);

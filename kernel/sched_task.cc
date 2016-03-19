@@ -637,7 +637,8 @@ unsigned long g_stat_syscall_count;
 void sc_after_syscall() {
 	/* Handle any pending signal */
 	//SYSCALL_DEBUG("syscall ret  state:%x\n",g_current_task->state);
-	net_bh();
+
+	//net_bh();
 	STAT_INC(g_stat_syscall_count);
 
 	g_cpu_state[getcpuid()].stats.syscalls++;
@@ -873,7 +874,7 @@ void timer_callback(void *unused_args) {
 		ar_update_jiffie();
 		g_cpu_state[0].net_bh.ticks++;
 		if (g_conf_net_pmd==1 && (g_cpu_state[0].net_bh.ticks>5) ){
-			if (g_cpu_state[0].net_bh.pkts_processed<10000){
+			if (g_cpu_state[0].net_bh.pkts_processed<100){
 				g_cpu_state[0].net_bh.pmd_active = 0;
 			}else{
 				g_cpu_state[0].net_bh.pmd_active = 1;
@@ -1105,7 +1106,7 @@ void sc_disable_nonpreemptive(){
 	g_current_task->state = g_current_task->state & (~TASK_NONPREEMPTIVE);
 
 }
-
+int g_conf_clone_bug=0; /* TODO: only for testing purpose */
 unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*fn)(void *, void *), void **args, unsigned long tls_area) {
 	struct task_struct *p;
 	struct mm_struct *mm;
@@ -1202,8 +1203,9 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	}
 
 	SYSCALL_DEBUG("clone return pid :%d(%x) \n", ret_pid,ret_pid);
-	sc_schedule();  /* TODO :this is temporary fix for memcached program, looks like futex is not working as expected for new thread in memcached, not if this is correct, giving chance to run new task */
-
+	if (g_conf_clone_bug == 1){
+		sc_schedule();  /* TODO :this is temporary fix for memcached program, looks like futex is not working as expected for new thread in memcached, not if this is correct, giving chance to run new task */
+	}
 	return ret_pid;
 }
 unsigned long SYS_sc_fork() {

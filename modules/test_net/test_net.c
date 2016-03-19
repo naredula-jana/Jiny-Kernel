@@ -11,8 +11,9 @@ void create_thread(void (*func)(void *arg));
 void start_udp_client();
 void start_udp_server();
 
+//#define _KERNEL 1
 #ifdef _KERNEL
-#include "lwip/sockets.h"
+//#include "lwip/sockets.h"
 typedef struct {
 	unsigned long tv_sec;
 	unsigned long tv_usec;
@@ -44,7 +45,8 @@ main(int argc, char *argv[]){
     }
 #endif
 
-  	start_udp_client();
+  	//start_udp_client();
+  	start_udp_server();
 }
 
 
@@ -74,7 +76,7 @@ int debug_udp_test(){
 int print_udp_stats(){
    printf(" server recv pkts: %d starttime:%d  endtime:%d  duration:%d\n",stat_server_recv_pkt,start_time.tv_sec,end_time.tv_sec,(end_time.tv_sec-start_time.tv_sec));
 }
- int udp_recv_mode=0;
+ int udp_recv_mode=1;
 static void server_recv_func() {
 	int ret,len;
 	//test_debug=1;
@@ -109,13 +111,20 @@ void start_udp_server(){
 	printf(" return of socket :%x \n",sfd);
 	server.sin_family = AF_INET;
 	server.sin_port = 1300; /* 0x0514 */
-	server.sin_port = 0x0514;
+	server.sin_port = 0x1405;
 	bind(sfd, &server, sizeof(server));
 	server_recv_func();
 
 	printf(" duration:sec %x:%x(%d)  usec:%x:%x  \n",end_time.tv_sec,start_time.tv_sec,(end_time.tv_sec-start_time.tv_sec), end_time.tv_usec,start_time.tv_usec);
 }
+void init_module(){
 
+    printf("udp server \n");
+    start_udp_server();
+}
+void clean_module(){
+	printf(" clean test module\n");
+}
 
 void start_udp_client(){
 	int i,ret,n;

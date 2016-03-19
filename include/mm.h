@@ -40,9 +40,11 @@ typedef struct kmem_cache_s kmem_cache_t;
 
 
 /* kerne virtual address space */
-#define KADDRSPACE_START (0xffffc90000000000)
-#define KERNEL_CODE_START (0xffffffff80000000) /* Note This should be multiples 1GB , otherwise page tables copying will break */
-#define KADDRSPACE_END   (0xffffffffc0000000) /*  */
+#define KADDRSPACE_START       (0xffffc90000000000)
+#define KERNEL_CODE_START      (0xffffffff80000000) /* Note This should be multiples 1GB , otherwise page tables copying will break */
+#define KADDRSPACE_END         (0xffffffffc0000000) /*  */
+#define HIGHPRIORITY_APP_START (0xffffffffb0000000)
+#define HIGHPRIORITY_APP_LEN 0x100000
 
 extern unsigned long g_kernelspace_starting_address;
 //unsigned long __va(unsigned long addr);
