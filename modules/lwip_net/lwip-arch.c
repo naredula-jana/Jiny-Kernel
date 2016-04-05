@@ -70,7 +70,7 @@ uint32_t sys_arch_sem_wait(sys_sem_t *sem, uint32_t timeout_arg){
 	int net_locked=0;
 
 	sys_sem_t *net_sem = g_netBH_lock;
-	if (net_sem && (net_sem->owner_pid == g_current_task->pid)){
+	if (net_sem && (net_sem->owner_pid == g_current_task->task_id)){
 		net_locked=1;
 		mutexUnLock(g_netBH_lock);
 	}
@@ -252,7 +252,7 @@ sys_thread_t sys_thread_new(char *name, void (*thread)(void *arg), void *arg,
 
 	pid = sc_createKernelThread(thread, (unsigned char *)arg, (unsigned char *)name,0);
 //	sc_task_stick_to_cpu(pid, 0); /* TODO: currently all network related threads are sticked to cpu-o to avoid crash in tcp layer */
-	DEBUG(" Thread created for tcp/ip: %d:\n", pid);
+	DEBUG(" Thread created for tcp/ip: %d:\n", task_id);
 	return pid;
 }
 

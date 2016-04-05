@@ -334,7 +334,7 @@ long proc_fs::read(fs_inode *inodep, uint64_t offset, unsigned char *buff, unsig
 			if (cmd.pid != 0) {
 				list_for_each(pos, &g_task_queue.head) {
 					task = list_entry(pos, struct task_struct, task_queue);
-					if (task->pid == cmd.pid) {
+					if (task->task_id == cmd.pid) {
 						found=1;
 						break;
 					}
@@ -348,7 +348,7 @@ long proc_fs::read(fs_inode *inodep, uint64_t offset, unsigned char *buff, unsig
 				unsigned long rss_size = task->mm->stat_page_allocs-task->mm->stat_page_free;
 				unsigned long rss_limit = 0xffffffff;
 				unsigned long vsize = (task->mm->end_code-task->mm->start_code) + task->mm->brk_len + USERSTACK_LEN;
-				len = ut_snprintf(buff,len_arg,"%d (%s) %c %d 0 0 0 0 0 0 0 0 0 0 0 0 0 16 0 1 0 0 ",task->pid,task->name,state,task->ppid);
+				len = ut_snprintf(buff,len_arg,"%d (%s) %c %d 0 0 0 0 0 0 0 0 0 0 0 0 0 16 0 1 0 0 ",task->task_id,task->name,state,task->parent_process_pid);
 				/* starting from vsize */
 				ut_snprintf(&buff[len],len_arg-len,"%d %d %d %d %d %d 0 0 0 0 0 0 0 0 0 0 0 0 0",vsize,rss_size,rss_limit,task->mm->start_code,task->mm->end_code,task->mm->stack_bottom);
 			}
@@ -383,8 +383,8 @@ long proc_fs::readDir(fs_inode *inodep, struct dirEntry *dir_p, unsigned long di
 				if ( offset && (i-1)< *offset) continue;
 				task = list_entry(pos, struct task_struct, task_queue);
 				dir_p = (struct dirEntry *)p;
-				dir_p->inode_no = task->pid;
-				ut_sprintf(dir_p->filename,"%d",task->pid);
+				dir_p->inode_no = task->task_id;
+				ut_sprintf(dir_p->filename,"%d",task->task_id);
 				len = 2 * (sizeof(unsigned long)) + sizeof(unsigned short) + ut_strlen((unsigned char *)dir_p->filename) + 2;
 				dir_p->d_reclen = (len / 8) * 8;
 				if ((dir_p->d_reclen) < len)

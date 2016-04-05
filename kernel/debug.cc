@@ -89,7 +89,7 @@ static int breakpoint_add_trace(int brk_index) {
 
 	traces[trace_index].breakpoint_index = brk_index;
 	traces[trace_index].cpu_id = getcpuid();
-	traces[trace_index].pid = g_current_task->pid ;
+	traces[trace_index].pid = g_current_task->task_id ;
 	traces[trace_index].count=0;
 	if (breakpoint_table[brk_index].type == BRKPOINT_START){
 		g_current_task->trace_stack_length++;

@@ -692,7 +692,7 @@ int fs_write(struct file *filep, uint8_t *buff, unsigned long len) {
 	DEBUG("Write  filename from hs  :%s: offset:%d inode:%x \n", filep->filename, filep->offset, filep->inode);
 	ret = inode->write(filep->offset, buff, len,0);
 	if (ret < 0) {
-		ut_log(" fs_write fails error:%x pid:%d \n", ret, g_current_task->pid);
+		ut_log(" fs_write fails error:%x pid:%d \n", ret, g_current_task->task_id);
 		return 0;
 	}
 	filep->offset = filep->offset+ret;

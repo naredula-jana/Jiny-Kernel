@@ -165,9 +165,12 @@ unsigned long SYS_arch_prctl(unsigned long code, unsigned long addr) {
 }
 unsigned long SYS_getpid() {
 	SYSCALL_DEBUG("getpid :\n");
-	return g_current_task->pid;
+	return g_current_task->process_id;
 }
-
+unsigned long SYS_gettid() {
+	SYSCALL_DEBUG("gettid :\n");
+	return g_current_task->task_id;
+}
 unsigned long SYS_nanosleep(const struct timespec *req, struct timespec *rem) {
 	long ticks;
 	SYSCALL_DEBUG("nanosleep sec:%d nsec:%d:\n", req->tv_sec, req->tv_nsec);
@@ -180,7 +183,7 @@ unsigned long SYS_nanosleep(const struct timespec *req, struct timespec *rem) {
 }
 unsigned long SYS_getppid() {
 	SYSCALL_DEBUG("getppid :\n");
-	return g_current_task->ppid;
+	return g_current_task->parent_process_pid;
 }
 unsigned long snull(unsigned long *args) {
 	unsigned long syscall_no;
@@ -245,7 +248,7 @@ unsigned long SYS_getpgid() {
 }
 unsigned long  SYS_setsid(){
 	SYSCALL_DEBUG("setsid(Hardcoded) :\n");
-	return g_current_task->pid;
+	return g_current_task->task_id;
 }
 unsigned long SYS_geteuid() {
 	SYSCALL_DEBUG("geteuid(Hardcoded) :\n");
@@ -278,7 +281,7 @@ unsigned long SYS_ioctl(int d, int request, unsigned long *addr) {//TODO
 
 unsigned long SYS_set_tid_address(unsigned long tid_address){
 	g_current_task->child_tid_address = tid_address;
-	return g_current_task->pid;
+	return g_current_task->task_id;
 }
 
 extern task_queue_t g_task_queue;
@@ -299,7 +302,7 @@ void Jcmd_pt(unsigned char *arg1,unsigned char *arg2){
 		pid=ut_atoi(arg1, FORMAT_DECIMAL);
 		list_for_each(pos, &g_task_queue.head) {
 			task = list_entry(pos, struct task_struct, task_queue);
-			if (task->pid == pid) {
+			if (task->task_id == pid) {
 				found =1;
 				pt = task->mm->pgd;
 				break;
@@ -386,7 +389,7 @@ unsigned long SYS_wait4(int pid, void *status, unsigned long option, void *rusag
 	}
 
 	if (child_task != 0) {
-		child_id = child_task->pid;
+		child_id = child_task->task_id;
 		atomic_dec(&child_task->count);
 	//	ut_log("wait child exited :%s: exitcode:%d \n",child_task->name,child_task->exit_code);
 		sc_delete_task(child_task);
@@ -553,6 +556,20 @@ unsigned long SYS_getsockopt(int sockfd, int level, int optname,
 }
 unsigned long SYS_exit_group() {
 	SYSCALL_DEBUG("exit_group :\n");
+	unsigned long flags;
+	struct list_head *pos;
+	struct task_struct *task;
+
+	spin_lock_irqsave(&g_global_lock, flags);
+	list_for_each(pos, &g_task_queue.head) {
+		task = list_entry(pos, struct task_struct, task_queue);
+		if ((task->task_id!=g_current_task->task_id) && (task->process_id == g_current_task->process_id)) {
+			task->pending_signals = 1;
+			task->killed = 1;
+		}
+	}
+	spin_unlock_irqrestore(&g_global_lock, flags);
+
 	SYS_sc_exit(103);
 	return SYSCALL_SUCCESS;
 }
@@ -665,6 +682,14 @@ int SYS_madvise(void *addr, size_t length, int advise){
 	SYSCALL_DEBUG("TODO  madvise : addr:%x lenght: %d  advise:%d \n",addr,length,advise);
 	return 0;
 }
+int SYS_sched_getaffinity(){
+	SYSCALL_DEBUG("TODO  SYS_sched_getaffinity\n");
+	return 0;
+}
+int SYS_sigalt_stack(){
+	SYSCALL_DEBUG("TODO  SYS_sigaltstack\n");
+	return 0;
+}
 extern int SYS_epoll_create(int flags);
 extern int SYS_epoll_ctl(uint32_t  efd, uint32_t op, uint32_t fd, struct epoll_event *event);
 extern int SYS_epoll_wait(uint32_t efd, struct epoll_event *events, uint32_t maxevents, uint32_t timeout);
@@ -697,7 +722,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 120 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 125 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 130 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 135 */
+{ SYS_sigalt_stack }, { snull }, { snull }, { snull }, { snull }, /* 135 */
 { snull }, { SYS_fs_stat }, { snull }, { snull }, { snull }, /* 140 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 145 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 150 */
@@ -708,10 +733,10 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 175 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 180 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 185 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 190 */
+{ SYS_gettid }, { snull }, { snull }, { snull }, { snull }, /* 190 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 195 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 200 */
-{ SYS_time }, { SYS_futex }, { snull }, { snull }, { snull }, /* 205 */
+{ SYS_time }, { SYS_futex }, { snull }, { SYS_sched_getaffinity }, { snull }, /* 205 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 210 */
 { snull }, { snull }, { SYS_epoll_create }, { snull }, { snull }, /* 215 */
 { snull }, { snull }, { SYS_set_tid_address }, { snull }, { snull }, /* 220 */
@@ -761,9 +786,9 @@ void print_syscall_stat(struct task_struct *task, int output){
 	for (i=0; i<MAX_SYSCALL; i++){
 		if ( task->stats.syscalls[i].count > 0){
 			if (output ==0 ){
-				ut_printf("%d-%d: %s: %s -> %d\n",count,task->pid,task->name,ut_get_symbol(syscalltable[i].func),task->stats.syscalls[i].count);
+				ut_printf("%d-%d: %s: %s -> %d\n",count,task->task_id,task->name,ut_get_symbol(syscalltable[i].func),task->stats.syscalls[i].count);
 			}else{
-				ut_log("%d-%d: %s: %s -> %d\n",count,task->pid,task->name,ut_get_symbol(syscalltable[i].func),task->stats.syscalls[i].count);
+				ut_log("%d-%d: %s: %s -> %d\n",count,task->task_id,task->name,ut_get_symbol(syscalltable[i].func),task->stats.syscalls[i].count);
 			}
 			count++;
 		}

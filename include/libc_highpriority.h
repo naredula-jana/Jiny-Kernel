@@ -8,6 +8,15 @@
  *   Author: Naredula Janardhana Reddy  (naredula.jana@gmail.com, naredula.jana@yahoo.com)
  */
 #include "types.h"
+
+#define EPOLL_CTL_ADD 1
+#define EPOLL_CTL_DEL 2
+#define EPOLL_CTL_MOD 3
+struct epoll_event {
+	uint32_t events;
+	uint64_t data;
+} __attribute__((packed));
+
 #define socket SYS_socket
 #define sendto SYS_sendto
 #define gettimeofday SYS_gettimeofday
@@ -19,14 +28,10 @@
 #define read SYS_fs_read
 #define open SYS_fs_open
 #define exit SYS_sc_exit
-#if 0
-struct sockaddr_in {
-	uint16_t sin_family;
-	uint16_t sin_port;
-	uint32_t sin_addr;
-	char     sin_zero[8];  // zero this if you want to
-};
-#endif
+
+#define epoll_create SYS_epoll_create
+#define epoll_ctl SYS_epoll_ctl
+#define epoll_wait SYS_epoll_wait
 
 /* Internet address. */
 struct in_addr {

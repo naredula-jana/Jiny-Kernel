@@ -375,7 +375,7 @@ void ipc_release_resources(struct task_struct *task){
 			continue;
 		if (wait_queue::wait_queues[i]->used_for == 0) continue;
 		semaphore *sem = wait_queue::wait_queues[i]->used_for;
-		if (sem->owner_pid != task->pid) continue;
+		if (sem->owner_pid != task->task_id) continue;
 
 		spin_unlock_irqrestore(&g_global_lock, flags);
 		sem->signal();
@@ -451,7 +451,7 @@ int Jcmd_locks(char *arg1, char *arg2) {
 			int wait_line=0;
 			task = list_entry(pos, struct task_struct, wait_queue);
 			if (sem!=0) wait_line=task->stats.wait_line_no;
-			len = len - ut_snprintf(buf+max_len-len,len,":%x(%s-%d),", task->pid, task->name,wait_line);
+			len = len - ut_snprintf(buf+max_len-len,len,":%x(%s-%d),", task->task_id, task->name,wait_line);
 		}
 
 		len = len - ut_snprintf(buf+max_len-len,len,"\n");
@@ -742,7 +742,7 @@ int semaphore::lock(int line) {
 
 	int ret;
 	unsigned long stat_arrive_time;
-	if ((owner_pid == g_current_task->pid) && recursive_count != 0){
+	if ((owner_pid == g_current_task->task_id) && recursive_count != 0){
 		//ut_log("mutex_lock Recursive mutex: thread:%s  count:%d line:%d \n",g_current_task->name,sem->recursive_count,line);
 		recursive_count++;
 		stat_recursive_count++;
@@ -759,7 +759,7 @@ int semaphore::lock(int line) {
 	stat_cont_time = g_jiffies - stat_arrive_time;
 
 	g_current_task->status_info[0] = 0;
-	owner_pid = g_current_task->pid;
+	owner_pid = g_current_task->task_id;
 	recursive_count =1;
 	g_current_task->locks_sleepable++;
 	assert (g_current_task->locks_nonsleepable == 0);
@@ -770,7 +770,7 @@ int semaphore::lock(int line) {
 }
 int semaphore::unlock(int line) {
 
-	if ((owner_pid == g_current_task->pid) && recursive_count > 1){
+	if ((owner_pid == g_current_task->task_id) && recursive_count > 1){
 		//ut_log("mutex_unlock Recursive mutex: thread:%s  recursive count:%d line:%d \n",g_current_task->name,sem->recursive_count,line);
 		recursive_count--;
 		return 1;

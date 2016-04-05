@@ -61,7 +61,7 @@ int socketpair_close(struct file *filep){
 	}
 	return 0;
 }
-int SYS_epoll_create(int flags) {
+int SYS_epoll_create(int unused_flags) {
 	int fd = -1;
 	struct file *filep;
 	struct epoll_struct *epoll_p;
@@ -77,7 +77,7 @@ int SYS_epoll_create(int flags) {
 	return fd;
 }
 
-int SYS_epoll_ctl(uint32_t  efd, uint32_t op, uint32_t fd, struct epoll_event *event){
+int SYS_epoll_ctl(uint32_t  efd, uint32_t op, uint32_t fd, struct epoll_event *unused_event){
 	struct file *efilep,*filep;
 	struct epoll_struct *epoll_p;
 	int i,k;

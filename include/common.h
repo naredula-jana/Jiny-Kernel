@@ -35,7 +35,7 @@ extern spinlock_t g_global_lock;
 	if (g_conf_syscall_debug==1)	{\
 		unsigned long sys_debug_flags; \
 		spin_lock_irqsave(&g_userspace_stdio_lock, sys_debug_flags); \
-		ut_printf("SYSCALL(%x :%d uip: %x :%d jiff:%d) ",g_current_task->pid,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip,g_current_task->stats.syscall_count,g_jiffies); ut_printf(x); \
+		ut_printf("SYSCALL(%x :%d uip: %x :%d jiff:%d) ",g_current_task->task_id,getcpuid(),g_cpu_state[getcpuid()].md_state.user_ip,g_current_task->stats.syscall_count,g_jiffies); ut_printf(x); \
 		spin_unlock_irqrestore(&g_userspace_stdio_lock, sys_debug_flags); \
 	}\
 } while (0) 

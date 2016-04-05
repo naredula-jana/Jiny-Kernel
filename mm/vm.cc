@@ -115,7 +115,7 @@ static int vma_link(struct mm_struct *mm, struct vm_area_struct *vma) {
 		if (vma->vm_start >= tmp->vm_end) {
 			tmp_next = tmp->vm_next;
 			if (tmp_next != 0) {
-				if (vma->vm_end < tmp_next->vm_start) {
+				if (vma->vm_end <= tmp_next->vm_start) {
 					tmp->vm_next = vma;
 					vma->vm_next = tmp_next;
 					ret = 2;
@@ -512,7 +512,7 @@ int Jcmd_maps(char *arg1, char *arg2) {
 		pid=ut_atoi(arg1, FORMAT_DECIMAL);
 		list_for_each(pos, &g_task_queue.head) {
 			task = list_entry(pos, struct task_struct, task_queue);
-			if (task->pid == pid) {
+			if (task->task_id == pid) {
 				found =1;
 				break;
 			}

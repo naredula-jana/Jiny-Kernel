@@ -532,7 +532,7 @@ void ut_getBackTrace(unsigned long *rbp, unsigned long task_addr, backtrace_t *b
 	}
 	if (bt == 0) {
 		struct task_struct *t = lower_addr;
-		ut_log("taskname: %s  pid:%d\n", t->name, t->pid);
+		ut_log("taskname: %s  pid:%d\n", t->name, t->task_id);
 	}
 	for (i = 0; i < MAX_BACKTRACE_LENGTH; i++) {
 		if (rbp < lower_addr || rbp > upper_addr)

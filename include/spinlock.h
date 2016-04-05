@@ -39,12 +39,12 @@ extern int g_boot_completed ;
 static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 #ifdef SPINLOCK_DEBUG
 #ifdef RECURSIVE_SPINLOCK
-	if (lock->recursion_allowed==1 && lock->pid == g_current_task->pid  && g_current_task->pid!=0) {
+	if (lock->recursion_allowed==1 && lock->pid == g_current_task->task_id  && g_current_task->task_id!=0) {
 		lock->recursive_count++;
 		lock->stat_recursive_locks++;
 		return;
 	}else{
-		if (lock->recursion_allowed==0 && lock->pid == g_current_task->pid){ /* already owning the lock */
+		if (lock->recursion_allowed==0 && lock->pid == g_current_task->task_id){ /* already owning the lock */
 			SPIN_BUG();
 		}
 	}
@@ -73,14 +73,14 @@ static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 #ifdef SPINLOCK_DEBUG_LOG
 	if (lock->log_length >= MAX_SPIN_LOG) lock->log_length=0;
 	lock->log[lock->log_length].line = line;
-	lock->log[lock->log_length].pid = g_current_task->pid;
+	lock->log[lock->log_length].task_id = g_current_task->task_id;
 	lock->log[lock->log_length].cpuid = g_current_task->current_cpu;
 	lock->log[lock->log_length].name = g_current_task->name;
 	lock->log[lock->log_length].spins = 1 + (lock->stat_count/10);
 	//lock->log[lock->log_length].line = line;
 	lock->log_length++;
 #endif
-	lock->pid = g_current_task->pid;
+	lock->pid = g_current_task->task_id;
 	g_current_task->locks_nonsleepable++;
 
 	lock->contention=lock->contention+(lock->stat_count/10);
@@ -126,11 +126,11 @@ static inline void arch_spinlock_init(spinlock_t *lock, unsigned char *name){
 static inline void arch_spinlock_unlock(spinlock_t *lock, int line) {
 #ifdef SPINLOCK_DEBUG
 #ifdef RECURSIVE_SPINLOCK
-	if (lock->recursion_allowed==1 && lock->pid == g_current_task->pid && lock->recursive_count>0) {
+	if (lock->recursion_allowed==1 && lock->pid == g_current_task->task_id && lock->recursive_count>0) {
 		lock->recursive_count--;
 		return;
 	} else {
-		if (lock->recursion_allowed==0 && lock->pid != g_current_task->pid){
+		if (lock->recursion_allowed==0 && lock->pid != g_current_task->task_id){
 			SPIN_BUG();
 		}
 	}
@@ -140,7 +140,7 @@ static inline void arch_spinlock_unlock(spinlock_t *lock, int line) {
 #ifdef SPINLOCK_DEBUG_LOG
 		if (lock->log_length >= MAX_SPIN_LOG) lock->log_length=0;
 		lock->log[lock->log_length].line = line;
-		lock->log[lock->log_length].pid = g_current_task->pid;
+		lock->log[lock->log_length].task_id = g_current_task->task_id;
 		lock->log[lock->log_length].cpuid = g_current_task->current_cpu;
 		lock->log[lock->log_length].name = g_current_task->name;
 		lock->log[lock->log_length].spins = 0;

@@ -258,7 +258,7 @@ static int free_mm(struct mm_struct *mm) {
 
 	unsigned long vm_space_size = ~0;
 	vm_munmap(mm, 0, vm_space_size);
-	DEBUG(" tid:%x Freeing the final PAGE TABLE :%x\n", g_current_task->pid, vm_space_size);
+	DEBUG(" tid:%x Freeing the final PAGE TABLE :%x\n", g_current_task->task_id, vm_space_size);
 	ret = ar_pageTableCleanup(mm, 0, vm_space_size);
 	if (ret != 1) {
 		ut_printf("ERROR : clear the pagetables :%d: \n", ret);
@@ -284,7 +284,7 @@ unsigned long sc_createKernelThread(int (*fn)(void *, void *), void **args, unsi
 	spin_lock_irqsave(&g_global_lock, flags);
 	list_for_each(pos, &g_task_queue.head) {
 		task = list_entry(pos, struct task_struct, task_queue);
-		if (task->pid == pid) {
+		if (task->task_id == pid) {
 			ut_strncpy(task->name, thread_name, MAX_TASK_NAME);
 			goto last;
 		}
@@ -325,14 +325,15 @@ static void init_task_struct(struct task_struct *p, struct mm_struct *mm, struct
 
 	p->current_cpu = 0xffff;
 	p->stick_to_cpu = 0xffff;
-	p->ppid = g_current_task->pid;
+	p->process_id = g_current_task->process_id;
+	p->parent_process_pid = g_current_task->task_id;
 	p->trace_stack_length = 10; /* some initial stack length, we do not know at what point tracing starts */
 
 	/* link to queue */
 	free_pid_no++;
 	if (free_pid_no == 0)
 		free_pid_no++;
-	p->pid = free_pid_no;
+	p->task_id = free_pid_no;
 	p->stats.syscalls = mm_malloc(sizeof(struct syscall_stat)*MAX_SYSCALL, MEM_CLEAR);
 	p->stats.start_time = g_jiffies;
 	p->stats.start_tsc = ar_read_tsc();
@@ -368,7 +369,7 @@ static int release_resources(struct task_struct *child_task, int attach_to_paren
 
 	/* 2. release locks */
 	if (child_task->locks_sleepable > 0) { // TODO : need to check the mutex held
-		ut_log("ERROR:  lock held by the process: %s pid:%d(%x)\n", child_task->name,child_task->pid,child_task->pid); // TODO : hitting and the process hangs during exit.
+		ut_log("ERROR:  lock held by the process: %s pid:%d(%x)\n", child_task->name,child_task->task_id,child_task->task_id); // TODO : hitting and the process hangs during exit.
 		ipc_release_resources(child_task);
 	}
 
@@ -379,7 +380,7 @@ static int release_resources(struct task_struct *child_task, int attach_to_paren
 	spin_lock_irqsave(&g_global_lock, flags);
 	list_for_each(pos, &g_task_queue.head) {
 		task = list_entry(pos, struct task_struct, task_queue);
-		if (task->pid == child_task->ppid && task->state != TASK_DEAD) {
+		if (task->task_id == child_task->parent_process_pid && task->state != TASK_DEAD) {
 			atomic_inc(&child_task->count);
 			_ipc_delete_from_waitqueues(child_task);
 			list_del(&child_task->wait_queue);
@@ -406,7 +407,7 @@ last:
 		_add_to_deadlist(child_task);
 		spin_unlock_irqrestore(&g_global_lock, flags);
 	}
-	DEBUG("Attaching to dead queue: %d(%x) count:%d parent:%x ch:%x \n",child_task->pid,child_task->pid,child_task->count.counter,parent,child_task);
+	DEBUG("Attaching to dead queue: %d(%x) count:%d parent:%x ch:%x \n",child_task->task_id,child_task->task_id,child_task->count.counter,parent,child_task);
 	return 1;
 }
 
@@ -419,7 +420,7 @@ int sc_task_stick_to_cpu(unsigned long pid, int cpu_id) {
 	spin_lock_irqsave(&g_global_lock, flags);
 	list_for_each(pos, &g_task_queue.head) {
 		task = list_entry(pos, struct task_struct, task_queue);
-		if (task->pid == pid) {
+		if (task->task_id == pid) {
 			task->stick_to_cpu = cpu_id;
 			ret = SYSCALL_SUCCESS;
 			break;
@@ -463,7 +464,7 @@ int init_tasking(unsigned long unused) {
 	struct fs_struct *fs;
 
 	g_global_lock.recursion_allowed = 1;
-	g_current_task->pid = 1;/* hardcoded pid to make g_global _lock work */
+
 	vm_area_cachep = (kmem_cache_t *) kmem_cache_create((const unsigned char *) "vm_area_struct", sizeof(struct vm_area_struct),
 			0, 0, 0, 0);
 	mm_cachep = (kmem_cache_t *) kmem_cache_create((const unsigned char *) "mm_struct", sizeof(struct mm_struct), 0, 0, 0, 0);
@@ -506,6 +507,11 @@ int init_tasking(unsigned long unused) {
 		g_cpu_state[i].idle_task = (struct task_struct *) ((unsigned char *) (task_addr) + i * TASK_SIZE);
 		ut_memset((unsigned char *) g_cpu_state[i].idle_task, MAGIC_CHAR, TASK_SIZE - PAGE_SIZE / 2);
 		init_task_struct(g_cpu_state[i].idle_task, g_kernel_mm, fs);
+		if (i==0){
+			g_current_task->task_id = 1;/* hardcoded pid to make g_global _lock work */
+			g_current_task->process_id = 1;
+			g_current_task->parent_process_pid = 1;
+		}
 		INIT_LIST_HEAD(&(g_cpu_state[i].run_queue.head));
 
 		arch_spinlock_init(&g_cpu_state[i].lock, (unsigned char *)"CPU_lock");
@@ -536,7 +542,7 @@ static int continue_parent_task(unsigned long ppid){
 	spin_lock_irqsave(&g_global_lock, flags);
 	list_for_each(pos, &g_task_queue.head) {
 		task = list_entry(pos, struct task_struct, task_queue);
-		if (task->pid == ppid) {
+		if (task->task_id == ppid) {
 			if (task->state == TASK_STOPPED){
 				task->state == TASK_RUNNING;
 				add_to_runqueue(task, -1);
@@ -559,11 +565,11 @@ void sc_delete_task(struct task_struct *task) {
 		return;
 	atomic_dec(&task->count);
 	if (task->count.counter != 0) {
-		ut_log("Not deleted Task :%d count:%d task:%x\n", task->pid,task->count.counter,task);
+		ut_log("Not deleted Task :%d count:%d task:%x\n", task->task_id,task->count.counter,task);
 		return;
 	}
 
-	DEBUG("DELETING TASK :%x\n", task->pid);
+	DEBUG("DELETING TASK :%x\n", task->task_id);
 	//ut_log("DELETING TASK deleting task id:%d name:%s  curretask:%s\n",task->pid,task->name,g_current_task->name);
 
 	spin_lock_irqsave(&g_global_lock, intr_flags);
@@ -599,7 +605,7 @@ void sc_delete_task(struct task_struct *task) {
 	if (1){
 		unsigned long life_length = g_jiffies - task->stats.start_time;
 		unsigned long tsc_diff = (ar_read_tsc() - task->stats.start_tsc)/1000000;
-		ut_log("DELETING TASK :%d(%x) st:%d dur:%d (diff_tsc:%d) cont:%d tick:%d name:%s cpu:%i\n", task->pid,task->pid,task->stats.start_time,life_length,tsc_diff,task->stats.total_contexts,task->stats.ticks_consumed,task->name, task->allocated_cpu);
+		ut_log("DELETING TASK :%d(%x) st:%d dur:%d (diff_tsc:%d) cont:%d tick:%d name:%s cpu:%i\n", task->task_id,task->task_id,task->stats.start_time,life_length,tsc_diff,task->stats.total_contexts,task->stats.ticks_consumed,task->name, task->allocated_cpu);
 	}
 	//Jcmd_pt(0,0);
 	//Jcmd_maps(0,0);
@@ -875,7 +881,7 @@ void timer_callback(void *unused_args) {
 		g_cpu_state[0].net_bh.ticks++;
 		if (g_conf_net_pmd==1 && (g_cpu_state[0].net_bh.ticks>5) ){
 			if (g_cpu_state[0].net_bh.pkts_processed<100){
-				g_cpu_state[0].net_bh.pmd_active = 0;
+			//	g_cpu_state[0].net_bh.pmd_active = 0;
 			}else{
 				g_cpu_state[0].net_bh.pmd_active = 1;
 			}
@@ -960,15 +966,15 @@ void Jcmd_prio(unsigned char *arg1, unsigned char *arg2) {
 	}
 }
 int Jcmd_kill(uint8_t *arg1, uint8_t *arg2) {
-	int pid;
+	int tid;
 	if (arg1 != 0) {
-		pid = ut_atoi(arg1, FORMAT_DECIMAL);
+		tid = ut_atoi(arg1, FORMAT_DECIMAL);
 	} else {
 		ut_printf(" Error: kill pid is needed\n");
 		return 0;
 	}
-	ut_printf(" Killing the process with pid : %x(%d)\n", pid, pid);
-	SYS_sc_kill(pid, 9);
+	ut_printf(" Killing the process with pid : %x(%d)\n", tid, tid);
+	SYS_sc_kill(tid, 9);
 	return 1;
 }
 extern void print_syscall_stat(struct task_struct *task, int output);
@@ -982,7 +988,7 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	unsigned char *buf;
 	int all = 0;
 
-	ut_printf(" pid allocatedcpu: state (cont-switches/total ticks)  mm:mm_count name cpu\n");
+	ut_printf(" [tid:pid:ppid] allocatedcpu: state (cont-switches/total ticks)  mm:mm_count name cpu\n");
 
 	if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "all") == 0) {
 		all = 1;
@@ -1005,9 +1011,9 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	list_for_each(pos, &g_task_queue.head) {
 		task = list_entry(pos, struct task_struct, task_queue);
 		if (is_kernelThread(task))
-			len = len - ut_snprintf(buf + max_len - len, len, "[%2x]", task->pid);
+			len = len - ut_snprintf(buf + max_len - len, len, "[%2x:%2x:%2x]", task->task_id,task->process_id,task->parent_process_pid);
 		else
-			len = len - ut_snprintf(buf + max_len - len, len, "(%2x)", task->pid);
+			len = len - ut_snprintf(buf + max_len - len, len, "(%2x:%2x:%2x)", task->task_id,task->process_id,task->parent_process_pid);
 
 		len = len
 				- ut_snprintf(buf + max_len - len, len,
@@ -1043,7 +1049,7 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 		len = len
 				- ut_snprintf(buf + max_len - len, len, "%2d:(%4d/%4d) <%d-%d> %7s(%d) rlen:%d  runq:%x - %x\n", i,
 						g_cpu_state[i].stats.nonidle_contexts, g_cpu_state[i].stats.total_contexts, g_cpu_state[i].active,
-						g_cpu_state[i].intr_disabled, g_cpu_state[i].current_task->name, g_cpu_state[i].current_task->pid,g_cpu_state[i].run_queue_length,&g_cpu_state[i].run_queue.head,g_cpu_state[i].run_queue.head.next);
+						g_cpu_state[i].intr_disabled, g_cpu_state[i].current_task->name, g_cpu_state[i].current_task->task_id,g_cpu_state[i].run_queue_length,&g_cpu_state[i].run_queue.head,g_cpu_state[i].run_queue.head.next);
 		if (all != 3) { continue; }
 		temp_bt.count = 0;
 		ut_getBackTrace((unsigned long *) g_cpu_state[i].current_task->thread.rbp, (unsigned long) g_cpu_state[i].current_task, &temp_bt);
@@ -1187,7 +1193,7 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	ut_strncpy(p->name, g_current_task->name, MAX_TASK_NAME);
 
 //	ut_log(" New thread is created:%d %s on %d\n",p->pid,p->name,p->allocated_cpu);
-	ret_pid = p->pid;
+	ret_pid = p->task_id;
 
 	spin_lock_irqsave(&g_global_lock, flags);
 	list_add_tail(&p->task_queue, &g_task_queue.head);
@@ -1195,7 +1201,7 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	spin_unlock_irqrestore(&g_global_lock, flags);
 
 	p->clone_flags = clone_flags;
-	ut_log(" clone : %s  pid :%d(%x) task:%x \n",p->name,p->pid,p->pid, p);
+	ut_log(" clone : %s  pid :%d(%x) task:%x \n",p->name,p->task_id,p->task_id, p);
 
 	if (clone_flags & CLONE_VFORK) { //TODO : sys-vfork partially done, need to use to signals suspend and continue the parent process
 		g_current_task->state = TASK_STOPPED;
@@ -1224,18 +1230,18 @@ unsigned long SYS_sched_yield(){
 int SYS_sc_exit(int status) {
 	unsigned long flags;
 	SYSCALL_DEBUG("sys exit : status:%d \n", status);
-	SYSCALL_DEBUG(" pid:%d existed cause:%d name:%s \n", g_current_task->pid, status, g_current_task->name);
+	SYSCALL_DEBUG(" pid:%d existed cause:%d name:%s \n", g_current_task->task_id, status, g_current_task->name);
 	//ut_log(" pid:%d existed cause:%d name:%s \n",g_current_task->pid,status,g_current_task->name);
 	ar_updateCpuState(g_current_task, 0);
 
 	release_resources(g_current_task, 1);
 
 	if (g_current_task->clone_flags & CLONE_VFORK){
-		continue_parent_task(g_current_task->ppid);
+		continue_parent_task(g_current_task->parent_process_pid);
 	}
 
 	if (g_conf_syscall_debug > 0){
-		ut_log(" pid:%d: %s : start_time:%d end_time:%d duration:%d\n",g_current_task->pid,g_current_task->name,g_current_task->stats.start_time,g_jiffies,g_jiffies-g_current_task->stats.start_time);
+		ut_log(" pid:%d: %s : start_time:%d end_time:%d duration:%d\n",g_current_task->task_id,g_current_task->name,g_current_task->stats.start_time,g_jiffies,g_jiffies-g_current_task->stats.start_time);
 		print_syscall_stat(g_current_task, 1);
 	}
 
@@ -1302,6 +1308,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	old_mm = g_current_task->mm;
 	g_current_task->mm = mm;
 	g_current_task->fs = fs;
+	g_current_task->process_id = g_current_task->task_id; /* process id is created for every exec */
 //	sc_set_fsdevice(DEVICE_SERIAL1, DEVICE_SERIAL1);
 
 	/* from this point onwards new address space comes into picture, no memory belonging to previous address space like file etc should  be used */
@@ -1336,7 +1343,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 		SYS_sc_exit(703);
 		return;
 	}
-	ut_log(" execve : %s  pid :%d(%x) task:%x CPU:%d \n",g_current_task->name,g_current_task->pid,g_current_task->pid, g_current_task,getcpuid());
+	ut_log(" execve : %s  pid :%d(%x) task:%x CPU:%d \n",g_current_task->name,g_current_task->task_id,g_current_task->task_id, g_current_task,getcpuid());
 	g_current_task->stats.start_tsc = ar_read_tsc();
 
 	g_current_task->thread.userland.ip = main_func;
@@ -1352,7 +1359,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 
 	g_current_task->thread.userland.user_fs_base = 0;
 	if (g_current_task->clone_flags & CLONE_VFORK){
-		continue_parent_task(g_current_task->ppid);
+		continue_parent_task(g_current_task->parent_process_pid);
 	}
 	ar_updateCpuState(g_current_task, 0);
 
@@ -1370,7 +1377,7 @@ int SYS_sc_kill(unsigned long pid, unsigned long signal) {
 	spin_lock_irqsave(&g_global_lock, flags);
 	list_for_each(pos, &g_task_queue.head) {
 		task = list_entry(pos, struct task_struct, task_queue);
-		if (task->pid == pid) {
+		if (task->task_id == pid) {
 			task->pending_signals = 1;
 			ret = SYSCALL_SUCCESS;
 			if (signal == 9) {

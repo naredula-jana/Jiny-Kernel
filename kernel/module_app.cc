@@ -48,11 +48,12 @@ public:
 	int symb_table_length;
 	unsigned char *str_table;
 	int str_table_length;
-	unsigned char *common_symbol_addr;
+	//unsigned char *common_symbol_addr;
 
 	int (*init_module)(unsigned char *arg1, unsigned char *arg2);
 	int (*clean_module)(unsigned char *arg1, unsigned char *arg2);
 	int (*highpriority_app_main)(int argc, unsigned char *argv);
+	unsigned long mem_start,mem_end;
 };
 void module_t::rank_symbols_by_hits(int max_ranks) {
 	unsigned long hits;
@@ -256,8 +257,8 @@ int module_t::update_symboltable(Elf64_Sym *symb, int total_symb) {
 				symbol_table[j].address = tsemb->st_value + (uint64_t) secs[si].addr;
 				symbol_table[j].type = SYMBOL_DATA;
 			} else if (tsemb->st_shndx == SHN_COMMON) { /* storage need to be allocated */
-				symbol_table[j].address = common_symb_length;
-				common_symb_length = common_symb_length + tsemb->st_size;
+				symbol_table[j].address = mem_end;
+				mem_end = mem_end + tsemb->st_size;
 			} else if (tsemb->st_shndx == SHN_ABS) { /* storage need to be allocated */
 				symbol_table[j].address = tsemb->st_value;
 			} else {
@@ -290,14 +291,17 @@ int module_t::update_symboltable(Elf64_Sym *symb, int total_symb) {
 		}
 	symbol_table[j].name = 0;
 	symbol_table[j].address = 0;
+#if 0
 	if (common_symb_length > 0) {
 		common_symbol_addr = (unsigned char *) mm_malloc(common_symb_length, MEM_CLEAR);
+
 		for (i = 0; i < j; i++) {
 			if (symbol_table[i].sec_index == SHN_COMMON) {
 				symbol_table[i].address = symbol_table[i].address + (uint64_t) common_symbol_addr;
 			}
 		}
 	}
+#endif
 
 	return ret;
 }
@@ -337,10 +341,10 @@ char *module_t::update_symbols(binary_source_t *source, Elf64_Sym **arg_symb, El
 	return (char *)ret;
 }
 void module_t::free_module() {
-	mm_free(secs[SEC_TEXT].addr);
+// TODO:  allocated from : 	mm_free(secs[SEC_TEXT].addr);
 	mm_free(str_table);
 	mm_free(symbol_table);
-	mm_free(common_symbol_addr);
+
 	mm_free(this);
 }
 extern "C" {
@@ -402,164 +406,7 @@ static int launch_hp_task(module_t *modulep) {
 	return JSUCCESS;
 }
 
-#if 0
-symb_table_t *module_load_kernel_symbols(unsigned char *start_addr, unsigned long mod_len) { /* load kernel symbols from kernel file loaded as a module */
-	struct elfhdr *elf_ex;
-	const char *error = 0;
-	Elf64_Shdr *elf_shdata;
-	int sect_size;
-	int i;
-	Elf64_Shdr *sec_data, *sec_rel_text, *sec_rel_data, *sec_rel_rodata, *sec_symb, *sec_str;
-	unsigned char *sh_strtab = 0;
-	unsigned char *strtab = 0;
-	module_t *modulep = 0;
-	unsigned long file_min_offset, file_max_offset;
-	unsigned long flags;
-	Elf64_Sym *symb = 0;
-	binary_source_t source;
-	int total_symbols = 0;
 
-	source.file = 0;
-	source.code_start = start_addr;
-	source.code_length = mod_len;
-	elf_ex = (struct elfhdr *) start_addr;
-	if (mod_len < sizeof(elf_ex)) {
-		error = "incorrect elf format";
-		goto out;
-	}
-	if (elf_ex->e_type != ET_EXEC || !(elf_ex->e_machine == EM_X86_64)) {
-		error = "ELF not a executable file or not a x86_64";
-		goto out;
-	}
-
-	sect_size = sizeof(Elf64_Shdr) * elf_ex->e_shnum;
-	elf_shdata = (Elf64_Shdr *) (start_addr + (unsigned long) elf_ex->e_shoff);
-	if (mod_len < ((unsigned long) elf_ex->e_shoff + sect_size)) {
-		error = "failed to read the sections from file";
-		goto out;
-	}
-
-	sh_strtab = start_addr + (unsigned long) elf_shdata[elf_ex->e_shstrndx].sh_offset;
-	if (mod_len < ((unsigned long) elf_shdata[elf_ex->e_shstrndx].sh_offset + elf_shdata[elf_ex->e_shstrndx].sh_size)) {
-		error = "failed to read the sections section symbol table";
-		goto out;
-	}
-	modulep = mm_malloc(sizeof(module_t), MEM_CLEAR);
-	modulep->type = elf_ex->e_type;
-	file_min_offset = 0;
-	file_max_offset = 0;
-	for (i = 0; i < elf_ex->e_shnum; i++, elf_shdata++) {
-		if ((elf_shdata->sh_type == SHT_PROGBITS) && ut_strcmp(sh_strtab + elf_shdata->sh_name, (uint8_t *) ".text") == 0) {
-			modulep->secs[SEC_TEXT].file_offset = elf_shdata->sh_offset;
-			modulep->secs[SEC_TEXT].length = elf_shdata->sh_size;
-			modulep->secs[SEC_TEXT].addr = (uint8_t *) elf_shdata->sh_addr;
-			modulep->secs[SEC_TEXT].sec_index = i;
-
-			file_min_offset = elf_shdata->sh_offset;
-			file_max_offset = file_min_offset + elf_shdata->sh_size;
-			continue;
-		}
-		if ((elf_shdata->sh_type == SHT_PROGBITS) && ut_strcmp(sh_strtab + elf_shdata->sh_name, (uint8_t *) ".data") == 0) {
-			modulep->secs[SEC_DATA].file_offset = elf_shdata->sh_offset;
-			modulep->secs[SEC_DATA].length = elf_shdata->sh_size;
-			modulep->secs[SEC_DATA].addr = (uint8_t *) elf_shdata->sh_addr;
-			modulep->secs[SEC_DATA].sec_index = i;
-			if ((file_max_offset) < (elf_shdata->sh_offset + elf_shdata->sh_size)) {
-				file_max_offset = elf_shdata->sh_offset + elf_shdata->sh_size;
-			}
-			continue;
-		}
-		if ((elf_shdata->sh_type == SHT_RELA) && ut_strcmp(sh_strtab + elf_shdata->sh_name, (uint8_t *) ".rela.text") == 0) {
-			sec_rel_text = elf_shdata;
-			continue;
-		}
-		if ((elf_shdata->sh_type == SHT_RELA) && ut_strcmp(sh_strtab + elf_shdata->sh_name, (uint8_t *) ".rela.data") == 0) {
-			sec_rel_data = elf_shdata;
-			continue;
-		}
-		if ((elf_shdata->sh_type == SHT_RELA) && ut_strcmp(sh_strtab + elf_shdata->sh_name, (uint8_t *) ".rela.rodata") == 0) {
-			sec_rel_rodata = elf_shdata;
-			continue;
-		}
-		if ((elf_shdata->sh_type == SHT_STRTAB) && ut_strcmp(sh_strtab + elf_shdata->sh_name, (uint8_t *) ".strtab") == 0) {
-			sec_str = elf_shdata;
-			continue;
-		}
-		if ((elf_shdata->sh_type == SHT_SYMTAB) && ut_strcmp(sh_strtab + elf_shdata->sh_name, (uint8_t *) ".symtab") == 0) {
-			sec_symb = elf_shdata;
-			continue;
-		}
-		if (ut_strcmp(sh_strtab + elf_shdata->sh_name, (uint8_t *) ".rodata") == 0) {
-			modulep->secs[SEC_RODATA].file_offset = elf_shdata->sh_offset;
-			modulep->secs[SEC_RODATA].length = elf_shdata->sh_size;
-			modulep->secs[SEC_RODATA].addr = (uint8_t *) elf_shdata->sh_addr;
-			modulep->secs[SEC_RODATA].sec_index = i;
-
-			if ((file_max_offset) < (elf_shdata->sh_offset + elf_shdata->sh_size)) {
-				file_max_offset = elf_shdata->sh_offset + elf_shdata->sh_size;
-			}
-			continue;
-		}
-		if (ut_strcmp(sh_strtab + elf_shdata->sh_name, (uint8_t *) ".bss") == 0) {
-			modulep->secs[SEC_BSS].file_offset = elf_shdata->sh_offset;
-			modulep->secs[SEC_BSS].length = elf_shdata->sh_size;
-			modulep->secs[SEC_BSS].addr = (uint8_t *) elf_shdata->sh_addr;
-			modulep->secs[SEC_BSS].sec_index = i;
-			continue;
-		}
-	}
-	if ((modulep->secs[SEC_TEXT].length == 0) || (sec_symb == 0)) {
-		ut_printf("  sec_rel:%x sec_symv:%x \n", sec_rel_text, sec_symb);
-		error = "necessary section are missing";
-		goto out;
-	}
-
-	modulep->str_table = mm_malloc(sec_str->sh_size, 0);
-	if (modulep->str_table == 0) {
-		error = "allocating str_table";
-		goto out;
-	}
-	modulep->str_table_length = sec_str->sh_size;
-
-	if (mod_len < ((unsigned long) sec_str->sh_offset + sec_str->sh_size)) {
-		error = "str table reading";
-		goto out;
-	}
-	ut_memcpy((unsigned char *) modulep->str_table, start_addr + (unsigned long) sec_str->sh_offset, sec_str->sh_size);
-
-	modulep->secs[SEC_TEXT].length = file_max_offset; /* this will cover text+rodata+data */
-
-	error = modulep->update_symbols(&source, &symb, sec_symb);
-	if (error != 0) {
-		goto out;
-	}
-	total_symbols = sec_symb->sh_size / sec_symb->sh_entsize;
-
-	spin_lock_irqsave(&g_global_lock, flags);
-	if (error == 0 && (total_modules < MAX_MODULES)) {
-		ut_strncpy(modulep->name, (uint8_t *) "kernel", MAX_FILENAME);
-		g_modules[total_modules] = modulep;
-		total_modules++;
-	}
-	spin_unlock_irqrestore(&g_global_lock, flags);
-
-	out: ;
-	if (error != 0) {
-		ut_printf("ERROR : %s\n", error);
-	} else {
-		g_modules[0]->sort_symbols();
-		ut_printf(" Successfull loaded the sybols tables of kernel\n");
-		return g_modules[0]->symbol_table;
-	}
-
-	/* Free the allocated resources */
-
-	mm_free(strtab);
-	vfree(symb);
-	modulep->free_module();
-	return NULL;
-}
-#endif
 void Jcmd_insmod(unsigned char *filename, unsigned char *arg);
 //unsigned char test_code[2*4096]; /* TODO remove later */
 void Jcmd_insmod(unsigned char *filename, unsigned char *arg) {
@@ -720,9 +567,10 @@ void Jcmd_insmod(unsigned char *filename, unsigned char *arg) {
 	//modulep->secs[SEC_TEXT].addr = mm_malloc(modulep->secs[SEC_TEXT].length + modulep->secs[SEC_BSS].length, MEM_CLEAR);
 
 	modulep->secs[SEC_TEXT].addr = HIGHPRIORITY_APP_START;
+	modulep->mem_start = HIGHPRIORITY_APP_START;
+	modulep->mem_end = HIGHPRIORITY_APP_START + modulep->secs[SEC_TEXT].length + modulep->secs[SEC_BSS].length;
 	modulep->secs[SEC_TEXT].addr[0]=0;/* touching memory */
 
-//	modulep->secs[SEC_TEXT].addr = &test_code[0];
 	if (modulep->secs[SEC_TEXT].addr == 0) {
 		error = "allocating code";
 		goto out;
@@ -783,11 +631,7 @@ void Jcmd_insmod(unsigned char *filename, unsigned char *arg) {
 			goto out;
 		}
 	}
-#if 0
-} catch (char *e) {
-	ut_printf(" Exception: %s\n",e);
-}
-#endif
+
 	out: if (error != 0) {
 		ut_printf("ERROR : %s\n", error);
 	} else {

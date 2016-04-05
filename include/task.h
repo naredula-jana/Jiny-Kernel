@@ -34,7 +34,7 @@ typedef struct {  /* Do not change the order , initilization will break */
 #ifdef SPINLOCK_DEBUG_LOG
         struct {
             int line;
-            unsigned int pid;
+            unsigned int task_id;
             unsigned int cpuid;
             unsigned long spins;
             unsigned char *name;
@@ -144,7 +144,9 @@ struct task_struct {
 	atomic_t count; /* usage count */
 	int clone_flags; /* clone flags of the parent task, this is used for vfork call */
 
-	unsigned long pid,ppid;
+	unsigned long task_id;  /* unique id for each task */
+	unsigned long parent_process_pid;  /* parent process id */
+	unsigned long process_id;  /* same  task id for all with the same process*/
 	unsigned char name[MAX_TASK_NAME+1];
 	char thread_type;
 	unsigned long child_tid_address; /* used set_tid_address */

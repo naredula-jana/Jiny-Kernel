@@ -318,7 +318,7 @@ static int net_bh_send() {
 	unsigned long flags;
 	int pkt_send = 0;
 
-	if (sendqs_empty == 1) {
+	if (sendqs_empty == 1 || g_conf_net_send_burst==0) {
 		return pkt_send;
 	}
 

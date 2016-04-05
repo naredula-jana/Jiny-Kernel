@@ -182,7 +182,6 @@ extern int check_emptyspace_net_sendq();
 int ut_sleep_ns(int dur);
 }
 int network_stack::write(network_connection *conn, struct iovec *msg_iov, int iov_len) {
-//int network_stack::write(network_connection *conn, uint8_t *app_data, int app_len) {
 	int ret = JFAIL;
 	unsigned char *buf=0;
 	uint16_t port;
@@ -224,7 +223,6 @@ int network_stack::write(network_connection *conn, struct iovec *msg_iov, int io
 
 		uip_udp_conn->ripaddr[0] = ip & 0xffff;
 		uip_udp_conn->ripaddr[1] = (ip >> 16) & 0xffff;
-#if 1
 		for (i=0; i<iov_len; i++){
 			uip_slen = uip_slen+msg_iov[i].iov_len;
 		}
@@ -235,7 +233,6 @@ int network_stack::write(network_connection *conn, struct iovec *msg_iov, int io
 			ut_memcpy(uip_appdata+tmp_len, (unsigned char *)msg_iov[i].iov_base, (int)msg_iov[i].iov_len);
 			tmp_len=tmp_len+msg_iov[i].iov_len;
 		}
-#endif
 		send_buf = uip_buf;
 		send_len = 0;
 		if (uip_len > 0) {
@@ -251,26 +248,6 @@ int network_stack::write(network_connection *conn, struct iovec *msg_iov, int io
 		if (send_len > 0){
 			uip_buf=0;
 			netstack_unlock();
-#if 0
-			if (g_conf_test_dummy_send > 0) {
-				int i;
-				for (i=0; i<g_conf_test_dummy_send; i++) {
-					unsigned char *test_dbuf = (unsigned long) jalloc_page(MEM_NETBUF);
-					if (test_dbuf != 0) {
-						ut_memset(test_dbuf,0,10);
-						test_dbuf = test_dbuf +10;
-						ut_memcpy(test_dbuf, send_buf, send_len+50);
-						do {
-							ret = net_send_eth_frame(test_dbuf, send_len, WRITE_SLEEP_TILL_SEND);
-							if (ret == JFAIL) {
-								//jfree_page(test_dbuf);
-								ut_sleep_ns(20);
-							}
-						}while(ret == JFAIL);
-					}
-				}
-			}
-#endif
 			ret = net_send_eth_frame(send_buf, send_len, WRITE_SLEEP_TILL_SEND);
 			if ((ret == JFAIL) && send_buf){
 					jfree_page(send_buf);
@@ -282,7 +259,48 @@ int network_stack::write(network_connection *conn, struct iovec *msg_iov, int io
 			return ret;
 		}
 	}else if (conn->protocol == IPPROTO_TCP){
+		unsigned char *send_buf;
+		unsigned int send_len;
 
+		uip_udp_conn = conn->proto_connection;
+		ip = conn->dest_ip;
+		port = conn->dest_port;
+
+		for (i=0; i<iov_len; i++){
+			uip_slen = uip_slen+msg_iov[i].iov_len;
+		}
+		//uip_slen = app_len;
+		uip_process(0);
+		tmp_len=0;
+		for (i=0; i<iov_len; i++){
+			ut_memcpy(uip_appdata+tmp_len, (unsigned char *)msg_iov[i].iov_base, (int)msg_iov[i].iov_len);
+			tmp_len=tmp_len+msg_iov[i].iov_len;
+		}
+		send_buf = uip_buf;
+		send_len = 0;
+		if (uip_len > 0) {
+			uip_arp_out();
+			DEBUG("FROM WRITE ... - uip SENDTO pkt: buf: %x  %d applen  \n", uip_buf, uip_len);
+			send_len = uip_len;
+			//ret = net_send_eth_frame(uip_buf, uip_len,WRITE_BUF_CREATED);
+		}
+		uip_len = 0;
+		uip_slen = 0;
+		uip_conn = 0;
+		uip_udp_conn = 0;
+		if (send_len > 0){
+			uip_buf=0;
+			netstack_unlock();
+			ret = net_send_eth_frame(send_buf, send_len, WRITE_SLEEP_TILL_SEND);
+			if ((ret == JFAIL) && send_buf){
+					jfree_page(send_buf);
+					buf =0 ;
+			}
+			if (ret == JSUCCESS){
+				ret = send_len;
+			}
+			return ret;
+		}
 	}
 
 last:
