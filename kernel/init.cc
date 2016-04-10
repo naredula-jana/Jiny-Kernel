@@ -254,6 +254,7 @@ int init_kernel_vmaps(unsigned long arg1){
 }
 extern int g_conf_func_debug;
 int g_init_loglevel=1;
+extern void Jcmd_remove_old_pte();
 void cmain() {  /* This is the first c function to be executed */
 	int i,ret;
 
@@ -279,6 +280,7 @@ void cmain() {  /* This is the first c function to be executed */
 	/* link global locks for debugging purpose */
 	arch_spinlock_link(&g_global_lock);
 
+	Jcmd_remove_old_pte();
 	g_boot_completed=1;
 	sti(); /* start the interrupts finally */
 

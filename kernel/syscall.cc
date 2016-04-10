@@ -317,7 +317,7 @@ void Jcmd_pt(unsigned char *arg1,unsigned char *arg2){
 		ut_printf("%s\n",error);
 		return;
 	}
-	pagetable_walk(4,pt,1);
+	pagetable_walk(4,pt,1,0);
 	return;
 }
 extern void symbol_clear_stats();

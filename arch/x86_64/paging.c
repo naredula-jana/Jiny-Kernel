@@ -172,6 +172,7 @@ last:
 	j= image_size /(512*4*1024); /* 2M pages */
 	j = j+1;
 	level2_table = __va(0x103000) +(j*8);
+
 	for (i=j; i<21; i++){
 		unsigned long *p;
 		p=level2_table;
@@ -180,8 +181,21 @@ last:
 		level2_table = level2_table + 8;
 	}
 
+
 	flush_tlb(0x101000);
 	return (addr_t)virt_addr;
+}
+void Jcmd_remove_old_pte(){
+	int i,j;
+	addr_t fr,max_fr,level4_index,level3_index,level2_index,level2_table,level3_table;
+
+	level3_table = __va(0x102000);
+	unsigned long *p;
+	p=level3_table;
+	*p=0;
+
+	flush_tlb(0x101000);
+	return;
 }
 
  void flush_tlb_entry(unsigned long  vaddr)
@@ -396,8 +410,8 @@ static int copy_pagetable(struct mm_struct *dest_mm, int level,unsigned long src
 	DEBUG("E level: %d src:%x  dest:%x \n",level,src,dest);	
 	return 1;
 }
-int pagetable_walk(int level,unsigned long ptable_addr, int print){
-	unsigned long p,phy_entry; /* physical address */
+int pagetable_walk(int level,unsigned long ptable_addr, int print, unsigned long start_vaddr){
+	unsigned long addr_width,p,phy_entry; /* physical address */
 	unsigned long *v; /* virtual address */
 	unsigned int i,max_i,j;
 	int count=0;
@@ -406,6 +420,13 @@ int pagetable_walk(int level,unsigned long ptable_addr, int print){
 	p=ptable_addr;
 	if (p == 0) return 0;
 
+	switch(level){
+		case 1: addr_width = (PAGE_SIZE); break;
+		case 2: addr_width = 512*(PAGE_SIZE); break;
+		case 3: addr_width = 512*512*(PAGE_SIZE); break;
+		case 4: addr_width = 512*512*512*(PAGE_SIZE); break;
+		default: addr_width =0;
+	}
 	if (level == 4){
 		ut_printf("Page Table Walk : %x state:%x\n",ptable_addr,g_current_task->state);
 	}
@@ -419,24 +440,16 @@ int pagetable_walk(int level,unsigned long ptable_addr, int print){
 		if ((level == kernel_pages_level) && check_kernel_ptable_entry(phy_entry)){
 			for (j=level; j<5; j++)
 				if (print) ut_printf("   ");
-			ut_printf(" %d (%d):%x  **** \n",level,i,phy_entry);
-#if 0
-			if (phy_entry== 0x103000){
-				//ut_printf(" SKIP \n");
-				continue;
-			}
-#endif
-			//continue;
+			ut_printf(" %d (%d):%x  **** \n",level,i,phy_entry,(start_vaddr+addr_width*i));
 		}else{
-			if (level >2 && print){
+			if (level >= 2 && print){
 				for (j=level; j<5; j++)
 					if (print) ut_printf("   ");
-				ut_printf(" %d (%d):%x\n",level,i,phy_entry);
+				ut_printf(" %d (%d):%x [%x]\n",level,i,phy_entry,(start_vaddr+addr_width*i));
 			}
 		}
-
-		if (level > 2) {
-			pagetable_walk(level-1,phy_entry,arg_print);
+		if (level >= 2) {
+			pagetable_walk(level-1,phy_entry,arg_print,(start_vaddr+addr_width*i));
 		}
 	}
 
@@ -647,11 +660,14 @@ int ar_check_valid_address(unsigned long addr, int len) {
 int g_stat_pagefault;
 int g_stat_pagefaults_write;
 extern unsigned long g_phy_mem_size;
-
+extern int g_conf_only_kshell;
 int check_kernel_address(unsigned long addr){
 	if (addr >=KADDRSPACE_START && addr <(KADDRSPACE_START + g_phy_mem_size)){
 		return 1;
 	}else{
+		if (g_conf_only_kshell == 1){
+			return 1;
+		}
 		return 0;
 	}
 }
@@ -850,14 +866,19 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 		mk_pte(__va(pl1),((addr_t)p>>12),1,0,1);/* global=on, user=off rw=on*/
 		flush_tlb(0x101000);
 	}else{
-		mk_pte(__va(pl1),((addr_t)p>>12), 0, 1, writeFlag); /* global=off, user=on rw=flag from vma*/
+		if (g_conf_only_kshell == 1){
+			mk_pte(__va(pl1),((addr_t)p>>12),1,0,1);/* global=on, user=off rw=on*/
+			flush_tlb(0x101000); // TODO : inserted for HP app
+		}else{
+			mk_pte(__va(pl1),((addr_t)p>>12), 0, 1, writeFlag); /* global=off, user=on rw=flag from vma*/
+		}
 	}
 
 	ar_flushTlbGlobal();
 	flush_tlb_entry(addr);
-	if (addr >= 0x810000 &&  addr <= 0x811000){
-		unsigned long *test_ptr=0x810ec0;
-	}
+	//if (addr >= 0x810000 &&  addr <= 0x811000){
+	//	unsigned long *test_ptr=0x810ec0;
+	//}
 	DEBUG("Finally Inserted addr:%x  Pl4: %x pl3:%x  p12:%x pl1:%x p:%x \n",addr,pl4,pl3,pl2,pl1,p);	
 	return 1;	
 }

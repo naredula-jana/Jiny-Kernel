@@ -34,7 +34,7 @@ extern "C" {
 extern int net_bh();
 unsigned char g_mac[7];
 
-int g_conf_net_pmd __attribute__ ((section ("confdata")))=1; /* pollmode driver on/off */
+int g_conf_net_pmd __attribute__ ((section ("confdata")))=0; /* pollmode driver on/off */
 int g_conf_net_auto_intr __attribute__ ((section ("confdata")))=0; /* auto interrupts, switch on/off based on the recv packet frequency */
 int g_conf_netbh_cpu __attribute__ ((section ("confdata")))=0;
 

@@ -315,7 +315,7 @@ void **sc_get_thread_argv();
 void sc_set_fsdevice(unsigned int in, unsigned int out);
 
 uint8_t dr_kbGetchar(int device_id, int peek_data);
-int pagetable_walk(int level,unsigned long ptable_addr, int print);
+int pagetable_walk(int level,unsigned long ptable_addr, int print, unsigned long start_vaddr);
 
 void *ipc_mutex_create(char *name);
 int ipc_mutex_lock(void *p, int line);

@@ -181,6 +181,7 @@ int kshell::get_cmd(unsigned char *line) {
 	line[i] = '\0';
 	return cmd;
 }
+int g_conf_only_kshell = 1;
 unsigned char *envs[] = { (unsigned char *) "HOSTNAME=jana",
 		(unsigned char *) "USER=jana", (unsigned char *) "HOME=/",
 		(unsigned char *) "PWD=/", 0 };
@@ -188,21 +189,21 @@ unsigned char *envs[] = { (unsigned char *) "HOSTNAME=jana",
 static int thread_launch_serial(void *arg1, void *arg2) {
 	void **argv = sc_get_thread_argv();
 
-	//serial_ksh.input_device = serial_dev;
-	if (argv == 0) {
-		BUG();
-	} else {
-		void *arg[5];
-
-		//ut_strcpy(name, (const unsigned char *)argv[0]);
-		arg[0] = argv[0];
-		arg[1] = argv[1];
-		arg[2] = argv[2];
-		arg[3] = 0;
-		//serial_ksh.input_device = argv[3];
-		SYS_sc_execve((unsigned char *)argv[0], (unsigned char **)arg, envs);
+	if (g_conf_only_kshell == 0) {
+		if (argv == 0) {
+			BUG();
+		} else {
+			void *arg[5];
+			//ut_strcpy(name, (const unsigned char *)argv[0]);
+			arg[0] = argv[0];
+			arg[1] = argv[1];
+			arg[2] = argv[2];
+			arg[3] = 0;
+			//serial_ksh.input_device = argv[3];
+			SYS_sc_execve((unsigned char *) argv[0], (unsigned char **) arg, envs);
+		}
+		ut_printf(" Error: User Space shell(%s) not found, fallback to kernel shell\n",arg1);
 	}
-	ut_printf(" Error: User Space shell(%s) not found, fallback to kernel shell\n",arg1);
 	serial_ksh.input_device = argv[3];
 	serial_ksh.kshell_process();
 	return 1;
@@ -216,8 +217,7 @@ static int sh_create(unsigned char *bin_file, unsigned char *name, unsigned char
 	tmp_arg[2] =(void *) arg;
 	tmp_arg[3] =(void *) serial_dev;
 	sc_set_fsdevice(serial_dev, serial_dev);  /* all user level thread on serial line */
-	ret = sc_createKernelThread(thread_launch_serial, (void **) &tmp_arg,
-			name,0);
+	ret = sc_createKernelThread(thread_launch_serial, (void **) &tmp_arg,name,0);
 
 	return ret;
 }
@@ -234,12 +234,7 @@ void kshell::kshell_process(){
 	}
 }
 #define USERLEVEL_SHELL "./busybox"
-extern "C" {
-void Jcmd_newsh(void *arg1,void *arg2){
 
-	 sh_create((unsigned char *) USERLEVEL_SHELL, (unsigned char *) "sh", 0,DEVICE_SERIAL2);
-}
-}
 extern struct jdevice *serial2_device;
 //#define USERLEVEL_SHELL "/jiny_root/busybox"
 int kshell::main(void *arg) {
@@ -247,9 +242,7 @@ int kshell::main(void *arg) {
 	int ret = 1;
 
 	ut_log("   loading the kernel shell :%s:\n", USERLEVEL_SHELL);
-//	ret = fs_open(USERLEVEL_SHELL,0,0);
 	if (ret != 0) {
-//		fs_close(ret);
 		ret = sh_create((unsigned char *) USERLEVEL_SHELL,(unsigned char *) "sh", 0, DEVICE_SERIAL1); // start the user level shell
 #if 1
 		if (serial2_device != 0 && serial2_device->driver != 0) {

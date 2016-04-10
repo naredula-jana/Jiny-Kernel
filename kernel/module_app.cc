@@ -32,6 +32,7 @@ public:
 	unsigned long _get_symbol_addr(unsigned char *name);
 	void free_module();
 	char* do_relocation(struct file *file, Elf64_Sym *symb, int total_symbols, Elf64_Shdr *sec_rel,int sec_type);
+	char *load_symbols_for_HP_app(binary_source_t *source, Elf64_Sym **arg_symb, Elf64_Shdr *sec_symb);
 	char *update_symbols(binary_source_t *source, Elf64_Sym **arg_symb, Elf64_Shdr *sec_symb);
 	unsigned char name[MAX_FILENAME]; /* module name and file name are same */
 	int use_count; //TODO
@@ -340,8 +341,70 @@ char *module_t::update_symbols(binary_source_t *source, Elf64_Sym **arg_symb, El
 	}
 	return (char *)ret;
 }
+extern unsigned char *syscalltable;
+char *module_t::load_symbols_for_HP_app(binary_source_t *source, Elf64_Sym **arg_symb, Elf64_Shdr *sec_symb) {
+	const char *ret = 0;
+	Elf64_Sym *symb = 0;
+	int file_ret;
+	int total_symbols;
+	Elf64_Sym *tsemb;
+	int i,j;
+
+	symb = (Elf64_Sym *) vmalloc(sec_symb->sh_size, 0);
+	if (symb == 0) {
+		ret = "getting memory symbol table fails";
+		goto out;
+	}
+	if (source->file != 0) {
+		fs_lseek(source->file, sec_symb->sh_offset, 0);
+		file_ret = complete_read(source->file, (unsigned char *) symb,
+				sec_symb->sh_size);
+		if (file_ret != sec_symb->sh_size) {
+			ret = "getting symbol table from file fails";
+			goto out;
+		}
+	}
+
+	total_symbols = sec_symb->sh_size / sec_symb->sh_entsize;
+	symbol_table = (symb_table_t *) mm_malloc((total_symbols + 1) * sizeof(symb_table_t), 0);
+	if (symbol_table == 0) {
+		ret = "mem alloc failed";
+		goto out;
+	}
+	tsemb=symb;
+	j=0;
+	for (i = 0; (i < total_symbols); i++, tsemb++) {
+#ifdef MODULE_DEBUG
+//		ut_printf(" %d: name:%s info:%x secton_ind:%d \n", i,tsemb->st_name, tsemb->st_info, tsemb->st_shndx);
+#endif
+		symbol_table[j].name = str_table + tsemb->st_name;
+		symbol_table[j].address = tsemb->st_value;
+
+		if ((ut_strcmp(symbol_table[j].name, (uint8_t *) "jiny_syscalltable") == 0)) {
+			ut_printf("		%d: symbol name:%s: value:%x type:%x length:%x(%d)\n", j, symbol_table[j].name, symbol_table[j].address, symbol_table[j].type, tsemb->st_size);
+			ut_memcpy(symbol_table[j].address, (unsigned char *)&syscalltable ,512*8);
+		}
+		if ((ut_strcmp(symbol_table[j].name, (uint8_t *) "main") == 0)) {
+			highpriority_app_main = symbol_table[j].address;
+			ut_printf("		%d: symbol name:%s: value:%x type:%x length:%x(%d)\n", j, symbol_table[j].name, symbol_table[j].address, symbol_table[j].type, tsemb->st_size);
+		}
+		j++;
+	}
+	symbol_table[j].name =0;
+	symbol_table[j].address =0;
+
+out:
+	if (ret != 0) {
+		vfree((uint64_t) symb);
+		*arg_symb = 0;
+	}else{
+		*arg_symb = symb;
+	}
+	return ret;
+}
 void module_t::free_module() {
 // TODO:  allocated from : 	mm_free(secs[SEC_TEXT].addr);
+	//TODO need to free other regions in module
 	mm_free(str_table);
 	mm_free(symbol_table);
 
@@ -391,8 +454,8 @@ static int complete_read(struct file *file, unsigned char *buf, int total_size) 
 static void hp_main(module_t *modulep) { /* kernel thread */
 	Jcmd_reset_cpu_stat();
 	modulep->highpriority_app_main(0, 0);
-	Jcmd_lsmod("stat", 0);
-	remove_module(modulep);
+	//Jcmd_lsmod("stat", 0);
+	//remove_module(modulep);
 	SYS_sc_exit(0);
 }
 static int launch_hp_task(module_t *modulep) {
@@ -401,14 +464,12 @@ static int launch_hp_task(module_t *modulep) {
 	if (modulep == 0)
 		return JFAIL;
 	ret = sc_createKernelThread(hp_main, (void **) modulep, (uint8_t*) "hpriorty_task",CLONE_FS);
-	ut_printf(" launched high priority taks: pid %d \n", ret);
+	//ut_printf(" launched high priority taks: pid %d \n", ret);
 
 	return JSUCCESS;
 }
-
-
 void Jcmd_insmod(unsigned char *filename, unsigned char *arg);
-//unsigned char test_code[2*4096]; /* TODO remove later */
+
 void Jcmd_insmod(unsigned char *filename, unsigned char *arg) {
 	struct file *file = 0;
 	struct elfhdr elf_ex;
@@ -432,7 +493,7 @@ void Jcmd_insmod(unsigned char *filename, unsigned char *arg) {
 
 	sec_data = sec_rel_text = sec_rel_data = sec_rel_rodata = sec_symb = sec_str = 0;
 	elf_shdata = 0;
-//try{
+
 	if (filename == 0) {
 		error = "file is empty";
 		goto out;
@@ -657,6 +718,273 @@ void Jcmd_insmod(unsigned char *filename, unsigned char *arg) {
 
 	return;
 }
+void Jcmd_insexe(unsigned char *filename, unsigned char *arg) {
+	struct file *file = 0;
+	struct elfhdr elf_ex;
+	Elf64_Shdr *elf_shdata;
+	Elf64_Phdr *elf_phdata,*eppnt;
+	int retval;
+	int sect_size,phdr_size;
+	const char *error = 0;
+	int i;
+	Elf64_Shdr *sec_data, *sec_rel_text, *sec_rel_data, *sec_rel_rodata, *sec_symb, *sec_str;
+	unsigned char *sh_strtab = 0;
+	unsigned char *strtab = 0;
+	module_t *modulep = 0;
+	unsigned long file_min_offset, file_max_offset;
+	unsigned long flags;
+	Elf64_Sym *symb = 0;
+	binary_source_t source;
+	int total_symbols = 0;
+	unsigned long elf_bss, bss_start, bss;
+
+	source.code_start = 0;
+	source.code_length = 0;
+
+	sec_data = sec_rel_text = sec_rel_data = sec_rel_rodata = sec_symb = sec_str = 0;
+	elf_shdata = 0;
+
+	if (filename == 0) {
+		error = "file is empty";
+		goto out;
+	}
+	error = 0;
+	file = (struct file *) fs_open(filename, 0, 0);
+	if (file == 0) {
+		error = "Fail to open the module file";
+		goto out;
+	} else { /* flush the old file contents */
+		fs_fadvise(file->vinode, 0, 0, POSIX_FADV_DONTNEED);
+	}
+	source.file = file;
+	fs_lseek(file, 0, 0);
+	retval = fs_read(file, (unsigned char *) &elf_ex, sizeof(elf_ex));
+	if (retval != sizeof(elf_ex)) {
+		error = "incorrect elf format..";
+		goto out;
+	}
+
+	if (elf_ex.e_type != ET_EXEC || !(elf_ex.e_machine == EM_X86_64)) {
+		error = "ELF not a executable file or not a x86_64..";
+		goto out;
+	}
+	/* read section headers */
+	sect_size = sizeof(Elf64_Shdr) * elf_ex.e_shnum;
+	elf_shdata = mm_malloc(sect_size, 0);
+	if (elf_shdata == 0) {
+		error = "malloc failed";
+		goto out;
+	}
+	fs_lseek(file, (unsigned long) elf_ex.e_shoff, 0);
+
+	retval = complete_read(file, (unsigned char *) elf_shdata, sect_size);
+	if (retval != sect_size) {
+		error = "failed to read the sections from file";
+		goto out;
+	}
+
+	sh_strtab = mm_malloc(elf_shdata[elf_ex.e_shstrndx].sh_size, 0);
+	fs_lseek(file, (unsigned long) elf_shdata[elf_ex.e_shstrndx].sh_offset, 0);
+	retval = complete_read(file, (unsigned char *) sh_strtab, elf_shdata[elf_ex.e_shstrndx].sh_size);
+	if (retval != elf_shdata[elf_ex.e_shstrndx].sh_size) {
+		error = "failed to read the sections section symbol table";
+		goto out;
+	}
+	/* end of section reading */
+
+	modulep = mm_malloc(sizeof(module_t), MEM_CLEAR);
+	modulep->type = elf_ex.e_type;
+	file_min_offset = 0;
+	file_max_offset = 0;
+#if 1
+	for (i = 0; i < elf_ex.e_shnum; i++, elf_shdata++) {
+		if ((elf_shdata->sh_type == SHT_PROGBITS) && ut_strcmp(sh_strtab + elf_shdata->sh_name, (uint8_t *) ".text") == 0) {
+			modulep->secs[SEC_TEXT].file_offset = elf_shdata->sh_offset;
+			modulep->secs[SEC_TEXT].length = elf_shdata->sh_size;
+			modulep->secs[SEC_TEXT].sec_index = i;
+
+			file_min_offset = elf_shdata->sh_offset;
+			file_max_offset = file_min_offset + elf_shdata->sh_size;
+			continue;
+		}
+		if ((elf_shdata->sh_type == SHT_PROGBITS) && ut_strcmp(sh_strtab + elf_shdata->sh_name, (uint8_t *) ".data") == 0) {
+			modulep->secs[SEC_DATA].file_offset = elf_shdata->sh_offset;
+			modulep->secs[SEC_DATA].length = elf_shdata->sh_size;
+			modulep->secs[SEC_DATA].sec_index = i;
+			if ((file_max_offset) < (elf_shdata->sh_offset + elf_shdata->sh_size)) {
+				file_max_offset = elf_shdata->sh_offset + elf_shdata->sh_size;
+			}
+			continue;
+		}
+		if ((elf_shdata->sh_type == SHT_RELA) && ut_strcmp(sh_strtab + elf_shdata->sh_name, (uint8_t *) ".rela.text") == 0) {
+			sec_rel_text = elf_shdata;
+			continue;
+		}
+		if ((elf_shdata->sh_type == SHT_RELA) && ut_strcmp(sh_strtab + elf_shdata->sh_name, (uint8_t *) ".rela.data") == 0) {
+			sec_rel_data = elf_shdata;
+			continue;
+		}
+		if ((elf_shdata->sh_type == SHT_RELA) && ut_strcmp(sh_strtab + elf_shdata->sh_name, (uint8_t *) ".rela.rodata") == 0) {
+			sec_rel_rodata = elf_shdata;
+			continue;
+		}
+		if ((elf_shdata->sh_type == SHT_STRTAB) && ut_strcmp(sh_strtab + elf_shdata->sh_name, (uint8_t *) ".strtab") == 0) {
+			sec_str = elf_shdata;
+			continue;
+		}
+		if ((elf_shdata->sh_type == SHT_SYMTAB) && ut_strcmp(sh_strtab + elf_shdata->sh_name, (uint8_t *) ".symtab") == 0) {
+			sec_symb = elf_shdata;
+			continue;
+		}
+		if (ut_strcmp(sh_strtab + elf_shdata->sh_name, (uint8_t *) ".rodata") == 0) {
+			modulep->secs[SEC_RODATA].file_offset = elf_shdata->sh_offset;
+			modulep->secs[SEC_RODATA].length = elf_shdata->sh_size;
+			modulep->secs[SEC_RODATA].sec_index = i;
+
+			if ((file_max_offset) < (elf_shdata->sh_offset + elf_shdata->sh_size)) {
+				file_max_offset = elf_shdata->sh_offset + elf_shdata->sh_size;
+			}
+			continue;
+		}
+		if (ut_strcmp(sh_strtab + elf_shdata->sh_name, (uint8_t *) ".bss") == 0) {
+			modulep->secs[SEC_BSS].file_offset = elf_shdata->sh_offset;
+			modulep->secs[SEC_BSS].length = elf_shdata->sh_size;
+			modulep->secs[SEC_BSS].sec_index = i;
+			continue;
+		}
+	}
+#endif
+	/* load program table */
+	phdr_size = sizeof(Elf64_Phdr) * elf_ex.e_phentsize;
+	elf_phdata = mm_malloc(phdr_size, 0);
+	if (elf_phdata == 0) {
+		error = "malloc failed";
+		goto out;
+	}
+	fs_lseek(file, (unsigned long) elf_ex.e_phoff, 0);
+
+	retval = complete_read(file, (unsigned char *) elf_phdata, phdr_size);
+	if (retval != phdr_size) {
+		error = "failed to read the programheaders from file";
+		goto out;
+	}
+
+	/* end of load program table */
+	for (i = 0, eppnt = elf_phdata; i < elf_ex.e_phnum; i++, eppnt++) /* mmap all loadable program headers */
+	{
+		if (eppnt->p_type != PT_LOAD) {
+			continue;
+		}
+		if (eppnt->p_filesz > 0) {
+			unsigned long addr;
+			unsigned long start_addr = ELF_PAGESTART(eppnt->p_vaddr);
+			unsigned long end_addr = eppnt->p_filesz
+					+ ELF_PAGEOFFSET(eppnt->p_vaddr);
+			addr = vm_mmap(file, start_addr, end_addr, eppnt->p_flags, 0,
+					(eppnt->p_offset - ELF_PAGEOFFSET(eppnt->p_vaddr)), "text");
+			if (addr == 0)
+				error = 0;
+		}else{
+			while(1);
+		}
+		elf_bss = eppnt->p_vaddr + eppnt->p_filesz;
+		//	padzero(elf_bss);
+
+		/* TODO :  bss start address in not at the PAGE_ALIGN or ELF_MIN_ALIGN , need to club this partial page with the data */
+		//	len = ELF_PAGESTART(eppnt->p_filesz + eppnt->p_vaddr + ELF_MIN_ALIGN - 1);
+		bss_start = eppnt->p_filesz + eppnt->p_vaddr;
+		bss = eppnt->p_memsz + eppnt->p_vaddr;
+		//ut_log(" bss start :%x end:%x memsz:%x elf_bss:%x \n",bss_start, bss,eppnt->p_memsz,elf_bss);
+		if (bss > bss_start) {
+			vm_setupBrk(bss_start, bss - bss_start);
+		}
+	}
+
+	modulep->str_table = mm_malloc(sec_str->sh_size, 0);
+	if (modulep->str_table == 0) {
+		error = "allocating str_table";
+		goto out;
+	}
+	modulep->str_table_length = sec_str->sh_size;
+
+	fs_lseek(file, (unsigned long) sec_str->sh_offset, 0);
+	retval = complete_read(file, (unsigned char *) modulep->str_table, sec_str->sh_size);
+	if (retval != sec_str->sh_size) {
+		error = "str table reading";
+		goto out;
+	}
+
+	modulep->secs[SEC_TEXT].length = file_max_offset; /* this will cover text+rodata+data */
+	//modulep->secs[SEC_TEXT].addr = mm_malloc(modulep->secs[SEC_TEXT].length + modulep->secs[SEC_BSS].length, MEM_CLEAR);
+
+	modulep->secs[SEC_TEXT].addr = 0x400000;
+	modulep->mem_start = 0x400000;
+	modulep->mem_end = 0x400000 + modulep->secs[SEC_TEXT].length + modulep->secs[SEC_BSS].length;
+	i = (unsigned char )modulep->secs[SEC_TEXT].addr[0];/* reading memory */
+
+	if (modulep->secs[SEC_TEXT].addr == 0) {
+		error = "allocating code";
+		goto out;
+	}
+	if (modulep->secs[SEC_BSS].length > 0) {
+		modulep->secs[SEC_BSS].addr = modulep->secs[SEC_TEXT].addr + modulep->secs[SEC_TEXT].length;
+	}
+	if (modulep->secs[SEC_RODATA].file_offset > 0)
+		modulep->secs[SEC_RODATA].addr = modulep->secs[SEC_TEXT].addr + modulep->secs[SEC_RODATA].file_offset
+				- modulep->secs[SEC_TEXT].file_offset;
+
+	if (modulep->secs[SEC_DATA].file_offset > 0)
+		modulep->secs[SEC_DATA].addr = modulep->secs[SEC_TEXT].addr + modulep->secs[SEC_DATA].file_offset
+				- modulep->secs[SEC_TEXT].file_offset;
+
+#if 1
+	error = modulep->load_symbols_for_HP_app(&source, &symb, sec_symb);
+	if (error != 0) {
+		goto out;
+	}
+#endif
+
+	spin_lock_irqsave(&g_global_lock, flags);
+	if (error == 0 && (total_modules < MAX_MODULES)) {
+		ut_strncpy(modulep->name, filename, MAX_FILENAME);
+		g_modules[total_modules] = modulep;
+		total_modules++;
+	}
+	spin_unlock_irqrestore(&g_global_lock, flags);
+
+	if (modulep->highpriority_app_main == 0) {
+		if ((modulep->init_module == 0 || modulep->clean_module == 0)) {
+			error = "init_module or clean_module or main function not found";
+			goto out;
+		}
+	}
+
+out:
+	if (error != 0) {
+		ut_printf("ERROR : %s\n", error);
+	} else {
+		modulep->sort_symbols();
+		if (modulep->highpriority_app_main != 0) {
+			launch_hp_task(modulep);
+		} else {
+			modulep->init_module(0, 0);
+		}
+		ut_printf(" Successfull loaded the module\n");
+		return;
+	}
+
+	/* Free the allocated resources */
+	if (file != 0) {
+		fs_close(file);
+	}
+	mm_free(elf_shdata);
+	mm_free(strtab);
+	mm_free(sh_strtab);
+	vfree(symb);
+	modulep->free_module();
+
+	return;
+}
 #define MAX_FUNC_HITS 1000
 struct func_debug {
 	unsigned long addr;
@@ -666,7 +994,6 @@ static int func_hits_count=0;
 struct func_debug func_hits[MAX_FUNC_HITS];
 static int stat_cpu_rip_unknown_hit = 0;
 long g_conf_func_debug  __attribute__ ((section ("confdata")))=982;
-//int g_conf_func_debug;  // TODO like cause the kernel to crash
 static unsigned long stat_unknown_ip=0;
 
 void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {

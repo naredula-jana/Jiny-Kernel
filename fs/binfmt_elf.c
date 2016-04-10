@@ -20,15 +20,7 @@
 #define elf_core_dump	NULL
 #endif
 
-#if ELF_EXEC_PAGESIZE > PAGE_SIZE
-# define ELF_MIN_ALIGN	ELF_EXEC_PAGESIZE
-#else
-# define ELF_MIN_ALIGN	PAGE_SIZE
-#endif
 
-#define ELF_PAGESTART(_v) ((_v) & ~(unsigned long)(ELF_MIN_ALIGN-1))
-#define ELF_PAGEOFFSET(_v) ((_v) & (ELF_MIN_ALIGN-1))
-#define ELF_PAGEALIGN(_v) (((_v) + ELF_MIN_ALIGN - 1) & ~(ELF_MIN_ALIGN - 1))
 /* Symbolic values for the entries in the auxiliary table
    put on the initial stack */
 #define AT_NULL   0     /* end of vector */
@@ -409,7 +401,7 @@ unsigned long fs_elf_load(struct file *file,unsigned long tmp_stack, unsigned lo
 			//ut_memset((unsigned char *)SYSCALL_PAGE,(unsigned char )0xcc,0x1000);
 			ut_memcpy((unsigned char *)USER_SYSCALL_PAGE,(unsigned char *)&__vsyscall_page,0x1000);
 			if (g_conf_syscall_debug==1){
-				pagetable_walk(4,g_current_task->mm->pgd,1);
+				pagetable_walk(4,g_current_task->mm->pgd,1,0);
 			}
 		}
 	}

@@ -1,0 +1,5 @@
+rm ./hello.o
+rm ./syscall.o
+gcc -c ./hello.c
+gcc -c ./syscall.s
+gcc -static ./hello.o ./syscall.o -o ./a.out

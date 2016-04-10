@@ -383,6 +383,15 @@ extern Elf64_Dyn _DYNAMIC [];
 
 #endif
 
+#if ELF_EXEC_PAGESIZE > PAGE_SIZE
+# define ELF_MIN_ALIGN	ELF_EXEC_PAGESIZE
+#else
+# define ELF_MIN_ALIGN	PAGE_SIZE
+#endif
+
+#define ELF_PAGESTART(_v) ((_v) & ~(unsigned long)(ELF_MIN_ALIGN-1))
+#define ELF_PAGEOFFSET(_v) ((_v) & (ELF_MIN_ALIGN-1))
+#define ELF_PAGEALIGN(_v) (((_v) + ELF_MIN_ALIGN - 1) & ~(ELF_MIN_ALIGN - 1))
 
 
 #endif /* JINYKERNEL_ELF_H */
