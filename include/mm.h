@@ -46,6 +46,9 @@ typedef struct kmem_cache_s kmem_cache_t;
 #define HIGHPRIORITY_APP_START (0xffffffffb0000000)
 #define HIGHPRIORITY_APP_LEN 0x100000
 
+#define HIGHPRIORITY_APP_SYSCALLTABLE 0x3DD000
+//#define HIGHPRIORITY_APP_SYSCALLTABLE 0x800000
+
 extern unsigned long g_kernelspace_starting_address;
 //unsigned long __va(unsigned long addr);
 //unsigned long __pa(unsigned long addr);

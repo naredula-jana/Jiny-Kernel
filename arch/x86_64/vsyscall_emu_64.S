@@ -30,5 +30,26 @@ __vsyscall_page:
 	ret
 
 	.balign 4096, 0xcc
-
 	.size __vsyscall_page, 4096
+
+/* vsyscall_page for the high priorty app */
+	.globl __HP_vsyscall_page
+	.balign 4096, 0xcc
+	.type __HP_vsyscall_page, @object
+__HP_vsyscall_page:
+
+	movq $0x60 ,%rax /* gettimeofday */
+	callq *0x3DD000
+	ret
+
+	.balign 1024, 0xcc   /* time */
+	movq $0xc9 ,%rax
+	callq HP_syscall
+	ret
+
+	.balign 1024, 0xcc  /* getcpu */
+	movq $0x135 ,%rax
+	callq HP_syscall
+	ret
+	.balign 4096, 0xcc
+	.size __HP_vsyscall_page, 4096

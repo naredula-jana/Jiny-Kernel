@@ -115,6 +115,10 @@ last:
 	SYSCALL_DEBUG("open return value: %d \n", ret);
 	return ret;
 }
+int SYS_fs_openat(int unused,char *filename, int mode, int flags){
+	SYSCALL_DEBUG("openat: Partially done\n");
+	return SYS_fs_open(filename, mode,  flags);
+}
 int SYS_fs_dup2(int fd_old, int fd_new);
 int SYS_fs_dup(int fd_old) {
 	int i;
@@ -209,7 +213,7 @@ int fs_fd_write(unsigned long fd, uint8_t *buff, unsigned long len) {
 int SYS_fs_write(unsigned long fd, uint8_t *buff, unsigned long len) {
 	int ret;
 
-	SYSCALL_DEBUG("write fd:%d buff:%x len:%x data:%s:\n", fd, buff, len,buff);
+	SYSCALL_DEBUG("write fd:%d buff:%x len:%x data:%x:\n", fd, buff, len,buff);
 	ret = fs_fd_write(fd, buff, len);
 	SYSCALL_DEBUG("write return : fd:%d ret:%d \n",fd,ret);
 	return ret;

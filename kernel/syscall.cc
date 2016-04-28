@@ -262,8 +262,11 @@ unsigned long SYS_rt_sigaction() {
 	SYSCALL_DEBUG("sigaction(Dummy) \n");
 	return SYSCALL_SUCCESS;
 }
+int Jcmd_maps(char *arg1, char *arg2);
 unsigned long SYS_rt_sigprocmask() {
 	SYSCALL_DEBUG("sigprocmask(Dummy) \n");
+	//Jcmd_maps(0,0);
+	SYSCALL_DEBUG("sigprocmask(Dummy) END \n");
 	return SYSCALL_SUCCESS;
 }
 #define TIOCSPGRP 0x5410
@@ -484,7 +487,7 @@ int SYS_select(int nfds, int *readfds, int *writefds, int *exceptfds, struct tim
 			sc_sleep(duration);
 		}
 	}
-	SYSCALL_DEBUG("select readval :%x \n",*p);
+	//SYSCALL_DEBUG("select readval :%x \n",*p);
 
 	return 0;
 }
@@ -690,6 +693,7 @@ int SYS_sigalt_stack(){
 	SYSCALL_DEBUG("TODO  SYS_sigaltstack\n");
 	return 0;
 }
+extern int SYS_fs_openat(int unused,char *filename, int mode, int flags);
 extern int SYS_epoll_create(int flags);
 extern int SYS_epoll_ctl(uint32_t  efd, uint32_t op, uint32_t fd, struct epoll_event *event);
 extern int SYS_epoll_wait(uint32_t efd, struct epoll_event *events, uint32_t maxevents, uint32_t timeout);
@@ -747,7 +751,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 245 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 250 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 255 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 260 */
+{ snull }, { SYS_fs_openat }, { snull }, { snull }, { snull }, /* 260 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 265 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 270 */
 { snull }, { snull }, { SYS_set_robust_list }, { SYS_get_robust_list }, { snull }, /* 275 */

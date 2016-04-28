@@ -327,6 +327,7 @@ static void init_task_struct(struct task_struct *p, struct mm_struct *mm, struct
 	p->stick_to_cpu = 0xffff;
 	p->process_id = g_current_task->process_id;
 	p->parent_process_pid = g_current_task->task_id;
+	p->HP_thread = g_current_task->HP_thread;
 	p->trace_stack_length = 10; /* some initial stack length, we do not know at what point tracing starts */
 
 	/* link to queue */
@@ -337,6 +338,7 @@ static void init_task_struct(struct task_struct *p, struct mm_struct *mm, struct
 	p->stats.syscalls = mm_malloc(sizeof(struct syscall_stat)*MAX_SYSCALL, MEM_CLEAR);
 	p->stats.start_time = g_jiffies;
 	p->stats.start_tsc = ar_read_tsc();
+	ut_strncpy(p->name, g_current_task->name, MAX_TASK_NAME);
 }
 
 static int release_resources(struct task_struct *child_task, int attach_to_parent) {
@@ -500,11 +502,13 @@ int init_tasking(unsigned long unused) {
 #define G_IDLE_TASK  &g_idle_stack[0][0]
 	// task_addr=(unsigned long )((unsigned char *)G_IDLE_TASK+TASK_SIZE);
 	task_addr = g_current_task;
-	ut_log("		Task Addr start :%x  stack:%x current:%x maxcpus:%d\n", task_addr, &task_addr, g_current_task,MAX_CPUS);
+	ut_log("		Task Addr.. start :%x  stack:%x current:%x maxcpus:%d\n", task_addr, &task_addr, g_current_task,MAX_CPUS);
 	for (i = 0; i < MAX_CPUS; i++) {
 		ut_memset((unsigned char *) &g_cpu_state[i],0,sizeof(struct cpu_state));
 		g_cpu_state[i].md_state.cpu_id = i;
 		g_cpu_state[i].idle_task = (struct task_struct *) ((unsigned char *) (task_addr) + i * TASK_SIZE);
+		g_cpu_state[i].current_task = g_cpu_state[i].idle_task;
+		ut_log("	%d : currenttask:%x \n",g_cpu_state[i].current_task);
 		ut_memset((unsigned char *) g_cpu_state[i].idle_task, MAGIC_CHAR, TASK_SIZE - PAGE_SIZE / 2);
 		init_task_struct(g_cpu_state[i].idle_task, g_kernel_mm, fs);
 		if (i==0){
@@ -518,7 +522,7 @@ int init_tasking(unsigned long unused) {
 		g_cpu_state[i].idle_task->allocated_cpu = i;
 		g_cpu_state[i].idle_task->state = TASK_RUNNING;
 		g_cpu_state[i].idle_task->current_cpu = i;
-		g_cpu_state[i].current_task = g_cpu_state[i].idle_task;
+
 		g_cpu_state[i].active = 1; /* by default when the system starts all the cpu are in active state */
 		ut_strncpy(g_cpu_state[i].idle_task->name, (unsigned char *) "idle", MAX_TASK_NAME);
 	}
@@ -619,10 +623,37 @@ static void schedule_userSecondHalf() { /* user thread second Half: _schedule fu
 	ar_updateCpuState(g_current_task, 0);
 	clone_push_to_userland();
 }
+extern unsigned long g_temp_hp_stack_len;
+static void schedule_childHPSecondHalf() {
+	asm("movq %[rsi],%%rsi\n\t": [rsi] "=m" (g_current_task->thread.user_regs.gpres.rsi));
+	asm("movq %[rdi],%%rdi\n\t": [rdi] "=m" (g_current_task->thread.user_regs.gpres.rdi));
+	asm("movq %[r8],%%r8\n\t": [r8] "=m" (g_current_task->thread.user_regs.gpres.r8));
+	asm("movq %[r9],%%r9\n\t": [r9] "=m" (g_current_task->thread.user_regs.gpres.r9));
+	asm("movq %[r12],%%r12\n\t": [r12] "=m" (g_current_task->thread.user_regs.gpres.r12));
+	asm("movq $0x0,%rax\n\t");
+	//g_current_task->thread.real_ip(g_current_task->thread.argv,0);
+	asm("callq %[ip]\n\t" : [ip] "=m" (g_current_task->thread.real_ip) : : "rax");
+}
 static void schedule_kernelSecondHalf() { /* kernel thread second half:_schedule function task can lands here. */
 	//spin_unlock_irqrestore(&g_cpu_state[getcpuid()].lock, g_current_task->flags);
 	restore_flags(g_current_task->flags);
-	g_current_task->thread.real_ip(g_current_task->thread.argv, 0);
+	if (g_current_task->thread.userland.user_stack != 0){ /* HP thread */
+		unsigned char c[1024];
+		ut_memcpy(&c[0],g_current_task->thread.userland.user_stack,g_temp_hp_stack_len);
+		if (g_current_task->HP_thread == 0){ /* parent HP thread */
+			g_current_task->process_id = g_current_task->task_id; /* process id is created for HP process */
+			g_current_task->thread.userland.sp = &c[0];
+			g_current_task->thread.userland.argc = 0; /* TODO: Hard coded , other wise it is crashing*/
+			g_current_task->HP_thread = 1;
+			asm("movq %[new_sp],%%rsp\n\t" : [new_sp] "=m" (g_current_task->thread.userland.user_stack));
+			g_current_task->thread.real_ip(g_current_task->thread.userland.argc,g_current_task->thread.userland.sp);
+		}else{ /* child Hp threads */
+			asm("movq %[new_sp],%%rsp\n\t" : [new_sp] "=m" (g_current_task->thread.userland.user_stack));
+			g_current_task->thread.real_ip(g_current_task->thread.argv,0);
+		}
+	}else{ /* kernel thread other HP */
+		g_current_task->thread.real_ip(g_current_task->thread.argv, 0);
+	}
 }
 
 /* NOT do not add any extra code in this function, if any register is used syscalls will not function properly */
@@ -825,7 +856,6 @@ static unsigned long _schedule(unsigned long flags) {
 	//next->cpu_contexts++;
 	next->stats.total_contexts++;
 	next->last_jiffie = g_jiffies;
-	g_cpu_state[cpuid].current_task = next;
 	g_cpu_state[cpuid].stats.total_contexts++;
 
 	//arch_spinlock_transfer(&g_cpu_state[cpuid].lock, prev, next);
@@ -839,6 +869,7 @@ static unsigned long _schedule(unsigned long flags) {
 		spin_unlock(g_cpu_state[cpuid].sched_lock);
 		g_cpu_state[cpuid].sched_lock = 0;
 	}
+	g_cpu_state[cpuid].current_task = next;
 	/* finally switch the task */
 	arch::switch_to(prev, next, prev);
 	/* from the next statement onwards should not use any stack variables, new threads launched will not able see next statements*/
@@ -1118,7 +1149,6 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	struct mm_struct *mm;
 	struct fs_struct *fs;
 	unsigned long flags;
-	//void *fn=fd_p;
 	unsigned long ret_pid = 0;
 	int i;
 	//Jcmd_maps(0,0);
@@ -1136,7 +1166,6 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 		atomic_inc(&fs->count);
 	} else {
 		fs = create_fs();
-		//for (i = 0; i < g_current_task->fs->total && i < 3; i++) {
 		for (i = 0; i < g_current_task->fs->total ; i++) {
 			fs->filep[i] = fs_dup(g_current_task->fs->filep[i], 0);
 		}
@@ -1146,7 +1175,7 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 
 	/* Initialize mm */
 	if (clone_flags & CLONE_VM){ /* parent and child run in the same vm */
-		if (clone_flags & CLONE_KERNEL_THREAD) {
+		if (clone_flags & CLONE_KERNEL_THREAD || clone_flags & CLONE_HP_THREAD ) {
 			mm = g_kernel_mm;
 		} else {
 			mm = g_current_task->mm;
@@ -1164,6 +1193,9 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 
 	/* initialize task struct */
 	init_task_struct(p, mm, fs);
+	if (clone_flags & CLONE_SETTLS){
+		p->thread.userland.user_fs_base = tls_area;
+	}
 	if (mm != g_kernel_mm) { /* user level thread */
 		ut_memcpy((uint8_t *) &(p->thread.userland), (uint8_t *) &(g_current_task->thread.userland), sizeof(struct user_thread));
 		ut_memcpy((uint8_t *) &(p->thread.user_regs),
@@ -1171,9 +1203,6 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 
 		p->thread.userland.sp = (unsigned long) child_stack;
 		p->thread.userland.user_stack = (unsigned long) child_stack;
-		if (clone_flags & CLONE_SETTLS){
-			p->thread.userland.user_fs_base = tls_area;
-		}
 
 		SYSCALL_DEBUG(" child ip:%x stack:%x \n", p->thread.userland.ip, p->thread.userland.sp);
 		SYSCALL_DEBUG("userspace rip:%x rsp:%x \n", p->thread.user_regs.isf.rip, p->thread.user_regs.isf.rsp);
@@ -1181,16 +1210,37 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 		//p->thread.userland.argv = 0; /* TODO */
 		save_flags(p->flags);
 		p->thread.ip = (void *) schedule_userSecondHalf;
+		ut_strncpy(p->name,g_current_task->name,MAX_TASK_NAME);
 	} else { /* kernel level thread */
 		p->thread.ip = (void *) schedule_kernelSecondHalf;
 		save_flags(p->flags);
 		p->thread.argv = args;
 		p->thread.real_ip = fn;
+		if ((clone_flags & CLONE_HP_THREAD)){/* first/parent HP thread */
+			ut_strcpy(p->name,"HP_thread");
+			p->thread.userland.user_stack = child_stack;
+		}else if (g_current_task->HP_thread == 1){ /* child HP thread */
+			unsigned long *rbp;
+			unsigned char *test_p;
+			test_p = child_stack; /*TODO: temporary solution , touch child stack to avaoid page fault in the user space*/
+			test_p = *test_p;
+			asm("movq %%rbp,%0" : "=m" (rbp));
+			rbp=rbp+2+2; /* 2- for pushing r8,r9 */
+			p->thread.real_ip = *rbp;
+			p->thread.user_regs.gpres.rsi = child_stack;
+			p->thread.user_regs.gpres.rdi = clone_flags;
+			p->thread.user_regs.gpres.r8 = args;
+			p->thread.user_regs.gpres.r9 = tls_area;
+			p->thread.user_regs.gpres.r12 = fn;
+			ut_strcpy(p->name,"childHP_thread");
+			p->thread.ip = (void *) schedule_childHPSecondHalf;
+		}else { /* any other non-HP kernel thread */
+			ut_strncpy(p->name,g_current_task->name,MAX_TASK_NAME);
+		}
 	}
 	p->thread.sp = (void *) ((addr_t) p + (addr_t) TASK_SIZE - (addr_t) 160); /* 160 bytes are left at the bottom of the stack */
 	p->state = TASK_RUNNING;
 
-	ut_strncpy(p->name, g_current_task->name, MAX_TASK_NAME);
 
 //	ut_log(" New thread is created:%d %s on %d\n",p->pid,p->name,p->allocated_cpu);
 	ret_pid = p->task_id;
@@ -1295,6 +1345,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 		mm->exec_fp = 0;
 		free_mm(mm);
 		free_fs(fs);
+		ut_log("Error execve in fs : Failed to open the file :%s  fd:%x\n",file,mm->exec_fp);
 		return;
 	}
 	if (elf_interp != 0) {
@@ -1331,7 +1382,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	/* populate vm with vmaps */
 	if (mm->exec_fp == 0) {
 		vfree(tmp_stack);
-		ut_printf("Error execve : Failed to open the file \n");
+		ut_log("Error execve : Failed to open the file :%s \n",file);
 		SYS_sc_exit(701);
 		return;
 	}

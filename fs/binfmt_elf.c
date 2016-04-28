@@ -152,8 +152,8 @@ static unsigned long setup_userstack(unsigned char **argv, unsigned char **env, 
 		t = (unsigned long *)p;
 		*t = total_args; /* store argc at the top of stack */
 
-		DEBUG(" arg0:%x arg1:%x arg2:%x len:%d \n",target_argv[0],target_argv[1],target_argv[2],len);
-		DEBUG(" arg0:%x arg1:%x arg2:%x len:%d \n",target_env[0],target_env[1],target_env[2],len);
+		DEBUG("Target ARG arg0:%x arg1:%x arg2:%x len:%d \n",target_argv[0],target_argv[1],target_argv[2],len);
+		DEBUG("Target ENV arg0:%x arg1:%x arg2:%x len:%d \n",target_env[0],target_env[1],target_env[2],len);
 
 		real_stack = real_stack - len;
 	} else {
@@ -163,7 +163,7 @@ static unsigned long setup_userstack(unsigned char **argv, unsigned char **env, 
 
 	*stack_len = max_stack_len - (p - stack);
 	*t_argc = total_args;
-	*t_argv = real_stack ;
+	*t_argv = real_stack;
 
 error:
 	if (ret ==0 ){
@@ -248,6 +248,56 @@ out:
 	return tmp_stack_top;
 }
 
+int elf_initialize_userspace_stack(struct elfhdr elf_ex,unsigned long aux_addr,unsigned long tmp_stack, unsigned long stack_len,unsigned long load_addr) {
+	unsigned long *aux_vec, aux_index;
+	Elf64_Addr p_entry;
+
+	p_entry = elf_ex.e_entry;
+	vm_mmap(0, USERSTACK_ADDR, USERSTACK_LEN, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0, "userstack");
+	if (stack_len > 0) {
+		aux_vec = (unsigned long *) aux_addr;
+		if (aux_vec != 0) {
+			int aux_last;
+
+			aux_index = 0;
+			aux_last = (MAX_AUX_VEC_ENTRIES - 2) * 2;
+
+			AUX_ENT(AT_HWCAP, 0xbfebfbff); /* TODO: need to modify*/
+			AUX_ENT(AT_PAGESZ, PAGE_SIZE);
+			AUX_ENT(AT_CLKTCK, 100);
+			AUX_ENT(AT_PHDR, load_addr + elf_ex.e_phoff);
+			AUX_ENT(AT_PHENT, sizeof(struct elf_phdr));
+			AUX_ENT(AT_PHNUM, elf_ex.e_phnum);
+			AUX_ENT(AT_BASE, 0);
+			AUX_ENT(AT_FLAGS, 0);
+			AUX_ENT(AT_ENTRY, p_entry);
+
+			AUX_ENT(AT_UID, 0x1f4); /* TODO : remove  UID hard coded to 0x1f4 for the next four entries  */
+			AUX_ENT(AT_EUID, 0x1f4);
+			AUX_ENT(AT_GID, 0x1f4);
+			AUX_ENT(AT_EGID, 0x1f4);
+
+			AUX_ENT(AT_SECURE, 0x0);
+
+			aux_vec[aux_last] = 0x1234567887654321;
+			aux_vec[aux_last + 1] = 0x1122334455667788;
+			AUX_ENT(AT_RANDOM,
+					userstack_addr((unsigned long)&aux_vec[aux_last]));
+
+			aux_vec[aux_last + 2] = 0x34365f363878; /* This is string "x86_64" */
+			AUX_ENT(AT_PLATFORM,
+					userstack_addr((unsigned long)&aux_vec[aux_last+2]));
+		}
+
+		if (stack_len > 0){
+			ut_memcpy((unsigned char *) USERSTACK_ADDR + USERSTACK_LEN - stack_len,
+				(unsigned char *) tmp_stack, stack_len);
+		}
+
+		return JSUCCESS;
+	}
+	return JFAIL;
+}
 //unsigned long fs_loadElfLibrary(struct file *file, unsigned long tmp_stack, unsigned long stack_len, unsigned long aux_addr) {
 unsigned long fs_elf_load(struct file *file,unsigned long tmp_stack, unsigned long stack_len, unsigned long aux_addr) {
 	struct elf_phdr *elf_phdata;
@@ -358,51 +408,13 @@ unsigned long fs_elf_load(struct file *file,unsigned long tmp_stack, unsigned lo
 		ut_log(" ERROR in elf loader filename :%s :%d\n",file->filename,-error);
 	} else {
 		task->mm->stack_bottom = USERSTACK_ADDR+USERSTACK_LEN;
-		vm_mmap(0, USERSTACK_ADDR, USERSTACK_LEN, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0,"userstack");
-		if (stack_len > 0) {
-			aux_vec = (unsigned long *)aux_addr;
-			if (aux_vec != 0) {
-				int aux_last;
+		 elf_initialize_userspace_stack(elf_ex,aux_addr,tmp_stack, stack_len,load_addr);
 
-				aux_index = 0;
-				aux_last = (MAX_AUX_VEC_ENTRIES - 2) * 2;
-
-				AUX_ENT(AT_HWCAP, 0xbfebfbff); /* TODO: need to modify*/
-				AUX_ENT(AT_PAGESZ, PAGE_SIZE);
-				AUX_ENT(AT_CLKTCK, 100);
-				AUX_ENT(AT_PHDR, load_addr + elf_ex.e_phoff);
-				AUX_ENT(AT_PHENT, sizeof(struct elf_phdr));
-				AUX_ENT(AT_PHNUM, elf_ex.e_phnum);
-				AUX_ENT(AT_BASE, 0);
-				AUX_ENT(AT_FLAGS, 0);
-				AUX_ENT(AT_ENTRY, p_entry);
-
-				AUX_ENT(AT_UID, 0x1f4); /* TODO : remove  UID hard coded to 0x1f4 for the next four entries  */
-				AUX_ENT(AT_EUID, 0x1f4);
-				AUX_ENT(AT_GID, 0x1f4);
-				AUX_ENT(AT_EGID, 0x1f4);
-
-				AUX_ENT(AT_SECURE, 0x0);
-
-				aux_vec[aux_last] = 0x1234567887654321;
-				aux_vec[aux_last + 1] = 0x1122334455667788;
-				AUX_ENT(AT_RANDOM, userstack_addr((unsigned long)&aux_vec[aux_last]));
-
-				aux_vec[aux_last + 2] = 0x34365f363878; /* This is string "x86_64" */
-				AUX_ENT(AT_PLATFORM, userstack_addr((unsigned long)&aux_vec[aux_last+2]));
-
-				//  AUX_ENT(AT_EXECFN, bprm->exec);
-			}
-			//ut_log(" before copy :%x :%x len:%x\n",USERSTACK_ADDR + USERSTACK_LEN - stack_len,tmp_stack,stack_len);
-			ut_memcpy((unsigned char *)USERSTACK_ADDR + USERSTACK_LEN - stack_len, (unsigned char *)tmp_stack, stack_len);
-
-
-			vm_mmap(0, USER_SYSCALL_PAGE, 0x1000, PROT_READ | PROT_EXEC |PROT_WRITE, MAP_ANONYMOUS, 0,"fst_syscal");
+		vm_mmap(0, USER_SYSCALL_PAGE, 0x1000, PROT_READ | PROT_EXEC |PROT_WRITE, MAP_ANONYMOUS, 0,"fst_syscal");
 			//ut_memset((unsigned char *)SYSCALL_PAGE,(unsigned char )0xcc,0x1000);
-			ut_memcpy((unsigned char *)USER_SYSCALL_PAGE,(unsigned char *)&__vsyscall_page,0x1000);
-			if (g_conf_syscall_debug==1){
-				pagetable_walk(4,g_current_task->mm->pgd,1,0);
-			}
+		ut_memcpy((unsigned char *)USER_SYSCALL_PAGE,(unsigned char *)&__vsyscall_page,0x1000);
+		if (g_conf_syscall_debug==1){
+			pagetable_walk(4,g_current_task->mm->pgd,1,0);
 		}
 	}
 	DEBUG(" Program start address(autod) : %x \n",elf_ex.e_entry);

@@ -1,0 +1,8 @@
+- map related stack pages need to be touch, otherwise pagefault will crash 
+- seperate stack when it enter into kernel, this especially if the stack is full 
+- smp: getcpuid need to optimize using gs register. 
+- symbols in golang not sorted in lsmod.
+- consuming arguments  and environment variable when starting golang code.
+- udp_server using golang.
+- Terminating HP threads cleanly
+- syscall count in HPsyscall boundary.

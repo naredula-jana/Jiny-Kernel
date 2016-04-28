@@ -257,10 +257,11 @@ int g_init_loglevel=1;
 extern void Jcmd_remove_old_pte();
 void cmain() {  /* This is the first c function to be executed */
 	int i,ret;
+	unsigned long current_stack_pointer asm("esp");
 
-	g_cpu_state[0].current_task = g_current_task;
+	g_cpu_state[0].current_task = ((struct task_struct *)((unsigned long)(&i) & ~(TASK_SIZE - 1)));
 
-	ut_log(" Before g_conf_func_debug-> :%x(%d)\n",g_conf_func_debug,g_conf_func_debug);
+	ut_log(" Before g_conf_func_debug-> :%x(%d) current task:%x\n",g_conf_func_debug,g_conf_func_debug,g_cpu_state[0].current_task);
 	for (i=0; inittable[i].func != 0; i++){
 		g_init_loglevel = inittable[i].log_level ;
 		ut_log("%d : INITIALIZING :%s  ...\n",i, inittable[i].comment);

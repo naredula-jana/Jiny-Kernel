@@ -294,7 +294,7 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, 
 			}
 		}
 	} else if (flags & MAP_ANONYMOUS) {
-		if (addr == 0 && mm!=g_kernel_mm) {
+		if (addr == 0 && (mm!=g_kernel_mm || g_current_task->HP_thread==1)) {
 			if (mm->anonymous_addr == 0){
 				mm->anonymous_addr = USERANONYMOUS_ADDR;
 			}else{
@@ -496,8 +496,9 @@ int Jcmd_maps(char *arg1, char *arg2) {
 	unsigned char *error=0;
 
 	max_len=len;
-	spin_lock_irqsave(&g_global_lock, flags);
 	buf = (unsigned char *) vmalloc(len,0);
+	spin_lock_irqsave(&g_global_lock, flags);
+
 	if (buf == 0) {
 		spin_unlock_irqrestore(&g_global_lock, flags);
 		ut_printf(" Unable to get vmalloc memory \n");

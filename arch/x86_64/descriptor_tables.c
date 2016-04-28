@@ -131,15 +131,18 @@ static void init_gdt(int cpu) {
 	gdtr_load(&gdt_ptr[cpu]);
 	tr_load(GDT_SEL(TSS_DESCR));
 }
-
+extern int g_conf_only_kshell;
 int ar_archSetUserFS(unsigned long addr) /* TODO need to reimplement using LDT */
 {
 	if (addr == 0) {
 		g_current_task->thread.userland.user_fs = 0;
 		g_current_task->thread.userland.user_fs_base = 0;
 	} else {
-		g_current_task->thread.userland.user_fs = GDT_SEL(FS_UDATA_DESCR)
-				| SEG_DPL_USER; /* 8th location in gdt table */
+		if (g_conf_only_kshell == 0){
+			g_current_task->thread.userland.user_fs = GDT_SEL(FS_UDATA_DESCR) | SEG_DPL_USER; /* 8th location in gdt table */
+		}else{
+			g_current_task->thread.userland.user_fs = GDT_SEL(KDATA_DESCR) ;
+		}
 		g_current_task->thread.userland.user_fs_base = addr;
 	}
 	ar_updateCpuState(g_current_task,0);

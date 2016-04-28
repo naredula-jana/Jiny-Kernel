@@ -12,7 +12,7 @@
 #define TASK_H
 
 #include "mm.h"
-
+#define SPINLOCK_DEBUG_LOG 1 /* TODO redefined */
 
 #define SPINLOCK_DEBUG 1
 #define RECURSIVE_SPINLOCK 1
@@ -38,6 +38,7 @@ typedef struct {  /* Do not change the order , initilization will break */
             unsigned int cpuid;
             unsigned long spins;
             unsigned char *name;
+            unsigned long index;
         }log[MAX_SPIN_LOG];
 #endif /* end of SPINLOCK_DEBUG_LOG */
 #endif
@@ -129,6 +130,7 @@ enum {
 #define CLONE_SYSVSEM   0x00040000      /* share system V SEM_UNDO semantics */
 #define CLONE_SETTLS    0x00080000      /* create a new TLS for the child */
 
+#define CLONE_HP_THREAD 0x40000000 /* proparatory */
 #define CLONE_KERNEL_THREAD 0x80000000 /* proparatory */
 /* - task can be on run queue or in wait queues */
 #define MAX_SYSCALL 255
@@ -148,7 +150,7 @@ struct task_struct {
 	unsigned long parent_process_pid;  /* parent process id */
 	unsigned long process_id;  /* same  task id for all with the same process*/
 	unsigned char name[MAX_TASK_NAME+1];
-	char thread_type;
+	char HP_thread;
 	unsigned long child_tid_address; /* used set_tid_address */
 
 	int allocated_cpu;
@@ -257,9 +259,10 @@ static inline struct task_struct *bootup_task(void)
 
     return (struct task_struct *)addr;
 }
-//#define g_current_task g_cpu_state[0].current_task
+
 register unsigned long current_stack_pointer asm("esp");
-#define g_current_task ((struct task_struct *)(current_stack_pointer & ~(TASK_SIZE - 1)))
+//#define g_current_task ((struct task_struct *)(current_stack_pointer & ~(TASK_SIZE - 1)))
+#define g_current_task (g_cpu_state[0].current_task)  /* TODO : this is temporary , laer need to change */
 
 #define is_kernel_thread (g_current_task->mm == g_kernel_mm)
 typedef struct backtrace{

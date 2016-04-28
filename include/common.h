@@ -45,7 +45,7 @@ extern spinlock_t g_global_lock;
  //#define DEBUG_ENABLE 1
 #ifdef DEBUG_ENABLE 
 #define DEBUG(x...) do { \
-	if ( g_conf_debug_level==1)	ut_log(x); \
+	if ( g_conf_debug_level==1)	ut_printf(x); \
 } while (0) 
 #else
 #define DEBUG(x...) do { \

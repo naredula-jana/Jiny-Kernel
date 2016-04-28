@@ -25,7 +25,7 @@
 #define __SPINLOCK_LOCKED   1
 #define __SPINLOCK_UNLOCKED 0
 
-//#define SPINLOCK_DEBUG_LOG 1
+#define SPINLOCK_DEBUG_LOG 1
 
 #ifdef SPINLOCK_DEBUG
 #define SPIN_LOCK_UNLOCKED(x) (spinlock_t) { __SPINLOCK_UNLOCKED,0,x,0,0,0,0,1,0,0,0}
@@ -77,6 +77,7 @@ static inline void arch_spinlock_lock(spinlock_t *lock, int line) {
 	lock->log[lock->log_length].cpuid = g_current_task->current_cpu;
 	lock->log[lock->log_length].name = g_current_task->name;
 	lock->log[lock->log_length].spins = 1 + (lock->stat_count/10);
+	lock->log[lock->log_length].index = lock->stat_locks;
 	//lock->log[lock->log_length].line = line;
 	lock->log_length++;
 #endif
@@ -143,6 +144,7 @@ static inline void arch_spinlock_unlock(spinlock_t *lock, int line) {
 		lock->log[lock->log_length].task_id = g_current_task->task_id;
 		lock->log[lock->log_length].cpuid = g_current_task->current_cpu;
 		lock->log[lock->log_length].name = g_current_task->name;
+		lock->log[lock->log_length].index = lock->stat_unlocks;
 		lock->log[lock->log_length].spins = 0;
 		lock->log_length++;
 #endif

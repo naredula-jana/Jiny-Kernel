@@ -147,7 +147,7 @@ int SYS_futex(int *uaddr, int op, int val, unsigned long timeout,
 	int ret=0;
 	int op_ret;
 	futex *futex_p;
-	SYSCALL_DEBUG("futex uaddr: %x op:%x val:%x\n", uaddr, op, val);
+	SYSCALL_DEBUG("futex uaddr: %x op:%x val:%x timeout:%x\n", uaddr, op, val,timeout);
 
 	if ((op & FUTEX_CMD_MASK) ==0){
 
@@ -158,7 +158,7 @@ int SYS_futex(int *uaddr, int op, int val, unsigned long timeout,
 	case FUTEX_WAIT:
 //		  val2 = FUTEX_BITSET_MATCH_ANY;
 //	case FUTEX_WAIT_BITSET:  /*TODO: needed for multi cpu application */
-		assert(timeout == 0);
+		//assert(timeout == 0);
 		retries=0;
 		while (retries < 1000) {
 			if (*uaddr != val) {

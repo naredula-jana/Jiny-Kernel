@@ -2,6 +2,7 @@
 
 .global syscall_entry
 .global enter_userspace
+.global HP_syscall
 
 #define SAVE_AND_LOAD_SEGMENT_REGISTERS         \
    mov %ds, %gs:CPU_STATE_USER_DS_OFFSET;            \
@@ -112,7 +113,6 @@ tight_loop_error:
     jmp tight_loop_error
 
 good_syscall_number:
-
     pushq %rax
     pushq %rdx
     movq %rax,%gs:CPU_STATE_SYSCALLID
@@ -142,4 +142,10 @@ syscall_done:
 	orq $(1 << 9),IRET_OFFSET_RFLAGS(%rsp)
 	iretq
 
-
+HP_syscall:
+	pushq %r8
+	pushq %r9
+	call *syscalltable(,%rax,8)
+	popq %r9
+	popq %r8
+	ret

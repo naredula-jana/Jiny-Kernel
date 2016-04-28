@@ -181,7 +181,7 @@ int kshell::get_cmd(unsigned char *line) {
 	line[i] = '\0';
 	return cmd;
 }
-int g_conf_only_kshell = 1;
+int g_conf_only_kshell = 0;
 unsigned char *envs[] = { (unsigned char *) "HOSTNAME=jana",
 		(unsigned char *) "USER=jana", (unsigned char *) "HOME=/",
 		(unsigned char *) "PWD=/", 0 };
@@ -217,6 +217,7 @@ static int sh_create(unsigned char *bin_file, unsigned char *name, unsigned char
 	tmp_arg[2] =(void *) arg;
 	tmp_arg[3] =(void *) serial_dev;
 	sc_set_fsdevice(serial_dev, serial_dev);  /* all user level thread on serial line */
+	//BRK;
 	ret = sc_createKernelThread(thread_launch_serial, (void **) &tmp_arg,name,0);
 
 	return ret;
@@ -233,7 +234,7 @@ void kshell::kshell_process(){
 		process_command(cmd_type, curr_line);
 	}
 }
-#define USERLEVEL_SHELL "./busybox"
+#define USERLEVEL_SHELL "/data/busybox"
 
 extern struct jdevice *serial2_device;
 //#define USERLEVEL_SHELL "/jiny_root/busybox"

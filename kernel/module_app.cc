@@ -13,7 +13,9 @@ extern "C" {
 #include "interface.h"
 #include "elf.h"
 #include "symbol_table.h"
+#include "mm.h"
 #define MODULE_DEBUG 1
+extern void * __HP_vsyscall_page;
 static int complete_read(struct file *file, unsigned char *buf, int total_size);
 typedef struct {
 	struct file *file;
@@ -342,6 +344,11 @@ char *module_t::update_symbols(binary_source_t *source, Elf64_Sym **arg_symb, El
 	return (char *)ret;
 }
 extern unsigned char *syscalltable;
+
+extern "C" {
+extern unsigned long HP_syscall;
+}
+
 char *module_t::load_symbols_for_HP_app(binary_source_t *source, Elf64_Sym **arg_symb, Elf64_Shdr *sec_symb) {
 	const char *ret = 0;
 	Elf64_Sym *symb = 0;
@@ -366,13 +373,15 @@ char *module_t::load_symbols_for_HP_app(binary_source_t *source, Elf64_Sym **arg
 	}
 
 	total_symbols = sec_symb->sh_size / sec_symb->sh_entsize;
-	symbol_table = (symb_table_t *) mm_malloc((total_symbols + 1) * sizeof(symb_table_t), 0);
+	//symbol_table = (symb_table_t *) mm_malloc((total_symbols + 1) * sizeof(symb_table_t), 0);
+	symbol_table = (symb_table_t *) vmalloc((total_symbols + 1) * sizeof(symb_table_t), 0);
 	if (symbol_table == 0) {
 		ret = "mem alloc failed";
 		goto out;
 	}
 	tsemb=symb;
 	j=0;
+
 	for (i = 0; (i < total_symbols); i++, tsemb++) {
 #ifdef MODULE_DEBUG
 //		ut_printf(" %d: name:%s info:%x secton_ind:%d \n", i,tsemb->st_name, tsemb->st_info, tsemb->st_shndx);
@@ -382,7 +391,8 @@ char *module_t::load_symbols_for_HP_app(binary_source_t *source, Elf64_Sym **arg
 
 		if ((ut_strcmp(symbol_table[j].name, (uint8_t *) "jiny_syscalltable") == 0)) {
 			ut_printf("		%d: symbol name:%s: value:%x type:%x length:%x(%d)\n", j, symbol_table[j].name, symbol_table[j].address, symbol_table[j].type, tsemb->st_size);
-			ut_memcpy(symbol_table[j].address, (unsigned char *)&syscalltable ,512*8);
+			//ut_memcpy(symbol_table[j].address, (unsigned char *)&syscalltable ,512*8);
+			//ut_memcpy(0x800000, (unsigned char *)&syscalltable ,512*8);
 		}
 		if ((ut_strcmp(symbol_table[j].name, (uint8_t *) "main") == 0)) {
 			highpriority_app_main = symbol_table[j].address;
@@ -392,6 +402,13 @@ char *module_t::load_symbols_for_HP_app(binary_source_t *source, Elf64_Sym **arg
 	}
 	symbol_table[j].name =0;
 	symbol_table[j].address =0;
+	unsigned long *tmp_p;
+	tmp_p=HIGHPRIORITY_APP_SYSCALLTABLE;
+	for (i=0; i<512; i++){
+		*tmp_p = &HP_syscall;
+		tmp_p++;
+	}
+	//ut_memcpy(HIGHPRIORITY_APP_SYSCALLTABLE, (unsigned char *)&syscalltable ,512*8);
 
 out:
 	if (ret != 0) {
@@ -464,6 +481,8 @@ static int launch_hp_task(module_t *modulep) {
 	if (modulep == 0)
 		return JFAIL;
 	ret = sc_createKernelThread(hp_main, (void **) modulep, (uint8_t*) "hpriorty_task",CLONE_FS);
+	//ret = sc_createKernelThread(modulep->highpriority_app_main, (void **) 0, (uint8_t*) "hpriorty_task",CLONE_FS);
+	//ret = SYS_sc_clone(CLONE_VM | CLONE_KERNEL_THREAD | CLONE_FS, 0, 0, modulep->highpriority_app_main, 0,0);
 	//ut_printf(" launched high priority taks: pid %d \n", ret);
 
 	return JSUCCESS;
@@ -718,6 +737,9 @@ void Jcmd_insmod(unsigned char *filename, unsigned char *arg) {
 
 	return;
 }
+unsigned long g_temp_hp_stack_len=0; /* TODO : remove later */
+extern unsigned long fs_elf_check_prepare(struct file *file,unsigned char **argv, unsigned char **env,unsigned long *t_argc, unsigned long *t_argv,unsigned long  *stack_len, unsigned long *aux_addr,unsigned char **elf_interpreter, unsigned long *tmp_stackp);
+extern int elf_initialize_userspace_stack(struct elfhdr elf_ex,unsigned long aux_addr,unsigned long tmp_stack, unsigned long stack_len,unsigned long load_addr);
 void Jcmd_insexe(unsigned char *filename, unsigned char *arg) {
 	struct file *file = 0;
 	struct elfhdr elf_ex;
@@ -899,7 +921,7 @@ void Jcmd_insexe(unsigned char *filename, unsigned char *arg) {
 			vm_setupBrk(bss_start, bss - bss_start);
 		}
 	}
-
+	vm_mmap(0, HIGHPRIORITY_APP_SYSCALLTABLE, 0x2000, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0,"syscalltable");
 	modulep->str_table = mm_malloc(sec_str->sh_size, 0);
 	if (modulep->str_table == 0) {
 		error = "allocating str_table";
@@ -943,7 +965,8 @@ void Jcmd_insexe(unsigned char *filename, unsigned char *arg) {
 		goto out;
 	}
 #endif
-
+	modulep->highpriority_app_main = elf_ex.e_entry ;
+	ut_printf("New HP starting address :%x \n",modulep->highpriority_app_main);
 	spin_lock_irqsave(&g_global_lock, flags);
 	if (error == 0 && (total_modules < MAX_MODULES)) {
 		ut_strncpy(modulep->name, filename, MAX_FILENAME);
@@ -965,11 +988,31 @@ out:
 	} else {
 		modulep->sort_symbols();
 		if (modulep->highpriority_app_main != 0) {
-			launch_hp_task(modulep);
-		} else {
-			modulep->init_module(0, 0);
+			unsigned char *temp_addr;
+
+			vm_mmap(0, USER_SYSCALL_PAGE, 0x1000, PROT_READ | PROT_EXEC |PROT_WRITE, MAP_ANONYMOUS, 0,"fst_syscal");
+			ut_memcpy((unsigned char *)USER_SYSCALL_PAGE,(unsigned char *)&__HP_vsyscall_page,0x1000);
+
+			temp_addr =(unsigned char *) modulep->highpriority_app_main;
+			i= (int)temp_addr[0]; /*TODO: remove later  touch the mmeory just to help debugging */
+			//launch_hp_task(modulep);
+			if (1){ /* prepare the stack */
+					unsigned long argv[4],env[4];
+					unsigned long t_argc, t_argv;
+					unsigned long stack_len, tmp_stack, tmp_stack_top, tmp_aux;
+					unsigned char *elf_interp = 0;
+
+					argv[0]="highpriorityapp"; /* zero arguments */
+					argv[1]=0;
+					env[0]="USER=jana"; /* zero envs */
+					env[1]=0;
+					tmp_stack_top = fs_elf_check_prepare(file, (unsigned char **)argv, (unsigned char **)env, &t_argc, &t_argv, &stack_len, &tmp_aux, &elf_interp, &tmp_stack);
+					elf_initialize_userspace_stack(elf_ex, tmp_aux,tmp_stack_top, stack_len, ELF_PAGESTART(eppnt->p_vaddr));
+					g_temp_hp_stack_len = stack_len;
+					SYS_sc_clone(CLONE_VM | CLONE_KERNEL_THREAD| CLONE_HP_THREAD | CLONE_FS, tmp_stack_top, 0, modulep->highpriority_app_main, 0,0);
+			}
+			ut_printf(" Successfull loaded the high priority app\n");
 		}
-		ut_printf(" Successfull loaded the module\n");
 		return;
 	}
 
