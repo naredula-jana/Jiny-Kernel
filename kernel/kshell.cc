@@ -181,7 +181,7 @@ int kshell::get_cmd(unsigned char *line) {
 	line[i] = '\0';
 	return cmd;
 }
-int g_conf_only_kshell = 0;
+int g_conf_only_kshell = 1;
 unsigned char *envs[] = { (unsigned char *) "HOSTNAME=jana",
 		(unsigned char *) "USER=jana", (unsigned char *) "HOME=/",
 		(unsigned char *) "PWD=/", 0 };

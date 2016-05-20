@@ -87,7 +87,6 @@ fault_entry_point:
         movq %rbx, 8(%rsp)
         popq %rbx
 
-
 1:
         cmpq $GDT_SEL(KCODE_DESCR), 16 + INT_STACK_FRAME_CS_OFFT(%rsp)
         je 2f
@@ -98,7 +97,20 @@ fault_entry_point:
         movq %rax, %rsi /* fault number : second argument */
         cmpq $03,%rax /* if it is a breakpoint trap exception */
         jz breakpoint_handler
+
+movq %rsp,%rax
+and $0xffffffffffffc000,%rax
+add $0x4000,%rax
+cmpq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rax
+je 9f
+movq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rsp
+9:
+pushq %rdi  /* contains old stack pointer */
         callq ar_faultHandler   /* rest of the exceptions */
+popq %rdi
+movq %rdi, %rsp
+
+
 	    RESTORE_GPRS
 	    cmpq $GDT_SEL(KCODE_DESCR), 16 + INT_STACK_FRAME_CS_OFFT(%rsp)
         je 4f
@@ -192,7 +204,19 @@ irq_entry_point:
         SAVE_GPRS
 	    movq %rsp, %rdi /* contains the context : first argument */
         movq %rax, %rsi  /* contains interrupts number */
+
+movq %rsp,%rax
+and $0xffffffffffffc000,%rax
+add $0x4000,%rax
+cmpq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rax
+je 9f
+//movq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rsp
+9:
+pushq %rdi  /* contains old stack pointer */
         callq ar_irqHandler
+popq %rdi
+movq %rdi, %rsp
+
 	    RESTORE_GPRS
 		
 	    cmpq $GDT_SEL(KCODE_DESCR), 8 + INT_STACK_FRAME_CS_OFFT(%rsp)

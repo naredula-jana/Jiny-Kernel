@@ -169,6 +169,7 @@ int ar_updateCpuState(struct task_struct *next, struct task_struct *prev) {
 	g_cpu_state[cpuid].md_state.user_fs_base = next->thread.userland.user_fs_base;
 	g_cpu_state[cpuid].md_state.kernel_stack = (unsigned long) next + TASK_SIZE;
 
+
 	seg_descr_setup(&gdt_entries[cpuid][FS_UDATA_DESCR], SEG_TYPE_DATA,
 			SEG_DPL_USER, g_cpu_state[cpuid].md_state.user_fs_base, 0xfffff,
 			SEG_FLG_PRESENT | SEG_FLG_64BIT | SEG_FLG_GRAN);

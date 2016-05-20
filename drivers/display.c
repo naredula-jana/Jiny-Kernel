@@ -391,6 +391,7 @@ void ut_log(const char *format, ...){
 	struct writer_struct writer;
 	unsigned long flags;
 	char buf[80];
+//	if (g_boot_completed==0) return;
 //	if (g_boot_completed) mutexLock(g_print_lock);
 
 	va_list vl;

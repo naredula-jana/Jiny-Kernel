@@ -159,7 +159,9 @@ int ar_faultHandler(void *p, unsigned int int_no) {
 		int ret;
 
 		g_cpu_state[getcpuid()].intr_nested_level++;
+		g_cpu_state[0].isr_ctxts[stack_depth]=(void *)&ctx;
 		stack_depth++;
+		g_current_task->stats.fault_count++;
 		isr_t handler = g_interrupt_handlers[int_no].action;
 		ret = handler(&ctx);
 		g_interrupt_handlers[int_no].stat[getcpuid()].num_irqs++;

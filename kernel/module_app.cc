@@ -389,11 +389,6 @@ char *module_t::load_symbols_for_HP_app(binary_source_t *source, Elf64_Sym **arg
 		symbol_table[j].name = str_table + tsemb->st_name;
 		symbol_table[j].address = tsemb->st_value;
 
-		if ((ut_strcmp(symbol_table[j].name, (uint8_t *) "jiny_syscalltable") == 0)) {
-			ut_printf("		%d: symbol name:%s: value:%x type:%x length:%x(%d)\n", j, symbol_table[j].name, symbol_table[j].address, symbol_table[j].type, tsemb->st_size);
-			//ut_memcpy(symbol_table[j].address, (unsigned char *)&syscalltable ,512*8);
-			//ut_memcpy(0x800000, (unsigned char *)&syscalltable ,512*8);
-		}
 		if ((ut_strcmp(symbol_table[j].name, (uint8_t *) "main") == 0)) {
 			highpriority_app_main = symbol_table[j].address;
 			ut_printf("		%d: symbol name:%s: value:%x type:%x length:%x(%d)\n", j, symbol_table[j].name, symbol_table[j].address, symbol_table[j].type, tsemb->st_size);
@@ -402,13 +397,11 @@ char *module_t::load_symbols_for_HP_app(binary_source_t *source, Elf64_Sym **arg
 	}
 	symbol_table[j].name =0;
 	symbol_table[j].address =0;
+
 	unsigned long *tmp_p;
 	tmp_p=HIGHPRIORITY_APP_SYSCALLTABLE;
-	for (i=0; i<512; i++){
-		*tmp_p = &HP_syscall;
-		tmp_p++;
-	}
-	//ut_memcpy(HIGHPRIORITY_APP_SYSCALLTABLE, (unsigned char *)&syscalltable ,512*8);
+	*tmp_p = &HP_syscall; /* all syscalls of HP will routed through this point */
+
 
 out:
 	if (ret != 0) {
@@ -921,7 +914,7 @@ void Jcmd_insexe(unsigned char *filename, unsigned char *arg) {
 			vm_setupBrk(bss_start, bss - bss_start);
 		}
 	}
-	vm_mmap(0, HIGHPRIORITY_APP_SYSCALLTABLE, 0x2000, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0,"syscalltable");
+	vm_mmap(0, HIGHPRIORITY_APP_SYSCALLTABLE, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0,"syscalltable");
 	modulep->str_table = mm_malloc(sec_str->sh_size, 0);
 	if (modulep->str_table == 0) {
 		error = "allocating str_table";
@@ -942,6 +935,7 @@ void Jcmd_insexe(unsigned char *filename, unsigned char *arg) {
 	modulep->secs[SEC_TEXT].addr = 0x400000;
 	modulep->mem_start = 0x400000;
 	modulep->mem_end = 0x400000 + modulep->secs[SEC_TEXT].length + modulep->secs[SEC_BSS].length;
+	ut_printf(" addr: %x - %x\n",modulep->secs[SEC_TEXT].addr,modulep->mem_end );
 	i = (unsigned char )modulep->secs[SEC_TEXT].addr[0];/* reading memory */
 
 	if (modulep->secs[SEC_TEXT].addr == 0) {
@@ -986,7 +980,7 @@ out:
 	if (error != 0) {
 		ut_printf("ERROR : %s\n", error);
 	} else {
-		modulep->sort_symbols();
+		modulep->sort_symbols();  /* TODO: make it optional ,this is resource intensive */
 		if (modulep->highpriority_app_main != 0) {
 			unsigned char *temp_addr;
 
@@ -1216,6 +1210,9 @@ int perf_stat_rip_hit(unsigned long rip) {
 		int min = 0;
 		int max;
 
+		if (j==0){
+			min=35; /* TODO: initial symbols in kernel as low values, that collides with HP app */
+		}
 		modulep = g_modules[j];
 		max = modulep->symb_table_length - 4;
 		if (max < 0)

@@ -67,13 +67,14 @@ static inittable_t inittable[] = {
 		{init_physical_memory,0,"PhysicalMemory and Symbol table",1},
 		{init_descriptor_tables,0,"ISR and Descriptors",0},
 		{init_kernel_args,0, "Kernel Args",0},
+		{init_syscall,0,       "syscalls",0},
 		{init_memory,0,           "Main memory",0},
 #ifndef JINY_SLAB
 		{init_kmem_cache,0,       "kmem cache",0},
 #endif
 		{init_ipc,0,       "ipc",0},
 		{init_jslab,0,"Jslab initialization",0},
-		{init_syscall,0,       "syscalls",0},
+		//{init_syscall,0,       "syscalls",0},
 
 		{init_vfs,0,       "vfs",0},
 		{init_tasking,0,       "tasking",0},
@@ -260,7 +261,8 @@ void cmain() {  /* This is the first c function to be executed */
 	unsigned long current_stack_pointer asm("esp");
 
 	g_cpu_state[0].current_task = ((struct task_struct *)((unsigned long)(&i) & ~(TASK_SIZE - 1)));
-
+	g_cpu_state[0].md_state.current_task = g_cpu_state[0].current_task;
+//BRK;
 	ut_log(" Before g_conf_func_debug-> :%x(%d) current task:%x\n",g_conf_func_debug,g_conf_func_debug,g_cpu_state[0].current_task);
 	for (i=0; inittable[i].func != 0; i++){
 		g_init_loglevel = inittable[i].log_level ;
@@ -272,6 +274,7 @@ void cmain() {  /* This is the first c function to be executed */
 			ut_log("	%s : ....Failed error:%d\n",inittable[i].comment,ret);
 		}
 	}
+	//ar_updateCpuState(g_cpu_state[0].current_task,0);
 
 	uint32_t val[5];
 	do_cpuid(1,val);

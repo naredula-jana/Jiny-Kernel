@@ -30,7 +30,8 @@ extern int g_conf_syscall_debug;
 extern int g_conf_debug_level;
 extern spinlock_t g_userspace_stdio_lock;
 extern spinlock_t g_global_lock;
-
+#define SYSCALL_DEBUG(x...) if (g_conf_syscall_debug==1)	{ }
+#if 0
 #define SYSCALL_DEBUG(x...) do { \
 	if (g_conf_syscall_debug==1)	{\
 		unsigned long sys_debug_flags; \
@@ -39,7 +40,7 @@ extern spinlock_t g_global_lock;
 		spin_unlock_irqrestore(&g_userspace_stdio_lock, sys_debug_flags); \
 	}\
 } while (0) 
-
+#endif
 #define assert(x) do {  if (!(x)) { BUG() ;} } while(0)
 
  //#define DEBUG_ENABLE 1

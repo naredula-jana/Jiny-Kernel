@@ -505,9 +505,11 @@ int init_tasking(unsigned long unused) {
 	ut_log("		Task Addr.. start :%x  stack:%x current:%x maxcpus:%d\n", task_addr, &task_addr, g_current_task,MAX_CPUS);
 	for (i = 0; i < MAX_CPUS; i++) {
 		ut_memset((unsigned char *) &g_cpu_state[i],0,sizeof(struct cpu_state));
-		g_cpu_state[i].md_state.cpu_id = i;
 		g_cpu_state[i].idle_task = (struct task_struct *) ((unsigned char *) (task_addr) + i * TASK_SIZE);
+		g_cpu_state[i].md_state.cpu_id = i;
+		g_cpu_state[i].md_state.current_task = g_cpu_state[i].idle_task;
 		g_cpu_state[i].current_task = g_cpu_state[i].idle_task;
+
 		ut_log("	%d : currenttask:%x \n",g_cpu_state[i].current_task);
 		ut_memset((unsigned char *) g_cpu_state[i].idle_task, MAGIC_CHAR, TASK_SIZE - PAGE_SIZE / 2);
 		init_task_struct(g_cpu_state[i].idle_task, g_kernel_mm, fs);
@@ -648,8 +650,7 @@ static void schedule_kernelSecondHalf() { /* kernel thread second half:_schedule
 			asm("movq %[new_sp],%%rsp\n\t" : [new_sp] "=m" (g_current_task->thread.userland.user_stack));
 			g_current_task->thread.real_ip(g_current_task->thread.userland.argc,g_current_task->thread.userland.sp);
 		}else{ /* child Hp threads */
-			asm("movq %[new_sp],%%rsp\n\t" : [new_sp] "=m" (g_current_task->thread.userland.user_stack));
-			g_current_task->thread.real_ip(g_current_task->thread.argv,0);
+			BRK;
 		}
 	}else{ /* kernel thread other HP */
 		g_current_task->thread.real_ip(g_current_task->thread.argv, 0);
@@ -869,7 +870,9 @@ static unsigned long _schedule(unsigned long flags) {
 		spin_unlock(g_cpu_state[cpuid].sched_lock);
 		g_cpu_state[cpuid].sched_lock = 0;
 	}
+
 	g_cpu_state[cpuid].current_task = next;
+	g_cpu_state[cpuid].md_state.current_task = next;
 	/* finally switch the task */
 	arch::switch_to(prev, next, prev);
 	/* from the next statement onwards should not use any stack variables, new threads launched will not able see next statements*/

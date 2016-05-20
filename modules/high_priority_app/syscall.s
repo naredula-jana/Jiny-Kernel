@@ -9,5 +9,5 @@ jiny_syscalltable:
 my_write:
 
    mov $0x1,%eax
-   call *jiny_syscalltable(,%rax,8)
+   CALL *jiny_syscalltable(,%rax,8)
    retq

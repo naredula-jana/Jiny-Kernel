@@ -10,8 +10,10 @@
 #define CPU_STATE_USER_GS_OFFSET 0x30
 #define CPU_STATE_USER_FS_BASE 0x38
 #define CPU_STATE_USER_IP 0x40
-#define CPU_STATE_CPUID 0x48   // currently hardcoded in getcpuid , before changing this , change in getcpuid also
+#define CPU_STATE_CPUID 0x48   // TODO: currently hardcoded in getcpuid , before changing this , change in getcpuid also
 #define CPU_STATE_SYSCALLID 0x50
+#define CPU_STATE_CURRENT_TASK 0x58
+
 //#define CPU_STATE_USER_PTD_OFFSET 0x40
 
 #define IRET_OFFSET_RIP 0x0
@@ -142,6 +144,7 @@ struct md_cpu_state { /* NOTE: do not alter the attributes, there location matte
         unsigned long user_ip; /* Stats and debugging pupose */
         unsigned long cpu_id;
         unsigned long syscall_id;
+        unsigned long current_task;
 };
 //extern struct cpu_state g_cpu_state[];
 

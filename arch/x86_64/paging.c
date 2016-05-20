@@ -671,8 +671,9 @@ int check_kernel_address(unsigned long addr){
 		return 0;
 	}
 }
-#define MAX_STAT_FAULTS 200
+#define MAX_STAT_FAULTS 5000
 struct stat_fault{
+	int index;
 	unsigned long  addr,fault_ip;
 } stat_fault;
 struct stat_fault stat_faults[MAX_STAT_FAULTS+1];
@@ -687,8 +688,14 @@ static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_faul
 
 	mm=g_kernel_mm;
 	g_stat_pagefault++;
+	stat_faults[g_stat_pagefault % MAX_STAT_FAULTS].index = g_stat_pagefault;
 	stat_faults[g_stat_pagefault % MAX_STAT_FAULTS].addr = addr;
 	stat_faults[g_stat_pagefault % MAX_STAT_FAULTS].fault_ip = faulting_ip;
+#if 0
+if (g_stat_pagefault>6){
+	ut_printf("    addr:%x faulting: %x \n",addr,faulting_ip);
+}
+#endif
 	if ((check_kernel_address(addr)) && (write_fault == 1)) { /* look for the kernel slab data pages */
 		vma=vm_findVma(g_kernel_mm,(addr & PAGE_MASK),8);
 		assert(vma!=0);

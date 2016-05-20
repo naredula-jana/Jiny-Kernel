@@ -34,10 +34,10 @@ static inline int getcpuid() {
 	unsigned long cpuid;
 
 	asm volatile("movq %%gs:0x48,%0" : "=r" (cpuid)); // TODO : Hardcoded 48 need to replace with define symbol
-	if (cpuid >= MAX_CPUS || cpuid < 0 || cpuid >= g_imps_num_cpus){
+/*	if (cpuid >= MAX_CPUS || cpuid < 0 || cpuid >= g_imps_num_cpus){
 		while(1);
 		return 0;
-	}
+	}*/
 	return cpuid;
 }
 static inline int getmaxcpus()  __attribute__((always_inline));
