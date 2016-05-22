@@ -1,0 +1,180 @@
+16c16
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+22c22
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+30c30
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+40c40
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+52c52
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+64c64
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+75c75
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+91c91
+< 	MOVL	$0, CX
+---
+> 	MOVL	$0, R10
+94c94
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+99c99
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+105c105
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+109c109
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+114c114
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+118c118
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+126c126
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+134c134
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+203c203
+< 	MOVL	size+24(FP), CX
+---
+> 	MOVL	size+24(FP), R10
+205c205
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+215c215
+< 	MOVQ	size+24(FP), CX
+---
+> 	MOVQ	size+24(FP), R10
+217c217
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+239c239
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+246c246
+< 	MOVL	flags+20(FP), CX 
+---
+> 	MOVL	flags+20(FP), R10
+251c251
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+277c277
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+288c288
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+298c298
+< 	MOVQ	ts+16(FP), CX
+---
+> 	MOVQ	ts+16(FP), R10
+302c302
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+311c311
+< 	MOVQ	$0, CX
+---
+> 	MOVQ	$0, R10
+320c320
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+339c339
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+359c359
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+366c366
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+385c385
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+393c393
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+401c401
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+409c409
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+417c417
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+426c426
+< 	MOVQ	ev+16(FP), CX
+---
+> 	MOVQ	ev+16(FP), R10
+428c428
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+437c437
+< 	MOVL	timeout+20(FP), CX
+---
+> 	MOVL	timeout+20(FP), R10
+439c439
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+449c449
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+458c458
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+468c468
+<         CALL 0x3DD000
+---
+> 	SYSCALL
+478c478
+<         CALL 0x3DD000
+---
+> 	SYSCALL

@@ -1,0 +1,5 @@
+71,72c71
+< 	//_StackMin = 2048
+< 	_StackMin = 8192
+---
+> 	_StackMin = 2048

@@ -1,0 +1,16 @@
+26c26
+< 	CALL 0x3DD000	
+---
+> 	SYSCALL
+52c52
+< 	CALL 0x3DD000	
+---
+> 	SYSCALL
+77c77
+< 	CALL 0x3DD000	
+---
+> 	SYSCALL
+100c100
+< 	CALL 0x3DD000	
+---
+> 	SYSCALL
