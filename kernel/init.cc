@@ -262,6 +262,7 @@ void cmain() {  /* This is the first c function to be executed */
 
 	g_cpu_state[0].current_task = ((struct task_struct *)((unsigned long)(&i) & ~(TASK_SIZE - 1)));
 	g_cpu_state[0].md_state.current_task = g_cpu_state[0].current_task;
+	g_cpu_state[0].md_state.kernel_stack = g_cpu_state[0].current_task + TASK_SIZE;
 //BRK;
 	ut_log(" Before g_conf_func_debug-> :%x(%d) current task:%x\n",g_conf_func_debug,g_conf_func_debug,g_cpu_state[0].current_task);
 	for (i=0; inittable[i].func != 0; i++){
@@ -292,7 +293,7 @@ void cmain() {  /* This is the first c function to be executed */
 	sc_createKernelThread(shell_main, 0, (unsigned char *)"shell_main",0);
 	sc_createKernelThread(housekeeper_thread, 0, (unsigned char *)"house_keeper",0);
 #endif
-	ut_log("	Initialization COMPLETED\n-------------------\n");
+	ut_log("	HP version Initialization COMPLETED\n-------------------\n");
 
 	idleTask_func();
 	return;

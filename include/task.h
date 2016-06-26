@@ -192,6 +192,10 @@ struct task_struct {
 		int wait_line_no; /* line number where mutex lock as triggered */
 		int syscall_count;
 		int fault_count;
+		int irq_count;
+		int inside_fault;
+		int inside_irq;
+        int nested_fault_irq;
 		unsigned long ticks_consumed;
 		unsigned long start_time;
 		unsigned long start_tsc;
@@ -253,29 +257,9 @@ extern struct cpu_state g_cpu_state[];
 #define IPI_INTERRUPT 200
 #define IPI_CLEARPAGETABLE 201
 
-static inline struct task_struct *bootup_task(void)
-{
-	unsigned long addr,p;
-	addr = (unsigned long)&p;
-	addr=addr & (~(TASK_SIZE-1));
-
-    return (struct task_struct *)addr;
-}
-
-
-static inline struct task_struct *getcurrenttask()  __attribute__((always_inline));
-static inline struct task_struct *getcurrenttask() {
-	//struct task_struct *task;
-	//asm volatile("movq %%gs:0x58,%0" : "=r" (task)); // TODO : Hardcoded 58 need to replace with define symbol
-	return g_cpu_state[0].current_task;
-}
-
 register unsigned long current_stack_pointer asm("esp");
-#define boot_g_current_task ((struct task_struct *)(current_stack_pointer & ~(TASK_SIZE - 1)))
-//#define g_current_task ((struct task_struct *)(current_stack_pointer & ~(TASK_SIZE - 1)))
-#define g_current_task (g_cpu_state[0].current_task)  /* TODO : this is temporary , later need to change */
-//#define g_current_task (getcurrenttask())
-//#define g_current_task ((g_boot_completed == 0)? (g_cpu_state[0].current_task):(getcurrenttask()))
+#define g_current_task ((struct task_struct *)(current_stack_pointer & ~(TASK_SIZE - 1)))
+//#define g_current_task (g_cpu_state[0].current_task)  /* TODO : this is temporary , later need to change */
 
 #define is_kernel_thread (g_current_task->mm == g_kernel_mm)
 typedef struct backtrace{

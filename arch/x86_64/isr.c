@@ -148,25 +148,48 @@ static void fill_fault_context(struct fault_ctx *fctx, void *rsp, int fault_num,
 //	g_cpu_state[0].stat_rip = fctx->istack_frame->rip; // TODO: done only for cpu=0
 }
 static int stack_depth = 0;
+int test_count;
 // This gets called from our ASM interrupt handler stub.
 int ar_faultHandler(void *p, unsigned int int_no) {
 	struct fault_ctx ctx;
 
+
 	asm volatile("cli");
 	/* SOME BAD happened STOP all the interrupts */
 	fill_fault_context(&ctx, p, int_no, 0);
+	g_current_task->stats.fault_count++;
+	if ((g_current_task->stats.inside_irq+g_current_task->stats.inside_fault)>0){
+		g_current_task->stats.nested_fault_irq++;
+	}
+	g_current_task->stats.inside_fault++;
+	test_count = g_current_task->stats.fault_count;
 	if (g_interrupt_handlers[int_no].action != 0) {
 		int ret;
-
+#if 1
+		addr_t faulting_address;
+	asm volatile("mov %%cr2, %0" : "=r" (faulting_address));
+#endif
 		g_cpu_state[getcpuid()].intr_nested_level++;
 		g_cpu_state[0].isr_ctxts[stack_depth]=(void *)&ctx;
 		stack_depth++;
-		g_current_task->stats.fault_count++;
+#if 1
+		if (g_current_task->HP_thread == 1){ /* TODO-HP1 : removing this as some race condition HP threads */
+			ut_log(" %d: tid:%x Fault HP:%d ks:%x addr:%x rbx:%x rip:%x rdi:%x rcx:%x\n",g_current_task->stats.fault_count,
+					g_current_task->task_id,int_no,g_cpu_state[0].md_state.kernel_stack,faulting_address,ctx.gprs->rbx,ctx.istack_frame->rip,ctx.gprs->rdi,ctx.gprs->rcx);
+			//BRK;
+		}
+#endif
 		isr_t handler = g_interrupt_handlers[int_no].action;
 		ret = handler(&ctx);
 		g_interrupt_handlers[int_no].stat[getcpuid()].num_irqs++;
 		g_cpu_state[getcpuid()].intr_nested_level--;
 		stack_depth--;
+		g_current_task->stats.inside_fault--;
+#if 1
+		if (g_current_task->HP_thread == 1){
+			test_count=0;
+		}
+#endif
 		return ret; /* return properly for page fault or debug fault or trap fault */
 	} else {
 		g_interrupt_handlers[int_no].stat[getcpuid()].num_error++;
@@ -213,7 +236,11 @@ void ar_irqHandler(void *p, unsigned int int_no) {
 		outb(0x20, 0x20);
 
 	}
-
+	g_current_task->stats.irq_count++;
+	if ((g_current_task->stats.inside_irq+g_current_task->stats.inside_fault)>0){
+		g_current_task->stats.nested_fault_irq++;
+	}
+	g_current_task->stats.inside_irq++;
 	if (g_interrupt_handlers[int_no].action != 0) {
 		struct fault_ctx ctx;
 
@@ -234,6 +261,7 @@ void ar_irqHandler(void *p, unsigned int int_no) {
 		}
 	}
 
+	g_current_task->stats.inside_irq--;
 #ifdef SMP
 	local_apic_send_eoi(); // Re-enable the APIC interrupts
 #endif

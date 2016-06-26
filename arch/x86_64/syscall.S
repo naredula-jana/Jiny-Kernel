@@ -145,7 +145,23 @@ syscall_done:
 HP_syscall:
 	pushq %r8
 	pushq %r9
+
+	pushq %rbx
+	pushq %rbp
+	movq %rsp, %rbx
+	movq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rsp
+	movq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rbp
+	subq $16, %rsp
+	subq $16, %rbp
+	pushq %rbx // old stack
 	call *syscalltable(,%rax,8)
+	popq %rbx // old stack
+	movq %rbx, %rsp
+	popq %rbp
+	popq %rbx
+
+//call *syscalltable(,%rax,8)
+
 	popq %r9
 	popq %r8
 	ret

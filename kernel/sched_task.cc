@@ -508,6 +508,7 @@ int init_tasking(unsigned long unused) {
 		g_cpu_state[i].idle_task = (struct task_struct *) ((unsigned char *) (task_addr) + i * TASK_SIZE);
 		g_cpu_state[i].md_state.cpu_id = i;
 		g_cpu_state[i].md_state.current_task = g_cpu_state[i].idle_task;
+		g_cpu_state[i].md_state.kernel_stack = g_cpu_state[i].idle_task + TASK_SIZE;
 		g_cpu_state[i].current_task = g_cpu_state[i].idle_task;
 
 		ut_log("	%d : currenttask:%x \n",g_cpu_state[i].current_task);
@@ -627,15 +628,16 @@ static void schedule_userSecondHalf() { /* user thread second Half: _schedule fu
 }
 extern unsigned long g_temp_hp_stack_len;
 static void schedule_childHPSecondHalf() {
-	asm("movq %[rsi],%%rsi\n\t": [rsi] "=m" (g_current_task->thread.user_regs.gpres.rsi));
-	asm("movq %[rdi],%%rdi\n\t": [rdi] "=m" (g_current_task->thread.user_regs.gpres.rdi));
-	asm("movq %[r8],%%r8\n\t": [r8] "=m" (g_current_task->thread.user_regs.gpres.r8));
-	asm("movq %[r9],%%r9\n\t": [r9] "=m" (g_current_task->thread.user_regs.gpres.r9));
-	asm("movq %[r12],%%r12\n\t": [r12] "=m" (g_current_task->thread.user_regs.gpres.r12));
+	struct task_struct *task=g_current_task;
+	asm("movq %[rsi],%%rsi\n\t": [rsi] "=m" (task->thread.user_regs.gpres.rsi));
+	asm("movq %[rdi],%%rdi\n\t": [rdi] "=m" (task->thread.user_regs.gpres.rdi));
+	asm("movq %[r8],%%r8\n\t": [r8] "=m" (task->thread.user_regs.gpres.r8));
+	asm("movq %[r9],%%r9\n\t": [r9] "=m" (task->thread.user_regs.gpres.r9));
+	asm("movq %[r12],%%r12\n\t": [r12] "=m" (task->thread.user_regs.gpres.r12));
 	asm("movq $0x0,%rax\n\t");
-	//g_current_task->thread.real_ip(g_current_task->thread.argv,0);
-	asm("callq %[ip]\n\t" : [ip] "=m" (g_current_task->thread.real_ip) : : "rax");
+	asm("callq %[ip]\n\t" : [ip] "=m" (task->thread.real_ip) : : "rax");
 }
+struct task_struct *tmp_task;  /* TODO-HP2: should be local variable for HP thread, otherwise it will issue */
 static void schedule_kernelSecondHalf() { /* kernel thread second half:_schedule function task can lands here. */
 	//spin_unlock_irqrestore(&g_cpu_state[getcpuid()].lock, g_current_task->flags);
 	restore_flags(g_current_task->flags);
@@ -643,12 +645,15 @@ static void schedule_kernelSecondHalf() { /* kernel thread second half:_schedule
 		unsigned char c[1024];
 		ut_memcpy(&c[0],g_current_task->thread.userland.user_stack,g_temp_hp_stack_len);
 		if (g_current_task->HP_thread == 0){ /* parent HP thread */
+			tmp_task=g_current_task; /* TODO: need to replace temp_task with local variable  */
 			g_current_task->process_id = g_current_task->task_id; /* process id is created for HP process */
 			g_current_task->thread.userland.sp = &c[0];
 			g_current_task->thread.userland.argc = 0; /* TODO: Hard coded , other wise it is crashing*/
 			g_current_task->HP_thread = 1;
 			asm("movq %[new_sp],%%rsp\n\t" : [new_sp] "=m" (g_current_task->thread.userland.user_stack));
-			g_current_task->thread.real_ip(g_current_task->thread.userland.argc,g_current_task->thread.userland.sp);
+			asm("movq %[new_sp],%%rbp\n\t" : [new_sp] "=m" (tmp_task->thread.userland.user_stack));
+			tmp_task->thread.real_ip(tmp_task->thread.userland.argc,tmp_task->thread.userland.sp);
+
 		}else{ /* child Hp threads */
 			BRK;
 		}
@@ -1225,10 +1230,16 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 		}else if (g_current_task->HP_thread == 1){ /* child HP thread */
 			unsigned long *rbp;
 			unsigned char *test_p;
-			test_p = child_stack; /*TODO: temporary solution , touch child stack to avaoid page fault in the user space*/
+			test_p = child_stack; /*TODO: temporary solution , touch child stack to avoid page fault in the user space*/
 			test_p = *test_p;
+#if 0
 			asm("movq %%rbp,%0" : "=m" (rbp));
 			rbp=rbp+2+2; /* 2- for pushing r8,r9 */
+#else
+			asm("movq %%rbx,%0" : "=m" (rbp));  /* rbx : contains the user space stack */
+			rbp=rbp+2+2; /* 2- for pushing r8,r9 */
+#endif
+
 			p->thread.real_ip = *rbp;
 			p->thread.user_regs.gpres.rsi = child_stack;
 			p->thread.user_regs.gpres.rdi = clone_flags;

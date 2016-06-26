@@ -1,5 +1,11 @@
 #include "descriptor_tables.h"
 
+	.align	0x4000
+irq_stack1:
+        .fill   0x8000,1,0
+irq_stack2:
+        .fill   0x8000,1,0
+
 .code64
 .text
 #define SAVE_AND_LOAD_SEGMENT_REGISTERS         \
@@ -98,18 +104,27 @@ fault_entry_point:
         cmpq $03,%rax /* if it is a breakpoint trap exception */
         jz breakpoint_handler
 
-movq %rsp,%rax
-and $0xffffffffffffc000,%rax
+movq %rsp,%rax  /* copy existing sp */
+and $0xffffffffffffc000,%rax /* find base of stack */
 add $0x4000,%rax
 cmpq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rax
 je 9f
 movq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rsp
+movq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rbp
+subq $16, %rsp
+subq $16, %rbp
+
 9:
 pushq %rdi  /* contains old stack pointer */
+
+pushq $0x12345888 /* safety check */
         callq ar_faultHandler   /* rest of the exceptions */
+popq %rdi /* safety check */
+cmpq $0x12345888,%rdi /* safety check */
+jne err2
+
 popq %rdi
 movq %rdi, %rsp
-
 
 	    RESTORE_GPRS
 	    cmpq $GDT_SEL(KCODE_DESCR), 16 + INT_STACK_FRAME_CS_OFFT(%rsp)
@@ -144,6 +159,10 @@ breakpoint_handler:
 //	    sti
         iretq
 
+err1:
+ jmp err1
+ err2:
+ jmp err2
 
 rbp_push:
         popq %rax
@@ -210,10 +229,20 @@ and $0xffffffffffffc000,%rax
 add $0x4000,%rax
 cmpq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rax
 je 9f
-//movq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rsp
+
+movq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rsp
+movq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rbp
+subq $16, %rsp
+subq $16, %rbp
 9:
 pushq %rdi  /* contains old stack pointer */
+
+pushq $0x12345678 /* safety check */
         callq ar_irqHandler
+popq %rdi /* safety check */
+cmpq $0x12345678,%rdi /* safety check */
+jne err2
+
 popq %rdi
 movq %rdi, %rsp
 
