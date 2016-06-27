@@ -30,8 +30,8 @@ extern int g_conf_syscall_debug;
 extern int g_conf_debug_level;
 extern spinlock_t g_userspace_stdio_lock;
 extern spinlock_t g_global_lock;
-#define SYSCALL_DEBUG(x...) if (g_conf_syscall_debug==1)	{ }
-#if 0
+//#define SYSCALL_DEBUG(x...) if (g_conf_syscall_debug==1)	{ }
+#if 1
 #define SYSCALL_DEBUG(x...) do { \
 	if (g_conf_syscall_debug==1)	{\
 		unsigned long sys_debug_flags; \
@@ -102,7 +102,7 @@ void *kmalloc (long size, int flags);
 void kfree (const void *objp);
 extern addr_t g_jiffies;
 
-#define MAX_DMESG_LOG 100000
+#define MAX_DMESG_LOG 1200000
 #include "interface.h"
 
 #endif

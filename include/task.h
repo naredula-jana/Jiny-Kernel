@@ -259,7 +259,7 @@ extern struct cpu_state g_cpu_state[];
 
 register unsigned long current_stack_pointer asm("esp");
 #define g_current_task ((struct task_struct *)(current_stack_pointer & ~(TASK_SIZE - 1)))
-//#define g_current_task (g_cpu_state[0].current_task)  /* TODO : this is temporary , later need to change */
+//#define g_current_task (g_cpu_state[0].current_task)  /* TODO : this is temporary , later need to remove */
 
 #define is_kernel_thread (g_current_task->mm == g_kernel_mm)
 typedef struct backtrace{

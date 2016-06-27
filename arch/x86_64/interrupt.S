@@ -111,18 +111,12 @@ cmpq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rax
 je 9f
 movq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rsp
 movq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rbp
-subq $16, %rsp
-subq $16, %rbp
+subq $0x500, %rsp /* TODO-HP1 : need to leave some head room look like some memory corruption is happening */
+subq $0x500, %rbp
 
 9:
 pushq %rdi  /* contains old stack pointer */
-
-pushq $0x12345888 /* safety check */
         callq ar_faultHandler   /* rest of the exceptions */
-popq %rdi /* safety check */
-cmpq $0x12345888,%rdi /* safety check */
-jne err2
-
 popq %rdi
 movq %rdi, %rsp
 
@@ -236,13 +230,7 @@ subq $16, %rsp
 subq $16, %rbp
 9:
 pushq %rdi  /* contains old stack pointer */
-
-pushq $0x12345678 /* safety check */
         callq ar_irqHandler
-popq %rdi /* safety check */
-cmpq $0x12345678,%rdi /* safety check */
-jne err2
-
 popq %rdi
 movq %rdi, %rsp
 

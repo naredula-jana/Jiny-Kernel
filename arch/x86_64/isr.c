@@ -148,11 +148,11 @@ static void fill_fault_context(struct fault_ctx *fctx, void *rsp, int fault_num,
 //	g_cpu_state[0].stat_rip = fctx->istack_frame->rip; // TODO: done only for cpu=0
 }
 static int stack_depth = 0;
+
 int test_count;
 // This gets called from our ASM interrupt handler stub.
 int ar_faultHandler(void *p, unsigned int int_no) {
 	struct fault_ctx ctx;
-
 
 	asm volatile("cli");
 	/* SOME BAD happened STOP all the interrupts */
@@ -172,7 +172,13 @@ int ar_faultHandler(void *p, unsigned int int_no) {
 		g_cpu_state[getcpuid()].intr_nested_level++;
 		g_cpu_state[0].isr_ctxts[stack_depth]=(void *)&ctx;
 		stack_depth++;
-#if 1
+#if 0
+		if (g_current_task->HP_thread == 1){
+		//ut_log("%d: rip:%x rbx: %x: \n",g_current_task->stats.fault_count,ctx.istack_frame->rip,ctx.gprs->rbx);
+		//ut_log(" faults:%d: tid:%x irq:%d ks:%x addr:%x rbx:%x rip:%x rdi:%x rcx:%x\n",g_current_task->stats.fault_count,
+		//						g_current_task->task_id,g_current_task->stats.irq_count,g_cpu_state[0].md_state.kernel_stack,g_current_task,g_current_task,test,test,test);
+		}
+
 		if (g_current_task->HP_thread == 1){ /* TODO-HP1 : removing this as some race condition HP threads */
 			ut_log(" %d: tid:%x Fault HP:%d ks:%x addr:%x rbx:%x rip:%x rdi:%x rcx:%x\n",g_current_task->stats.fault_count,
 					g_current_task->task_id,int_no,g_cpu_state[0].md_state.kernel_stack,faulting_address,ctx.gprs->rbx,ctx.istack_frame->rip,ctx.gprs->rdi,ctx.gprs->rcx);
@@ -203,23 +209,6 @@ int ar_faultHandler(void *p, unsigned int int_no) {
 #define I8259_PIC_MASTER    0x20
 #define I8259_PIC_SLAVE     0xA0
 #define PIC_EOI             0x20
-#if 0
-static void i8259a_mask_irq(unsigned int irq)
-{
-	uint8_t mask;
-
-	if(irq < 0x08) {
-		mask = inb(I8259_PIC_MASTER + 1);
-		mask |= (1 << irq);
-		outb(I8259_PIC_MASTER + 1, mask);
-	}
-	else { /*located in PIC1*/
-		mask = inb(I8259_PIC_SLAVE + 1);
-		mask |= (1 << (irq-0x08));
-		outb(I8259_PIC_SLAVE + 1, mask);
-	}
-}
-#endif
 
 extern void do_softirq();
 void ar_irqHandler(void *p, unsigned int int_no) {

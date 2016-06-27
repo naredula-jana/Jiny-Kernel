@@ -637,7 +637,7 @@ static void schedule_childHPSecondHalf() {
 	asm("movq $0x0,%rax\n\t");
 	asm("callq %[ip]\n\t" : [ip] "=m" (task->thread.real_ip) : : "rax");
 }
-struct task_struct *tmp_task;  /* TODO-HP2: should be local variable for HP thread, otherwise it will issue */
+
 static void schedule_kernelSecondHalf() { /* kernel thread second half:_schedule function task can lands here. */
 	//spin_unlock_irqrestore(&g_cpu_state[getcpuid()].lock, g_current_task->flags);
 	restore_flags(g_current_task->flags);
@@ -645,15 +645,14 @@ static void schedule_kernelSecondHalf() { /* kernel thread second half:_schedule
 		unsigned char c[1024];
 		ut_memcpy(&c[0],g_current_task->thread.userland.user_stack,g_temp_hp_stack_len);
 		if (g_current_task->HP_thread == 0){ /* parent HP thread */
-			tmp_task=g_current_task; /* TODO: need to replace temp_task with local variable  */
+			g_cpu_state[getcpuid()].current_task=g_current_task; /* TODO: not needed , already current_task would have initialsed,  */
 			g_current_task->process_id = g_current_task->task_id; /* process id is created for HP process */
 			g_current_task->thread.userland.sp = &c[0];
 			g_current_task->thread.userland.argc = 0; /* TODO: Hard coded , other wise it is crashing*/
 			g_current_task->HP_thread = 1;
 			asm("movq %[new_sp],%%rsp\n\t" : [new_sp] "=m" (g_current_task->thread.userland.user_stack));
-			asm("movq %[new_sp],%%rbp\n\t" : [new_sp] "=m" (tmp_task->thread.userland.user_stack));
-			tmp_task->thread.real_ip(tmp_task->thread.userland.argc,tmp_task->thread.userland.sp);
-
+			asm("movq %[new_sp],%%rbp\n\t" : [new_sp] "=m" (g_cpu_state[getcpuid()].current_task->thread.userland.user_stack));
+			g_cpu_state[getcpuid()].current_task->thread.real_ip(g_cpu_state[getcpuid()].current_task->thread.userland.argc,g_cpu_state[getcpuid()].current_task->thread.userland.sp);
 		}else{ /* child Hp threads */
 			BRK;
 		}
@@ -1124,7 +1123,7 @@ static int get_free_cpu() {
 		k = 0;
 	}
 	if (k == g_conf_netbh_cpu && getmaxcpus()>1){
-		i++;
+		//i++; /* not use cpu-0 for userlevel threads */
 		k = i % getmaxcpus();
 	}
 
