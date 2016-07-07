@@ -172,13 +172,8 @@ int ar_faultHandler(void *p, unsigned int int_no) {
 		g_cpu_state[getcpuid()].intr_nested_level++;
 		g_cpu_state[0].isr_ctxts[stack_depth]=(void *)&ctx;
 		stack_depth++;
-#if 0
-		if (g_current_task->HP_thread == 1){
-		//ut_log("%d: rip:%x rbx: %x: \n",g_current_task->stats.fault_count,ctx.istack_frame->rip,ctx.gprs->rbx);
-		//ut_log(" faults:%d: tid:%x irq:%d ks:%x addr:%x rbx:%x rip:%x rdi:%x rcx:%x\n",g_current_task->stats.fault_count,
-		//						g_current_task->task_id,g_current_task->stats.irq_count,g_cpu_state[0].md_state.kernel_stack,g_current_task,g_current_task,test,test,test);
-		}
 
+#if 0
 		if (g_current_task->HP_thread == 1){ /* TODO-HP1 : removing this as some race condition HP threads */
 			ut_log(" %d: tid:%x Fault HP:%d ks:%x addr:%x rbx:%x rip:%x rdi:%x rcx:%x\n",g_current_task->stats.fault_count,
 					g_current_task->task_id,int_no,g_cpu_state[0].md_state.kernel_stack,faulting_address,ctx.gprs->rbx,ctx.istack_frame->rip,ctx.gprs->rdi,ctx.gprs->rcx);

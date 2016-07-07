@@ -507,11 +507,9 @@ int init_tasking(unsigned long unused) {
 		ut_memset((unsigned char *) &g_cpu_state[i],0,sizeof(struct cpu_state));
 		g_cpu_state[i].idle_task = (struct task_struct *) ((unsigned char *) (task_addr) + i * TASK_SIZE);
 		g_cpu_state[i].md_state.cpu_id = i;
-		g_cpu_state[i].md_state.current_task = g_cpu_state[i].idle_task;
 		g_cpu_state[i].md_state.kernel_stack = g_cpu_state[i].idle_task + TASK_SIZE;
-		g_cpu_state[i].current_task = g_cpu_state[i].idle_task;
 
-		ut_log("	%d : currenttask:%x \n",g_cpu_state[i].current_task);
+		ut_log("	%d : currenttask:%x \n",g_cpu_state[i].md_state.kernel_stack-TASK_SIZE);
 		ut_memset((unsigned char *) g_cpu_state[i].idle_task, MAGIC_CHAR, TASK_SIZE - PAGE_SIZE / 2);
 		init_task_struct(g_cpu_state[i].idle_task, g_kernel_mm, fs);
 		if (i==0){
@@ -639,20 +637,18 @@ static void schedule_childHPSecondHalf() {
 }
 
 static void schedule_kernelSecondHalf() { /* kernel thread second half:_schedule function task can lands here. */
-	//spin_unlock_irqrestore(&g_cpu_state[getcpuid()].lock, g_current_task->flags);
 	restore_flags(g_current_task->flags);
 	if (g_current_task->thread.userland.user_stack != 0){ /* HP thread */
 		unsigned char c[1024];
 		ut_memcpy(&c[0],g_current_task->thread.userland.user_stack,g_temp_hp_stack_len);
 		if (g_current_task->HP_thread == 0){ /* parent HP thread */
-			g_cpu_state[getcpuid()].current_task=g_current_task; /* TODO: not needed , already current_task would have initialsed,  */
 			g_current_task->process_id = g_current_task->task_id; /* process id is created for HP process */
 			g_current_task->thread.userland.sp = &c[0];
 			g_current_task->thread.userland.argc = 0; /* TODO: Hard coded , other wise it is crashing*/
 			g_current_task->HP_thread = 1;
 			asm("movq %[new_sp],%%rsp\n\t" : [new_sp] "=m" (g_current_task->thread.userland.user_stack));
-			asm("movq %[new_sp],%%rbp\n\t" : [new_sp] "=m" (g_cpu_state[getcpuid()].current_task->thread.userland.user_stack));
-			g_cpu_state[getcpuid()].current_task->thread.real_ip(g_cpu_state[getcpuid()].current_task->thread.userland.argc,g_cpu_state[getcpuid()].current_task->thread.userland.sp);
+			asm("movq %[new_sp],%%rbp\n\t" : [new_sp] "=m" (cpu_current_task(getcpuid())->thread.userland.user_stack));
+			cpu_current_task(getcpuid())->thread.real_ip(cpu_current_task(getcpuid())->thread.userland.argc,cpu_current_task(getcpuid())->thread.userland.sp);
 		}else{ /* child Hp threads */
 			BRK;
 		}
@@ -820,16 +816,6 @@ static unsigned long _schedule(unsigned long flags) {
 		next = prev;
 	}
 
-#ifdef SMP   // SAFE Check
-	if (g_cpu_state[0].idle_task==g_cpu_state[1].current_task || g_cpu_state[0].current_task==g_cpu_state[1].idle_task) {
-		ut_printf("ERROR  cpuid :%d  %d\n",cpuid,getcpuid());
-		while(1);
-	}
-	if (g_cpu_state[0].current_task==g_cpu_state[1].current_task) {
-		while(1);
-	}
-#endif
-
 	/* if prev and next are same then return */
 	if (prev == next) {
 		if ((prev->state != TASK_RUNNING)) {
@@ -875,8 +861,6 @@ static unsigned long _schedule(unsigned long flags) {
 		g_cpu_state[cpuid].sched_lock = 0;
 	}
 
-	g_cpu_state[cpuid].current_task = next;
-	g_cpu_state[cpuid].md_state.current_task = next;
 	/* finally switch the task */
 	arch::switch_to(prev, next, prev);
 	/* from the next statement onwards should not use any stack variables, new threads launched will not able see next statements*/
@@ -1087,10 +1071,10 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 		len = len
 				- ut_snprintf(buf + max_len - len, len, "%2d:(%4d/%4d) <%d-%d> %7s(%d) rlen:%d  runq:%x - %x\n", i,
 						g_cpu_state[i].stats.nonidle_contexts, g_cpu_state[i].stats.total_contexts, g_cpu_state[i].active,
-						g_cpu_state[i].intr_disabled, g_cpu_state[i].current_task->name, g_cpu_state[i].current_task->task_id,g_cpu_state[i].run_queue_length,&g_cpu_state[i].run_queue.head,g_cpu_state[i].run_queue.head.next);
+						g_cpu_state[i].intr_disabled, cpu_current_task(i)->name, cpu_current_task(i)->task_id,g_cpu_state[i].run_queue_length,&g_cpu_state[i].run_queue.head,g_cpu_state[i].run_queue.head.next);
 		if (all != 3) { continue; }
 		temp_bt.count = 0;
-		ut_getBackTrace((unsigned long *) g_cpu_state[i].current_task->thread.rbp, (unsigned long) g_cpu_state[i].current_task, &temp_bt);
+		ut_getBackTrace((unsigned long *) cpu_current_task(i)->thread.rbp, (unsigned long) cpu_current_task(i), &temp_bt);
 		for (j = 0; j < temp_bt.count; j++) {
 				len = len - ut_snprintf(buf + max_len - len, len, "          %d: %9s - %x \n", j, temp_bt.entries[j].name,
 											temp_bt.entries[j].ret_addr);
@@ -1437,7 +1421,6 @@ int SYS_sc_kill(unsigned long pid, unsigned long signal) {
 	int ret = SYSCALL_FAIL;
 
 	SYSCALL_DEBUG("kill pid:%d signal:%d \n", pid, signal);
-
 	spin_lock_irqsave(&g_global_lock, flags);
 	list_for_each(pos, &g_task_queue.head) {
 		task = list_entry(pos, struct task_struct, task_queue);

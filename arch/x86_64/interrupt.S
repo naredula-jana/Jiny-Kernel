@@ -111,8 +111,8 @@ cmpq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rax
 je 9f
 movq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rsp
 movq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rbp
-subq $0x500, %rsp /* TODO-HP1 : need to leave some head room look like some memory corruption is happening */
-subq $0x500, %rbp
+subq $0x10, %rsp /* TODO-HP1 : need to leave some head room , look like some memory corruption is happening */
+subq $0x10, %rbp
 
 9:
 pushq %rdi  /* contains old stack pointer */
@@ -202,17 +202,12 @@ rbp_pop:
 //		sti
 		iretq				/* return from interrupt */
 
-
-
-
 irq_entry_point:
-
         cmpq $GDT_SEL(KCODE_DESCR), 8 + INT_STACK_FRAME_CS_OFFT(%rsp)
         je 1f
 
         swapgs
         SAVE_AND_LOAD_SEGMENT_REGISTERS
-
 1:
         SAVE_GPRS
 	    movq %rsp, %rdi /* contains the context : first argument */
@@ -226,8 +221,8 @@ je 9f
 
 movq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rsp
 movq %gs:CPU_STATE_KERNEL_STACK_OFFSET,%rbp
-subq $16, %rsp
-subq $16, %rbp
+subq $0x10, %rsp
+subq $0x10, %rbp
 9:
 pushq %rdi  /* contains old stack pointer */
         callq ar_irqHandler
@@ -235,7 +230,6 @@ popq %rdi
 movq %rdi, %rsp
 
 	    RESTORE_GPRS
-		
 	    cmpq $GDT_SEL(KCODE_DESCR), 8 + INT_STACK_FRAME_CS_OFFT(%rsp)
         je 2f
 

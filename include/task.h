@@ -82,7 +82,7 @@ struct thread_struct {
 	struct user_regs user_regs;
 };
 #define MAX_FDS 100
-//#define MAX_FILENAME 200
+
 struct file;
 struct fs_struct {
 	struct file *filep[MAX_FDS];
@@ -169,11 +169,13 @@ struct task_struct {
 	int locks_nonsleepable;
 	int wait_for_child_exit;
 
+#if 1
 #define MAX_DEBUG_CALLSTACK 10
 	int trace_stack_length; /* used for trace purpose */
 	char trace_on; /* used for trace */
 	void *callstack[MAX_DEBUG_CALLSTACK];  /* current function when collecting call graph */
 	int callstack_top;
+#endif
 
 	task_queue_t dead_tasks;
 	int exit_code;
@@ -209,7 +211,7 @@ struct task_struct {
 struct cpu_state {
 	struct md_cpu_state md_state; /* This should be at the first location */
 
-	struct task_struct *current_task;
+	//struct task_struct *current_task;
 	struct task_struct *idle_task;
 	spinlock_t lock; /* currently this a) protect run queue, since it is updated globally b) before schedule this is taken to disable interrupts */
 	task_queue_t run_queue;
@@ -260,6 +262,7 @@ extern struct cpu_state g_cpu_state[];
 register unsigned long current_stack_pointer asm("esp");
 #define g_current_task ((struct task_struct *)(current_stack_pointer & ~(TASK_SIZE - 1)))
 //#define g_current_task (g_cpu_state[0].current_task)  /* TODO : this is temporary , later need to remove */
+#define cpu_current_task(cpu) ((struct task_struct *)(g_cpu_state[(int)cpu].md_state.kernel_stack-TASK_SIZE))
 
 #define is_kernel_thread (g_current_task->mm == g_kernel_mm)
 typedef struct backtrace{

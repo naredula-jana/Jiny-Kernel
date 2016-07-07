@@ -262,7 +262,7 @@ static int boot_cpu(imps_processor *proc) {
 	p = __va(bootaddr);
 	while (*p != 0xA5A5A5A5 && to++ < 100)
 		UDELAY(1000);
-	INIT_LOG("		SMP: boot addr: %x  cpuid:%d accept_status current_task:%x\n", *p,cpuid,accept_status,g_cpu_state[cpuid].current_task);
+	INIT_LOG("		SMP: boot addr: %x  cpuid:%d accept_status current_task:%x\n", *p,cpuid,accept_status,g_cpu_state[cpuid].md_state.kernel_stack);
 	if (to >= 100) {
 		INIT_LOG("		SMP: CPU Not Responding, DISABLED");
 		success = 0;

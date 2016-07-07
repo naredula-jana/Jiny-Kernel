@@ -274,7 +274,7 @@ static int wakeup_cpus(int wakeup_cpu) {
 			apic_send_ipi_vector(wakeup_cpu, IPI_INTERRUPT);
 			return 1;
 		} else {
-			if (g_cpu_state[wakeup_cpu].current_task == g_cpu_state[wakeup_cpu].idle_task) {
+			if ((g_cpu_state[wakeup_cpu].md_state.kernel_stack-TASK_SIZE) == g_cpu_state[wakeup_cpu].idle_task) {
 				g_stat_idle_busy++;
 			}
 			return 0;
