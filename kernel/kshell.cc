@@ -181,7 +181,7 @@ int kshell::get_cmd(unsigned char *line) {
 	line[i] = '\0';
 	return cmd;
 }
-int g_conf_only_kshell = 1;
+int g_conf_only_kshell = 0;
 unsigned char *envs[] = { (unsigned char *) "HOSTNAME=jana",
 		(unsigned char *) "USER=jana", (unsigned char *) "HOME=/",
 		(unsigned char *) "PWD=/", 0 };
@@ -265,7 +265,34 @@ int kshell::main(void *arg) {
 	return 1;
 }
 extern "C" {
+unsigned char test_tcp_data[4096];
+void kernel_web_server(void *arg1, void *arg2){
+	struct sockaddr addr,raddr;
+	int ret;
+
+	int fd = SYS_socket(2,1,0);
+	addr.addr =0;
+	addr.sin_port = 0x5000;
+	if (fd < 0){
+		return ;
+	}
+	SYS_bind(fd,&addr,0);
+	while(1){
+		int nfd = SYS_accept(fd,0,0);
+		while (nfd != 0){
+			ret = SYS_fs_read(nfd,test_tcp_data,4096);
+			if (ret > 0){
+				test_tcp_data[ret]=0;
+				SYS_fs_write(nfd,test_tcp_data,ret);
+			}
+			ut_log("read data :%d data:%s\n",ret,test_tcp_data);
+			//SYS_fs_write(nfd,test_tcp_data,ret);
+		}
+		sc_sleep(1);
+	}
+}
 void shell_main(){
+	sc_createKernelThread(kernel_web_server, 0 ,"kernel_ws",0);
 	console_ksh.main(0);
 }
 void Jcmd_help(){
@@ -274,11 +301,6 @@ void Jcmd_help(){
 	ut_printf("Cmd variables:\n");
 	ut_symbol_show(SYMBOL_CMD);
 }
-void Jcmd_test(){  /* generating GP */
-	unsigned long *p=0x100,*r;
-	unsigned long(*q)();
-	q=__va(0x101000);
-	q();
-}
+
 }
 

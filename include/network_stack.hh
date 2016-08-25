@@ -25,6 +25,22 @@ enum _socket_type
 #define IPPROTO_UDP 0x11 /* protocol type */
 #define IPPROTO_TCP 0x06
 
+struct tcp_connection{
+	uint32_t send_seq_no,send_ack_no;
+	uint32_t recv_seq_no,recv_ack_no;
+
+#define MAX_TCPSND_WINDOW 4
+	struct {
+		unsigned char *buf;
+		int len;
+		uint32_t seq_no;
+	}send_queue[MAX_TCPSND_WINDOW];
+
+	uint16_t srcport, destport;
+	uint32_t ip_saddr,ip_daddr;
+	uint8_t  mac_dest[6],mac_src[6];
+
+};
 
 class network_connection{
 public:
@@ -40,8 +56,7 @@ public:
 	}new_child_connection; /* this for listening  tcp connection */
 
 	void *proto_connection;  /* protocol connection */
-
-
+	struct tcp_connection *tcp_conn;
 };
 class network_stack{
 //	char temp_buff[8192];

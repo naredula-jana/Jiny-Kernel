@@ -21,7 +21,6 @@ extern "C"{
 
 extern "C"{
 extern int net_bh();
-int g_conf_eat_udp=0;
 
 static spinlock_t _netstack_lock = SPIN_LOCK_UNLOCKED((unsigned char *)"netstack");
 unsigned long stack_flags;
@@ -50,9 +49,6 @@ int socket::attach_rawpkt(unsigned char *buff, unsigned int len) {
 
 	struct ether_pkt *pkt = (struct ether_pkt *) (buff + 10);
 	if (pkt->iphdr.protocol == IPPROTO_UDP) {
-		if (g_conf_eat_udp == 1){
-			goto last;
-		}
 		for (i=0; i<udp_list.size; i++) {
 			sock = udp_list.list[i];
 			if (sock == 0) continue;
@@ -240,6 +236,7 @@ int fifo_queue::is_empty(){
 unsigned long  fifo_queue::queue_size(){
 	return producer.count - consumer.count;
 }
+int tcp_read(network_connection *conn, uint8_t *raw_data, int raw_len, uint8_t *app_data, int app_maxlen);
 void socket::default_pkt_process(){
 	int i,ret = 0;
 	unsigned char *buf = 0;
@@ -270,7 +267,8 @@ void socket::default_pkt_process(){
 						goto last;
 					}
 					app_len=PAGE_SIZE-sizeof(struct tcp_data);
-					ret = net_stack->read(conn, buf, buf_len,&app_data->data[0], app_len);
+					//ret = net_stack->read(conn, buf, buf_len,&app_data->data[0], app_len);
+					ret = tcp_read(conn, buf, buf_len,&app_data->data[0], app_len);
 					if (ret > 0) {
 						app_data->len = ret;
 						app_data->consumed = 0;
@@ -291,7 +289,8 @@ void socket::default_pkt_process(){
 						ut_log(" ERROR: tcp new connection packet dropped \n");
 						goto last;
 					}
-					ret = net_stack->read(conn, buf, buf_len, 0, app_len);
+					//ret = net_stack->read(conn, buf, buf_len, 0, app_len);
+					ret = tcp_read(conn, buf, buf_len,0, 0);
 					if (conn->new_child_connection.dest_port != 0) {
 						sock->epoll_fd_wakeup();
 					}
@@ -420,6 +419,7 @@ int socket::write_iov(struct iovec *msg_iov, int iov_len) {
 	}
 	return ret;
 }
+extern int tcp_write(network_connection *conn, uint8_t *app_data, int app_maxlen);
 int socket::write(unsigned long offset_unused, unsigned char *app_data, int app_len, int wr_flags_unused) {
 	struct iovec  iov;
 	int ret = 0;
@@ -428,7 +428,11 @@ int socket::write(unsigned long offset_unused, unsigned char *app_data, int app_
 
 	iov.iov_base = app_data;
 	iov.iov_len = app_len;
-	ret = net_stack->write(&network_conn, &iov, 1);
+	if (network_conn.protocol == IPPROTO_TCP){
+		ret = tcp_write(&network_conn, app_data, app_len);
+	}else{
+		ret = net_stack->write(&network_conn, &iov, 1);
+	}
 
 	if (ret > 0) {
 		stat_out++;
@@ -438,6 +442,7 @@ int socket::write(unsigned long offset_unused, unsigned char *app_data, int app_
 	}
 	return ret;
 }
+int tcp_conn_free(struct tcp_connection *tcp_conn);
 int socket::close() {
 	int ret;
 	ut_log(" Freeing the socket :%d\n",this->count.counter);
@@ -450,6 +455,10 @@ int socket::close() {
 
 	if (peeked_msg != 0 ){
 		free_page(peeked_msg);
+	}
+	if (network_conn.tcp_conn != 0){
+		tcp_conn_free(network_conn.tcp_conn);
+		network_conn.tcp_conn = 0;
 	}
 
 	ut_log("socket freeing: in:%d out:%d inerr:%d outerr:%d \n",this->stat_in,this->stat_out,this->statin_err,this->statout_err);
@@ -645,6 +654,9 @@ vinode* socket::create_new(int arg_type) {
 }
 int socket::default_pkt_thread(void *arg1, void *arg2){
 	int ret ;
+	while (g_boot_completed == 0){
+		sc_sleep(1);
+	}
 	while(1){
 		ret = default_socket->queue.peep_from_queue(0,0,0);
 		if (ret == JSUCCESS) {
@@ -722,7 +734,7 @@ int SYS_bind(int fd, struct sockaddr *addr, int len) {
 	return ret;
 }
 #define AF_INET         2       /* Internet IP Protocol         */
-static uint32_t net_htonl(uint32_t n) {
+uint32_t net_htonl(uint32_t n) {
 	return ((n & 0xff) << 24) | ((n & 0xff00) << 8) | ((n & 0xff0000UL) >> 8) | ((n & 0xff000000UL) >> 24);
 }
 int SYS_getpeername(int sockfd, struct sockaddr *addr, int *addrlen) {
@@ -801,6 +813,9 @@ int SYS_accept4(int fd,unsigned long sockaddr, unsigned long addrlen,int accept_
 		return SYSCALL_FAIL;
 	}
 
+	while (inode->network_conn.tcp_conn ==0){
+		sc_sleep(1); /* wait till the tcp-connection arrives */
+	}
 	new_file = g_current_task->fs->filep[i];
 	struct socket *new_inode = (struct socket *) new_file->vinode;
 	new_inode->network_conn.proto_connection = (unsigned long) 0;
@@ -811,6 +826,12 @@ int SYS_accept4(int fd,unsigned long sockaddr, unsigned long addrlen,int accept_
 
 	inode->data_available_for_consumption = 0; /*TODO:  currently the listen capcity is one, for the socekts that are bind, need to listen on more then one */
 	inode->network_conn.new_child_connection.dest_port = 0;
+	new_inode->network_conn.tcp_conn = inode->network_conn.tcp_conn;
+	if (inode->network_conn.tcp_conn != 0){
+		new_inode->network_conn.dest_port= inode->network_conn.tcp_conn->destport;
+	}
+	inode->network_conn.tcp_conn =0;
+
 	new_inode->network_conn.type = SOCK_STREAM;
 	new_file->flags = file->flags;
 
@@ -862,7 +883,6 @@ unsigned long SYS_sendto(int sockfd, void *buf, size_t len, int flags, struct so
 	SYSCALL_DEBUG("SENDTO fd:%x buf:%x len:%d flags:%x dest_addr:%x addrlen:%d\n", sockfd, buf, len, flags, dest_addr, addrlen);
 	//ut_log("SENDTO fd:%x buf:%x len:%d flags:%x dest_addr:%x addrlen:%d\n", sockfd, buf, len, flags, dest_addr, addrlen);
 
-	//return len;
 	if (sock_check(sockfd) == JFAIL || g_current_task->fs->filep[sockfd] == 0)
 		return 0;
 	struct file *file = g_current_task->fs->filep[sockfd];

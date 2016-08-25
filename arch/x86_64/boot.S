@@ -42,8 +42,7 @@ multiboot_header:
 	.long	0x100024
 
 /* load_end_addr */
-	.long   0x520000  /* TODO: hard coded address: end address, it works only with grub not directly with kernel */
-//	.long   0x518790
+	.long   0x560000  /* TODO-critical: hard coded address: end address, it works only with grub not directly with kernel */
 //	.long   jiny_kernel_end / 0x32
 /* bss_end_addr */
 	.long   0
