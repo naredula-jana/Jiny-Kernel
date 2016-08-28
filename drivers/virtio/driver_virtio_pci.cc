@@ -147,7 +147,7 @@ int virtio_p9_jdriver::ioctl(unsigned long arg1, unsigned long arg2) {
 static virtio_p9_jdriver *p9_jdriver;
 static virtio_net_jdriver *net_jdriver;
 static virtio_disk_jdriver *disk_jdriver;
-
+static virtio_memballoon_jdriver *memballoon_jdriver;
 
 extern "C"{
 
@@ -167,6 +167,11 @@ void init_virtio_drivers() {
 	disk_jdriver = jnew_obj(virtio_disk_jdriver, 0);
 	disk_jdriver->name = (unsigned char *) "disk_virtio_driver";
 	register_jdriver(disk_jdriver);
+
+	/* init memballoon */
+	memballoon_jdriver = jnew_obj(virtio_memballoon_jdriver, 0);
+	memballoon_jdriver->name = (unsigned char *) "virtio_memballoon_driver";
+	register_jdriver(memballoon_jdriver);
 }
 
 virtio_queue *virtio_jdriver_getvq(void *driver, int index) {

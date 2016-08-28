@@ -14,7 +14,8 @@
 
 
 /********************* Data Structures *****************************/
-#define NR_MEM_LISTS 8
+// #define NR_MEM_LISTS 8
+#define NR_MEM_LISTS 10 /* change for getting 2M pages */
 #define memory_head(x) ((struct page *)(x))
 
 /* The start of this MUST match the start of "struct page" */

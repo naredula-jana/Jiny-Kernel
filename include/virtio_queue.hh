@@ -328,5 +328,15 @@ public:
 
 };
 
+class memballoon_virtio_queue: public virtio_queue {
+
+public:
+	memballoon_virtio_queue(jdevice *device, uint16_t index, int queue_type):
+			virtio_queue(device, index, queue_type){
+		virtio_type = VIRTIO_ID_BALLOON;
+		scatter_list_size = 3;
+	}
+
+};
 
 #endif

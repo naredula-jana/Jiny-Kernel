@@ -125,7 +125,6 @@ int disk_io(int type, unsigned char *buf, int len, int offset, int read_ahead, j
 #define DISK_WRITE 1
 #define IOCTL_DISK_SIZE 1
 class virtio_disk_jdriver: public jdiskdriver {
-
 public:
 	struct virt_queue{
 		disk_virtio_queue *send;
@@ -147,6 +146,27 @@ public:
 	int write(unsigned char *buf, int len, int flags);
 	int ioctl(unsigned long arg1,unsigned long arg2);
 };
+
+class virtio_memballoon_jdriver: public jdriver {
+public:
+
+	virtio_queue *send_queues[2];
+	virtio_queue *recv_queue;
+	uint16_t max_vqs;
+
+	virtio_memballoon_jdriver(class jdevice *jdev);
+
+//	int init_device(jdevice *dev);
+
+	void print_stats(unsigned char *arg1,unsigned char *arg2);
+	int probe_device(jdevice *dev);
+	jdriver *attach_device(jdevice *dev);
+	int dettach_device(jdevice *dev);
+	int read(unsigned char *buf, int len, int flags, int opt_flags);
+	int write(unsigned char *buf, int len, int flags);
+	int ioctl(unsigned long arg1,unsigned long arg2);
+};
+
 class virtio_p9_jdriver: public jdriver {
 	int p9_attach_device(jdevice *dev);
 

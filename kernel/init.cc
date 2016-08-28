@@ -68,7 +68,7 @@ static inittable_t inittable[] = {
 		{init_descriptor_tables,0,"ISR and Descriptors",0},
 		{init_kernel_args,0, "Kernel Args",0},
 		{init_syscall,0,       "syscalls",0},
-		{init_memory,0,           "Main memory",0},
+		{init_memory,0,           "Main memory",1},
 #ifndef JINY_SLAB
 		{init_kmem_cache,0,       "kmem cache",0},
 #endif

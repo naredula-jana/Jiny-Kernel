@@ -102,7 +102,8 @@ void *kmalloc (long size, int flags);
 void kfree (const void *objp);
 extern addr_t g_jiffies;
 
-#define MAX_DMESG_LOG 1200000
+//#define MAX_DMESG_LOG 1200000
+#define MAX_DMESG_LOG 1000000
 #include "interface.h"
 
 #endif
