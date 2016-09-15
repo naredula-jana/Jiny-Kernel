@@ -610,7 +610,7 @@ void sc_delete_task(struct task_struct *task) {
 	if (1){
 		unsigned long life_length = g_jiffies - task->stats.start_time;
 		unsigned long tsc_diff = (ar_read_tsc() - task->stats.start_tsc)/1000000;
-		ut_log("DELETING TASK :%d(%x) st:%d dur:%d (diff_tsc:%d) cont:%d tick:%d name:%s cpu:%i\n", task->task_id,task->task_id,task->stats.start_time,life_length,tsc_diff,task->stats.total_contexts,task->stats.ticks_consumed,task->name, task->allocated_cpu);
+		//ut_log("DELETING TASK :%d(%x) st:%d dur:%d (diff_tsc:%d) cont:%d tick:%d name:%s cpu:%i\n", task->task_id,task->task_id,task->stats.start_time,life_length,tsc_diff,task->stats.total_contexts,task->stats.ticks_consumed,task->name, task->allocated_cpu);
 	}
 	//Jcmd_pt(0,0);
 	//Jcmd_maps(0,0);
@@ -1144,7 +1144,7 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	int i;
 	//Jcmd_maps(0,0);
 	SYSCALL_DEBUG("clone fn:%x child_stack:%x flags:%x args:%x pid:%x tls_area:%x\n", fn, child_stack, clone_flags, args,pid,tls_area);
-	ut_log("clone FN:%x child_stack:%x flags:%x args:%x \n", fn, child_stack, clone_flags, args,pid);
+	//ut_log("clone FN:%x child_stack:%x flags:%x args:%x \n", fn, child_stack, clone_flags, args,pid);
 
 	/* Initialize the stack  */
 	p = alloc_task_struct();
@@ -1248,7 +1248,7 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	spin_unlock_irqrestore(&g_global_lock, flags);
 
 	p->clone_flags = clone_flags;
-	ut_log(" clone : %s  pid :%d(%x) task:%x \n",p->name,p->task_id,p->task_id, p);
+	//ut_log(" clone : %s  pid :%d(%x) task:%x \n",p->name,p->task_id,p->task_id, p);
 
 	if (clone_flags & CLONE_VFORK) { //TODO : sys-vfork partially done, need to use to signals suspend and continue the parent process
 		g_current_task->state = TASK_STOPPED;

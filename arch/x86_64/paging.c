@@ -1011,6 +1011,7 @@ unsigned long  Jcmd_scanptes(){
 	addr = ar_scanPtes(0xffffc90000000000,0xffffd00000000000,&test_ac,&test_dr);
 	return addr;
 }
+#if 0
 extern unsigned long test_mem_start,test_mem_end;
 void Jcmd_memtest(unsigned char *arg1,unsigned char *arg2){
 	unsigned long start_addr,end_addr;
@@ -1050,7 +1051,7 @@ void Jcmd_memtest(unsigned char *arg1,unsigned char *arg2){
 	ut_printf("CPU:%d TIME.. : %d loop=%d add diff:%x start:%x end:%x\n",cpu,etime-stime,loop,end_addr-start_addr,start_addr,end_addr);
 	//Jcmd_scanptes();
 }
-
+#endif
 unsigned long  ar_modifypte(unsigned long addr, struct mm_struct *mm, unsigned char rw)
 {
 	addr_t *pl4,*pl3,*pl2,*pl1,*v;

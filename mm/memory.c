@@ -15,7 +15,7 @@
 
 /********************* Data Structures *****************************/
 // #define NR_MEM_LISTS 8
-#define NR_MEM_LISTS 10 /* change for getting 2M pages */
+#define NR_MEM_LISTS 11 /* change for getting 2M pages */
 #define memory_head(x) ((struct page *)(x))
 
 /* The start of this MUST match the start of "struct page" */
@@ -192,7 +192,7 @@ static unsigned long init_free_area(unsigned long start_mem, unsigned long end_m
 	return start_mem;
 }
 static int init_done=0;
-static unsigned long stat_mem_size=0;
+unsigned long g_stat_mem_size=0;
 static unsigned long stat_allocs=0;
 static unsigned long stat_frees=0;
 static void init_mem(unsigned long start_mem, unsigned long end_mem, unsigned long virt_start_addr){
@@ -204,7 +204,7 @@ static void init_mem(unsigned long start_mem, unsigned long end_mem, unsigned lo
 
 	INIT_LOG("	first page : %x :%x :%x\n",MAP_NR(start_mem),MAP_NR(start_mem+PAGE_SIZE),MAP_NR(virt_start_addr));
 	start_mem = PAGE_ALIGN(start_mem);
-	stat_mem_size = end_mem -start_mem;
+	g_stat_mem_size = end_mem -start_mem;
 	while (start_mem < end_mem) {
 		clear_bit(PG_reserved, &g_mem_map[MAP_NR(start_mem)].flags);
 		start_mem += PAGE_SIZE;
@@ -430,7 +430,7 @@ int init_memory(unsigned long arg1){
 
 	virt_start_addr=virt_start_addr+pc_size;
 
-#if 1 /* reserve the test memory for testing */
+#if 0 /* reserve the test memory for testing */
 	if (virt_end_addr > (virt_start_addr + (600*1024*1024))){
 	test_mem_start = virt_start_addr;
 	test_mem_end  = virt_start_addr + 512 *1024 *1204 ; /* 512M */
@@ -464,7 +464,7 @@ int Jcmd_mem(char *arg1, char *arg2) {
 				free_mem_area[order].stat_count, (nr << order), ((nr << order)*PAGE_SIZE)/(1024*1024));
 	}
 	spin_unlock_irqrestore(&free_area_lock, flags);
-	ut_printf("total Free pages = %d (%dM) Actual pages: %d (%dM) pagecachesize: %dM \n", total, (total * 4) / 1024,stat_mem_size/PAGE_SIZE,stat_mem_size/(1024*1024),g_pagecache_size/(1024*1024));
+	ut_printf("total Free pages = %d (%dM) Actual pages: %d (%dM) pagecachesize: %dM , freepages:%d\n", total, (total * 4) / 1024,g_stat_mem_size/PAGE_SIZE,g_stat_mem_size/(1024*1024),g_pagecache_size/(1024*1024),g_nr_free_pages);
 
 	int slab=0;
 	int referenced=0;

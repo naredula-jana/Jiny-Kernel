@@ -151,7 +151,7 @@ class virtio_memballoon_jdriver: public jdriver {
 public:
 
 	virtio_queue *send_queues[2];
-	virtio_queue *recv_queue;
+	virtio_queue *stat_queue;
 	uint16_t max_vqs;
 
 	virtio_memballoon_jdriver(class jdevice *jdev);

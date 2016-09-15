@@ -212,7 +212,7 @@ static  int acpiEnable(void)
 //
 int init_acpi(unsigned long unused_arg1)
 {
-	//return -1;
+	return -1; /*  TODO:  getting invalid address with new qemu version from acpiGetRSDPtr */
    unsigned int *ptr = acpiGetRSDPtr();
 
  //  ut_printf(" first : phy %x \n",ptr);
