@@ -64,10 +64,12 @@ More details of the Benchmarks are available at [Jiny-Benchmarks.](../master/doc
 
 
 ##Papers:
- -   [Page cache optimizations for Hadoop, published and presented in open cirrus-2011 summit](../master/doc/PageCache-Open-Cirrus.pdf) .
- -   [Memory optimization techniques](../master/doc/malloc_paper_techpulse_submit_final.pdf).
+ -   [Page cache optimizations for Hadoop/HDFS, published and presented in open cirrus-2011 summit](../master/doc/PageCache-Open-Cirrus.pdf) .
+ -   [User space Memory optimization techniques](../master/doc/malloc_paper_techpulse_submit_final.pdf).
  -   [Jiny pagecache implementation](../master/doc/pagecache.txt).
  -   [Tar Fs - Jiny root file system](../master/doc/tar_fs.md).
+ -   [Jiny Kernel Memory optimizations](../master/doc/Jiny_memory_management.md).
+ -   [Golang apps in ring-0](../master/doc/GolangAppInRing0.pdf).
 
 ##Related Projects:
  -[Vmstate](https://github.com/naredula-jana/vmstate): Virtualmachine state capture and analysis.
