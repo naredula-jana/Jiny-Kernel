@@ -30,4 +30,4 @@ The following are advantages of Huge Page when compare to 4k page:
  -  Example: Suppose a Vm with 8G RAM, of this 2GB is used by kernel and apps,  rest of the 6G pages are in the free list but not zero pages since it is used for some purpose, with this patch, by clearing the contents free list will contain all the zero pages, and the KSM will pick all pages in the free list. and amount memory consumed by VM is 2G+4K instead of 8G. This is compression within the VM. KSM also does the compression across the vm for identical code pages.
  
 *Source code: Enable or disable zero page creation for KSM:*
-   -   use [g_conf_zeropage_cache](../mm/jslab.cc)  sysctl config variable to turn or off.
+   -   use [g_conf_zeropage_cache](../mm/jslab.c)  sysctl config variable to turn or off.
