@@ -368,12 +368,12 @@ unsigned long SYS_sysctl(struct __sysctl_args *args) {
 }
 
 unsigned long SYS_wait4(int pid, void *status, unsigned long option, void *rusage) {
-	//SYSCALL_DEBUG("wait4(Dummy)  pid:%x status:%x option:%x rusage:%x\n",pid,status,option,rusage);
+	SYSCALL_DEBUG("wait4()  pid:%x status:%x option:%x rusage:%x\n",pid,status,option,rusage);
 	unsigned long child_id;
 	unsigned long flags;
 	struct task_struct *child_task = 0;
 #define WNOHANG 1
-
+repeat:
 	struct list_head *node;
 	node = g_current_task->dead_tasks.head.next;
 	if (list_empty((g_current_task->dead_tasks.head.next))) {
@@ -381,6 +381,7 @@ unsigned long SYS_wait4(int pid, void *status, unsigned long option, void *rusag
 			g_current_task->wait_for_child_exit = 1;
 			sc_sleep(50);
 			g_current_task->wait_for_child_exit = 0;
+			goto repeat;
 		}
 	} else {
 		spin_lock_irqsave(&g_global_lock, flags);
@@ -404,7 +405,8 @@ unsigned long SYS_wait4(int pid, void *status, unsigned long option, void *rusag
 	}
 }
 unsigned long SYS_alarm(int seconds){
-	SYSCALL_DEBUG("alarm(TODO) seconds :%d \n", seconds);
+	SYSCALL_DEBUG("alarm seconds :%d \n", seconds);
+	g_current_task->sys_alaram = g_jiffies + (seconds*100);
 	return SYSCALL_SUCCESS;
 }
 unsigned long SYS_chroot(uint8_t *filename) {

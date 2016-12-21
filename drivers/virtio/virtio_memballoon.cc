@@ -113,7 +113,7 @@ static void update_balloon_size(){
 	unsigned long config_addr;
 
 	uint32_t total = balloon_data.total_pages ;
-	ut_log("BALLOON  ACTUAL size :%x(%d) \n",total,total);
+	//ut_log("BALLOON  ACTUAL size :%x(%d) \n",total,total);
 
 	config_addr = dev->pci_device.pci_ioaddr  + 20;
 
@@ -139,7 +139,7 @@ static void update_balloon_stats(){
 	update_stat(vb_stats, idx++, VIRTIO_BALLOON_S_MINFLT, 0);
 	update_stat(vb_stats, idx++, VIRTIO_BALLOON_S_MAJFLT, 0);
 
-	ut_log("MEM Balloon update status, free :%d(%x) Avail:%d(%x), Total:%d\n",g_nr_free_pages*PAGE_SIZE,g_nr_free_pages*PAGE_SIZE,total_available_mem,total_available_mem,total_phy_mem);
+	//ut_log("MEM Balloon update status, free :%d(%x) Avail:%d(%x), Total:%d\n",g_nr_free_pages*PAGE_SIZE,g_nr_free_pages*PAGE_SIZE,total_available_mem,total_available_mem,total_phy_mem);
 
 	sg[0].page_link = (unsigned long) vb_stats;
 	sg[0].length = sizeof(vb_stats);

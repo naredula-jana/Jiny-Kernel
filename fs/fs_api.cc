@@ -544,6 +544,8 @@ last:
 
 extern int fs_sync();
 int SYS_sync(){
+	SYSCALL_DEBUG("sync \n");
+	return 0; // TODO
 	return fs_sync();
 }
 

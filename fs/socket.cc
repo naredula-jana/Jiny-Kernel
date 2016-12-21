@@ -796,6 +796,7 @@ int SYS_getsockname(int sockfd, struct sockaddr *addr, int *addrlen) {
 
 int SYS_accept4(int fd,unsigned long sockaddr, unsigned long addrlen,int accept_flags) {
 	struct file *file, *new_file;
+	int sleep_dur=1;
 
 	SYSCALL_DEBUG("accept %d \n", fd);
 	ut_log("accept :fd \n");
@@ -814,7 +815,10 @@ int SYS_accept4(int fd,unsigned long sockaddr, unsigned long addrlen,int accept_
 	}
 
 	while (inode->network_conn.tcp_conn ==0){
-		sc_sleep(1); /* wait till the tcp-connection arrives */
+		sc_sleep(sleep_dur); /* wait till the tcp-connection arrives */
+		if (sleep_dur < 100){
+			sleep_dur = sleep_dur*2;
+		}
 	}
 	new_file = g_current_task->fs->filep[i];
 	struct socket *new_inode = (struct socket *) new_file->vinode;

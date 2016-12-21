@@ -414,7 +414,7 @@ unsigned long fs_elf_load(struct file *file,unsigned long tmp_stack, unsigned lo
 			//ut_memset((unsigned char *)SYSCALL_PAGE,(unsigned char )0xcc,0x1000);
 		ut_memcpy((unsigned char *)USER_SYSCALL_PAGE,(unsigned char *)&__vsyscall_page,0x1000);
 		if (g_conf_syscall_debug==1){
-			pagetable_walk(4,g_current_task->mm->pgd,1,0);
+			//pagetable_walk(4,g_current_task->mm->pgd,1,0);
 		}
 	}
 	DEBUG(" Program start address(autod) : %x \n",elf_ex.e_entry);

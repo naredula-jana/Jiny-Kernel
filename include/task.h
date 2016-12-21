@@ -129,6 +129,8 @@ enum {
 #define CLONE_NEWNS     0x00020000      /* New mount namespace group */
 #define CLONE_SYSVSEM   0x00040000      /* share system V SEM_UNDO semantics */
 #define CLONE_SETTLS    0x00080000      /* create a new TLS for the child */
+#define CLONE_CHILD_CLEARTID    0x00200000
+#define CLONE_CHILD_SETTID      0x01000000
 
 #define CLONE_HP_THREAD 0x40000000 /* proparatory */
 #define CLONE_KERNEL_THREAD 0x80000000 /* proparatory */
@@ -145,6 +147,9 @@ struct task_struct {
 	int killed; /* some as send send a kill signal or self killed */
 	atomic_t count; /* usage count */
 	int clone_flags; /* clone flags of the parent task, this is used for vfork call */
+	unsigned long sys_alaram; /* sets the alaram time to kill the process, this is in timestamp */
+	void *set_child_tid,*clear_child_tid;
+	int temp_count_tid;/* TODO remove later */
 
 	unsigned long task_id;  /* unique id for each task */
 	unsigned long parent_process_pid;  /* parent process id */

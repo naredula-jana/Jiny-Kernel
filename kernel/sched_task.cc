@@ -672,15 +672,7 @@ void sc_before_syscall() {
 extern "C" {
 unsigned long g_stat_syscall_count;
 }
-void sc_after_syscall() {
-	/* Handle any pending signal */
-	//SYSCALL_DEBUG("syscall ret  state:%x\n",g_current_task->state);
-
-	//net_bh();
-	STAT_INC(g_stat_syscall_count);
-
-	g_cpu_state[getcpuid()].stats.syscalls++;
-
+static void check_signals(){
 	if (g_current_task->pending_signals == 0) {
 		return;
 	}
@@ -695,6 +687,20 @@ void sc_after_syscall() {
 		return;
 	}
 	g_current_task->pending_signals = 0;
+	if ((g_current_task->sys_alaram > 0) && (g_jiffies > g_current_task->sys_alaram)){
+		SYS_sc_exit(124);
+	}
+}
+void sc_after_syscall() {
+	/* Handle any pending signal */
+	//SYSCALL_DEBUG("syscall ret  state:%x\n",g_current_task->state);
+
+	//net_bh();
+	STAT_INC(g_stat_syscall_count);
+
+	g_cpu_state[getcpuid()].stats.syscalls++;
+	check_signals();
+
 	g_current_task->callstack_top = 0;
 	sc_schedule();
 }
@@ -918,6 +924,7 @@ void timer_callback(void *unused_args) {
 		g_current_task->stats.ticks_consumed++;
 		g_current_task->last_jiffie = g_jiffies;
 	}
+	check_signals();
 }
 
 /*********************************************8888   Sys calls and Jcmds ************************************/
@@ -1010,7 +1017,7 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	unsigned char *buf;
 	int all = 0;
 
-	ut_printf(" [tid:pid:ppid] allocatedcpu: state (cont-switches/total ticks)  mm:mm_count name cpu\n");
+	ut_printf(" [tid:pid:ppid] (syscount) allocatedcpu: state (cont-switches/total ticks)  mm:mm_count name cpu\n");
 
 	if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "all") == 0) {
 		all = 1;
@@ -1033,9 +1040,9 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	list_for_each(pos, &g_task_queue.head) {
 		task = list_entry(pos, struct task_struct, task_queue);
 		if (is_kernelThread(task))
-			len = len - ut_snprintf(buf + max_len - len, len, "[%2x:%2x:%2x]", task->task_id,task->process_id,task->parent_process_pid);
+			len = len - ut_snprintf(buf + max_len - len, len, "[%2x(%d):%2x:%2x](%d)", task->task_id,task->task_id,task->process_id,task->parent_process_pid,task->stats.syscall_count);
 		else
-			len = len - ut_snprintf(buf + max_len - len, len, "(%2x:%2x:%2x)", task->task_id,task->process_id,task->parent_process_pid);
+			len = len - ut_snprintf(buf + max_len - len, len, "(%2x(%d):%2x:%2x)(%d)", task->task_id,task->task_id,task->process_id,task->parent_process_pid,task->stats.syscall_count);
 
 		len = len
 				- ut_snprintf(buf + max_len - len, len,
@@ -1187,6 +1194,10 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	if (clone_flags & CLONE_SETTLS){
 		p->thread.userland.user_fs_base = tls_area;
 	}
+
+	p->set_child_tid = (clone_flags & CLONE_CHILD_SETTID) ? fn : NULL; /* fn is overloaded and same child_tid */
+	p->clear_child_tid = (clone_flags & CLONE_CHILD_CLEARTID) ? fn : NULL;
+
 	if (mm != g_kernel_mm) { /* user level thread */
 		ut_memcpy((uint8_t *) &(p->thread.userland), (uint8_t *) &(g_current_task->thread.userland), sizeof(struct user_thread));
 		ut_memcpy((uint8_t *) &(p->thread.user_regs),
@@ -1238,8 +1249,6 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	p->thread.sp = (void *) ((addr_t) p + (addr_t) TASK_SIZE - (addr_t) 160); /* 160 bytes are left at the bottom of the stack */
 	p->state = TASK_RUNNING;
 
-
-//	ut_log(" New thread is created:%d %s on %d\n",p->pid,p->name,p->allocated_cpu);
 	ret_pid = p->task_id;
 
 	spin_lock_irqsave(&g_global_lock, flags);
@@ -1248,7 +1257,6 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 	spin_unlock_irqrestore(&g_global_lock, flags);
 
 	p->clone_flags = clone_flags;
-	//ut_log(" clone : %s  pid :%d(%x) task:%x \n",p->name,p->task_id,p->task_id, p);
 
 	if (clone_flags & CLONE_VFORK) { //TODO : sys-vfork partially done, need to use to signals suspend and continue the parent process
 		g_current_task->state = TASK_STOPPED;

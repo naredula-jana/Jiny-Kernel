@@ -140,6 +140,7 @@ struct vm_area_struct {
 	void *vm_inode; /* File we map to (can be NULL). */
 	unsigned long vm_private_data; /* was vm_pte (shared mem) */
 	struct list_head inode_vma_link; /* vmas connected to inode */
+	int hugepages_enabled; /* set this flag if enabled */
 
 	int stat_page_faults,stat_page_wrt_faults;
 	int stat_page_count;

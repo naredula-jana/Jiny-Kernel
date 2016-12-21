@@ -179,6 +179,11 @@ int ar_updateCpuState(struct task_struct *next, struct task_struct *prev) {
 #if 1 /* fs update using MSR instead of gdt table, in gdt table the value can have only 32 bit whereas in msr it is 64 bit */
 	msr_write(MSR_FS_BASE, g_cpu_state[cpuid].md_state.user_fs_base);
 #endif
+	if (next->set_child_tid != 0  && next->temp_count_tid==0){
+		uint64_t *ptid = next->set_child_tid;
+		*ptid= next->task_id;
+		next->temp_count_tid = 1;
+	}
 	return 1;
 }
 

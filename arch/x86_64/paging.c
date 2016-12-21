@@ -533,10 +533,14 @@ static int clear_pagetable(struct mm_struct *mm, int level,unsigned long ptable_
 				}else
 				{
 					DEBUG("Freeing ANONYMOUS  from page table level:%d  vaddr:%x paddr:%x  \n",level,page,*v);
-					if (level ==1) /* Freeing the Anonymous page */
+					if (level ==1 ) /* Freeing the Anonymous page */
 					{
 						mm->stat_page_free++;
 						free_page((unsigned long)__va(page));
+					    *v=0;
+					}else if  (level==2 && pde->ps==1){
+						mm->stat_page_free++;
+						mm_putFreePages((unsigned long)__va(page), 9);
 					    *v=0;
 					}else
 					{ /* TODO */
@@ -790,9 +794,20 @@ if (g_stat_pagefault>6){
 
 	if (pl1==0)
 	{
+		if ((vma->vm_flags & MAP_ANONYMOUS) && (vma->hugepages_enabled == 1) && (user==1)) {
+			unsigned long hp = mm_getFreePages(MEM_CLEAR, 9); /* need 2M page to aattch to pte  */
+			if (hp != 0) {
+				mm->stat_page_allocs++;
+				pl1 = (unsigned long *) __pa(v);
+				mk_pde(__va(pl1), (__pa(hp))>>PAGE_SHIFT, 1, 0, user);
+				vm_vma_stat(vma,addr,faulting_ip,write_fault,0);
+				ar_flushTlbGlobal();
+				flush_tlb_entry(addr);
+				return 1;
+			}
+		}
 		v=(unsigned long *)mm_pagealloc(mm); /* get page of 4k size for page table */
 		assert (v !=0);
-		ut_memset((unsigned char *)v,0,4096);
 		pl1=(unsigned long *)__pa(v);
 		p=(unsigned long *)(pl2+(L2_INDEX(addr)));
 		v=__va(p);
@@ -804,7 +819,7 @@ if (g_stat_pagefault>6){
 	}
 
 
-	/* By Now we have pointer to all 4 tables , Now check the required page*/
+	/* By Now we have pointer to all 4-levels of tables , Now check the required page*/
     int writeFlag = vma->vm_prot&PROT_WRITE;
 	if (vma->vm_flags & MAP_ANONYMOUS)
 	{
