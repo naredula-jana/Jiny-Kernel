@@ -85,7 +85,7 @@ static inittable_t inittable[] = {
 		{init_kmemleak,0,       "kmemleak",0},
 #endif
 #ifdef SMP
-		{init_smp_force, 8,       "smp_init",0},  /* TODO:  MAX CPU'S CANNOT GO BEYOND 8, IF IT GOS beyond 8 , cpu spend lot of time in init_clock  */
+		{init_smp_force, 8,       "smp_init",1},  /* TODO:  MAX CPU'S CANNOT GO BEYOND 8, IF IT GOS beyond 8 , cpu spend lot of time in init_clock  */
 #endif
 #ifdef NETWORKING
 		{init_networking,0,       "network_sched",0},  /* should be after smp,since it uses number of ax core */
@@ -93,7 +93,7 @@ static inittable_t inittable[] = {
 	//	{init_clock,0,       "clock"},
 //		{init_code_readonly,0,       "Making code readonly",0},
 		{init_kernel_vmaps, 0, "Kernel Vmaps",0},
-		{init_jdevices,0,       "devices in c++ ",1},
+		{init_jdevices,0,       "devices in c++ ",0},
 		{init_procfs,0,"Procfs",0},
 		{init_acpi,0,       "ACPI initialzed ",0},
 #ifdef NETWORKING
@@ -163,7 +163,7 @@ int init_physical_memory(unsigned long unused){
 	}
 	init_symbol_table(&_edata, max_addr);
 	INIT_LOG("	    After of symbol processing:  \n");
-	//while(1);
+//	while(1);
 	return JSUCCESS;
 }
 /* Forward declarations.  */
@@ -274,6 +274,7 @@ void cmain() {  /* This is the first c function to be executed */
 		}else{
 			ut_log("	%s : ....Failed error:%d\n",inittable[i].comment,ret);
 		}
+	//	BRK;
 	}
 	//ar_updateCpuState(g_cpu_state[0].current_task,0);
 
@@ -294,7 +295,7 @@ void cmain() {  /* This is the first c function to be executed */
 	sc_createKernelThread(housekeeper_thread, 0, (unsigned char *)"house_keeper",0);
 #endif
 	ut_log("	HP version 1.004 Initialization COMPLETED\n-------------------\n");
-
+//	while(1);
 	idleTask_func();
 	return;
 }

@@ -216,7 +216,7 @@ struct task_struct {
 struct cpu_state {
 	struct md_cpu_state md_state; /* This should be at the first location */
 
-	//struct task_struct *current_task;
+//	struct task_struct *test_current_task; /* TODO used only for testing purpose */
 	struct task_struct *idle_task;
 	spinlock_t lock; /* currently this a) protect run queue, since it is updated globally b) before schedule this is taken to disable interrupts */
 	task_queue_t run_queue;

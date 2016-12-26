@@ -22,10 +22,14 @@ The following are advantages of Huge Page when compare to 4k page:
    -   use [MEMBALLOON_2M_PAGE_SIZE](../drivers/virtio/virtio_memballoon.cc) flag in the code to turn or off. 
  
 *Benchmark* : TODO
- 
+
+ **2. picking pages from low priority memory region:**
+  - Rule1: Always the balloon driver picks the pages from the low priority region if it is enabled.
+  - Rule2: periodically housekeeping thread checks, if the pages are available in high priority region and there is a shortage of pages in low prority, then content of pages are swapped between low prority and high priority to give back to balloon driver. 
+
 ### KSM and Zero page related optimizations:
 
- **2. Zero Pages in free list:**
+ **3. Zero Pages in free list:**
  -  Clearing the free pages during idle cpu by housekeeping thread will have two advantages. Firstly, zero pages will get picked up by KSM for merging the identical pages. Secondly, maintaning sufficient zero pages in the free list will speed up the calloc calls, otherwise clearing the page will be done syncronously and increasing the delay of calloc call.  with this approach pages are zeroed asyncronously. 
  -  Example: Suppose a Vm with 8G RAM, of this 2GB is used by kernel and apps,  rest of the 6G pages are in the free list but not zero pages since it is used for some purpose, with this patch, by clearing the contents free list will contain all the zero pages, and the KSM will pick all pages in the free list. and amount memory consumed by VM is 2G+4K instead of 8G. This is compression within the VM. KSM also does the compression across the vm for identical code pages.
  

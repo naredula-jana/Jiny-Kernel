@@ -142,6 +142,7 @@ int wait_non_bootcpus = 1;
 extern void init_smp_gdt(int cpu);
 extern void idleTask_func();
 extern void __enable_apic(void);
+
 void smp_main() {
     int cpuid;
     unsigned long rsp,rbp;
@@ -155,7 +156,7 @@ void smp_main() {
 	local_ap_apic_init();
 	__enable_apic();
 	init_syscall(cpuid);
-	interrupts_enable();
+//	interrupts_enable();
 
 	local_ap_apic_init(); /* TODO : Need to call this second time to get APIC enabled */
     ut_log("	SMP From the New processor cpu id:%d stack:%x\n",cpuid,&cpuid);
@@ -187,6 +188,7 @@ void smp_main() {
    		          		"memory");
 #endif
 
+  // interrupts_enable();
 	idleTask_func();
 	return;
 }
@@ -318,7 +320,7 @@ static void add_processor(imps_processor *proc) {
 int init_smp_force(unsigned long ncpus) {
 	int apicid, i,ret;
 	imps_processor p;
-
+//while(1);
 	ut_log(("		SMP: Intel MultiProcessor \"Force\" Support\n"));
 
 	imps_lapic_addr  = vm_create_kmap("smp_apic",0x100000,PROT_WRITE,MAP_FIXED,0xFee00000);
@@ -345,7 +347,7 @@ ut_log("		imps:smp : before the bsp_switch\n");  // TODO : uncommeting this line
 
 	INIT_LOG("		imps_smp:  stack vert addr:%x  phy:%x \n",g_cpu_state[0].idle_task,__pa(g_cpu_state[0].idle_task));
 	//return 0;
-
+//while(1);
 	init_ioapic();
 	for (i = 0; i < ncpus; i++) {
 		if (apicid == i) {
@@ -359,7 +361,7 @@ ut_log("		imps:smp : before the bsp_switch\n");  // TODO : uncommeting this line
 	local_bsp_apic_init(); /* TODO : Need to call this twice to get APIC enabled */
 
 	wait_non_bootcpus = 0; /* from this point onwards  all non-boot cpus starts */
-
+//while(1);
 	ut_log("	SMP: completed, ret:%d maxcpus: %d \n",g_imps_num_cpus,getmaxcpus());
 	cli();
 
