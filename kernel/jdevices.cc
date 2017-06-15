@@ -362,11 +362,11 @@ void *get_keyboard_device(int device_type,int file_type){
 void Jcmd_jdevices(unsigned char *arg1,unsigned char *arg2) {
 	int i;
 
-	ut_printf("---------------\Device List: count:%d\n",device_count);
+	ut_printf("---------------\DEVICE's List: count:%d\n",device_count);
 	for (i = 0; i < device_count; i++) {
 		jdevice_list[i]->print_stats(arg1,arg2);
 	}
-	ut_printf("---------------\nDriver List: count:%d\n",driver_count);
+	ut_printf("---------------\nDRIVER's List: count:%d\n",driver_count);
 	for (i = 0; i < driver_count; i++) {
 		ut_printf("%s(%d) : \n",jdriver_list[i]->name,jdriver_list[i]->instances);
 	}

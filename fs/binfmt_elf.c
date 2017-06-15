@@ -366,7 +366,7 @@ unsigned long fs_elf_load(struct file *file,unsigned long tmp_stack, unsigned lo
 	{
 		if (eppnt->p_type != PT_LOAD)
 			continue;
-		//ut_log("%d: LOAD section: vaddr:%x filesz:%x offset:%x flags:%x  \n",i,ELF_PAGESTART(eppnt->p_vaddr),eppnt->p_filesz,eppnt->p_offset,eppnt->p_flags);
+		ut_log("%d: LOAD section: vaddr:%x filesz:%x offset:%x flags:%x  \n",i,ELF_PAGESTART(eppnt->p_vaddr),eppnt->p_filesz,eppnt->p_offset,eppnt->p_flags);
 		/* Now use mmap to map the library into memory. */
 		error = 1;
 		if (eppnt->p_filesz > 0) {
@@ -375,8 +375,10 @@ unsigned long fs_elf_load(struct file *file,unsigned long tmp_stack, unsigned lo
 			unsigned long end_addr= eppnt->p_filesz + ELF_PAGEOFFSET(eppnt->p_vaddr);
 			addr = vm_mmap(file, start_addr, end_addr, eppnt->p_flags, 0, (eppnt->p_offset
 					- ELF_PAGEOFFSET(eppnt->p_vaddr)),"text");
-			if (addr == 0)
+			//if (addr == 0 && start_addr!=0)  { /* start_addr will be zero for ld-linux...so*/
+			if (addr == 0 )  {
 				error = 0;
+			}
 			if (task->mm->start_code ==0  || task->mm->start_code > start_addr ) task->mm->start_code = start_addr;
 			if (task->mm->end_code < end_addr ) task->mm->end_code = end_addr;
 		}

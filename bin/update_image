@@ -1,0 +1,6 @@
+sudo umount /dev/loop1
+sudo losetup -d /dev/loop1
+sudo losetup /dev/loop1 ./disk.img -o 1048576
+sudo mount /dev/loop1 /mnt
+sudo cp ./jiny_image.bin /mnt/boot/jiny_kernel
+sudo umount /mnt

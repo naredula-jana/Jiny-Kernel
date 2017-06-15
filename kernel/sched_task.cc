@@ -1387,7 +1387,7 @@ void SYS_sc_execve(unsigned char *file, unsigned char **argv, unsigned char **en
 	/* populate vm with vmaps */
 	if (mm->exec_fp == 0) {
 		vfree(tmp_stack);
-		ut_log("Error execve : Failed to open the file :%s \n",file);
+		ut_log("Error execve : Failed to open the file  \n");
 		SYS_sc_exit(701);
 		return;
 	}
