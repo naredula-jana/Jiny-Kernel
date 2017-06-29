@@ -27,7 +27,7 @@ kmem_cache_t *mm_cachep;
 
 int brk_pnt=0;
 uint32_t g_cpu_features;
-void *g_print_lock=0;
+//void *g_print_lock=0;
 
 
 extern int init_physical_memory(unsigned long unused);

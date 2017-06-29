@@ -476,7 +476,7 @@ int init_tasking(unsigned long unused) {
 ///	init_ipc();
 
 	g_inode_lock = mutexCreate((char *) "mutex_vfs");
-	g_print_lock = mutexCreate((char *) "mutex_print");
+//	g_print_lock = mutexCreate((char *) "mutex_print");
 
 	INIT_LIST_HEAD(&(g_task_queue.head));
 	timer_queue = jnew_obj(wait_queue,"timer", 0);

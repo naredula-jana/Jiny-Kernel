@@ -21,14 +21,15 @@ static int xpos;
 /* Save the Y position.  */
 static int ypos;
 /* Point to the video memory.  */
-volatile unsigned char *g_video_ram = 0;
+//volatile unsigned char *g_video_ram = 0;
+volatile unsigned char *g_video_ram =  0xB8000;
 static unsigned char video_buffer_g[LINES][2 * COLUMNS];
 /* Forward declarations.  */
 void cls(void);
 static void itoa(char *buf, int buf_len, int base, unsigned long d);
 void ut_printf(const char *format, ...);
 
-extern void *g_print_lock;
+extern void *g_print_lock;  /* not used */
 /* Clear the screen and initialize VIDEO, XPOS and YPOS.  */
 int ut_cls(void) {
 	int i;
@@ -217,7 +218,7 @@ void ut_putchar_vga(unsigned char c, int device) {
 		buf[0] = (char) c;
 		buf[1] = '\0';
 	time_print=0;
-	ut_log("%s",buf);
+
 	time_print=1;
 	}
 
@@ -269,8 +270,9 @@ struct writer_struct{
 static int str_writer(struct writer_struct *writer,unsigned char c){
 	if (writer->type==1){
 		log_putchar(c);
-		//if (is_kernel_thread)
-		//	ut_putchar(c);
+		 if (g_boot_completed ==0){  /* while booting, keep the output on both */
+            putchar(c);
+         }
 		return 1;
 	}else if (writer->type==0){
 		putchar(c);
@@ -408,6 +410,7 @@ void ut_log(const char *format, ...){
 
 	writer.type=1;
 	format_string(&writer,format,vl);
+
 
 //	if (g_boot_completed) mutexUnLock(g_print_lock);
 }

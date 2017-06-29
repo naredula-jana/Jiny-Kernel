@@ -48,6 +48,8 @@
 #define AT_RANDOM 25    /* address of 16 random bytes */
 
 #define AT_EXECFN  31   /* filename of program */
+#define AT_SYSINFO 32
+#define AT_SYSINFO_HDR 33  /* Pointer to the global system page used for system calls  */
 
 #define AUX_ENT(id, val) \
         do { \
@@ -272,6 +274,11 @@ int elf_initialize_userspace_stack(struct elfhdr elf_ex,unsigned long aux_addr,u
 			AUX_ENT(AT_FLAGS, 0);
 			AUX_ENT(AT_ENTRY, p_entry);
 
+			/* TODO: the below is somehow not working, statically build binaries and the one build using statifier not working dynamically */
+			AUX_ENT(AT_SYSINFO, __vsyscall_page);
+			AUX_ENT(AT_SYSINFO_HDR, USER_SYSCALL_PAGE);
+			ut_printf("setting the sysinfo page............................\n");
+
 			AUX_ENT(AT_UID, 0x1f4); /* TODO : remove  UID hard coded to 0x1f4 for the next four entries  */
 			AUX_ENT(AT_EUID, 0x1f4);
 			AUX_ENT(AT_GID, 0x1f4);
@@ -391,17 +398,20 @@ unsigned long fs_elf_load(struct file *file,unsigned long tmp_stack, unsigned lo
 		elf_bss = eppnt->p_vaddr + eppnt->p_filesz;
 		//	padzero(elf_bss);
 
-		/* TODO :  bss start address in not at the PAGE_ALIGN or ELF_MIN_ALIGN , need to club this partial page with the data */
+
 	//	len = ELF_PAGESTART(eppnt->p_filesz + eppnt->p_vaddr + ELF_MIN_ALIGN - 1);
 		bss_start = eppnt->p_filesz + eppnt->p_vaddr;
 		bss = eppnt->p_memsz + eppnt->p_vaddr;
-		//ut_log(" bss start :%x end:%x memsz:%x elf_bss:%x \n",bss_start, bss,eppnt->p_memsz,elf_bss);
-		if (bss > bss_start) {
-			vm_setupBrk(bss_start, bss - bss_start);
-		}
+		//ut_printf(" map: %x  start :%x end:%x memsz:%x elf_bss:%x \n",bss,bss_start, bss,eppnt->p_memsz,elf_bss);
+
 		error = 0;
 	}
 
+  	/* TODO :  bss start address in not at the PAGE_ALIGN or ELF_MIN_ALIGN , need to club this partial page with the data */
+	if (1) {
+		//ut_printf(" creating bss: %x  start :%x end:%x memsz:%x elf_bss:%x \n",bss,bss_start, bss,eppnt->p_memsz,elf_bss);
+		vm_setupBrk(bss_start, bss - bss_start);
+	}
  out:
  	if (elf_phdata) {
  		mm_free(elf_phdata);

@@ -93,7 +93,8 @@ int read_apic_isr(int isr){
 	}
 	return local_apic->isr[i].bits;
 }
- void __enable_apic(void)
+
+void __enable_apic(void)
 {
   apic_svr_t svr=local_apic->svr;
 
@@ -291,7 +292,7 @@ static int __local_apic_init(bool msgout)
   __disable_apic();
 
   set_apic_dfr_mode(0xf); 
- // ut_log(" APIC id:%d  destination id :%d \n",get_local_apic_id(),(1 << (__apics_number & 7)));
+  kprintf(" APIC id:%d  destination id :%d \n",get_local_apic_id(),(1 << (__apics_number & 7)));
   set_apic_ldr_logdest(1 << (__apics_number & 7));
 	__apics_number++;
 
@@ -363,9 +364,12 @@ static void __unmask_extint(void)
 	lvt_lint.mask = 0;
 	local_apic->lvt_lint1.reg = lvt_lint.reg;
 	__local_apic_chkerr();
+	kprintf("APIC: enabling extenal interrupt -----------------------\n");
 }
 
-
+void enable_ext_interrupt(){
+__unmask_extint();
+}
 
 void local_apic_bsp_switch(void)
 {
@@ -377,7 +381,7 @@ void local_apic_bsp_switch(void)
 }
 
 /* APIC timer implementation */
-void local_apic_timer_enable(void)
+static void local_apic_timer_enable(void)
 {
   apic_lvt_timer_t lvt_timer=local_apic->lvt_timer;
 
@@ -385,7 +389,7 @@ void local_apic_timer_enable(void)
   local_apic->lvt_timer.reg=lvt_timer.reg;
 }
 
-void local_apic_timer_disable(void)
+static void local_apic_timer_disable(void)
 {
   apic_lvt_timer_t lvt_timer=local_apic->lvt_timer;
 
@@ -413,7 +417,7 @@ static void __local_apic_timer_calibrate(uint32_t x)
 static uint32_t delay_loop;
 int g_conf_clock_scale __attribute__ ((section ("confdata")))=1; //default is 1
 
-void local_apic_timer_calibrate(uint32_t hz)
+static void local_apic_timer_calibrate(uint32_t hz)
 {
   uint32_t x1,x2;
   local_apic_timer_disable();
@@ -427,7 +431,6 @@ void local_apic_timer_calibrate(uint32_t hz)
 
   while(local_apic->timer_icr.count==x1) /* wait while cycle will be end */ {
         kprintf("APIC: %ld\n",local_apic->timer_icr.count);
-    
   }
 
   x1=local_apic->timer_ccr.count; /*get current counter*/
@@ -462,7 +465,7 @@ void i8254_suspend(void)
   outb(I8254_BASE,0xff);
 }
 extern void timer_callback(unsigned long  regs);
-void local_apic_timer_init(uint8_t vector)
+static void local_apic_timer_init(uint8_t vector)
 {
   apic_lvt_timer_t lvt_timer=local_apic->lvt_timer;
 
@@ -565,13 +568,7 @@ void broadcast_msg(){
 	return;
 #endif
 }
-#if 0
-int enable_ioapic(){
 
-	local_apic_timer_ap_init(LOCAL_TIMER_CPU_IRQ_VEC);
-	return 1;
-}
-#endif
 int local_ap_apic_init(void)
 {
 	if (__local_apic_init(false)){
@@ -582,10 +579,11 @@ int local_ap_apic_init(void)
 	set_local_apic_timer(LOCAL_TIMER_CPU_IRQ_VEC, TICKS_PER_SECOND/10);
 
 	__unmask_extint();
+	 kprintf("APIC: external interrupts enabled\n");
 	ready_for_broadcast=1;
 	return 0;
 }
-/*init functions makes me happy*/
+/*init functions : called from smp-imps.c*/
 int local_bsp_apic_init(void)
 {
 	__map_apic_page();
@@ -595,8 +593,8 @@ int local_bsp_apic_init(void)
 	}
 
 	local_apic_timer_init(LOCAL_TIMER_CPU_IRQ_VEC);
-
-	__unmask_extint();
+    kprintf("APIC: timer init done ....\n");
+	__unmask_extint(); /* TODO: commented out for Virtual box and vmware , otherwise it hangs at this point */
 
   return 0;
 }

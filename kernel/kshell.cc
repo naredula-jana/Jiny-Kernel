@@ -222,10 +222,19 @@ static int sh_create(unsigned char *bin_file, unsigned char *name, unsigned char
 
 	return ret;
 }
+extern "C" {
+void Jcmd_jdevices(unsigned char *arg1,unsigned char *arg2);
+void Jcmd_cpu(unsigned char *arg1,unsigned char *arg2);
+void enable_ext_interrupt();
+//void enable_avx();
+}
 void kshell::kshell_process(){
 	int  cmd_type;
 	curr_line[0] = '\0';
-	ut_printf(" JINY OS .. Started ..\n");
+//	enable_avx();
+	ut_printf(" JINY OS .. STARTED======\n");
+
+Jcmd_jdevices(0,0);
 
 	while (1) {
 		ut_printf(CMD_PROMPT);

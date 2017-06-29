@@ -142,7 +142,7 @@ int wait_non_bootcpus = 1;
 extern void init_smp_gdt(int cpu);
 extern void idleTask_func();
 extern void __enable_apic(void);
-
+#include "fp.h"
 void smp_main() {
     int cpuid;
     unsigned long rsp,rbp;
@@ -159,7 +159,7 @@ void smp_main() {
 //	interrupts_enable();
 
 	local_ap_apic_init(); /* TODO : Need to call this second time to get APIC enabled */
-    ut_log("	SMP From the New processor cpu id:%d stack:%x\n",cpuid,&cpuid);
+    ut_log("	SMP From the New processor cpu id:%d stack:%x -----------------\n",cpuid,&cpuid);
 
 #if 1
     /* adjust the stack pointer */
@@ -189,6 +189,7 @@ void smp_main() {
 #endif
 
   // interrupts_enable();
+ // xsetbv(XCR_XFEATURE_ENABLED_MASK, XFEATURE_MASK_FPSSE);
 	idleTask_func();
 	return;
 }
@@ -312,6 +313,36 @@ static void add_processor(imps_processor *proc) {
 	}
 }
 
+static int enable_ssx_avx(){
+    unsigned long cr4= native_read_cr4();
+    unsigned long cr2= native_read_cr4();
+    unsigned int eax, ebx, ecx, edx;
+    unsigned long xfeatures_mask;
+    ecx=0;
+    edx=0;
+    eax=0;
+    ebx=0;
+	cpuid_count(XSTATE_CPUID, 0, &eax, &ebx, &ecx, &edx);
+	xfeatures_mask = eax + ((unsigned long)edx << 32);
+	ut_log("CPUID XSTATE_CPUID eax:%x ebx:%x ecx:%x edx: %x\n",eax,ebx,ecx,edx);
+
+    ecx=0;
+    edx=0;
+    eax=0;
+    ebx=0;
+	cpuid_count(0x1, 0, &eax, &ebx, &ecx, &edx);  /* get feature information type==1 */
+	ut_log("CPUID Feature INFO  eax:%x ebx:%x ecx:%x edx: %x\n",eax,ebx,ecx,edx);
+
+	native_write_cr2(cr2 | 0x2);
+	native_write_cr4(cr4 |X86_CR4_OSXSAVE | X86_CR4_OSFXSR | X86_CR4_OSXMMEXCPT);
+	//native_write_cr4(0);
+	if (xfeatures_mask != 0){
+	    xsetbv(XCR_XFEATURE_ENABLED_MASK, XFEATURE_MASK_FPSSE | XFEATURE_MASK_YMM);
+	   // xsetbv(XCR_XFEATURE_ENABLED_MASK, XFEATURE_MASK_FP);
+	    //xsetbv(XCR_XFEATURE_ENABLED_MASK,  XFEATURE_MASK_ZMM_Hi256);
+	}
+	ut_log("	YMM NEW INITIALISED FP ++++++AVX +++++ enabled: %x : %x  cr4:%x\n",xfeatures_mask,XFEATURE_MASK_FPSSE,cr4);
+}
 /*
  *  This is the primary function to "force" SMP support, with
  *  the assumption that you have consecutively numbered APIC ids.
@@ -321,6 +352,10 @@ int init_smp_force(unsigned long ncpus) {
 	int apicid, i,ret;
 	imps_processor p;
 //while(1);
+
+
+
+
 	ut_log(("		SMP: Intel MultiProcessor \"Force\" Support\n"));
 
 	imps_lapic_addr  = vm_create_kmap("smp_apic",0x100000,PROT_WRITE,MAP_FIXED,0xFee00000);
@@ -335,7 +370,7 @@ int init_smp_force(unsigned long ncpus) {
 
 	imps_cpu_apic_map[0] = apicid;
 	imps_apic_cpu_map[apicid] = 0;
-
+//while(1);
 	p.type = 0;
 	p.apic_ver = 0x10;
 	p.signature = p.features = 0;
@@ -360,10 +395,13 @@ ut_log("		imps:smp : before the bsp_switch\n");  // TODO : uncommeting this line
 	}
 	local_bsp_apic_init(); /* TODO : Need to call this twice to get APIC enabled */
 
+	enable_ssx_avx();
+
 	wait_non_bootcpus = 0; /* from this point onwards  all non-boot cpus starts */
 //while(1);
 	ut_log("	SMP: completed, ret:%d maxcpus: %d \n",g_imps_num_cpus,getmaxcpus());
 	cli();
+
 
 	return JSUCCESS;
 }
