@@ -1,4 +1,4 @@
-##JINY (Jana's tINY kernel)
+## JINY (Jana's tINY kernel)
 [JINY](https://github.com/naredula-jana/Jiny-Kernel) is a cloud os designed from ground up for superior performance on virtual machine.
 
 1. **What is JINY?**.
@@ -63,7 +63,7 @@ More details of the Benchmarks are available at [Jiny-Benchmarks.](../master/doc
 - High Priorty mode: support c apps and golang applications. golang appliction does not need any change. [changes are needed to golang runtime system](../master/modules/HP_golang_changes).
 
 
-##Papers:
+## Papers:
  -   [Page cache optimizations for Hadoop/HDFS, published and presented in open cirrus-2011 summit](../master/doc/PageCache-Open-Cirrus.pdf) .
  -   [User space Memory optimization techniques](../master/doc/malloc_paper_techpulse_submit_final.pdf).
  -   [Jiny pagecache implementation](../master/doc/pagecache.txt).
@@ -71,5 +71,5 @@ More details of the Benchmarks are available at [Jiny-Benchmarks.](../master/doc
  -   [Jiny Kernel Memory optimizations](../master/doc/Jiny_memory_management.md).
  -   [Golang apps in ring-0](../master/doc/GolangAppInRing0.pdf).
 
-##Related Projects:
+## Related Projects:
  -[Vmstate](https://github.com/naredula-jana/vmstate): Virtualmachine state capture and analysis.

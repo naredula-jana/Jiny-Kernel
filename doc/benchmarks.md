@@ -23,19 +23,19 @@ In each benchmark the bottlenecks and corresponding optimizations were highlight
     
 ----------------------------------------------------------------------------------
 
-###Benchmark-1(CPU centric): 
+### Benchmark-1(CPU centric): 
 **Overview:** An application execution time on the metal is compared with the same app wrapped using thin OS like Jiny and launched as vm. The single app running in Jiny vm outperforms by completing in 6 seconds when compare to the same running on the metal that took 44sec. The key reason for superior performance in Jiny os is, it accelerates the app by allowing  it to run in ring-0 so that the overhead of system calls and context switches are minimized. The protection of system from app malfunctioning is left to virtulization hardware, means if the app crashes in ring-0 at the maximum vm goes down, but not the host. To run in Jiny vm, the app need to recompile using the modified c library. libc need to modify to convert the system calls in to plain function calls.
 
 **Application(app) used for testing:** A simple C application that read and writes into a /dev/null file repeatedly in a tight loop is used, the app is a system call intensive. [The app](https://github.com/naredula-jana/Jiny-Kernel/blob/master/modules/test_file/test_file.c) is executed in four environments on the metal, inside the Jiny as High priority, as normal priority inside Jiny  and inside the linux vm.   
 
-#####Completion time of app in different environments:
+##### Completion time of app in different environments:
 
 1. **case-1:** app as high priority inside Jiny vm:      6 sec
 2. **case-2:** same app on the metal(linux host): 44 sec
 3. **case-3:** same app as normal priority in Jiny vm: 55 sec
 4. **case-4:** same app on the linux vm:          43 sec
 
-#####Reasons for better performance:
+##### Reasons for better performance:
 
 - **From cpu point of view**: when app runs inside jiny vm(case-1), virtualization hardware(like intel VT-x) is active and it will protect system  from app malfunctioning, here app runs in ring-0 along with Jiny kernel. means if the app crashes it will not bring down the host, but only the vm crashes at the maximum. when app on the metal(case-2) , virtualization hardware is passive/disabled and the os surrounding(i.e host os) will make sure that the app malfunctioning will not bring down the host by running the app in ring-3. 
 
@@ -50,7 +50,7 @@ In each benchmark the bottlenecks and corresponding optimizations were highlight
 
 ----------------------------------------------------------------------------------
 
-###Benchmark-2(Network centric): 
+### Benchmark-2(Network centric): 
 
 This benchmark measures the network throughput between two vm's using virtual switch on the same host. This mainly highlight the bottlenecks in quest kernel or virtual switch connecting the vm's. Networking in Jiny is based on the [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). This benchmark gives the maxumum throughput in terms of packets per second(PPS) at which first vm can send udp packets to second vm using the virtual switch in between. 
 
@@ -148,19 +148,19 @@ With the below enhancements, the maximum throughput can be pushed further.
 2. [openNFV](https://wiki.opnfv.org/vm2vm_mst)
 
 ---------------------------------------------------------------------------------- 
-###Benchmark-3(Storage centric): In Progress:
+### Benchmark-3(Storage centric): In Progress:
   currently jiny uses  [tar file sytem](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/tar_fs.md):  
 
 ----------------------------------------------------------------------------------
-###Benchmark-4(PageCache): 
+### Benchmark-4(PageCache): 
    Details available in this paper ["Page cache optimizations for Hadoop".](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/PageCache-Open-Cirrus.pdf).  This paper was presented in opencirrus 2011 summit. Jiny uses same page algorithm as mentioned in the paper.
    
 ----------------------------------------------------------------------------------
-###Benchmark-5(Malloc): In Progress
+### Benchmark-5(Malloc): In Progress
   Memory allocation improvements like zero page accumulation and other related techiniques: Based on this technique one round of testing is done but it as not given the substantial improvements as expected, need to improve and redo.
    
 ----------------------------------------------------------------------------------
-###Benchmark-6( IPC Improvements): 
+### Benchmark-6( IPC Improvements): 
 
 This benchmark measures InterProcess Communication(mutex,semphore,messages passing etc) in virtual environment. 
 
@@ -168,7 +168,7 @@ This benchmark measures InterProcess Communication(mutex,semphore,messages passi
    During IPC, When cpu sleeps (blocking on "hlt" instruction) and getting awaken up by other cpu using IPI(Inter Processor Interrupt) within short period of time, this as performance implications for IPC and message passing workloads in virtual machines. The cost is more in vm when compare to metal because of vm exists in to hypervisor.
  
   
-#####Test Environment and Results
+##### Test Environment and Results
     
   IPC Test: This is a Producer-consumer test using semaphores. Producer and consumer runs in two seperate threads. Producer is more cpu intesive when compare to consumer, this make consumer waits for producer at the end of each loop. producer wakes consumer once item is produced. In this way consumer get context switched at the end of every loop. This emulates  producer and consumer with unequal computation to process every item, this is a very common case. The [source code for test available here.] (https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/expirements/sem_test4.c). If the amount of computation for producer and consumer is same then there will be minimum lock contention which will be very rare. 
 
@@ -236,13 +236,13 @@ Same Problem was solved by changing KVM hypervisor in this [paper](http://www.li
 3. Both solutions to the same problem can co-exist. since the problem is solved at two different layers(kernel and hypervisor). 
 
 ----------------------------------------------------------------------------------
-##Papers:
+## Papers:
  -   [Page cache optimizations for Hadoop, published and presented in open cirrus-2011 summit](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/PageCache-Open-Cirrus.pdf) .
  -   [Memory optimization techniques](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/malloc_paper_techpulse_submit_final.pdf).
  -   [Jiny pagecache implementation](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/pagecache.txt)
  -   [Tar Fs - Jiny root file system](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/tar_fs.md)
 
-##Related Projects:
+## Related Projects:
  -   [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel) .
  -   [Vmstate](https://github.com/naredula-jana/vmstate): Virtualmachine state capture and analysis.
  -   [User Space virtual Switch using Vhost-user](https://github.com/naredula-jana/Jiny-Kernel/tree/master/test/virtio-switch): Works only with kvm hypervisor.
