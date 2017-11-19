@@ -28,7 +28,7 @@
 #include "types.h"
 typedef unsigned long ulong_t;
 
-#define kprintf ut_printf
+#define kprintf ut_log
 //#define kprintf dummy
 #define true 1
 #define false 0
@@ -359,7 +359,7 @@ struct __local_apic_t {
 int local_bsp_apic_init(void);
 void local_apic_bsp_switch(void);
 uint32_t get_local_apic_id(void);
-void local_apic_timer_init(uint8_t vector);
+static void local_apic_timer_init(uint8_t vector);
 extern void fake_apic_init(void);
 void local_apic_send_eoi(void);
 void apic_timer_hack(void);

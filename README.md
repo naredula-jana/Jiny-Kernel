@@ -2,10 +2,10 @@
 [JINY](https://github.com/naredula-jana/Jiny-Kernel) is a cloud os designed from ground up for superior performance on virtual machine.
 
 1. **What is JINY?**.
- - Unlike tranditional os Jiny is tiny, fast and easy to administer kernel at large scale for cloud. Jiny provides posix interface similar to linux, so as linux app can directly run on it without recompiling.
+ - Unlike tranditional os Jiny is thin kernel desined for cloud. Jiny provides posix interface similar to linux, so as linux app can directly run on it without recompiling.
  - Designed from ground up: It is cloud os designed from the ground up to give superior performance on virtual machine(VM). The performance gain comes from reducing isolation, reducing protection, increasing  memory and cpu effeciency. 
- - High priority and normal priority mode: Jiny OS runs in two modes, first is high priority mode and normal priority mode. 
-     - **High priority mode or Single App mode**: In this mode, kernel functions like library os and does the supporting role for the app, designed with low overhead. Only one app can be launched in the OS, and app runs in the same ring as that of os(i.e ring-0). The functions which are considered “system calls” on Linux( e.g., futex,read ,..etc) in Jiny  are ordinary function calls and do not incur special call overheads, nor do they incur the cost of user to kernel parameter copying which is unnecessary in  single-application OS. fork and exec posix calls are not supported in this mode. App is launched in a different way. Apart from posix calls, Non posix API’s between app and Guest OS will further decreases latency and improves throughput of the app.  Currently golang and C  apps are supported in this mode.  
+ - High priority and normal priority mode: Jiny OS runs in two modes. 
+     - **High priority mode or Single App mode**: In this mode, kernel functions like library os and does the supporting role for the app, designed with low overhead. Only one app can be launched in the OS, and app runs in the same ring as that of os(i.e ring-0). The functions which are considered “system calls” on Linux( e.g., futex,read ,..etc)  are ordinary function calls in Jiny and do not incur syscall call overheads, nor do they incur the cost of user to kernel parameter copying which is unnecessary in  single-application OS. fork and exec posix calls are not supported in this mode. App is launched in a different way. Apart from posix calls, Non posix API’s between app and Guest OS will further decreases latency and improves throughput of the app.  Currently golang and C  apps are supported in this mode.  
      - **Normal priority mode**: Jiny kernel emulates most of the posix calls(system calls) compatible to linux, so that linux binaries can run as it is. Multiple applications can run in this mode at the same time similar to traditional OS.  
 
 2. **How different is Jiny from OS like Linux?**
@@ -17,7 +17,7 @@
  - **Network packet processing**: Most of cycles in packet processing is spent in the app context(i.e at the edge) as against in the bottom half in linux, this will minimizing the locks in the SMP. Detailed description is present in the [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf)
    
 3. **For What purpose Jiny can be used?**
- - Running single apps like  JVM( tomcat or any java server), golang apps, memcached  etc inside the Jiny vm in high priority mode. Here the app will run much faster when compare to the same app in other vm's like freebsd or linux. Thin OS like Jiny along with virtulization hardware can act like a performance enhancer for the apps on the metal.
+ - Running single apps like  JVM( any java server), golang apps, memcached  etc inside the Jiny vm in high priority mode. Here the app will run much faster when compare to the same app in other vm's like freebsd or linux. Thin OS like Jiny along with virtulization hardware can act like a performance enhancer for the apps on the metal.
  - Running multiple normal priority application like any traditional unix like systems with optimizations for vm. 
 
 
@@ -70,6 +70,7 @@ More details of the Benchmarks are available at [Jiny-Benchmarks.](../master/doc
  -   [Tar Fs - Jiny root file system](../master/doc/tar_fs.md).
  -   [Jiny Kernel Memory optimizations](../master/doc/Jiny_memory_management.md).
  -   [Golang apps in ring-0](../master/doc/GolangAppInRing0.pdf).
+ -   [Perf tool to measure the speed of vm/app](../master/doc/Perf_IPC.pdf).
 
 ## Related Projects:
  -[Vmstate](https://github.com/naredula-jana/vmstate): Virtualmachine state capture and analysis.

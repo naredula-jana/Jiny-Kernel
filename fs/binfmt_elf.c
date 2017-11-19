@@ -277,7 +277,7 @@ int elf_initialize_userspace_stack(struct elfhdr elf_ex,unsigned long aux_addr,u
 			/* TODO: the below is somehow not working, statically build binaries and the one build using statifier not working dynamically */
 			AUX_ENT(AT_SYSINFO, __vsyscall_page);
 			AUX_ENT(AT_SYSINFO_HDR, USER_SYSCALL_PAGE);
-			ut_printf("setting the sysinfo page............................\n");
+			//ut_printf("setting the sysinfo page............................\n");
 
 			AUX_ENT(AT_UID, 0x1f4); /* TODO : remove  UID hard coded to 0x1f4 for the next four entries  */
 			AUX_ENT(AT_EUID, 0x1f4);
