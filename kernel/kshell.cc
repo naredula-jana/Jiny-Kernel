@@ -234,7 +234,7 @@ void kshell::kshell_process(){
 		process_command(cmd_type, curr_line);
 	}
 }
-#define USERLEVEL_SHELL "/data/busybox"
+#define USERLEVEL_SHELL "/busybox"
 
 extern struct jdevice *serial2_device;
 //#define USERLEVEL_SHELL "/jiny_root/busybox"

@@ -1,0 +1,8 @@
+sudo umount /dev/loop1
+sudo losetup -d /dev/loop1
+sudo losetup /dev/loop1 ./disk.img -o 1048576
+sudo mount /dev/loop1 /mnt
+sudo cp ./jiny_image.bin /mnt/boot/jiny_kernel
+sudo umount /mnt
+/opt/qemu_2_5_0/bin/qemu-img convert -f raw -O vmdk ./disk.img /opt/host_folder/disk.vmdk
+cp /opt/host_folder/disk.vmdk /opt/host_folder/vmw_jiny3/disk.vmdk

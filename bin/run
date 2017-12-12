@@ -1,0 +1,1 @@
+/opt/qemu_2_5_0/bin/qemu-system-x86_64 -m 1024M  -smp 1 -vnc :8  -hda ./disk.img -monitor telnet::1335,server,nowait,nodelay  -gdb tcp::1336 -drive if=virtio,id=hdr0,file=./java_disk -serial telnet::50008,server,nowait,nodelay -balloon virtio -netdev tap,id=guest0,vhost=on,vhostforce -device virtio-net-pci,mac=00:30:48:DB:5E:01,netdev=guest0
