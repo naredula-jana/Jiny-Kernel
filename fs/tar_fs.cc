@@ -747,9 +747,9 @@ int tar_fs::write_file_contents(unsigned char *filename, unsigned char *buf, int
 long tar_fs::read(fs_inode *inodep, uint64_t offset, unsigned char *buff, unsigned long len_arg, int flags) {
 	int ret_len=0;
 
-	DEBUG(" inside the tarfs read: offset:%d len_arg:%d  filename:%s:\n", offset, len_arg,inodep->filename);
+	//ut_printf(" inside the tarfs read: offset:%d len_arg:%d  filename:%s:\n", offset, len_arg,inodep->filename);
 	ret_len = read_file_contents(inodep->filename, buff, len_arg,offset,flags);
-	DEBUG(" read from tarfs ret: %d buff:%x \n", ret_len,buff);
+	//ut_printf(" read from tarfs ret: %d buff:%x \n", ret_len,buff);
 
 	return ret_len;
 }

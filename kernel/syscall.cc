@@ -226,12 +226,12 @@ unsigned long snull(unsigned long *args) {
 }
 
 long int SYS_time(__time_t *time) {
-	SYSCALL_DEBUG("time :%x \n", time);
+	//SYSCALL_DEBUG("time :%x \n", time);
 	if (time == 0)
 		return 0;
 	//*time = g_jiffies;
 	ut_get_wallclock(time,0);
-	SYSCALL_DEBUG("Return time :%x seconds \n", *time);
+	//SYSCALL_DEBUG("Return time :%x seconds \n", *time);
 	return *time;
 }
 unsigned long SYS_gettimeofday(time_t *tv, struct timezone *unused_arg_tz) {
@@ -243,7 +243,7 @@ unsigned long SYS_gettimeofday(time_t *tv, struct timezone *unused_arg_tz) {
 		BUG();
 	}
 	ut_get_wallclock(&(tv->tv_sec),&(tv->tv_usec));
-	SYSCALL_DEBUG("gettimeofday sec:%d(%x) usec:%d(%x)\n", tv->tv_sec,tv->tv_sec, tv->tv_usec,tv->tv_usec);
+	//SYSCALL_DEBUG("gettimeofday sec:%d(%x) usec:%d(%x)\n", tv->tv_sec,tv->tv_sec, tv->tv_usec,tv->tv_usec);
 	return SYSCALL_SUCCESS;
 }
 #define TEMP_UID 26872

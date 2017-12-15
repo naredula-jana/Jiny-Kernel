@@ -94,7 +94,7 @@ static inittable_t inittable[] = {
 //		{init_code_readonly,0,       "Making code readonly",0},
 		{init_kernel_vmaps, 0, "Kernel Vmaps",0},
 		{init_jdevices,0,       "devices in c++ ",0},
-		{init_procfs,0,"Procfs",0},
+//		{init_procfs,0,"Procfs",0},
 		{init_acpi,0,       "ACPI initialzed ",0},
 #ifdef NETWORKING
 		{init_network_stack,0,       "network stacks",0},

@@ -267,7 +267,6 @@ void socket::default_pkt_process(){
 						goto last;
 					}
 					app_len=PAGE_SIZE-sizeof(struct tcp_data);
-					//ret = net_stack->read(conn, buf, buf_len,&app_data->data[0], app_len);
 					ret = tcp_read(conn, buf, buf_len,&app_data->data[0], app_len);
 					if (ret > 0) {
 						app_data->len = ret;
@@ -275,6 +274,8 @@ void socket::default_pkt_process(){
 						sock->tcpdata_queue.add_to_queue((unsigned char *) app_data, 4096, 0, 1);
 						sock->epoll_fd_wakeup();
 						app_data = 0;
+					}else if (ret ==0 && conn->state == NETWORK_CONN_CLOSED){
+						sock->epoll_fd_wakeup();
 					}
 					goto last;
 				}
@@ -291,7 +292,8 @@ void socket::default_pkt_process(){
 					}
 					//ret = net_stack->read(conn, buf, buf_len, 0, app_len);
 					ret = tcp_read(conn, buf, buf_len,0, 0);
-					if (conn->new_child_connection.dest_port != 0) {
+					//if (conn->new_child_connection.dest_port != 0) {
+					if (conn->tcp_conn != 0){
 						sock->epoll_fd_wakeup();
 					}
 					goto last;
@@ -326,9 +328,15 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int
 		struct tcp_data *tcp_data=0;
 		int unsued_flags;
 		int tcp_len =0 ;
+		if (network_conn.state == NETWORK_CONN_CLOSED){
+			return 0;
+		}
 		while(tcp_data == 0){
 			tcpdata_queue.peep_from_queue((unsigned char **)&tcp_data, &tcp_len,0);
 			if (tcp_data == 0){
+				if (read_flags & O_NONBLOCK) {
+					return -EAGAIN;
+				}
 				sc_sleep(2);
 			}
 		}
@@ -429,6 +437,9 @@ int socket::write(unsigned long offset_unused, unsigned char *app_data, int app_
 	iov.iov_base = app_data;
 	iov.iov_len = app_len;
 	if (network_conn.protocol == IPPROTO_TCP){
+		if (network_conn.tcp_conn == 0){
+			return 0;
+		}
 		ret = tcp_write(&network_conn, app_data, app_len);
 	}else{
 		ret = net_stack->write(&network_conn, &iov, 1);
@@ -439,6 +450,8 @@ int socket::write(unsigned long offset_unused, unsigned char *app_data, int app_
 		stat_out_bytes = stat_out_bytes + ret;
 	} else{
 		statout_err++;
+		ut_printf("socket Write Fails");
+		ret = -EAGAIN;
 	}
 	return ret;
 }
@@ -494,9 +507,9 @@ int socket::ioctl(unsigned long arg1, unsigned long arg2) {
 }
 
 void socket::print_stats(unsigned char *arg1,unsigned char *arg2){
-	ut_printf("socket: count:%d type:%d local:%x:%x remote:%x:%x (IO: %d/%d: StatErr:out:%d in:%d Qfull:%d  Qcheckfail:%i Qlen:%i)  %x epoll:%x\n",
-			count.counter,network_conn.type,network_conn.src_ip,network_conn.src_port,network_conn.dest_ip,network_conn.dest_port,stat_in
-	    ,stat_out,statout_err,statin_err,queue.error_full,queue.error_empty_check,queue.queue_size(), &network_conn,epoll_list[0]);
+	ut_printf("socket: count:%d type:%d state:%x local:%x:%x remote:%x:%x ( Stat: in:%d/%d out:%d/%d Qfull:%d  QReadfail:%i Qlen:%i)  %x epoll:%x\n",
+			count.counter,network_conn.type,network_conn.state,network_conn.src_ip,network_conn.src_port,network_conn.dest_ip,network_conn.dest_port,stat_in,stat_in_bytes
+	    ,stat_out,stat_out_bytes, statout_err,statin_err,queue.error_full,queue.error_empty_check,queue.queue_size(), &network_conn,epoll_list[0]);
 }
 
 sock_list_t socket::udp_list;
@@ -568,6 +581,7 @@ int socket::init_socket(int type){
 	net_stack = net_stack_list[0];
 	network_conn.family = AF_INET;
 	network_conn.type = type;
+	network_conn.state = NETWORK_CONN_CREATED;
 	network_conn.src_ip = 0;
 	tcpdata_queue.init((unsigned char *)"tcpdata",0);
 	stat_in = 0;
@@ -703,7 +717,7 @@ int SYS_socket(int family, int arg_type, int z) {
 
 	SYSCALL_DEBUG("SOCKET : family:%x type:%x arg3:%x\n", family, type, z);
 
-	if (arg_type > 2  || family!=AF_INET){
+	if ((arg_type > 2  || family!=AF_INET) && (family != AF_INET6)){
 		SYSCALL_DEBUG("ERROR: socket : type or family not supported\n");
 		return SYSCALL_FAIL;
 	}
@@ -716,6 +730,9 @@ int SYS_bind(int fd, struct sockaddr *addr, int len) {
 	if (sock_check(fd) == JFAIL || addr == 0) {
 		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
 	}
+    if (addr->family == AF_INET6){
+    	  return 0;
+    }
 
 	struct file *file = g_current_task->fs->filep[fd];
 	if (file == 0){
@@ -799,7 +816,7 @@ int SYS_accept4(int fd,unsigned long sockaddr, unsigned long addrlen,int accept_
 	int sleep_dur=1;
 
 	SYSCALL_DEBUG("accept %d \n", fd);
-	ut_log("accept :fd \n");
+	ut_log("accept :fd: %d \n",fd);
 	if (sock_check(fd) == JFAIL)
 		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
 
@@ -808,6 +825,9 @@ int SYS_accept4(int fd,unsigned long sockaddr, unsigned long addrlen,int accept_
 		return SYSCALL_FAIL;
 	struct socket *inode = (struct socket *) file->vinode;
 
+	if ((file->flags & O_NONBLOCK) &&  (inode->network_conn.tcp_conn ==0)){
+		return -1 ;
+	}
 /* create child socket */
 	int i = SYS_fs_open("/dev/sockets", SOCK_STREAM_CHILD, 0);
 	if (i == 0) {

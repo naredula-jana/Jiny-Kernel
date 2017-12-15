@@ -80,11 +80,11 @@ unsigned long SYS_fs_open(char *filename, int mode, int flags) {
 	struct file *filep;
 	int ret= SYSCALL_FAIL;
 
-	SYSCALL_DEBUG("open: filename :%s: mode:%x flags:%x \n", filename, mode, flags);
 	if (ut_strcmp((uint8_t *) filename, (uint8_t *) "/dev/tty") == 0) {
 		ret = 1;
 		goto last;
 	}
+	//SYSCALL_DEBUG("sys_open: filename :%s: mode:%x flags:%x \n", filename, mode, flags);
 	if (ut_strcmp((uint8_t *) filename, (uint8_t *) "/dev/null") == 0) {
 		filep  = (struct file *)fs_create_filep(&ret, 0);
 		if (filep == 0) {
@@ -112,7 +112,7 @@ fail:
 		fs_close(filep);
 
 last:
-	SYSCALL_DEBUG("open return value: %d \n", ret);
+	//SYSCALL_DEBUG("open : filname :%s return value: %x \n", filename, ret);
 	return ret;
 }
 int SYS_fs_openat(int unused,char *filename, int mode, int flags){

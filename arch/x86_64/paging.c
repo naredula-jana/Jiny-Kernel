@@ -739,9 +739,9 @@ if (g_stat_pagefault>6){
 			//ut_printf("ERROR: user program Segmentaion Fault addr:%x  ip:%x :%s\n",addr,faulting_ip,g_current_task->name);
 
 			//Jcmd_maps(0,0);
-			//ut_log("ERROR: user Segmentation fault page fault addr:%x ip:%x  \n",addr,faulting_ip);
+			ut_log("ERROR: user Segmentation fault page fault addr:%x ip:%x  \n",addr,faulting_ip);
 			//Jcmd_lsmod(0,0);
-			//BUG();
+			//while(1) ;
 			//ut_showTrace(&stack_var);
 			SYS_sc_exit(902);
 			return 1;
