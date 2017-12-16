@@ -172,7 +172,8 @@ static int __local_apic_chkerr(void)
   if (esr.rx_cs_err) { i++; kprintf("[LA] Receive checksum failed.\n"); }
   if (esr.tx_accept_err) { i++; kprintf("[LA] Transfer failed.\n"); }
   if (esr.rx_accept_err) { i++; kprintf("[LA] IPI is not accepted by any CPU.\n"); }
-  if (esr.tx_illegal_vector) { i++; kprintf("[LA] Illegal transfer vector.\n"); }
+  if (esr.tx_illegal_vector) { //i++;
+         kprintf("ERROR [LA] Illegal transfer vector.\n"); }
   if (esr.rx_illegal_vector) { kprintf("[LA] Illegal receive vector.\n"); }
   if (esr.reg_illegal_addr){
 	     i++;

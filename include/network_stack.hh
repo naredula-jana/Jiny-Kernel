@@ -21,6 +21,7 @@ enum _socket_type
   SOCK_STREAM_CHILD=200
 };
 #define AF_INET 2  /* family */
+#define AF_INET6 10  /* family */
 
 #define IPPROTO_UDP 0x11 /* protocol type */
 #define IPPROTO_TCP 0x06
@@ -29,7 +30,7 @@ struct tcp_connection{
 	uint32_t send_seq_no,send_ack_no;
 	uint32_t recv_seq_no,recv_ack_no;
 
-#define MAX_TCPSND_WINDOW 4
+#define MAX_TCPSND_WINDOW 40
 	struct {
 		unsigned char *buf;
 		int len;
@@ -42,10 +43,19 @@ struct tcp_connection{
 
 };
 
+enum connection_state
+{
+	NETWORK_CONN_CREATED =0,
+	NETWORK_CONN_INITIATED = 1,
+	NETWORK_CONN_ESTABILISHED = 2,
+	NETWORK_CONN_LISTEN = 3,
+	NETWORK_CONN_CLOSED = 4
+};
 class network_connection{
 public:
 	int family;
 	int type; /* udp or tcp */
+	connection_state state;
 	uint32_t dest_ip,src_ip;
 	uint16_t dest_port,src_port;
 	uint8_t 	protocol; /* ip_protocol , tcp or udp */

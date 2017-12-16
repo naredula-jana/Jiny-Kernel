@@ -164,10 +164,10 @@ static int send_tcp_pkt(struct tcp_connection *tcp_conn, uint8_t flags,
 		unsigned char *buf = (unsigned char *) send_pkt;
 		jfree_page(buf - 10);
 	}
-	ut_log("New tcp pkt send:%d len:%d recvseqno:%x sip:%x:%x-->%x:%x \n", ret,
+/*	ut_log("New tcp pkt send:%d len:%d recvseqno:%x sip:%x:%x-->%x:%x \n", ret,
 			send_len, tcp_conn->recv_seq_no, send_pkt->iphdr.saddr,
 			send_tcp_hdr->srcport, send_pkt->iphdr.daddr,
-			send_tcp_hdr->destport);
+			send_tcp_hdr->destport); */
 	return ret;
 }
 
@@ -247,6 +247,9 @@ int tcp_write(network_connection *conn, uint8_t *app_data, int app_maxlen) {
 	if (app_maxlen > (PAGE_SIZE - 100)) {
 		app_maxlen = PAGE_SIZE - 100;
 	}
+	if (conn==0 || conn->tcp_conn == 0){
+		BUG();
+	}
 	for (i = 0; i < MAX_TCPSND_WINDOW; i++) {
 		if (conn->tcp_conn->send_queue[i].buf != 0
 				&& conn->tcp_conn->send_queue[i].len == 0) {
@@ -279,10 +282,11 @@ int tcp_read(network_connection *conn, uint8_t *recv_data, int recv_len,
 
 	if ((recv_tcp_hdr->flags & TCP_SYN) && conn->tcp_conn == 0) { /* create new connection */
 		conn->tcp_conn = tcp_conn_new(recv_pkt);
+		conn->state = NETWORK_CONN_INITIATED;
 		flags = TCP_SYN | TCP_ACK;
 	} else {
 		if (conn->tcp_conn == 0) {
-			ut_log("TCP_dropping the packet: conn found1 \n");
+			//ut_log("TCP_dropping the packet: conn found1 \n");
 			return 0;
 		}
 
@@ -297,28 +301,36 @@ int tcp_read(network_connection *conn, uint8_t *recv_data, int recv_len,
 			} else {
 				tcp_data_len = 0;
 			}
-			flags = TCP_ACK;
+			flags =  TCP_ACK;
 		}
 	}
 	if (conn->tcp_conn == 0) {
-		ut_log("TCP_dropping the packet: conn found2 \n");
+		//ut_log("TCP_dropping the packet: conn found2 \n");
 		return tcp_data_len;
 	}
 	if ((conn->tcp_conn->destport == recv_tcp_hdr->srcport)
 			&& (conn->tcp_conn->srcport == recv_tcp_hdr->destport)) {
-
+		if ((tcp_data_len==0)  && (flags==0)){
+			flags =  TCP_ACK;
+		}
 	} else {
-		ut_log("TCP_dropping the packet: not found \n");
+		//ut_log("TCP_dropping the packet: not found \n");
 		return tcp_data_len;
 	}
 	if (recv_tcp_hdr->flags & TCP_ACK) {
 		update_sendack(conn->tcp_conn, net_htonl(recv_tcp_hdr->ackno));
 	}
-	if (recv_tcp_hdr->flags & TCP_RST) {
+	if ((recv_tcp_hdr->flags & TCP_RST) || (recv_tcp_hdr->flags & TCP_FIN)) {
+		if (recv_tcp_hdr->flags & TCP_RST) {
+			send_tcp_pkt(conn->tcp_conn, flags | TCP_RST, 0, 0, 0);
+		}else{
+			send_tcp_pkt(conn->tcp_conn, flags | TCP_FIN, 0, 0, 0);
+		}
 		tcp_conn_free(conn->tcp_conn);
 		conn->tcp_conn = 0;
-		ut_log("TCP_silently cleaning the connection\n");
-		return tcp_data_len;
+		conn->state = NETWORK_CONN_CLOSED;
+		//ut_log("TODO: TCP_silently cleaning the connection\n");
+		return 0;
 	}
 	if (flags != 0) {
 		send_tcp_pkt(conn->tcp_conn, flags, 0, 0, 0);

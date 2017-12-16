@@ -144,6 +144,37 @@ static int init_utsname() {
 }
 static int init_uts_done = 0;
 
+struct sysinfo {
+               long uptime;             /* Seconds since boot */
+               unsigned long loads[3];  /* 1, 5, and 15 minute load averages */
+               unsigned long totalram;  /* Total usable main memory size */
+               unsigned long freeram;   /* Available memory size */
+               unsigned long sharedram; /* Amount of shared memory */
+               unsigned long bufferram; /* Memory used by buffers */
+               unsigned long totalswap; /* Total swap space size */
+               unsigned long freeswap;  /* swap space still available */
+               unsigned short procs;    /* Number of current processes */
+               unsigned long totalhigh; /* Total high memory size */
+               unsigned long freehigh;  /* Available high memory size */
+               unsigned int mem_unit;   /* Memory unit size in bytes */
+               char _f[20-2*sizeof(long)-sizeof(int)]; /* Padding to 64 bytes */
+};
+
+int SYS_sysinfo(struct sysinfo *info){
+    SYSCALL_DEBUG("sysinfo args:%x \n", info);
+
+    info->loads[0] =0;
+    info->loads[1] =0;
+    info->loads[2] =0;
+    info->freeram = 250 *1024*1024;
+    info->totalram = 256 *1024*1024;
+    info->mem_unit = 1 ;
+    info->sharedram = 1024*1024;
+    info->totalswap =0;
+    info->freeswap = 0;
+    return 0;
+}
+
 unsigned long SYS_uname(unsigned long *args) {
 	SYSCALL_DEBUG("uname args:%x \n", args);
 	if (init_uts_done == 0)
@@ -195,12 +226,12 @@ unsigned long snull(unsigned long *args) {
 }
 
 long int SYS_time(__time_t *time) {
-	SYSCALL_DEBUG("time :%x \n", time);
+	//SYSCALL_DEBUG("time :%x \n", time);
 	if (time == 0)
 		return 0;
 	//*time = g_jiffies;
 	ut_get_wallclock(time,0);
-	SYSCALL_DEBUG("Return time :%x seconds \n", *time);
+	//SYSCALL_DEBUG("Return time :%x seconds \n", *time);
 	return *time;
 }
 unsigned long SYS_gettimeofday(time_t *tv, struct timezone *unused_arg_tz) {
@@ -212,7 +243,7 @@ unsigned long SYS_gettimeofday(time_t *tv, struct timezone *unused_arg_tz) {
 		BUG();
 	}
 	ut_get_wallclock(&(tv->tv_sec),&(tv->tv_usec));
-	SYSCALL_DEBUG("gettimeofday sec:%d(%x) usec:%d(%x)\n", tv->tv_sec,tv->tv_sec, tv->tv_usec,tv->tv_usec);
+	//SYSCALL_DEBUG("gettimeofday sec:%d(%x) usec:%d(%x)\n", tv->tv_sec,tv->tv_sec, tv->tv_usec,tv->tv_usec);
 	return SYSCALL_SUCCESS;
 }
 #define TEMP_UID 26872
@@ -283,6 +314,7 @@ unsigned long SYS_ioctl(int d, int request, unsigned long *addr) {//TODO
 }
 
 unsigned long SYS_set_tid_address(unsigned long tid_address){
+    SYSCALL_DEBUG("settid address: %x \n",tid_address);
 	g_current_task->child_tid_address = tid_address;
 	return g_current_task->task_id;
 }
@@ -721,7 +753,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { SYS_fs_mkdir }, { snull }, { snull }, /* 85 */
 { snull }, { SYS_fs_unlink }, { snull }, { SYS_fs_readlink }, { snull }, /* 90 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 95 */
-{ SYS_gettimeofday }, { SYS_getrlimit }, { snull }, { snull }, { snull }, /* 100 */
+{ SYS_gettimeofday }, { SYS_getrlimit }, { snull }, { SYS_sysinfo }, { snull }, /* 100 */
 { snull }, { SYS_getuid }, { snull }, { SYS_getgid }, { SYS_setuid }, /* 105 */
 { SYS_setgid }, { SYS_geteuid }, { SYS_getpgid }, { SYS_setpgid }, { SYS_getppid }, /* 110 */
 { SYS_getpgrp }, { SYS_setsid }, { snull }, { snull }, { snull }, /* 115 */

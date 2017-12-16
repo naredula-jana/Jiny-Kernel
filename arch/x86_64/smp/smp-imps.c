@@ -395,7 +395,7 @@ ut_log("		imps:smp : before the bsp_switch\n");  // TODO : uncommeting this line
 	}
 	local_bsp_apic_init(); /* TODO : Need to call this twice to get APIC enabled */
 
-	enable_ssx_avx();
+	//enable_ssx_avx();
 
 	wait_non_bootcpus = 0; /* from this point onwards  all non-boot cpus starts */
 //while(1);

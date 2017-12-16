@@ -52,7 +52,7 @@ static int get_cmd(unsigned char *filename, struct procfs_cmd *cmd){
 	k=0;
 	j=0;
 	cmd->cmd_type = PROC_INVALID;
-	ut_printf(" procfs cmd filename :%s:\n",filename);
+	//ut_printf(" procfs cmd filename :%s:\n",filename);
 	for (i=0; filename[i]!='\0'&& i<100;i++){
 		if (filename[i]=='/' || filename[i+1]=='\0'){
 			k++;

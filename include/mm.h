@@ -64,7 +64,7 @@ extern unsigned long g_kernelspace_starting_address;
 #define USERSTACK_ADDR     0x7fffdbaac000
 #define USERSTACK_LEN  0x100000
 #define USER_SYSCALL_PAGE 0xffffffffff600000
-//#define USER_SYSCALL_PAGE  0x7ffff7ffa000
+
 
 
 #define MAP_NR(addr)            (__pa(addr) >> PAGE_SHIFT)

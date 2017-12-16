@@ -369,8 +369,11 @@ void * SYS_vm_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
 unsigned long vm_setupBrk(unsigned long addr, unsigned long len) {
 	unsigned long ret;
 	len = PAGE_ALIGN(len);
-	if (!len)
-		return addr;
+	if (!len){
+	   // ut_printf("ERROR..: unable to create the setup brk map\n");
+	    len = PAGE_SIZE;
+	    return addr;
+	}
 
 	g_current_task->mm->brk_addr = (addr + PAGE_SIZE) & PAGE_MASK;
 	g_current_task->mm->brk_len = len;
@@ -391,6 +394,9 @@ unsigned long SYS_vm_brk(unsigned long addr) {
 	struct vm_area_struct *vma;
 
 	SYSCALL_DEBUG("brk:%x \n",addr);
+	if (g_conf_syscall_debug == 1){
+    				Jcmd_maps(0,0);
+    }
 	if (addr == 0){
 		ret = g_current_task->mm->brk_addr + g_current_task->mm->brk_len;
 		goto last;

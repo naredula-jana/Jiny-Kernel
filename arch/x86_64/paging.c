@@ -736,9 +736,9 @@ if (g_stat_pagefault>6){
 		{
 			int stack_var;
 
-			ut_printf("ERROR: user program Segmentaion Fault addr:%x  ip:%x :%s\n",addr,faulting_ip,g_current_task->name);
+			ut_printf("ERROR: in user program Segmentaion Fault addr:%x  ip:%x :%s\n",addr,faulting_ip,g_current_task->name);
 
-			//Jcmd_maps(0,0);
+			Jcmd_maps(0,0);
 			//ut_log("ERROR: user Segmentation fault page fault addr:%x ip:%x  \n",addr,faulting_ip);
 			//Jcmd_lsmod(0,0);
 			//BUG();

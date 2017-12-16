@@ -52,7 +52,7 @@ public:
 
 #include "ipc.hh"
 
-#define MAX_EPOLL_FDS 20
+#define MAX_EPOLL_FDS 50
 struct epoll_struct{
 	int count;
 	int fds[MAX_EPOLL_FDS];

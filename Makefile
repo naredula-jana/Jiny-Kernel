@@ -82,7 +82,7 @@ test_file:
 	cp modules/test_file/test_file.o test/root/
 	gcc modules/test_file/test_file.c -static -o test/root/test_file
 	
-all: 
+all: 	clean	
 	make SOURCE_ROOT=$$PWD -C kernel
 	make SOURCE_ROOT=$$PWD -C drivers
 #	make SOURCE_ROOT=$$PWD -C drivers/xen
@@ -126,7 +126,6 @@ clean:
 	make SOURCE_ROOT=$$PWD -C mm clean
 	make SOURCE_ROOT=$$PWD -C mm/memleak clean
 	make SOURCE_ROOT=$$PWD -C modules/uip-uip-1-0/uip clean
-	\rm bin/jiny_bin
 ifdef LWIP_ENABLE
 	\rm $(LWIP_OBJ)
 endif

@@ -45,10 +45,12 @@ void vinode::epoll_fd_wakeup(void){
 			return;
 		}
 		epoll_list[i]->fd_waiting = 1;
-		epoll_list[i]->waitq->wakeup();
-#if 0
-		ut_log(" epoll fd wakeed up:%d \n",i);
-#endif
+		if (epoll_list[i]->waitq){
+			epoll_list[i]->waitq->wakeup();
+		}else{
+			ut_printf("ERROR: waitq not initialised \n");
+		//	BUG();
+		}
 	}
 }
 
@@ -99,13 +101,16 @@ int SYS_epoll_ctl(uint32_t  efd, uint32_t op, uint32_t fd, struct epoll_event *u
 	if (op == EPOLL_CTL_ADD){
 		for (i=0; i<epoll_p->count; i++){
 			if (epoll_p->fds[i] == fd){
-				SYSCALL_DEBUG("ERRO epoll_ctl fd:%d  fd already present\n", fd);
+				SYSCALL_DEBUG("ERROR epoll_ctl fd:%d  fd already present\n", fd);
 				return -1;
 			}
 		}
 		i=epoll_p->count;
-		if (i>=(MAX_EFDS_PER_FD-1)){
-			SYSCALL_DEBUG("ERRO epoll_ctl fd:%d  no space in efds\n", fd);
+		if (i>=(MAX_EPOLL_FDS-1)){
+			ut_printf("ERROR epoll_ctl fd:%d  no space in efds count:%d\n", fd,epoll_p->count);
+			for (i=0; i<epoll_p->count; i++){
+				ut_printf("     %d: ERROR Epoll_ctl fd:%d \n",i,epoll_p->fds[i]);
+			}
 			return -1;
 		}
 		SYSCALL_DEBUG("epoll_ctl added at %d  fd:%d \n",i,fd);
@@ -127,10 +132,15 @@ int SYS_epoll_ctl(uint32_t  efd, uint32_t op, uint32_t fd, struct epoll_event *u
 			if (epoll_p->fds[i] == fd){
 				int j;
 				epoll_p->fds[i] = -1;
+				if (i < epoll_p->count-1){
+					epoll_p->fds[i] = epoll_p->fds[epoll_p->count-1];
+					epoll_p->fds[epoll_p->count-1] = -1;
+				}
+				epoll_p->count--;
 				for (k=0; k<MAX_EFDS_PER_FD; k++){
 					if (vinode->epoll_list[k] == epoll_p){
 						vinode->epoll_list[k] = 0;
-						for (j=MAX_EFDS_PER_FD-1; j>k; j--){
+						for (j=MAX_EPOLL_FDS-1; j>k; j--){
 							if (vinode->epoll_list[j] != 0 ){
 								vinode->epoll_list[k] = vinode->epoll_list[j];
 								vinode->epoll_list[j] = 0;
@@ -139,7 +149,6 @@ int SYS_epoll_ctl(uint32_t  efd, uint32_t op, uint32_t fd, struct epoll_event *u
 						}
 					}
 				}
-
 				return 0;
 			}
 		}
@@ -179,10 +188,9 @@ int SYS_epoll_wait(uint32_t efd, struct epoll_event *events, uint32_t maxevents,
 	int fd,i,e=0;
 	int ret=0;
 
-	SYSCALL_DEBUG("epoll_wait efd:%d maxevents:%d timeout:%d\n", efd,maxevents,timeout);
 	efilep = fd_to_file(efd);
 	if (efilep == 0 || efilep->type!=EVENT_POLL_FILE){
-		SYSCALL_DEBUG("ERRO epoll_ctl efd:%d  \n", efd);
+		SYSCALL_DEBUG("ERROR wait efd:%d  \n", efd);
 		return -1;
 	}
 	epoll_p=efilep->vinode;
@@ -195,7 +203,7 @@ int SYS_epoll_wait(uint32_t efd, struct epoll_event *events, uint32_t maxevents,
 			ret = get_fds(epoll_p,events,maxevents);
 		}
 	}
-	SYSCALL_DEBUG("epoll_wait ret:%d \n",ret);
+	SYSCALL_DEBUG("epoll_wait efd:%d maxevents:%d timeout:%d ret:%d\n", efd,maxevents,timeout,ret);
 	return ret;
 }
 }

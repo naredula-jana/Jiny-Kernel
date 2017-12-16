@@ -9,7 +9,7 @@
 
 #include "file.hh"
 static  int fs_send_to_pipe(long pipe_index, uint8_t *buf, int len);
-static  int fs_recv_from_pipe(long pipe_index, uint8_t *buf, int len);
+static  int fs_recv_from_pipe(long pipe_index, uint8_t *buf, int len,int read_flags);
 static  int fs_destroy_pipe(long pipe_index);
 
 #define MAX_PIPES 100
@@ -85,7 +85,7 @@ int pipe::init(int type) {
 }
 int pipe::read(unsigned long unused, unsigned char *buf, int len, int read_flags, int opt_flags){
 	int ret;
-	ret = fs_recv_from_pipe(this->pipe_index,buf,len);
+	ret = fs_recv_from_pipe(this->pipe_index,buf,len,read_flags);
 	update_stat_in(1,ret);
 	return ret;
 }
@@ -115,7 +115,7 @@ void pipe::print_stats(unsigned char *arg1,unsigned char *arg2){
 }
 /*************************** End of pipe ******************************/
 
-static int fs_recv_from_pipe(long pipe_index, uint8_t *buf, int len) {
+static int fs_recv_from_pipe(long pipe_index, uint8_t *buf, int len,int read_flags) {
 	long i = pipe_index;
 	int in, max_size;
 	int ret = -1;
@@ -148,6 +148,9 @@ restart:
 		ret=0;
 		//ret = -EAGAIN;
 		mutexUnLock(g_inode_lock);
+		if (read_flags == O_NONBLOCK){
+			return -EAGAIN ;
+		}
 		if (pipes[i].count > 1) { /* wait if there is more then thread operating pipe */
 			sc_sleep(2);
 			goto restart;
@@ -285,7 +288,7 @@ unsigned long SYS_pipe(int *fds) {
 
 
 	if (ret == SYSCALL_SUCCESS){
-		SYSCALL_DEBUG("pipe  fds: fd1: %d fd2 :%d  \n", fds[0],fds[1]);
+		SYSCALL_DEBUG("pipe  fds: readfd1: %d writefd2 :%d  \n", fds[0],fds[1]);
 	}
 
 	return ret;
