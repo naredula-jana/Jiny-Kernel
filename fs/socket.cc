@@ -341,18 +341,22 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int
 			}
 		}
 		if (tcp_data){
-			if (tcp_data->len > app_len){
+			if ((tcp_data->len - tcp_data->consumed ) > app_len){
 				tcp_data->consumed=app_len;
+				ret_len = app_len;
 			}else{
 				ret_len = tcp_data->len;
 			}
-			ut_memcpy(app_data,&tcp_data->data[0],ret_len); /* TODO: consume from the point where last left */
-			if (tcp_data->len <= app_len){
+			ut_memcpy(app_data,&tcp_data->data[0+tcp_data->consumed],ret_len);
+			tcp_data->consumed = tcp_data->consumed +ret_len;
+			if (tcp_data->len == tcp_data->consumed){
 				tcpdata_queue.remove_from_queue((unsigned char **)&tcp_data, &tcp_len,&unsued_flags);
 			}
 			if (tcpdata_queue.queue_size() == 0){
 				data_available_for_consumption =0;
 			}
+			stat_in++;
+			stat_in_bytes = stat_in_bytes + ret_len;
 			return ret_len;
 		}
 		return ret_len;
@@ -507,9 +511,9 @@ int socket::ioctl(unsigned long arg1, unsigned long arg2) {
 }
 
 void socket::print_stats(unsigned char *arg1,unsigned char *arg2){
-	ut_printf("socket: count:%d type:%d state:%x local:%x:%x remote:%x:%x ( Stat: in:%d/%d out:%d/%d Qfull:%d  QReadfail:%i Qlen:%i)  %x epoll:%x\n",
+	ut_printf("socket: count:%d type:%d state:%x local:%x:%x remote:%x:%x ( Stat: in:%d/%d out:%d/%d error:%d:%d Qfull:%d  QReadfail:%i Qlen:%i) epoll:%x\n",
 			count.counter,network_conn.type,network_conn.state,network_conn.src_ip,network_conn.src_port,network_conn.dest_ip,network_conn.dest_port,stat_in,stat_in_bytes
-	    ,stat_out,stat_out_bytes, statout_err,statin_err,queue.error_full,queue.error_empty_check,queue.queue_size(), &network_conn,epoll_list[0]);
+	    ,stat_out,stat_out_bytes, statout_err,statin_err,queue.error_full,queue.error_empty_check,queue.queue_size(),epoll_list[0]);
 }
 
 sock_list_t socket::udp_list;
@@ -560,6 +564,7 @@ static int delete_sock_from_list(sock_list_t *listp,socket *sock){
 }
 int socket::delete_sock(socket *sock) {
 	int i;
+    ut_log("Deleting  the socket resources \n");
 
 	sock->queue.free();
 	if (delete_sock_from_list(&socket::tcp_listner_list,sock)==JSUCCESS){
@@ -571,6 +576,7 @@ int socket::delete_sock(socket *sock) {
 	if (delete_sock_from_list(&socket::tcp_connected_list,sock)==JSUCCESS){
 		return JSUCCESS;
 	}
+	sock->network_conn.magic_no = 0xaaaaa;
 	return JFAIL;
 }
 int socket::init_socket(int type){
@@ -600,8 +606,8 @@ int socket::init_socket(int type){
 	}
 	if (ret == JFAIL){
 		queue.free();
-		ut_log("ERROR:   socket OPen fails \n");
-		ut_printf("ERROR:  socket OPen fails \n");
+		ut_log("ERROR:   socket Open fails \n");
+		ut_printf("ERROR:  socket Open fails \n");
 	}
 	count.counter = 1;
 
@@ -646,6 +652,7 @@ vinode* socket::create_new(int arg_type) {
 	if (net_stack_list[0] == 0)
 		return 0;
 	socket *sock = jnew_obj(socket);
+	sock->network_conn.magic_no = 0xabc1234;
 
 	if (arg_type == SOCK_STREAM){
 		list = &socket::tcp_listner_list;

@@ -181,6 +181,7 @@ struct tcp_connection *tcp_conn_new(struct ether_pkt *recv_pkt) {
 
 	struct tcp_connection *tcp_conn = mm_malloc(sizeof(struct tcp_connection),
 			MEM_CLEAR);
+	tcp_conn->magic_no = 0xabcd123;
 	ut_memcpy(tcp_conn->mac_src, recv_pkt->machdr.dest, 6);
 	ut_memcpy(tcp_conn->mac_dest, recv_pkt->machdr.src, 6);
 	tcp_conn->ip_daddr = recv_pkt->iphdr.saddr;

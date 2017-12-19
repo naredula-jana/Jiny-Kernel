@@ -99,15 +99,15 @@ int SYS_epoll_ctl(uint32_t  efd, uint32_t op, uint32_t fd, struct epoll_event *u
 	}
 	vinode=filep->vinode;
 	if (op == EPOLL_CTL_ADD){
-		for (i=0; i<epoll_p->count; i++){
+		for (i=0; i<epoll_p->count && (i< MAX_EPOLL_FDS); i++){
 			if (epoll_p->fds[i] == fd){
 				SYSCALL_DEBUG("ERROR epoll_ctl fd:%d  fd already present\n", fd);
 				return -1;
 			}
 		}
 		i=epoll_p->count;
-		if (i>=(MAX_EPOLL_FDS-1)){
-			ut_printf("ERROR epoll_ctl fd:%d  no space in efds count:%d\n", fd,epoll_p->count);
+		if ((i>=(MAX_EPOLL_FDS-1)) || (i<0)){
+			ut_printf("ERROR epoll_ctl fd:%d  no space in efds count:%d i:%x\n", fd,epoll_p->count,i);
 			for (i=0; i<epoll_p->count; i++){
 				ut_printf("     %d: ERROR Epoll_ctl fd:%d \n",i,epoll_p->fds[i]);
 			}
@@ -128,11 +128,11 @@ int SYS_epoll_ctl(uint32_t  efd, uint32_t op, uint32_t fd, struct epoll_event *u
 			return -1;
 		}
 	}else if (op == EPOLL_CTL_DEL){
-		for (i=0; i<epoll_p->count; i++){
+		for (i=0; i<epoll_p->count && (i< MAX_EPOLL_FDS) ; i++){
 			if (epoll_p->fds[i] == fd){
 				int j;
 				epoll_p->fds[i] = -1;
-				if (i < epoll_p->count-1){
+				if (i < epoll_p->count-1 && (i< MAX_EPOLL_FDS)){
 					epoll_p->fds[i] = epoll_p->fds[epoll_p->count-1];
 					epoll_p->fds[epoll_p->count-1] = -1;
 				}

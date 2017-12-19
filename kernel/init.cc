@@ -27,7 +27,7 @@ kmem_cache_t *mm_cachep;
 
 int brk_pnt=0;
 uint32_t g_cpu_features;
-//void *g_print_lock=0;
+void *g_print_lock=0;
 
 
 extern int init_physical_memory(unsigned long unused);
@@ -94,7 +94,7 @@ static inittable_t inittable[] = {
 //		{init_code_readonly,0,       "Making code readonly",0},
 		{init_kernel_vmaps, 0, "Kernel Vmaps",0},
 		{init_jdevices,0,       "devices in c++ ",0},
-		{init_procfs,0,"Procfs",0},
+//		{init_procfs,0,"Procfs",0},
 		{init_acpi,0,       "ACPI initialzed ",0},
 #ifdef NETWORKING
 		{init_network_stack,0,       "network stacks",0},

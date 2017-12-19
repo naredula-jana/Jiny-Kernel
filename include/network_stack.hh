@@ -27,6 +27,7 @@ enum _socket_type
 #define IPPROTO_TCP 0x06
 
 struct tcp_connection{
+	uint32_t magic_no;
 	uint32_t send_seq_no,send_ack_no;
 	uint32_t recv_seq_no,recv_ack_no;
 
@@ -53,6 +54,7 @@ enum connection_state
 };
 class network_connection{
 public:
+	int magic_no;
 	int family;
 	int type; /* udp or tcp */
 	connection_state state;
