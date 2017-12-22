@@ -248,7 +248,7 @@ static struct vm_area_struct *vm_find_vma_ovrlap(struct mm_struct *mm, struct vm
 	return 0;
 }
 extern "C" {
-int g_conf_userhugepages __attribute__ ((section ("confdata"))) = 0;
+int g_conf_userhugepages __attribute__ ((section ("confdata"))) = 1;
 }
 unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long pgoff, const char *name) {
 	struct mm_struct *mm = g_current_task->mm;
@@ -559,15 +559,15 @@ int Jcmd_maps(char *arg1, char *arg2) {
 		inode = vma->vm_inode;
 		if (inode == NULL) {
 			len = len
-					- ut_snprintf(buf + max_len - len, len, "%9s [ %p - %p ] - (+%p) flag:%x prot:%x stats:(%d/%d/%d)\n",
-							vma->name, vma->vm_start, vma->vm_end, vma->vm_private_data, vma->vm_flags, vma->vm_prot,
+					- ut_snprintf(buf + max_len - len, len, "%9s [ %p - %p ] - (+%p) flag:%x huge:%d prot:%x stats:(%d/%d/%d)\n",
+							vma->name, vma->vm_start, vma->vm_end, vma->vm_private_data, vma->vm_flags,vma->hugepages_enabled, vma->vm_prot,
 							vma->stat_page_count, vma->stat_page_faults, vma->stat_page_wrt_faults);
 		} else {
 			unsigned char filename[100];
 			ut_strncpy(filename,fs_get_filename(inode),99);
 			len = len
-					- ut_snprintf(buf + max_len - len, len, "%9s [ %p - %p ] - (+%p) flag:%x prot:%x stats:(%d/%d/%d) :%s:\n",
-							vma->name, vma->vm_start, vma->vm_end, vma->vm_private_data, vma->vm_flags, vma->vm_prot,
+					- ut_snprintf(buf + max_len - len, len, "%9s [ %p - %p ] - (+%p) flag:%x huge:%d prot:%x stats:(%d/%d/%d) :%s:\n",
+							vma->name, vma->vm_start, vma->vm_end, vma->vm_private_data, vma->vm_flags, vma->hugepages_enabled,vma->vm_prot,
 							vma->stat_page_count, vma->stat_page_faults, vma->stat_page_wrt_faults, filename);
 			}
 		if (all == 1) {

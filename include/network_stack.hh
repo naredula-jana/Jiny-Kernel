@@ -27,6 +27,7 @@ enum _socket_type
 #define IPPROTO_TCP 0x06
 
 struct tcp_connection{
+	unsigned long conn_no; /* running connection  number */
 	uint32_t magic_no;
 	uint32_t send_seq_no,send_ack_no;
 	uint32_t recv_seq_no,recv_ack_no;
@@ -52,6 +53,7 @@ enum connection_state
 	NETWORK_CONN_LISTEN = 3,
 	NETWORK_CONN_CLOSED = 4
 };
+#define MAX_TCP_LISTEN 10
 class network_connection{
 public:
 	int magic_no;
@@ -69,6 +71,7 @@ public:
 
 	void *proto_connection;  /* protocol connection */
 	struct tcp_connection *tcp_conn;
+	struct tcp_connection *new_tcp_conn[MAX_TCP_LISTEN];
 };
 class network_stack{
 //	char temp_buff[8192];

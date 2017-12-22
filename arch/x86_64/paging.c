@@ -505,7 +505,7 @@ static int clear_pagetable(struct mm_struct *mm, int level,unsigned long ptable_
 
 	v=__va(p+i*8);
 	start_addr=start_addr+i*max_entry;
-	DEBUG("            i:%d max_i:%d tableaddr: %x \n",i,max_i,p);
+	//ut_printf("lev:%d mm:%x clearpages:%d  i:%d max_i:%d addr:%x start_addr:%x len:%x  max_ent:%x\n",level,mm,mm->stat_page_free,i,max_i,addr,start_addr,len,max_entry);
 	while( i<max_i )
 	{
 		unsigned long entry_end,entry_start;
@@ -539,7 +539,7 @@ static int clear_pagetable(struct mm_struct *mm, int level,unsigned long ptable_
 						free_page((unsigned long)__va(page));
 					    *v=0;
 					}else if  (level==2 && pde->ps==1){
-						mm->stat_page_free++;
+						mm->stat_page_free =  mm->stat_page_free + 512;
 						mm_putFreePages((unsigned long)__va(page), 9);
 					    *v=0;
 					}else
@@ -797,7 +797,7 @@ if (g_stat_pagefault>6){
 		if ((vma->vm_flags & MAP_ANONYMOUS) && (vma->hugepages_enabled == 1) && (user==1)) {
 			unsigned long hp = mm_getFreePages(MEM_CLEAR, 9); /* need 2M page to aattch to pte  */
 			if (hp != 0) {
-				mm->stat_page_allocs++;
+				mm->stat_page_allocs = mm->stat_page_allocs + 512;
 				pl1 = (unsigned long *) __pa(v);
 				mk_pde(__va(pl1), (__pa(hp))>>PAGE_SHIFT, 1, 0, user);
 				vm_vma_stat(vma,addr,faulting_ip,write_fault,0);

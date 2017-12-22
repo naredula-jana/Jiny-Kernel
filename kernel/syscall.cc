@@ -166,8 +166,8 @@ int SYS_sysinfo(struct sysinfo *info){
     info->loads[0] =0;
     info->loads[1] =0;
     info->loads[2] =0;
-    info->freeram = 250 *1024*1024;
-    info->totalram = 256 *1024*1024;
+    info->freeram = (0.8)*g_phy_mem_size;
+    info->totalram = g_phy_mem_size;
     info->mem_unit = 1 ;
     info->sharedram = 1024*1024;
     info->totalswap =0;

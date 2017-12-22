@@ -44,12 +44,14 @@ void vinode::epoll_fd_wakeup(void){
 		if (epoll_list[i]==0 ){
 			return;
 		}
-		epoll_list[i]->fd_waiting = 1;
-		if (epoll_list[i]->waitq){
-			epoll_list[i]->waitq->wakeup();
-		}else{
-			ut_printf("ERROR: waitq not initialised \n");
-		//	BUG();
+		if (epoll_list[i]->fd_waiting == 0){
+			epoll_list[i]->fd_waiting = 1;
+			if (epoll_list[i]->waitq){
+				epoll_list[i]->waitq->wakeup();
+			}else{
+				ut_printf("ERROR: waitq not initialised \n");
+				//	BUG();
+			}
 		}
 	}
 }
@@ -140,7 +142,7 @@ int SYS_epoll_ctl(uint32_t  efd, uint32_t op, uint32_t fd, struct epoll_event *u
 				for (k=0; k<MAX_EFDS_PER_FD; k++){
 					if (vinode->epoll_list[k] == epoll_p){
 						vinode->epoll_list[k] = 0;
-						for (j=MAX_EPOLL_FDS-1; j>k; j--){
+						for (j=MAX_EFDS_PER_FD-1; j>k; j--){
 							if (vinode->epoll_list[j] != 0 ){
 								vinode->epoll_list[k] = vinode->epoll_list[j];
 								vinode->epoll_list[j] = 0;
@@ -162,7 +164,7 @@ static int get_fds(struct epoll_struct *epoll_p,struct epoll_event *events, uint
 	struct file *filep;
 
 	e=0;
-	epoll_p->fd_waiting = 0;
+
 	for (i=0; i<epoll_p->count && e<maxevents; i++){
 		fd = epoll_p->fds[i];
 		if (fd == -1) continue;
@@ -177,8 +179,8 @@ static int get_fds(struct epoll_struct *epoll_p,struct epoll_event *events, uint
 #if 0
 	ut_log(" epoll: get_fd got sockets:%d\n",e);
 #endif
-	if (e > 0){
-		epoll_p->fd_waiting = 1;
+	if (e == 0){
+		epoll_p->fd_waiting = 0;
 	}
 	return e;
 }

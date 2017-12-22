@@ -14,6 +14,17 @@ extern "C"{
 #include "interface.h"
 extern int net_send_eth_frame(unsigned char *buf, int len, int write_flags);
 extern uint32_t net_htonl(uint32_t n);
+unsigned long g_stat_tcpInData=0;
+unsigned long g_stat_tcpInDataDiscard=0;
+unsigned long g_stat_tcpInCtlDiscard=0;
+unsigned long g_stat_tcpOutData=0;
+unsigned long g_stat_tcpOutRetrans=0;
+unsigned long g_stat_tcpOutAck=0;
+unsigned long g_stat_tcpNewConn=0;
+unsigned long g_stat_tcpDupSYN=0;
+unsigned long g_stat_tcpBufAllocs=0;
+unsigned long g_stat_tcpBufFrees=0;
+
 }
 #include "file.hh"
 #include "network.hh"
@@ -107,6 +118,7 @@ static int send_tcp_pkt(struct tcp_connection *tcp_conn, uint8_t flags,
 	if (buf == 0) {
 		return 0;
 	}
+	//g_stat_tcpBufAllocs++;
 	ut_memset(buf, 0, 10);
 	send_pkt = (struct ether_pkt *) (buf + 10);
 
@@ -142,7 +154,11 @@ static int send_tcp_pkt(struct tcp_connection *tcp_conn, uint8_t flags,
 	if (send_tcp_hdr->flags & TCP_SYN) {
 		send_tcp_hdr->seqno = net_htonl(tcp_conn->send_seq_no - 1);
 	} else {
-		send_tcp_hdr->seqno = net_htonl(tcp_conn->send_seq_no);
+		if (send_tcp_hdr->flags & TCP_FIN) {
+			send_tcp_hdr->seqno = net_htonl(tcp_conn->send_seq_no+1);
+		}else{
+			send_tcp_hdr->seqno = net_htonl(tcp_conn->send_seq_no);
+		}
 	}
 	send_tcp_hdr->ackno = net_htonl(tcp_conn->recv_seq_no);
 
@@ -150,7 +166,9 @@ static int send_tcp_pkt(struct tcp_connection *tcp_conn, uint8_t flags,
 		send_tcp_hdr->flags = send_tcp_hdr->flags | TCP_PSH;
 		ut_memcpy(buf + 10 + 14 + 40, data, data_len);
 		send_tcp_hdr->seqno = net_htonl(send_seq_no);
-
+		g_stat_tcpOutData++;
+	}else{
+		g_stat_tcpOutAck++;
 	}
 	send_tcp_hdr->tcpchksum = 0;
 	send_tcp_hdr->tcpchksum = ~(upper_layer_chksum((unsigned char *) send_pkt,
@@ -163,6 +181,7 @@ static int send_tcp_pkt(struct tcp_connection *tcp_conn, uint8_t flags,
 	} else {
 		unsigned char *buf = (unsigned char *) send_pkt;
 		jfree_page(buf - 10);
+		//g_stat_tcpBufFrees++;
 	}
 /*	ut_log("New tcp pkt send:%d len:%d recvseqno:%x sip:%x:%x-->%x:%x \n", ret,
 			send_len, tcp_conn->recv_seq_no, send_pkt->iphdr.saddr,
@@ -175,9 +194,22 @@ static int send_tcp_pkt(struct tcp_connection *tcp_conn, uint8_t flags,
 		unsigned char *data, int data_len, uint32_t seq_no);
 
 /**********************   TCP api functions ***********************************************/
-struct tcp_connection *tcp_conn_new(struct ether_pkt *recv_pkt) {
+int tcp_conn_new(network_connection *conn, struct ether_pkt *recv_pkt) {
 	int i;
 	struct tcpip_hdr *recv_tcp_hdr = (struct tcpip_hdr *) &(recv_pkt->iphdr);
+	int empty_i = -1;
+	for (i=0; i< MAX_TCP_LISTEN; i++){
+		if (conn->new_tcp_conn[i] != 0 && (conn->new_tcp_conn[i]->destport == recv_tcp_hdr->srcport)){
+			g_stat_tcpDupSYN++;
+			return 0;
+		}
+		if (conn->new_tcp_conn[i] == 0 && empty_i==-1){
+			empty_i =i;
+		}
+	}
+	if (empty_i == -1){
+		return 0;
+	}
 
 	struct tcp_connection *tcp_conn = mm_malloc(sizeof(struct tcp_connection),
 			MEM_CLEAR);
@@ -195,14 +227,22 @@ struct tcp_connection *tcp_conn_new(struct ether_pkt *recv_pkt) {
 		tcp_conn->send_queue[i].buf = jalloc_page(MEM_NETBUF);
 		tcp_conn->send_queue[i].len = 0;
 		tcp_conn->send_queue[i].seq_no = 0;
+		g_stat_tcpBufAllocs++;
 	}
-	return tcp_conn;
+	send_tcp_pkt(tcp_conn, TCP_SYN | TCP_ACK, 0, 0, 0);
+	conn->new_tcp_conn[empty_i] = tcp_conn ;
+	if (g_stat_tcpNewConn ==0 )
+		g_stat_tcpNewConn++;
+	tcp_conn->conn_no = g_stat_tcpNewConn; /* make sure this is not zero */
+	g_stat_tcpNewConn++;
+	return 1;
 }
 int tcp_conn_free(struct tcp_connection *tcp_conn) {
 	int i;
 	for (i = 0; i < MAX_TCPSND_WINDOW; i++) {
 		if (tcp_conn->send_queue[i].buf != 0) {
 			jfree_page(tcp_conn->send_queue[i].buf);
+			g_stat_tcpBufFrees++;
 		}
 	}
 	mm_free(tcp_conn);
@@ -235,7 +275,7 @@ void static tcp_retransmit(network_connection *conn) {
 				conn->tcp_conn->send_queue[i].seq_no) == JFAIL) {
 
 		} else {
-
+			g_stat_tcpOutRetrans++;
 		}
 	}
 	return;
@@ -281,12 +321,11 @@ int tcp_read(network_connection *conn, uint8_t *recv_data, int recv_len,
 	recv_tcp_hdr = (struct tcpip_hdr *) &(recv_pkt->iphdr);
 	int tcp_header_len = (recv_tcp_hdr->tcpoffset >> 4) * 4;
 
-	if ((recv_tcp_hdr->flags & TCP_SYN) && conn->tcp_conn == 0) { /* create new connection */
-		conn->tcp_conn = tcp_conn_new(recv_pkt);
-		conn->state = NETWORK_CONN_INITIATED;
-		flags = TCP_SYN | TCP_ACK;
+	if ((recv_tcp_hdr->flags & TCP_SYN)) { /* create new connection */
+		return tcp_conn_new(conn, recv_pkt);
 	} else {
 		if (conn->tcp_conn == 0) {
+			g_stat_tcpInCtlDiscard++;
 			//ut_log("TCP_dropping the packet: conn found1 \n");
 			return 0;
 		}
@@ -299,8 +338,10 @@ int tcp_read(network_connection *conn, uint8_t *recv_data, int recv_len,
 						tcp_data_len);
 				conn->tcp_conn->recv_seq_no = net_htonl(recv_tcp_hdr->seqno)
 						+ tcp_data_len;
+				g_stat_tcpInData++;
 			} else {
 				tcp_data_len = 0;
+				g_stat_tcpInDataDiscard++;
 			}
 			flags =  TCP_ACK;
 		}

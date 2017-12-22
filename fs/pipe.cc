@@ -120,11 +120,15 @@ static int fs_recv_from_pipe(long pipe_index, uint8_t *buf, int len,int read_fla
 	int in, max_size;
 	int ret = -1;
 
-	if (i < 0 || i >= MAX_PIPES)
+	if (i < 0 || i >= MAX_PIPES){
 		return -1;
+	}
+	in = pipes[i].in_index;
+	if ((pipes[i].bufs[in].data==0) && (read_flags == O_NONBLOCK)){
+		return -EAGAIN ;
+	}
 restart:
 	mutexLock(g_inode_lock);
-	in = pipes[i].in_index;
 	if (pipes[i].bufs[in].data != 0) {
 		max_size = pipes[i].bufs[in].size - pipes[i].bufs[in].start_offset;
 		if (len < max_size)
@@ -146,7 +150,6 @@ restart:
 		ret = max_size;
 	} else {
 		ret=0;
-		//ret = -EAGAIN;
 		mutexUnLock(g_inode_lock);
 		if (read_flags == O_NONBLOCK){
 			return -EAGAIN ;

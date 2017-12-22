@@ -25,7 +25,7 @@
 #define __SPINLOCK_LOCKED   1
 #define __SPINLOCK_UNLOCKED 0
 
-#define SPINLOCK_DEBUG_LOG 1 /* TODO redefined */
+//#define SPINLOCK_DEBUG_LOG 1 /* TODO redefined */
 
 #ifdef SPINLOCK_DEBUG
 #define SPIN_LOCK_UNLOCKED(x) (spinlock_t) { __SPINLOCK_UNLOCKED,0,x,0,0,0,0,1,0,0,0}

@@ -12,7 +12,7 @@
 #define TASK_H
 
 #include "mm.h"
-#define SPINLOCK_DEBUG_LOG 1 /* TODO redefined */
+//#define SPINLOCK_DEBUG_LOG 1 /* TODO redefined */
 
 #define SPINLOCK_DEBUG 1
 #define RECURSIVE_SPINLOCK 1

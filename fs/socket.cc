@@ -256,8 +256,10 @@ void socket::default_pkt_process(){
 			/* first tcp connected clients, then listners */
 			for (i = 0; i < tcp_connected_list.size; i++) {
 				sock = tcp_connected_list.list[i];
-				if (sock == 0)
+				if (sock == 0){
 					continue;
+				}
+
 				/* tcp and udp ports are located in same location in raw packet  , source and dest udp port is used to search for connected tcp sockets */
 				if ((pkt->udphdr.dest == sock->network_conn.src_port)
 						&& (pkt->udphdr.source == sock->network_conn.dest_port)) {
@@ -290,11 +292,11 @@ void socket::default_pkt_process(){
 						ut_log(" ERROR: tcp new connection packet dropped \n");
 						goto last;
 					}
-					//ret = net_stack->read(conn, buf, buf_len, 0, app_len);
 					ret = tcp_read(conn, buf, buf_len,0, 0);
-					//if (conn->new_child_connection.dest_port != 0) {
-					if (conn->tcp_conn != 0){
-						sock->epoll_fd_wakeup();
+					if (ret != 0){
+						if (data_available_for_consumption == 0 ){
+							sock->epoll_fd_wakeup();
+						}
 					}
 					goto last;
 				}
@@ -351,6 +353,9 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int
 			tcp_data->consumed = tcp_data->consumed +ret_len;
 			if (tcp_data->len == tcp_data->consumed){
 				tcpdata_queue.remove_from_queue((unsigned char **)&tcp_data, &tcp_len,&unsued_flags);
+			}
+			if (tcp_data > 0) {
+				free_page((unsigned long)tcp_data);
 			}
 			if (tcpdata_queue.queue_size() == 0){
 				data_available_for_consumption =0;
@@ -477,6 +482,14 @@ int socket::close() {
 		tcp_conn_free(network_conn.tcp_conn);
 		network_conn.tcp_conn = 0;
 	}
+	int i;
+	for (i=0; i< MAX_TCP_LISTEN; i++){
+		if (network_conn.new_tcp_conn[i] != 0){
+			tcp_conn_free(network_conn.new_tcp_conn[i]);
+			network_conn.new_tcp_conn[i]=0;
+		}
+	}
+
 
 	ut_log("socket freeing: in:%d out:%d inerr:%d outerr:%d \n",this->stat_in,this->stat_out,this->statin_err,this->statout_err);
 	delete_sock(this);
@@ -543,7 +556,7 @@ void socket::print_all_stats() {
 		name = net_stack_list[0]->name;
 	}
 
-	ut_printf("SOCKET  netstack:%s raw_drop:%d raw_attached:%d raw_default: %d\n",  name, stat_raw_drop, stat_raw_attached, stat_raw_default);
+	ut_printf("SOCKETs  netstack:%s raw_drop:%d raw_attached:%d raw_default: %d\n",  name, stat_raw_drop, stat_raw_attached, stat_raw_default);
 
 	default_socket->print_stats(0,0);
 	print_list(&socket::tcp_listner_list);
@@ -576,7 +589,6 @@ int socket::delete_sock(socket *sock) {
 	if (delete_sock_from_list(&socket::tcp_connected_list,sock)==JSUCCESS){
 		return JSUCCESS;
 	}
-	sock->network_conn.magic_no = 0xaaaaa;
 	return JFAIL;
 }
 int socket::init_socket(int type){
@@ -818,9 +830,36 @@ int SYS_getsockname(int sockfd, struct sockaddr *addr, int *addrlen) {
 	return ret;
 }
 
+static struct tcp_connection *get_new_conn(network_connection *conn){
+	int i;
+	struct tcp_connection *tcp_conn=0;
+	unsigned long min_conn_no=0;
+	for (i=0; i< MAX_TCP_LISTEN; i++){
+		if (conn->new_tcp_conn[i] != 0){
+			if (min_conn_no ==0  || min_conn_no > conn->new_tcp_conn[i]->conn_no){
+				tcp_conn = conn->new_tcp_conn[i];
+				min_conn_no = tcp_conn->conn_no;
+			}
+		}
+	}
+	return tcp_conn;
+}
+static int remove_new_conn(network_connection *conn, struct tcp_connection *tcp_conn){
+	int i;
+
+	for (i=0; i< MAX_TCP_LISTEN; i++){
+		if (conn->new_tcp_conn[i] == tcp_conn){
+			conn->new_tcp_conn[i] =0;
+			return 1;
+		}
+	}
+	return 0;
+}
 int SYS_accept4(int fd,unsigned long sockaddr, unsigned long addrlen,int accept_flags) {
 	struct file *file, *new_file;
 	int sleep_dur=1;
+	struct tcp_connection *new_tcp_conn;
+
 
 	SYSCALL_DEBUG("accept %d \n", fd);
 	ut_log("accept :fd: %d \n",fd);
@@ -828,12 +867,14 @@ int SYS_accept4(int fd,unsigned long sockaddr, unsigned long addrlen,int accept_
 		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
 
 	file = g_current_task->fs->filep[fd];
-	if (file == 0)
+	if (file == 0){
 		return SYSCALL_FAIL;
+	}
 	struct socket *inode = (struct socket *) file->vinode;
 
-	if ((file->flags & O_NONBLOCK) &&  (inode->network_conn.tcp_conn ==0)){
-		return -1 ;
+	new_tcp_conn = get_new_conn(&inode->network_conn);
+	if ((file->flags & O_NONBLOCK) &&  (new_tcp_conn ==0)){
+		return SYSCALL_FAIL;
 	}
 /* create child socket */
 	int i = SYS_fs_open("/dev/sockets", SOCK_STREAM_CHILD, 0);
@@ -841,11 +882,12 @@ int SYS_accept4(int fd,unsigned long sockaddr, unsigned long addrlen,int accept_
 		return SYSCALL_FAIL;
 	}
 
-	while (inode->network_conn.tcp_conn ==0){
+	while (new_tcp_conn ==0){
 		sc_sleep(sleep_dur); /* wait till the tcp-connection arrives */
 		if (sleep_dur < 100){
 			sleep_dur = sleep_dur*2;
 		}
+		new_tcp_conn = get_new_conn(&inode->network_conn);
 	}
 	new_file = g_current_task->fs->filep[i];
 	struct socket *new_inode = (struct socket *) new_file->vinode;
@@ -855,13 +897,12 @@ int SYS_accept4(int fd,unsigned long sockaddr, unsigned long addrlen,int accept_
 	new_inode->network_conn.dest_ip = inode->network_conn.new_child_connection.dest_ip;
 	new_inode->network_conn.dest_port = inode->network_conn.new_child_connection.dest_port;
 
-	inode->data_available_for_consumption = 0; /*TODO:  currently the listen capcity is one, for the socekts that are bind, need to listen on more then one */
+	inode->data_available_for_consumption = 0;
 	inode->network_conn.new_child_connection.dest_port = 0;
-	new_inode->network_conn.tcp_conn = inode->network_conn.tcp_conn;
-	if (inode->network_conn.tcp_conn != 0){
-		new_inode->network_conn.dest_port= inode->network_conn.tcp_conn->destport;
-	}
-	inode->network_conn.tcp_conn =0;
+	new_inode->network_conn.tcp_conn = new_tcp_conn;
+	remove_new_conn(&inode->network_conn,new_tcp_conn);
+	new_inode->network_conn.dest_port= new_tcp_conn->destport;
+
 
 	new_inode->network_conn.type = SOCK_STREAM;
 	new_file->flags = file->flags;
