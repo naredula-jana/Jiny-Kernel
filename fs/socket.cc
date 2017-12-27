@@ -236,23 +236,29 @@ int fifo_queue::is_empty(){
 unsigned long  fifo_queue::queue_size(){
 	return producer.count - consumer.count;
 }
-int tcp_read(network_connection *conn, uint8_t *raw_data, int raw_len, uint8_t *app_data, int app_maxlen);
+int tcp_read(network_connection *conn, uint8_t *raw_data, int raw_len);
+void tcp_stats(network_connection *conn);
 void socket::default_pkt_process(){
 	int i,ret = 0;
 	unsigned char *buf = 0;
 	int buf_len=0;
 	int read_flags=0;
-	int app_len=0;
-	struct tcp_data *app_data=0;
 	unsigned char *port;
 	socket *sock=0;
 	network_connection *conn=0;
-
+#if 0
+	struct tcp_data *app_data=0;
+	int app_len=0;
+#endif
 	/* push a packet in to protocol stack  */
 	ret = queue.remove_from_queue(&buf, &buf_len,&read_flags);
 	if (ret == JSUCCESS) {
 		struct ether_pkt *pkt = (struct ether_pkt *) (buf + 10);
 		if (pkt->iphdr.protocol == IPPROTO_TCP) {
+			if (pkt->iphdr.frag_off != 0x40){
+				ut_log(" IP frag:%x  len:%d \n",pkt->iphdr.frag_off,pkt->iphdr.tot_len);
+				BUG();
+			}
 			/* first tcp connected clients, then listners */
 			for (i = 0; i < tcp_connected_list.size; i++) {
 				sock = tcp_connected_list.list[i];
@@ -263,19 +269,30 @@ void socket::default_pkt_process(){
 				/* tcp and udp ports are located in same location in raw packet  , source and dest udp port is used to search for connected tcp sockets */
 				if ((pkt->udphdr.dest == sock->network_conn.src_port)
 						&& (pkt->udphdr.source == sock->network_conn.dest_port)) {
-					app_data = (unsigned long) jalloc_page(MEM_NETBUF);
 					conn = &sock->network_conn;
-					if (app_data == 0 || conn == 0) {
+					if (conn == 0) {
+						goto last;
+					}
+#if 0
+					app_data = (unsigned long) jalloc_page(MEM_NETBUF);
+					if (conn == 0) {
 						goto last;
 					}
 					app_len=PAGE_SIZE-sizeof(struct tcp_data);
-					ret = tcp_read(conn, buf, buf_len,&app_data->data[0], app_len);
+					ret = tcp_read(conn, buf, buf_len,&app_data->data[0],app_len);
+#endif
+					ret = tcp_read(conn, buf, buf_len);
 					if (ret > 0) {
+						sock->tcpdata_queue.add_to_queue((unsigned char *) buf, 4096, 0, 1);
+						buf =0;
+#if 0
 						app_data->len = ret;
 						app_data->consumed = 0;
+						app_data->offset = 0;
 						sock->tcpdata_queue.add_to_queue((unsigned char *) app_data, 4096, 0, 1);
+						app_data=0;
+#endif
 						sock->epoll_fd_wakeup();
-						app_data = 0;
 					}else if (ret ==0 && conn->state == NETWORK_CONN_CLOSED){
 						sock->epoll_fd_wakeup();
 					}
@@ -292,7 +309,7 @@ void socket::default_pkt_process(){
 						ut_log(" ERROR: tcp new connection packet dropped \n");
 						goto last;
 					}
-					ret = tcp_read(conn, buf, buf_len,0, 0);
+					ret = tcp_read(conn, buf, buf_len);
 					if (ret != 0){
 						if (data_available_for_consumption == 0 ){
 							sock->epoll_fd_wakeup();
@@ -315,9 +332,11 @@ last:
 	if (buf > 0) {
 		free_page((unsigned long)buf);
 	}
+#if 0
 	if (app_data > 0){
 		free_page((unsigned long)app_data);
 	}
+#endif
 	return;
 }
 
@@ -349,12 +368,10 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int
 			}else{
 				ret_len = tcp_data->len;
 			}
-			ut_memcpy(app_data,&tcp_data->data[0+tcp_data->consumed],ret_len);
+			ut_memcpy(app_data,&tcp_data->data[0+ tcp_data->consumed + tcp_data->offset],ret_len);
 			tcp_data->consumed = tcp_data->consumed +ret_len;
 			if (tcp_data->len == tcp_data->consumed){
 				tcpdata_queue.remove_from_queue((unsigned char **)&tcp_data, &tcp_len,&unsued_flags);
-			}
-			if (tcp_data > 0) {
 				free_page((unsigned long)tcp_data);
 			}
 			if (tcpdata_queue.queue_size() == 0){
@@ -449,7 +466,12 @@ int socket::write(unsigned long offset_unused, unsigned char *app_data, int app_
 		if (network_conn.tcp_conn == 0){
 			return 0;
 		}
-		ret = tcp_write(&network_conn, app_data, app_len);
+		int i;
+		for (i=0; i<4; i++){ /* try maximum 4times before giveup */
+			ret = tcp_write(&network_conn, app_data, app_len);
+			if (ret > 0) { break; }
+			sc_sleep(2);
+		}
 	}else{
 		ret = net_stack->write(&network_conn, &iov, 1);
 	}
@@ -527,6 +549,7 @@ void socket::print_stats(unsigned char *arg1,unsigned char *arg2){
 	ut_printf("socket: count:%d type:%d state:%x local:%x:%x remote:%x:%x ( Stat: in:%d/%d out:%d/%d error:%d:%d Qfull:%d  QReadfail:%i Qlen:%i) epoll:%x\n",
 			count.counter,network_conn.type,network_conn.state,network_conn.src_ip,network_conn.src_port,network_conn.dest_ip,network_conn.dest_port,stat_in,stat_in_bytes
 	    ,stat_out,stat_out_bytes, statout_err,statin_err,queue.error_full,queue.error_empty_check,queue.queue_size(),epoll_list[0]);
+	tcp_stats(&network_conn);
 }
 
 sock_list_t socket::udp_list;

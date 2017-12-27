@@ -159,7 +159,7 @@ struct sysinfo {
                unsigned int mem_unit;   /* Memory unit size in bytes */
                char _f[20-2*sizeof(long)-sizeof(int)]; /* Padding to 64 bytes */
 };
-
+extern unsigned long g_phy_mem_size;
 int SYS_sysinfo(struct sysinfo *info){
     SYSCALL_DEBUG("sysinfo args:%x \n", info);
 
@@ -716,7 +716,12 @@ long SYS_set_robust_list(struct robust_list_head *head, size_t len){
 
 /* TODO */
 int SYS_madvise(void *addr, size_t length, int advise){
-	SYSCALL_DEBUG("TODO  madvise : addr:%x lenght: %d  advise:%d \n",addr,length,advise);
+	if ((advise == MADV_DONTNEED) || (advise == MADV_REMOVE)){
+		SYSCALL_DEBUG("MADVISE partially implemented: addr:%x length:%x advise:%x\n",addr,length,advise);
+		ut_memset(addr, 0 , length);
+	}else{
+		SYSCALL_DEBUG("TODO  madvise : addr:%x lenght: %d  advise:%d \n",addr,length,advise);
+	}
 	return 0;
 }
 int SYS_sched_getaffinity(){

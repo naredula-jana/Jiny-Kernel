@@ -494,6 +494,7 @@ int housekeep_zeropage_cache() { /* clear the page at every call */
 static unsigned long stat_page_allocs=0;
 static unsigned long stat_page_alloc_zero=0;
 static unsigned long stat_page_frees=0;
+#define MAX_PAGES_PER_CPU_CACHE 5000 /* 4k * 5000 = 20M per cpu */
 struct page_bucket{
 #define MAX_STACK_SIZE 1000
 	unsigned long stack[MAX_STACK_SIZE+1];
@@ -506,6 +507,7 @@ static struct page_bucket *empty_buckets,*full_buckets;
 struct percpu_pagecache {
 	char inuse;
     struct page_bucket *bucket;
+    unsigned long count; /* count the number of pages this is to restric to max limit */
 	unsigned long stat_allocs,stat_frees,stat_miss_alloc,stat_miss_free,stat_fills,stat_emptys;
 } __attribute__ ((aligned (64)));
 
@@ -591,6 +593,7 @@ unsigned long jalloc_page(int flags) {
 		if (bucket && bucket->top > 0) {
 			unsigned long ret = bucket->stack[bucket->top - 1];
 			bucket->top--;
+			page_cache[cpu].count--;
 			page_cache[cpu].inuse = 0;
 			page_cache[cpu].stat_allocs++;
 			return ret;
@@ -639,9 +642,10 @@ int Bulk_free_pages(struct struct_mbuf *mbufs, int list_len){
 				page_cache[cpu].stat_emptys++;
 			}
 
-			while (bucket && bucket->top < MAX_STACK_SIZE) {
+			while (bucket && bucket->top < MAX_STACK_SIZE  && (page_cache[cpu].count < MAX_PAGES_PER_CPU_CACHE)) {
 				bucket->stack[bucket->top] = p & PAGE_MASK;
 				bucket->top++;
+				page_cache[cpu].count++;
 				page_cache[cpu].inuse = 0;
 				page_cache[cpu].stat_frees++;
 				if ((index+1) < list_len){
@@ -837,7 +841,7 @@ int Jcmd_jslab(unsigned char *arg1, unsigned char *arg2) {
 	allocs=0;
 	frees=0;
 	for (i=0; i <MAX_CPUS; i++){
-		ut_printf(" Alloc: %d Frees:%d missalloc:%d  missfrees:%d buc_fills:%d buc_empty:%d \n",page_cache[i].stat_allocs,page_cache[i].stat_frees,page_cache[i].stat_miss_alloc,page_cache[i].stat_miss_free,page_cache[i].stat_fills,page_cache[i].stat_emptys);
+		ut_printf(" Count: %d Alloc: %d Frees:%d missalloc:%d  missfrees:%d buc_fills:%d buc_empty:%d \n",page_cache[i].count, page_cache[i].stat_allocs,page_cache[i].stat_frees,page_cache[i].stat_miss_alloc,page_cache[i].stat_miss_free,page_cache[i].stat_fills,page_cache[i].stat_emptys);
 		allocs=allocs+page_cache[i].stat_allocs;
 		frees=frees+page_cache[i].stat_frees;
 	}

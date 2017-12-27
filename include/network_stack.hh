@@ -29,10 +29,10 @@ enum _socket_type
 struct tcp_connection{
 	unsigned long conn_no; /* running connection  number */
 	uint32_t magic_no;
-	uint32_t send_seq_no,send_ack_no;
-	uint32_t recv_seq_no,recv_ack_no;
+	uint32_t send_seq_no,send_ack_no; /* what it as send the seq no, what it got acknowledged */
+	uint32_t recv_seq_no;
 
-#define MAX_TCPSND_WINDOW 40
+#define MAX_TCPSND_WINDOW 80
 	struct {
 		unsigned char *buf;
 		int len;

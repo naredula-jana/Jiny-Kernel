@@ -263,7 +263,7 @@ static int free_mm(struct mm_struct *mm) {
 	if (ret != 1) {
 		ut_printf("ERROR : clear the pagetables :%d: \n", ret);
 	}
-    ut_log(" mm free: allocs:%d free:%d size:%d M\n",mm->stat_page_allocs,mm->stat_page_free,(mm->stat_page_allocs*4096)/(1024*1024));
+    //ut_log(" mm free: allocs:%d free:%d size:%d M\n",mm->stat_page_allocs,mm->stat_page_free,(mm->stat_page_allocs*4096)/(1024*1024));
 	destroy_futex(mm);
 //	ut_log(" mm_free alloc_pages: %d free_pages:%d \n", mm->stat_page_allocs, mm->stat_page_free);
 	mm_slab_cache_free(mm_cachep, mm);

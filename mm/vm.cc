@@ -248,7 +248,7 @@ static struct vm_area_struct *vm_find_vma_ovrlap(struct mm_struct *mm, struct vm
 	return 0;
 }
 extern "C" {
-int g_conf_userhugepages __attribute__ ((section ("confdata"))) = 1;
+int g_conf_userhugepages __attribute__ ((section ("confdata"))) = 0;
 }
 unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long pgoff, const char *name) {
 	struct mm_struct *mm = g_current_task->mm;

@@ -147,8 +147,10 @@ typedef struct sock_list_type{
 	int size;
 }sock_list_t;
 struct tcp_data{  /* this is for tcp connections */
-	int len;
-	int consumed;
+	uint64_t len;
+	uint64_t offset;
+	uint64_t consumed;
+#define TCP_USER_DATA_HDR 24 /* This is sum of the above feilds , if any any feild is added or removed this value changes */
 	unsigned char data[1];
 };
 

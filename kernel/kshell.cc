@@ -267,7 +267,7 @@ int kshell::main(void *arg) {
 	for (i = 0; i < MAX_CMD_HISTORY; i++)
 		cmd_history[i][0] = '\0';
 
-	sc_set_fsdevice(DEVICE_KEYBOARD, DEVICE_KEYBOARD); /* kshell on vga console */
+	sc_set_fsdevice(DEVICE_KEYBOARD, DEVICE_SERIAL2); /* kshell on vga console */
 	input_device = DEVICE_KEYBOARD;
 	kshell_process();
 
