@@ -662,7 +662,7 @@ void sc_before_syscall() {
 	g_current_task->curr_syscall_id = g_cpu_state[getcpuid()].md_state.syscall_id;
 	g_current_task->callstack_top = 0;
 	g_current_task->stats.syscall_count++;
-
+    net_bh();
 #if 1
 	if (g_current_task->curr_syscall_id < MAX_SYSCALL && g_current_task->stats.syscalls!=0){
 		g_current_task->stats.syscalls[g_current_task->curr_syscall_id].count++;
@@ -1037,6 +1037,16 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	}
 
 	spin_lock_irqsave(&g_global_lock, flags);
+	for (i = 0; i < getmaxcpus(); i++) {
+		task = g_cpu_state[i].idle_task ;
+		len = len - ut_snprintf(buf + max_len - len, len, "[%2x(%d):%2x:%2x](%d)", task->task_id,task->task_id,task->process_id,task->parent_process_pid,task->stats.syscall_count);
+		len = len
+				- ut_snprintf(buf + max_len - len, len,
+						"cpu-%d: %3d (%5d/%7d)  %5x:%d %7s sleeptick(%3d) cpu:%3d :%s: count:%d status:%s stickcpu:%x\n",
+						task->allocated_cpu, task->state, task->stats.total_contexts, task->stats.ticks_consumed, task->mm, task->mm->count.counter,
+						task->name, task->sleep_ticks, task->current_cpu, task->fs->cwd,
+						task->count.counter, task->status_info, task->stick_to_cpu);
+	}
 	list_for_each(pos, &g_task_queue.head) {
 		task = list_entry(pos, struct task_struct, task_queue);
 		if (is_kernelThread(task))

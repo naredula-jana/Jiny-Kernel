@@ -168,7 +168,6 @@ static int send_tcp_pkt(struct tcp_connection *tcp_conn, uint8_t flags,
 		send_tcp_hdr->flags = send_tcp_hdr->flags | TCP_PSH;
 		ut_memcpy(buf + 10 + 14 + 40, data, data_len);
 		send_tcp_hdr->seqno = net_htonl(send_seq_no);
-		g_stat_tcpOutData++;
 	}else{
 		g_stat_tcpOutAck++;
 	}
@@ -263,74 +262,63 @@ void tcp_stats(network_connection *conn){
 		}
 		ut_printf("          seq: %d len:%d \n",tcp_conn->send_queue[i].seq_no,tcp_conn->send_queue[i].len);
 	}
-
 }
-void static update_sendack(network_connection *conn, uint32_t send_ack) {
+
+/* TODO: merge all segments and send in bigger buffer */
+void static tcp_retransmit(network_connection *conn) {
 	int i;
-	int leftover=0;
 	struct tcp_connection *tcp_conn = conn->tcp_conn;
-	if (tcp_conn->send_ack_no >= send_ack) {
-		return;
-	}
 
-	tcp_conn->send_ack_no = send_ack;
-	if (g_conf_tcpDebug == 1){
-		ut_log("   tcp  ack_update sendseqno:%d  ackno: %d \n",tcp_conn->send_seq_no,tcp_conn->send_ack_no );
-
-	}
 	for (i = 0; i < MAX_TCPSND_WINDOW; i++) {
 		uint8_t flags = TCP_ACK;
 		if (tcp_conn->send_queue[i].len == 0){
 			continue;
 		}
-		if (send_ack > tcp_conn->send_queue[i].seq_no) {
+		if (tcp_conn->send_ack_no > tcp_conn->send_queue[i].seq_no) {
 			tcp_conn->send_queue[i].len = 0;
-		}else{
-			leftover++;
-		}
-	}
-	if (leftover > 0){
-		tcp_retransmit(conn);
-	}
-}
-void static tcp_retransmit(network_connection *conn) {
-	int i;
-
-	for (i = 0; i < MAX_TCPSND_WINDOW; i++) {
-		uint8_t flags = TCP_ACK;
-		if (conn->tcp_conn->send_queue[i].len == 0){
 			continue;
 		}
-		if (send_tcp_pkt(conn->tcp_conn, flags,
-				conn->tcp_conn->send_queue[i].buf,
-				conn->tcp_conn->send_queue[i].len,
-				conn->tcp_conn->send_queue[i].seq_no) == JFAIL) {
-
-		} else {
-			g_stat_tcpOutRetrans++;
+		if (g_jiffies == tcp_conn->send_queue[i].lastsend_ts){
+			continue;
+		}
+		if (send_tcp_pkt(tcp_conn, flags,
+				tcp_conn->send_queue[i].buf,
+				tcp_conn->send_queue[i].len,
+				tcp_conn->send_queue[i].seq_no) == JSUCCESS) {
+			if (tcp_conn->send_queue[i].lastsend_ts != 0){ /* this is not the first time */
+				g_stat_tcpOutRetrans++;
+			}else{
+				g_stat_tcpOutData++;
+			}
+			tcp_conn->send_queue[i].lastsend_ts = g_jiffies ;
 		}
 	}
 	return;
 }
 
+/* TODO: send entire user data in multiple iterations */
 int tcp_write(network_connection *conn, uint8_t *app_data, int app_maxlen) {
 	int i;
 	int copied = 0;
+	struct tcp_connection *tcp_conn = conn->tcp_conn;
 
 	if (app_maxlen > (PAGE_SIZE - 100)) {
 		app_maxlen = PAGE_SIZE - 100;
 	}
-	if (conn==0 || conn->tcp_conn == 0){
+	if (conn==0 || tcp_conn == 0){
 		BUG();
 	}
 	for (i = 0; i < MAX_TCPSND_WINDOW; i++) {
-		if (conn->tcp_conn->send_queue[i].buf != 0
-				&& conn->tcp_conn->send_queue[i].len == 0) {
-			ut_memcpy(conn->tcp_conn->send_queue[i].buf, app_data, app_maxlen);
-			conn->tcp_conn->send_queue[i].len = app_maxlen;
-			conn->tcp_conn->send_queue[i].seq_no = conn->tcp_conn->send_seq_no;
-			conn->tcp_conn->send_seq_no = conn->tcp_conn->send_seq_no
-					+ app_maxlen;
+		if ((tcp_conn->send_queue[i].len != 0) && (tcp_conn->send_ack_no > tcp_conn->send_queue[i].seq_no)) {
+			tcp_conn->send_queue[i].len = 0;
+			continue;
+		}
+		if (conn->tcp_conn->send_queue[i].len == 0) {
+			ut_memcpy(tcp_conn->send_queue[i].buf, app_data, app_maxlen);
+			tcp_conn->send_queue[i].len = app_maxlen;
+			tcp_conn->send_queue[i].seq_no = tcp_conn->send_seq_no;
+			tcp_conn->send_queue[i].lastsend_ts = 0;
+			tcp_conn->send_seq_no = conn->tcp_conn->send_seq_no + app_maxlen;
 			copied = 1;
 			break;
 		}
@@ -346,7 +334,8 @@ int tcp_write(network_connection *conn, uint8_t *app_data, int app_maxlen) {
 	return app_maxlen;
 }
 
-int tcp_read(network_connection *conn, uint8_t *recv_data, int recv_len) {
+/* this happens in the context of ISR or polling mode or this should in syncronous mode, this should be as fast as possible */
+int tcp_read(network_connection *conn, uint8_t *recv_data, int recv_len)   {
 	struct ether_pkt *recv_pkt = (struct ether_pkt *) (recv_data + 10);
 	struct tcpip_hdr *recv_tcp_hdr, *send_tcp_hdr;
 	int ret;
@@ -366,7 +355,8 @@ int tcp_read(network_connection *conn, uint8_t *recv_data, int recv_len) {
 	}
 	tcp_data_len = htons(recv_pkt->iphdr.tot_len) - (20 + tcp_header_len);
 	if (recv_tcp_hdr->flags & TCP_ACK) {
-		update_sendack(conn, net_htonl(recv_tcp_hdr->ackno));
+		int ackno = net_htonl(recv_tcp_hdr->ackno);
+		conn->tcp_conn->send_ack_no = ackno ; /* TODO: need to check rounding the number  and large ack */
 	}
 	if ((recv_tcp_hdr->flags & TCP_RST) || (recv_tcp_hdr->flags & TCP_FIN)) {
 		flags = flags | TCP_ACK;
@@ -378,13 +368,10 @@ int tcp_read(network_connection *conn, uint8_t *recv_data, int recv_len) {
 		tcp_conn_free(conn->tcp_conn);
 		conn->tcp_conn = 0;
 		conn->state = NETWORK_CONN_CLOSED;
-		//ut_log("TODO: TCP_silently cleaning the connection\n");
 		return 0;
 	}
 	if (tcp_data_len > 0) {
 		if (conn->tcp_conn->recv_seq_no == net_htonl(recv_tcp_hdr->seqno)) {
-//			ut_memcpy(app_data, recv_data + 10 + 14 + 20 + tcp_header_len, tcp_data_len);
-
 			conn->tcp_conn->recv_seq_no = net_htonl(recv_tcp_hdr->seqno) + tcp_data_len;
 #if 1
 			struct tcp_data *app_data=(struct tcp_data *) recv_data;

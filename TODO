@@ -1,0 +1,129 @@
+ critical TODO:
+1)  cpu_state  : extra struct is included, if removed crash happens in mmap  
+-------------------
+New features:
+1) disable clock ticks on non-boot cpu to avoid scheduling every tick.
+2) pthread_create is failing , need to fix somewhere in clone or related.
+3) hot cpu plugin and hot lug memory: need to check with qemu, implementing memory may be easier when compare to cpu.
+4) cpu load balancing tasks.
+5) house keepertasks redesign.
+6) NUMA and HugeTLB: how these two link to 
+7) clone system call:  replicating the env , following the unix standards
+8) adding busy on serial port-2 also, incase port-1 is lost, port-2 can be used.
+--------------------
+Network improvements:
+9) Testing with "vhost user"   and "NUMA + Large page + cpu pinning"  with userspace switch.
+10)
+
+-------------------------
+ovs-vsctl list-ifaces br-tun
+ovs-vsctl list-br
+
+neutron net-list
+nova list
+-----
+        Hit f to get into the Fields Management window
+        Select P (Last Used Cpu)
+
+here is an example with the last column P
+numactl --hardware
+-------------
+Total memory 1G  memory write 512M:  ( with 1*4 bytes write)
+
+NUMA friendly:(huge)
+2.7k 3.3k 2.9k
+
+NUMA opposite: (huge)
+4.2k,4.9k, 3.3k 
+
+
+NUMA friendly:(small)
+3.0k,2.8k, 3.9k 
+
+NUMA opposite: (small)
+5.9k, 5.7k,3.8k
+-------------------------------
+Total memory 1G  memory write 512M:  ( with 50*4 bytes write)
+NUMA friendly:(small)
+2.2k,3.3k, 2.3k 
+NUMA opposite: (small)
+4.5k, 4.8k,4.0k
+
+NUMA friendly:(huge)
+2.8k 1.5k 1.6k
+
+NUMA opposite: (huge)
+3.8k 4.8k 5.6k
+
+SUMMARY :  as big impact if memory and cpu sit on the same node. 
+   Huge pages as small impact, it may be because of the test that as good locality.
+   -------------------------------
+   enable avx:
+
+
+   enable_avx:
+       pushq %rax
+       pushq %rcx
+       xor %rcx, %rcx
+       xgetbv /* ;Load XCR0 register */
+       orl 0x7, %eax /*;Set AVX, SSE, X87 bits */
+       xsetbv /*;Save back to XCR0 */
+       popq %rcx
+       popq %rax
+       
+       ------------
+       
+       314				assert(PageReferenced(page));
+(gdb) where
+#0  0xffffffff8014d7f3 in mm_putFreePages (addr=18446683600750030848, order=9) at memory.c:314
+#1  0xffffffff801173a8 in clear_pagetable (mm=0xffffc9000a9c6140, level=2, ptable_addr=180011008, addr=0, len=18446744073709551615, start_addr=140733193388032) at paging.c:543
+#2  0xffffffff80117404 in clear_pagetable (mm=0xffffc9000a9c6140, level=3, ptable_addr=180015104, addr=0, len=18446744073709551615, start_addr=140733193388032) at paging.c:554
+#3  0xffffffff80117404 in clear_pagetable (mm=0xffffc9000a9c6140, level=4, ptable_addr=180097024, addr=0, len=18446744073709551615, start_addr=140187732541440) at paging.c:554
+#4  0xffffffff8011758c in ar_pageTableCleanup (mm=0xffffc9000a9c6140, addr=0, length=18446744073709551615) at paging.c:599
+#5  0xffffffff8013f6b3 in free_mm (mm=0xffffc9000a9c6140) at sched_task.cc:262
+#6  0xffffffff801438f6 in SYS_sc_execve (file=0x819c28 <error: Cannot access memory at address 0x819c28>, argv=0x819c90, env=0x819cb0) at sched_task.cc:1372
+#7  0xffffffff801123db in good_syscall_number () at syscall.S:126
+----------------------------
+
+1) cleaning tcp stack: 
+  a) merging the packets while sending with timers.
+  b) sending from a single thread
+  c) handling IP fragmentation
+ 2) networkschedule: 
+    a) removing default thread
+ 3) memory:
+   a) increasing mtu for network
+   b) huge pages for kernel
+   c) user huge pages works, but when it is enabled at startup there is a crash.
+   d) increasing memory more then 2G: there is some-issue during page table setup.
+ 4) misc:
+   a) profiling  
+   
+            0: addr:    0 -     0 
+    1:t:75 hits:976430896(-1897886016:537903138) (rip=0f7fffffff25c020) KDATA_SEG -> 0000000000000010 (0) 
+    2:t:84 hits:82292(82292:0) (rip=ffffffff801441ef) idleTask_func -> ffffffff80144177 (0) 
+    3:t:84 hits:28099(28099:0) (rip=ffffffff801374f2) net_bh -> ffffffff801373ed (290) 
+    4:t:84 hits:25784(25784:0) (rip=ffffffff8016c49e) _ZN12virtio_queue14check_recv_pktEv -> ffffffff8016c47e (56) 
+    5:t:116 hits:14236(14236:0) (rip=ffffffff80137311) net_bh_recv -> ffffffff80137311 (0) 
+    6:t:116 hits:5393(5393:0) (rip=ffffffff80137921) net_bh_send -> ffffffff801378fa (0) 
+    7:t:84 hits:3945(3945:0) (rip=ffffffff80170cda) _ZN18virtio_net_jdriver14check_for_pktsEv -> ffffffff80170cce (33) 
+    8:t:84 hits: 597(597:0) (rip=ffffffff801446d3) ut_memset -> ffffffff8014469a (72) 
+    9:t:84 hits: 527(527:0) (rip=ffffffff80171eee) _ZN18virtio_net_jdriver5ioctlEmm -> ffffffff80171d8a (0) 
+   10:t:115 hits: 453(453:0) (rip=ffffffff80112398) syscall_entry -> ffffffff8011233b (0) 
+   11:t:84 hits: 427(427:0) (rip=ffffffff80141017) sc_schedule -> ffffffff80140edd (321) 
+   12:t:116 hits: 346(346:0) (rip=ffffffff8011296d) get_percpu_ns -> ffffffff80112713 (0) 
+   13:t:84 hits: 290(290:0) (rip=ffffffff801445bb) ut_memcpy -> ffffffff801444f4 (262) 
+   14:t:116 hits: 177(177:0) (rip=ffffffff801630a1) _ZL6chksumtPKht -> ffffffff80163045 (0) 
+   15:t:84 hits: 164(164:0) (rip=ffffffff80140b60) sc_before_syscall -> ffffffff80140b3f (0) 
+   16:t:84 hits: 149(149:0) (rip=ffffffff80140e35) sc_remove_dead_tasks -> ffffffff80140e1c (0) 
+   17:t:84 hits: 126(126:0) (rip=ffffffff8011268a) ut_get_wallclock -> ffffffff80112650 (0) 
+   18:t:84 hits: 124(124:0) (rip=ffffffff801126fe) ar_read_tsc -> ffffffff801126f4 (0) 
+   19:t:84 hits:  93(95:0) (rip=ffffffff80174cf1) _ZN14serial_jdriver14dr_serialWriteEPci -> ffffffff80174bc8 (0) 
+ Total modules: 1 total Hits:0  unknownhits:13635 unown ip:00000000005624cf 
+   
+
+
+
+
+
+

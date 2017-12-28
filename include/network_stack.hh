@@ -37,6 +37,7 @@ struct tcp_connection{
 		unsigned char *buf;
 		int len;
 		uint32_t seq_no;
+		uint64_t lastsend_ts; /* last send timestamp */
 	}send_queue[MAX_TCPSND_WINDOW];
 
 	uint16_t srcport, destport;

@@ -169,7 +169,7 @@ public:
 
 	socket(){
 	}
-	void default_pkt_process();
+	void default_pkt_process(unsigned char *buf ,int buf_len);
 	int write_iov(struct iovec *msg_iov, int iov_len);
 
 	int read(unsigned long offset, unsigned char *data, int len, int flags, int unused_flags);

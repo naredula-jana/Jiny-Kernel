@@ -60,6 +60,8 @@ int socket::attach_rawpkt(unsigned char *buff, unsigned int len) {
 		}
 	} else if(pkt->iphdr.protocol == IPPROTO_TCP){
 		/* queue to default queue */
+		default_socket->default_pkt_process(buff,len);
+		return JSUCCESS;
 	}
 
 	default_socket->queue.add_to_queue(buff, len,0,1);
@@ -238,11 +240,11 @@ unsigned long  fifo_queue::queue_size(){
 }
 int tcp_read(network_connection *conn, uint8_t *raw_data, int raw_len);
 void tcp_stats(network_connection *conn);
-void socket::default_pkt_process(){
+void socket::default_pkt_process(unsigned char *arg_buf ,int buf_len){
 	int i,ret = 0;
-	unsigned char *buf = 0;
-	int buf_len=0;
-	int read_flags=0;
+	unsigned char *buf = arg_buf ;
+//	int buf_len=0;
+//	int read_flags=0;
 	unsigned char *port;
 	socket *sock=0;
 	network_connection *conn=0;
@@ -251,8 +253,8 @@ void socket::default_pkt_process(){
 	int app_len=0;
 #endif
 	/* push a packet in to protocol stack  */
-	ret = queue.remove_from_queue(&buf, &buf_len,&read_flags);
-	if (ret == JSUCCESS) {
+	//ret = queue.remove_from_queue(&buf, &buf_len,&read_flags);
+	//if (ret == JSUCCESS) {
 		struct ether_pkt *pkt = (struct ether_pkt *) (buf + 10);
 		if (pkt->iphdr.protocol == IPPROTO_TCP) {
 			if (pkt->iphdr.frag_off != 0x40){
@@ -285,13 +287,7 @@ void socket::default_pkt_process(){
 					if (ret > 0) {
 						sock->tcpdata_queue.add_to_queue((unsigned char *) buf, 4096, 0, 1);
 						buf =0;
-#if 0
-						app_data->len = ret;
-						app_data->consumed = 0;
-						app_data->offset = 0;
-						sock->tcpdata_queue.add_to_queue((unsigned char *) app_data, 4096, 0, 1);
-						app_data=0;
-#endif
+
 						sock->epoll_fd_wakeup();
 					}else if (ret ==0 && conn->state == NETWORK_CONN_CLOSED){
 						sock->epoll_fd_wakeup();
@@ -327,7 +323,7 @@ void socket::default_pkt_process(){
 			}
 		}
 		stat_in++;
-	}
+	//}
 last:
 	if (buf > 0) {
 		free_page((unsigned long)buf);
@@ -714,12 +710,15 @@ int socket::default_pkt_thread(void *arg1, void *arg2){
 		sc_sleep(1);
 	}
 	while(1){
-		ret = default_socket->queue.peep_from_queue(0,0,0);
+		//ret = default_socket->queue.peep_from_queue(0,0,0);
+		//if (ret == JSUCCESS) {
+		unsigned char *buf = 0;
+		int buf_len=0;
+		int read_flags=0;
+		ret = default_socket->queue.remove_from_queue(&buf, &buf_len,&read_flags);
 		if (ret == JSUCCESS) {
-			default_socket->default_pkt_process();
+			default_socket->default_pkt_process(buf,buf_len);
 			//default_socket->read(0,0,0,0,0);
-		}else{
-			sc_sleep(2);
 		}
 	}
 	return 1;
