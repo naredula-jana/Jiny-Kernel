@@ -170,7 +170,7 @@ int net_bh(){
 		return 0;
 	}
 	g_cpu_state[cpu].net_bh.inprogress =1;  /* this is to protect to enter this function by the same thread during soft interrupts */
-
+	socket::tcp_housekeep();
 	int ret = 0;
 	do {
 		ret = 0;

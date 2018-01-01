@@ -30,7 +30,7 @@ unsigned long g_stat_tcpSendBlocked=0;
 }
 #include "file.hh"
 #include "network.hh"
-#include "network_stack.hh"
+//#include "network_stack.hh"
 #include "types.h"
 struct tcpip_hdr {
 	/* IPv4 header. */
@@ -109,8 +109,7 @@ static u16_t ipchksum(u8_t *data) {
 	sum = chksum(0, &data[LLH_LEN], IPH_LEN);
 	return (sum == 0) ? 0xffff : htons(sum);
 }
-static int send_tcp_pkt(struct tcp_connection *tcp_conn, uint8_t flags,
-		unsigned char *data, int data_len, uint32_t send_seq_no) {
+int tcp_connection::send_tcp_pkt(uint8_t flags, unsigned char *data, int data_len,uint32_t seq_no) {
 	struct ether_pkt *send_pkt;
 	int ret, send_len;
 	struct tcpip_hdr *send_tcp_hdr;
@@ -125,17 +124,17 @@ static int send_tcp_pkt(struct tcp_connection *tcp_conn, uint8_t flags,
 	send_pkt = (struct ether_pkt *) (buf + 10);
 
 	send_tcp_hdr = (struct tcpip_hdr *) &(send_pkt->iphdr);
-	ut_memcpy(send_pkt->machdr.src, tcp_conn->mac_src, 6);
-	ut_memcpy(send_pkt->machdr.dest, tcp_conn->mac_dest, 6);
+	ut_memcpy(send_pkt->machdr.src, mac_src, 6);
+	ut_memcpy(send_pkt->machdr.dest, mac_dest, 6);
 	send_pkt->machdr.type[0] = 0x8;
 	send_pkt->machdr.type[1] = 0;
 
-	send_pkt->iphdr.daddr = tcp_conn->ip_daddr;
-	send_pkt->iphdr.saddr = tcp_conn->ip_saddr;
+	send_pkt->iphdr.daddr = ip_daddr;
+	send_pkt->iphdr.saddr = ip_saddr;
 	send_pkt->iphdr.frag_off = 0x40;
 
-	send_tcp_hdr->destport = tcp_conn->destport;
-	send_tcp_hdr->srcport = tcp_conn->srcport;
+	send_tcp_hdr->destport = destport;
+	send_tcp_hdr->srcport = srcport;
 	send_tcp_hdr->vhl = 0x45;
 	send_tcp_hdr->tos = 0x10;
 	send_tcp_hdr->ttl = 0x40;
@@ -154,20 +153,20 @@ static int send_tcp_pkt(struct tcp_connection *tcp_conn, uint8_t flags,
 
 	send_pkt->iphdr.check = 0;
 	if (send_tcp_hdr->flags & TCP_SYN) {
-		send_tcp_hdr->seqno = net_htonl(tcp_conn->send_seq_no - 1);
+		send_tcp_hdr->seqno = net_htonl(seq_no - 1);
 	} else {
 		if (send_tcp_hdr->flags & TCP_FIN) {
-			send_tcp_hdr->seqno = net_htonl(tcp_conn->send_seq_no+1);
+			send_tcp_hdr->seqno = net_htonl(seq_no);
 		}else{
-			send_tcp_hdr->seqno = net_htonl(tcp_conn->send_seq_no);
+			send_tcp_hdr->seqno = net_htonl(seq_no);
 		}
 	}
-	send_tcp_hdr->ackno = net_htonl(tcp_conn->recv_seq_no);
+	send_tcp_hdr->ackno = net_htonl(recv_seq_no);
 
 	if (data_len > 0) {
 		send_tcp_hdr->flags = send_tcp_hdr->flags | TCP_PSH;
 		ut_memcpy(buf + 10 + 14 + 40, data, data_len);
-		send_tcp_hdr->seqno = net_htonl(send_seq_no);
+		send_tcp_hdr->seqno = net_htonl(seq_no);
 	}else{
 		g_stat_tcpOutAck++;
 	}
@@ -184,15 +183,9 @@ static int send_tcp_pkt(struct tcp_connection *tcp_conn, uint8_t flags,
 		jfree_page(buf - 10);
 		//g_stat_tcpBufFrees++;
 	}
-/*	ut_log("New tcp pkt send:%d len:%d recvseqno:%x sip:%x:%x-->%x:%x \n", ret,
-			send_len, tcp_conn->recv_seq_no, send_pkt->iphdr.saddr,
-			send_tcp_hdr->srcport, send_pkt->iphdr.daddr,
-			send_tcp_hdr->destport); */
 	return ret;
 }
 
-static int send_tcp_pkt(struct tcp_connection *tcp_conn, uint8_t flags,
-		unsigned char *data, int data_len, uint32_t seq_no);
 
 /**********************   TCP api functions ***********************************************/
 int tcp_conn_new(network_connection *conn, struct ether_pkt *recv_pkt) {
@@ -212,8 +205,7 @@ int tcp_conn_new(network_connection *conn, struct ether_pkt *recv_pkt) {
 		return 0;
 	}
 
-	struct tcp_connection *tcp_conn = mm_malloc(sizeof(struct tcp_connection),
-			MEM_CLEAR);
+	tcp_connection *tcp_conn = jnew_obj(tcp_connection);
 	tcp_conn->magic_no = 0xabcd123;
 	ut_memcpy(tcp_conn->mac_src, recv_pkt->machdr.dest, 6);
 	ut_memcpy(tcp_conn->mac_dest, recv_pkt->machdr.src, 6);
@@ -230,7 +222,8 @@ int tcp_conn_new(network_connection *conn, struct ether_pkt *recv_pkt) {
 		tcp_conn->send_queue[i].seq_no = 0;
 		g_stat_tcpBufAllocs++;
 	}
-	send_tcp_pkt(tcp_conn, TCP_SYN | TCP_ACK, 0, 0, 0);
+	tcp_conn->send_tcp_pkt(TCP_SYN | TCP_ACK, 0, 0,tcp_conn->send_seq_no);
+	tcp_conn->state = TCP_CONN_ESTABILISHED;
 
 	conn->new_tcp_conn[empty_i] = tcp_conn ;
 	if (g_stat_tcpNewConn ==0 )
@@ -239,7 +232,7 @@ int tcp_conn_new(network_connection *conn, struct ether_pkt *recv_pkt) {
 	g_stat_tcpNewConn++;
 	return 1;
 }
-int tcp_conn_free(struct tcp_connection *tcp_conn) {
+int tcp_conn_free(tcp_connection *tcp_conn) {
 	int i;
 	for (i = 0; i < MAX_TCPSND_WINDOW; i++) {
 		if (tcp_conn->send_queue[i].buf != 0) {
@@ -248,94 +241,99 @@ int tcp_conn_free(struct tcp_connection *tcp_conn) {
 			g_stat_tcpBufFrees++;
 		}
 	}
-	mm_free(tcp_conn);
+	ut_free(tcp_conn);
 }
-void tcp_stats(network_connection *conn){
-	struct tcp_connection *tcp_conn = conn->tcp_conn;
+void tcp_connection::print_stats(unsigned char *arg1,unsigned char *arg2){
 	int i;
 
-	if (tcp_conn == 0) return;
-	ut_printf("   tcp  ack_update sendseqno:%d  ackno: %d \n",tcp_conn->send_seq_no,tcp_conn->send_ack_no );
+	ut_printf("   TCP  ack_update sendseqno:%d  ackno: %d  state:%d \n",send_seq_no, send_ack_no ,state);
 	for (i = 0; i < MAX_TCPSND_WINDOW; i++) {
-		if (tcp_conn->send_queue[i].len == 0){
+		if (send_queue[i].len == 0){
 			continue;
 		}
-		ut_printf("          seq: %d len:%d \n",tcp_conn->send_queue[i].seq_no,tcp_conn->send_queue[i].len);
-	}
-}
-
-/* TODO: merge all segments and send in bigger buffer */
-void static tcp_retransmit(network_connection *conn) {
-	int i;
-	struct tcp_connection *tcp_conn = conn->tcp_conn;
-
-	for (i = 0; i < MAX_TCPSND_WINDOW; i++) {
-		uint8_t flags = TCP_ACK;
-		if (tcp_conn->send_queue[i].len == 0){
-			continue;
-		}
-		if (tcp_conn->send_ack_no > tcp_conn->send_queue[i].seq_no) {
-			tcp_conn->send_queue[i].len = 0;
-			continue;
-		}
-		if (g_jiffies == tcp_conn->send_queue[i].lastsend_ts){
-			continue;
-		}
-		if (send_tcp_pkt(tcp_conn, flags,
-				tcp_conn->send_queue[i].buf,
-				tcp_conn->send_queue[i].len,
-				tcp_conn->send_queue[i].seq_no) == JSUCCESS) {
-			if (tcp_conn->send_queue[i].lastsend_ts != 0){ /* this is not the first time */
-				g_stat_tcpOutRetrans++;
-			}else{
-				g_stat_tcpOutData++;
-			}
-			tcp_conn->send_queue[i].lastsend_ts = g_jiffies ;
-		}
+		ut_printf("          seq: %d len:%d \n",send_queue[i].seq_no,send_queue[i].len);
 	}
 	return;
 }
 
+/* TODO: merge all segments and send in bigger buffer */
+void tcp_connection::housekeeper() {
+	int i;
+
+	if ((retransmit_inuse == 1) || (squeue_size.counter==0) || (retransmit_ts==g_jiffies)){
+		return;
+	}
+	retransmit_inuse = 1;
+
+	for (i = 0; i < MAX_TCPSND_WINDOW; i++) {
+		uint8_t flags = TCP_ACK;
+		if (send_queue[i].len == 0){
+			continue;
+		}
+		if (send_ack_no > send_queue[i].seq_no) {
+			send_queue[i].len = 0;
+			atomic_dec(&squeue_size);
+			continue;
+		}
+		if (g_jiffies == send_queue[i].lastsend_ts){
+			continue;
+		}
+		if (send_tcp_pkt( flags,
+				send_queue[i].buf,
+				send_queue[i].len,
+				send_queue[i].seq_no) == JSUCCESS) {
+			if (send_queue[i].lastsend_ts != 0){ /* this is not the first time */
+				g_stat_tcpOutRetrans++;
+			}else{
+				g_stat_tcpOutData++;
+			}
+			send_queue[i].lastsend_ts = g_jiffies ;
+		}
+	}
+	retransmit_ts = g_jiffies;
+	retransmit_inuse = 0;
+	return;
+}
+
 /* TODO: send entire user data in multiple iterations */
-int tcp_write(network_connection *conn, uint8_t *app_data, int app_maxlen) {
+int tcp_connection::tcp_write( uint8_t *app_data, int app_maxlen) {
 	int i;
 	int copied = 0;
-	struct tcp_connection *tcp_conn = conn->tcp_conn;
 
 	if (app_maxlen > (PAGE_SIZE - 100)) {
 		app_maxlen = PAGE_SIZE - 100;
 	}
-	if (conn==0 || tcp_conn == 0){
-		BUG();
-	}
+
 	for (i = 0; i < MAX_TCPSND_WINDOW; i++) {
-		if ((tcp_conn->send_queue[i].len != 0) && (tcp_conn->send_ack_no > tcp_conn->send_queue[i].seq_no)) {
-			tcp_conn->send_queue[i].len = 0;
+		if ((send_queue[i].len != 0) && (send_ack_no > send_queue[i].seq_no)) {
+			send_queue[i].len = 0;
 			continue;
 		}
-		if (conn->tcp_conn->send_queue[i].len == 0) {
-			ut_memcpy(tcp_conn->send_queue[i].buf, app_data, app_maxlen);
-			tcp_conn->send_queue[i].len = app_maxlen;
-			tcp_conn->send_queue[i].seq_no = tcp_conn->send_seq_no;
-			tcp_conn->send_queue[i].lastsend_ts = 0;
-			tcp_conn->send_seq_no = conn->tcp_conn->send_seq_no + app_maxlen;
+		if (send_queue[i].len == 0) {
+			ut_memcpy(send_queue[i].buf, app_data, app_maxlen);
+			send_queue[i].seq_no = send_seq_no;
+			send_tcp_pkt(TCP_ACK, send_queue[i].buf, app_maxlen, send_queue[i].seq_no);
+			send_queue[i].lastsend_ts = g_jiffies;
+			atomic_inc(&squeue_size);
+			send_queue[i].len = app_maxlen;
+
+			send_seq_no = send_seq_no + app_maxlen;
 			copied = 1;
 			break;
 		}
 	}
 	if (g_conf_tcpDebug == 1){
-		ut_printf("tcp  send: i=%d len:%d copied:%d seq_no:%d  sendack:%d  \n",i,app_maxlen,copied,conn->tcp_conn->send_seq_no,conn->tcp_conn->send_ack_no);
+		ut_printf("tcp  send: i=%d len:%d copied:%d seq_no:%d  sendack:%d  \n",i,app_maxlen,copied,send_seq_no,send_ack_no);
 	}
 	if (copied == 0) {
 		g_stat_tcpSendBlocked++;
 		return 0;
 	}
-	tcp_retransmit(conn);
+
 	return app_maxlen;
 }
-
 /* this happens in the context of ISR or polling mode or this should in syncronous mode, this should be as fast as possible */
-int tcp_read(network_connection *conn, uint8_t *recv_data, int recv_len)   {
+int tcp_read_listen_pkts(network_connection *conn, uint8_t *recv_data, int recv_len)   {
 	struct ether_pkt *recv_pkt = (struct ether_pkt *) (recv_data + 10);
 	struct tcpip_hdr *recv_tcp_hdr, *send_tcp_hdr;
 	int ret;
@@ -348,49 +346,64 @@ int tcp_read(network_connection *conn, uint8_t *recv_data, int recv_len)   {
 	if ((recv_tcp_hdr->flags & TCP_SYN)) { /* create new connection */
 		return tcp_conn_new(conn, recv_pkt);
 	}
-	if (conn->tcp_conn == 0) {
-		g_stat_tcpInCtlDiscard++;
-			//ut_log("TCP_dropping the packet: conn found1 \n");
-		return 0;
-	}
-	tcp_data_len = htons(recv_pkt->iphdr.tot_len) - (20 + tcp_header_len);
+	g_stat_tcpInCtlDiscard++;
+	return 0;
+}
+
+/* this happens in the context of ISR or polling mode or this should in syncronous mode, this should be as fast as possible */
+int tcp_connection::tcp_read(uint8_t *recv_data, int recv_len)   {
+	struct ether_pkt *recv_pkt = (struct ether_pkt *) (recv_data + 10);
+	struct tcpip_hdr *recv_tcp_hdr, *send_tcp_hdr;
+	int ret;
+	uint8_t flags = 0;
+	int tcp_data_len = 0;
+
+	recv_tcp_hdr = (struct tcpip_hdr *) &(recv_pkt->iphdr);
+	int tcp_header_len = (recv_tcp_hdr->tcpoffset >> 4) * 4;
+
+	tcp_data_len = htons(recv_pkt->iphdr.tot_len) - (20 + tcp_header_len); /* TODO: ip header assumed 20 */
 	if (recv_tcp_hdr->flags & TCP_ACK) {
 		int ackno = net_htonl(recv_tcp_hdr->ackno);
-		conn->tcp_conn->send_ack_no = ackno ; /* TODO: need to check rounding the number  and large ack */
+		send_ack_no = ackno ; /* TODO: need to check rounding the number  and large ack */
+		if (tcp_data_len == 0){
+			flags = TCP_ACK;
+		}
 	}
 	if ((recv_tcp_hdr->flags & TCP_RST) || (recv_tcp_hdr->flags & TCP_FIN)) {
+		if (g_conf_tcpDebug == 1){
+				ut_log("tcp  FIN:  seq_no:%d  sendack:%d  \n",send_seq_no,send_ack_no);
+		}
 		flags = flags | TCP_ACK;
 		if (recv_tcp_hdr->flags & TCP_RST) {
-			send_tcp_pkt(conn->tcp_conn, flags | TCP_RST, 0, 0, 0);
+			send_tcp_pkt( flags | TCP_RST, 0, 0, send_seq_no);
 		}else{
-			send_tcp_pkt(conn->tcp_conn, flags | TCP_FIN, 0, 0, 0);
+			send_tcp_pkt( flags | TCP_FIN, 0, 0, send_seq_no);
 		}
-		tcp_conn_free(conn->tcp_conn);
-		conn->tcp_conn = 0;
-		conn->state = NETWORK_CONN_CLOSED;
+		if (state == TCP_CONN_ESTABILISHED){
+			state = TCP_CONN_CLOSED_RECV;
+		}
 		return 0;
 	}
 	if (tcp_data_len > 0) {
-		if (conn->tcp_conn->recv_seq_no == net_htonl(recv_tcp_hdr->seqno)) {
-			conn->tcp_conn->recv_seq_no = net_htonl(recv_tcp_hdr->seqno) + tcp_data_len;
-#if 1
+		if (recv_seq_no == net_htonl(recv_tcp_hdr->seqno)) {
+			recv_seq_no = net_htonl(recv_tcp_hdr->seqno) + tcp_data_len;
+
 			struct tcp_data *app_data=(struct tcp_data *) recv_data;
 			app_data->len = tcp_data_len;
 			app_data->consumed = 0;
-			app_data->offset = 10 + 14 + 20 + tcp_header_len - TCP_USER_DATA_HDR ;
+			app_data->offset = 10 + 14 + 20 + tcp_header_len - TCP_USER_DATA_HDR ;  /* TODO: ip header assumed 20 */
 			if ((app_data->len+ app_data->offset) > 4096){
 				BUG();
 			}
-#endif
 			g_stat_tcpInData++;
-			flags = flags | TCP_ACK;
+			//flags = flags | TCP_ACK;
 		} else {
 			tcp_data_len = 0;
 			g_stat_tcpInDataDiscard++;
 		}
 	}
 	if (flags !=0){
-		send_tcp_pkt(conn->tcp_conn, flags, 0, 0, 0);
+		send_tcp_pkt(flags, 0, 0, send_seq_no);
 	}
 
 	return tcp_data_len;

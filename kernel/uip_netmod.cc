@@ -124,9 +124,9 @@ int network_stack::read(network_connection *conn, uint8_t *raw_data, int raw_len
 			//network_connection *new_conn = conn->child_connection;
 			ut_printf(" New connection details  \n");
 			//if (new_conn != 0){
-			conn->new_child_connection.dest_port = UDPBUF->srcport;
+		/*	conn->new_child_connection.dest_port = UDPBUF->srcport;
 			ut_memcpy((unsigned char *)&(conn->new_child_connection.dest_ip), (unsigned char *)&(UDPBUF->srcipaddr[0]),4);
-			ut_printf(" New connection port : ip : %x:%x \n",conn->new_child_connection.dest_port,conn->new_child_connection.dest_ip);
+			ut_printf(" New connection port : ip : %x:%x \n",conn->new_child_connection.dest_port,conn->new_child_connection.dest_ip);*/
 			//}
 			ret = -2;
 		}

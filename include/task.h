@@ -137,7 +137,8 @@ enum {
 /* - task can be on run queue or in wait queues */
 #define MAX_SYSCALL 255
 struct syscall_stat{
-	int count;
+	int call_count; /* total call count */
+	int partial_calls; /* out of the call count , the number of partial features hit */
 };
 struct task_struct {
 	unsigned long unused[4];

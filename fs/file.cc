@@ -176,7 +176,20 @@ struct page *fs_inode::fs_genericRead(unsigned long offset, int read_ahead) {
 }
 extern "C" {
 // TODO: fix need to read partial pages: if disk_blk_side is 512  for pvscsi
-int g_conf_read_ahead_pages  __attribute__ ((section ("confdata")))=20;
+int g_conf_read_ahead_pages  __attribute__ ((section ("confdata")))= 0;  /* TODO disabling readahed:  tar fs is giving wrong pages , so disabling */
+int g_conf_print_cksum =0;
+}
+
+void print_cksum(unsigned long offset, unsigned char *data, int len){
+	int i;
+	unsigned long cksum=0;
+	if (g_conf_print_cksum ==0 ) return;
+	if (offset > 20480) return;
+	for (i=0; i<len; i++){
+		cksum = cksum +data[i];
+	}
+	ut_printf(" offset:%d cksum :%x \n",offset,cksum);
+	return;
 }
 int fs_inode::read(unsigned long offset, unsigned char *data, int len, int unused_read_flags, int opt_flags) {
 	struct page *page;
@@ -200,6 +213,7 @@ int fs_inode::read(unsigned long offset, unsigned char *data, int len, int unuse
 	if (page > 0 && ret > 0) {
 		ut_memcpy(data, pcPageToPtr(page) + (offset - OFFSET_ALIGN(offset)),
 				ret);
+		print_cksum(offset,pcPageToPtr(page),PC_PAGESIZE);
 		DEBUG(" memcpy :%x %x  %d \n", buff, pcPageToPtr(page), ret);
 	}
 	pc_put_page(page);

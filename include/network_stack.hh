@@ -2,7 +2,7 @@
 #define _JINYKERNEL_NETWORK_STACK_HH
 
 extern "C" {
-
+#include "atomic.h"
 extern void netstack_lock();
 extern void netstack_unlock();
 }
@@ -25,58 +25,24 @@ enum _socket_type
 
 #define IPPROTO_UDP 0x11 /* protocol type */
 #define IPPROTO_TCP 0x06
+class network_connection ;
 
-struct tcp_connection{
-	unsigned long conn_no; /* running connection  number */
-	uint32_t magic_no;
-	uint32_t send_seq_no,send_ack_no; /* what it as send the seq no, what it got acknowledged */
-	uint32_t recv_seq_no;
-
-#define MAX_TCPSND_WINDOW 80
-	struct {
-		unsigned char *buf;
-		int len;
-		uint32_t seq_no;
-		uint64_t lastsend_ts; /* last send timestamp */
-	}send_queue[MAX_TCPSND_WINDOW];
-
-	uint16_t srcport, destport;
-	uint32_t ip_saddr,ip_daddr;
-	uint8_t  mac_dest[6],mac_src[6];
-
-};
-
-enum connection_state
-{
-	NETWORK_CONN_CREATED =0,
-	NETWORK_CONN_INITIATED = 1,
-	NETWORK_CONN_ESTABILISHED = 2,
-	NETWORK_CONN_LISTEN = 3,
-	NETWORK_CONN_CLOSED = 4
-};
 #define MAX_TCP_LISTEN 10
 class network_connection{
 public:
 	int magic_no;
 	int family;
 	int type; /* udp or tcp */
-	connection_state state;
+
 	uint32_t dest_ip,src_ip;
 	uint16_t dest_port,src_port;
 	uint8_t 	protocol; /* ip_protocol , tcp or udp */
-
-	struct {
-		uint32_t dest_ip,src_ip;
-		uint16_t dest_port,src_port;
-	}new_child_connection; /* this for listening  tcp connection */
 
 	void *proto_connection;  /* protocol connection */
 	struct tcp_connection *tcp_conn;
 	struct tcp_connection *new_tcp_conn[MAX_TCP_LISTEN];
 };
 class network_stack{
-//	char temp_buff[8192];
-
 public:
 	unsigned char *name;
 

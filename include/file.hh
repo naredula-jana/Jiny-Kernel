@@ -18,7 +18,7 @@ extern "C" {
 #include "common.h"
 #include "mm.h"
 #include "interface.h"
-#include "network_stack.hh"
+
 extern void *g_inode_lock; /* protects inode_list */
 extern kmem_cache_t *g_slab_filep;
 #define ENOSPC          28      /* No space left on device */
@@ -31,6 +31,7 @@ struct file *fs_create_filep(int *fd, struct file *in_fp);
 int fs_destroy_filep(int fd);
 extern void ut_putchar_vga(unsigned char c, int device);
 }
+#include "network_stack.hh"
 
 #define PIPE_IMPL 1
 
@@ -150,7 +151,7 @@ struct tcp_data{  /* this is for tcp connections */
 	uint64_t len;
 	uint64_t offset;
 	uint64_t consumed;
-#define TCP_USER_DATA_HDR 24 /* This is sum of the above feilds , if any any feild is added or removed this value changes */
+#define TCP_USER_DATA_HDR 24 /* This is sum of the above 3-feilds , if any any feild is added or removed this value changes */
 	unsigned char data[1];
 };
 
@@ -196,6 +197,7 @@ public:
 	static class socket *default_socket;
 	static void init_socket_layer();
 	static void print_all_stats();
+	static  void tcp_housekeep();
 	static int default_pkt_thread(void *arg1, void *arg2);
 };
 typedef struct hard_link hard_link_t;
@@ -251,7 +253,51 @@ public:
 	void print_stats(unsigned char *arg1,unsigned char *arg2);
 };
 
-/*******************************************************************************/
+/*************************************  TCP related *********************************/
+
+enum tcp_connection_state
+{
+	TCP_CONN_CREATED =0,
+	TCP_CONN_INITIATED = 1,
+	TCP_CONN_ESTABILISHED = 2,
+	TCP_CONN_LISTEN = 3,
+	TCP_CONN_CLOSED_RECV = 4,
+	TCP_CONN_CLOSED_SEND = 4
+};
+
+
+class tcp_connection :public jobject {
+public:
+	unsigned long conn_no; /* running connection  number */
+	int retransmit_inuse;
+	uint64_t retransmit_ts;
+	uint32_t magic_no;
+	uint32_t send_seq_no,send_ack_no; /* what it as send the seq no, what it got acknowledged */
+	uint32_t recv_seq_no;
+	tcp_connection_state state;
+
+#define MAX_TCPSND_WINDOW 80
+	atomic_t squeue_size;
+	struct {
+		unsigned char *buf;
+		int len;
+		uint32_t seq_no;
+		uint64_t lastsend_ts; /* last send timestamp */
+	}send_queue[MAX_TCPSND_WINDOW];
+
+	uint16_t srcport, destport;
+	uint32_t ip_saddr,ip_daddr;
+	uint8_t  mac_dest[6],mac_src[6];
+
+	tcp_connection(){
+	}
+	int send_tcp_pkt(uint8_t flags, unsigned char *data, int data_len, uint32_t seq_no);
+	int tcp_read(uint8_t *recv_data, int recv_len);
+	int tcp_write( uint8_t *app_data, int app_maxlen);
+	void  housekeeper();
+	void print_stats(unsigned char *arg1,unsigned char *arg2);
+};
+/**************************************** END of TCP related ***************************************/
 #if 1
 class filesystem {
 #define FLAG_READAHEAD 4

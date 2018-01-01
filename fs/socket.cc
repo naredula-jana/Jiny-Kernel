@@ -74,6 +74,7 @@ last:
 }
 extern "C" {
 int g_conf_fifo_max_qlen __attribute__ ((section ("confdata")))= 256;
+int g_conf_tcp_retransmit_ticks __attribute__ ((section ("confdata")))= 6;
 }
 void fifo_queue::init(unsigned char *arg_name,int wq_enable){
 	ut_snprintf(name,MAX_FILENAME,"fqueue_%s",arg_name);
@@ -238,104 +239,80 @@ int fifo_queue::is_empty(){
 unsigned long  fifo_queue::queue_size(){
 	return producer.count - consumer.count;
 }
-int tcp_read(network_connection *conn, uint8_t *raw_data, int raw_len);
-void tcp_stats(network_connection *conn);
-void socket::default_pkt_process(unsigned char *arg_buf ,int buf_len){
-	int i,ret = 0;
-	unsigned char *buf = arg_buf ;
-//	int buf_len=0;
-//	int read_flags=0;
-	unsigned char *port;
-	socket *sock=0;
-	network_connection *conn=0;
-#if 0
-	struct tcp_data *app_data=0;
-	int app_len=0;
-#endif
-	/* push a packet in to protocol stack  */
-	//ret = queue.remove_from_queue(&buf, &buf_len,&read_flags);
-	//if (ret == JSUCCESS) {
-		struct ether_pkt *pkt = (struct ether_pkt *) (buf + 10);
-		if (pkt->iphdr.protocol == IPPROTO_TCP) {
-			if (pkt->iphdr.frag_off != 0x40){
-				ut_log(" IP frag:%x  len:%d \n",pkt->iphdr.frag_off,pkt->iphdr.tot_len);
-				BUG();
+int tcp_read_listen_pkts(network_connection *conn, uint8_t *recv_data, int recv_len);
+void socket::default_pkt_process(unsigned char *arg_buf, int buf_len) {
+	int i, ret = 0;
+	unsigned char *buf = arg_buf;
+//	unsigned char *port;
+	socket *sock = 0;
+	network_connection *conn = 0;
+
+	struct ether_pkt *pkt = (struct ether_pkt *) (buf + 10);
+	if (pkt->iphdr.protocol == IPPROTO_TCP) {
+		if (pkt->iphdr.frag_off != 0x40) {
+			ut_log(" IP frag:%x  len:%d \n", pkt->iphdr.frag_off,
+					pkt->iphdr.tot_len);
+			BUG()
+			;
+		}
+		/* first tcp connected clients, then listners */
+		for (i = 0; i < tcp_connected_list.size; i++) {
+			sock = tcp_connected_list.list[i];
+			if (sock == 0) {
+				continue;
 			}
-			/* first tcp connected clients, then listners */
-			for (i = 0; i < tcp_connected_list.size; i++) {
-				sock = tcp_connected_list.list[i];
-				if (sock == 0){
-					continue;
-				}
 
-				/* tcp and udp ports are located in same location in raw packet  , source and dest udp port is used to search for connected tcp sockets */
-				if ((pkt->udphdr.dest == sock->network_conn.src_port)
-						&& (pkt->udphdr.source == sock->network_conn.dest_port)) {
-					conn = &sock->network_conn;
-					if (conn == 0) {
-						goto last;
-					}
-#if 0
-					app_data = (unsigned long) jalloc_page(MEM_NETBUF);
-					if (conn == 0) {
-						goto last;
-					}
-					app_len=PAGE_SIZE-sizeof(struct tcp_data);
-					ret = tcp_read(conn, buf, buf_len,&app_data->data[0],app_len);
-#endif
-					ret = tcp_read(conn, buf, buf_len);
-					if (ret > 0) {
-						sock->tcpdata_queue.add_to_queue((unsigned char *) buf, 4096, 0, 1);
-						buf =0;
-
-						sock->epoll_fd_wakeup();
-					}else if (ret ==0 && conn->state == NETWORK_CONN_CLOSED){
-						sock->epoll_fd_wakeup();
-					}
+			/* tcp and udp ports are located in same location in raw packet  , source and dest udp port is used to search for connected tcp sockets */
+			if ((pkt->udphdr.dest == sock->network_conn.src_port)
+					&& (pkt->udphdr.source == sock->network_conn.dest_port)) {
+				conn = &sock->network_conn;
+				if (conn == 0 || conn->tcp_conn==0) {
 					goto last;
 				}
-			}
-			for (i = 0; i < tcp_listner_list.size; i++) {
-				sock = tcp_listner_list.list[i];
-				if (sock == 0)
-					continue;
-				if ((pkt->udphdr.dest == sock->network_conn.src_port)) {
-					conn = &sock->network_conn;
-					if (conn->new_child_connection.dest_port != 0) {
-						ut_log(" ERROR: tcp new connection packet dropped \n");
-						goto last;
-					}
-					ret = tcp_read(conn, buf, buf_len);
-					if (ret != 0){
-						if (data_available_for_consumption == 0 ){
-							sock->epoll_fd_wakeup();
-						}
-					}
-					goto last;
+
+				ret = conn->tcp_conn->tcp_read(buf, buf_len);
+				if (ret > 0) {
+					sock->tcpdata_queue.add_to_queue((unsigned char *) buf,4096, 0, 1);
+					buf = 0;
+					sock->epoll_fd_wakeup();
+				} else if (ret == 0 && conn->tcp_conn->state==TCP_CONN_CLOSED_RECV) {
+					sock->epoll_fd_wakeup();
 				}
-			}
-		} else { /* non-tcp packets like udp,arp */
-			ret = net_stack->read(0, buf, buf_len, 0, 0);
-			if (ret > 0) {
-				stat_in_bytes = stat_in_bytes + ret;
-			} else { /* when tcp control packets are consumed, need to look for the data packets */
-				statin_err++;
+				goto last;
 			}
 		}
-		stat_in++;
-	//}
+		for (i = 0; i < tcp_listner_list.size; i++) {
+			sock = tcp_listner_list.list[i];
+			if (sock == 0)
+				continue;
+			if ((pkt->udphdr.dest == sock->network_conn.src_port)) {
+				conn = &sock->network_conn;
+				ret = tcp_read_listen_pkts(conn, buf, buf_len);
+				if (ret != 0) {
+					if (data_available_for_consumption == 0) {
+						sock->epoll_fd_wakeup();
+					}
+				}
+				goto last;
+			}
+		}
+	} else { /* non-tcp packets like udp,arp */
+		ret = net_stack->read(0, buf, buf_len, 0, 0);
+		if (ret > 0) {
+			stat_in_bytes = stat_in_bytes + ret;
+		} else { /* when tcp control packets are consumed, need to look for the data packets */
+			statin_err++;
+		}
+	}
+	stat_in++;
+
 last:
 	if (buf > 0) {
 		free_page((unsigned long)buf);
 	}
-#if 0
-	if (app_data > 0){
-		free_page((unsigned long)app_data);
-	}
-#endif
 	return;
 }
-
+unsigned char *test_app=0;
 int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int read_flags, int unused_flags) {
 	int ret = 0;
 	unsigned char *buf = 0;
@@ -345,7 +322,7 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int
 		struct tcp_data *tcp_data=0;
 		int unsued_flags;
 		int tcp_len =0 ;
-		if (network_conn.state == NETWORK_CONN_CLOSED){
+		if (network_conn.tcp_conn->state == TCP_CONN_CLOSED_RECV){
 			return 0;
 		}
 		while(tcp_data == 0){
@@ -358,13 +335,17 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int
 			}
 		}
 		if (tcp_data){
-			if ((tcp_data->len - tcp_data->consumed ) > app_len){
-				tcp_data->consumed=app_len;
+			int pkt_len=tcp_data->len;
+			if ((tcp_data->len - tcp_data->consumed ) >= app_len){
 				ret_len = app_len;
 			}else{
-				ret_len = tcp_data->len;
+				ret_len = tcp_data->len - tcp_data->consumed ;
+
 			}
-			ut_memcpy(app_data,&tcp_data->data[0+ tcp_data->consumed + tcp_data->offset],ret_len);
+			if ((ret_len < app_len) && (ret_len > 0)){
+				app_data[ret_len]='\0';
+			}
+			ut_memcpy(app_data,&tcp_data->data[tcp_data->offset + tcp_data->consumed],ret_len);
 			tcp_data->consumed = tcp_data->consumed +ret_len;
 			if (tcp_data->len == tcp_data->consumed){
 				tcpdata_queue.remove_from_queue((unsigned char **)&tcp_data, &tcp_len,&unsued_flags);
@@ -375,6 +356,12 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int
 			}
 			stat_in++;
 			stat_in_bytes = stat_in_bytes + ret_len;
+
+			if (test_app != 0){
+			//	ut_printf(" OLD DATA: %x:%x:%x:%x: cont:%d  \n",test_app[45],test_app[46],test_app[47],test_app[48],g_current_task->stats.total_contexts);
+			}
+			//ut_printf(" TCP READ retlen:%d applen:%d tcpdatalen:%d  appdat:%x data :%s: \n",ret_len,app_len,pkt_len,app_data,app_data);
+			test_app = app_data;
 			return ret_len;
 		}
 		return ret_len;
@@ -449,7 +436,7 @@ int socket::write_iov(struct iovec *msg_iov, int iov_len) {
 	}
 	return ret;
 }
-extern int tcp_write(network_connection *conn, uint8_t *app_data, int app_maxlen);
+
 int socket::write(unsigned long offset_unused, unsigned char *app_data, int app_len, int wr_flags_unused) {
 	struct iovec  iov;
 	int ret = 0;
@@ -464,7 +451,8 @@ int socket::write(unsigned long offset_unused, unsigned char *app_data, int app_
 		}
 		int i;
 		for (i=0; i<4; i++){ /* try maximum 4times before giveup */
-			ret = tcp_write(&network_conn, app_data, app_len);
+		//	ut_printf(" TCP write: offset:%d len:%d :%s:\n",offset_unused,app_len,app_data);
+			ret = network_conn.tcp_conn->tcp_write(app_data, app_len);
 			if (ret > 0) { break; }
 			sc_sleep(2);
 		}
@@ -485,7 +473,8 @@ int socket::write(unsigned long offset_unused, unsigned char *app_data, int app_
 int tcp_conn_free(struct tcp_connection *tcp_conn);
 int socket::close() {
 	int ret;
-	ut_log(" Freeing the socket :%d\n",this->count.counter);
+	ut_printf(" Freeing the socket :%d\n",this->count.counter);
+
 	atomic_dec(&this->count);
 	if (this->count.counter > 0){
 		ut_log("socket FAILED :%d\n",this->count.counter);
@@ -507,7 +496,6 @@ int socket::close() {
 			network_conn.new_tcp_conn[i]=0;
 		}
 	}
-
 
 	ut_log("socket freeing: in:%d out:%d inerr:%d outerr:%d \n",this->stat_in,this->stat_out,this->statin_err,this->statout_err);
 	delete_sock(this);
@@ -542,10 +530,12 @@ int socket::ioctl(unsigned long arg1, unsigned long arg2) {
 }
 
 void socket::print_stats(unsigned char *arg1,unsigned char *arg2){
-	ut_printf("socket: count:%d type:%d state:%x local:%x:%x remote:%x:%x ( Stat: in:%d/%d out:%d/%d error:%d:%d Qfull:%d  QReadfail:%i Qlen:%i) epoll:%x\n",
-			count.counter,network_conn.type,network_conn.state,network_conn.src_ip,network_conn.src_port,network_conn.dest_ip,network_conn.dest_port,stat_in,stat_in_bytes
+	ut_printf("socket: count:%d type:%d local:%x:%x remote:%x:%x ( Stat: in:%d/%d out:%d/%d error:%d:%d Qfull:%d  QReadfail:%i Qlen:%i) epoll:%x\n",
+			count.counter,network_conn.type,network_conn.src_ip,network_conn.src_port,network_conn.dest_ip,network_conn.dest_port,stat_in,stat_in_bytes
 	    ,stat_out,stat_out_bytes, statout_err,statin_err,queue.error_full,queue.error_empty_check,queue.queue_size(),epoll_list[0]);
-	tcp_stats(&network_conn);
+	if (network_conn.tcp_conn) {
+		network_conn.tcp_conn->print_stats(0,0);
+	}
 }
 
 sock_list_t socket::udp_list;
@@ -618,7 +608,6 @@ int socket::init_socket(int type){
 	net_stack = net_stack_list[0];
 	network_conn.family = AF_INET;
 	network_conn.type = type;
-	network_conn.state = NETWORK_CONN_CREATED;
 	network_conn.src_ip = 0;
 	tcpdata_queue.init((unsigned char *)"tcpdata",0);
 	stat_in = 0;
@@ -704,6 +693,21 @@ vinode* socket::create_new(int arg_type) {
 	}
 	return (vinode *) sock;
 }
+void  tcp_retransmit(struct tcp_connection *tcp_conn);
+void socket::tcp_housekeep(){
+	int i;
+	static uint64_t last_ts=0;
+
+	if (last_ts > g_jiffies) return;
+	last_ts = g_jiffies+g_conf_tcp_retransmit_ticks;
+	for (i = 0; i < tcp_connected_list.size; i++) {
+		socket *sock = tcp_connected_list.list[i];
+		if (sock==0  || sock->network_conn.tcp_conn ==0){
+			continue;
+		}
+		sock->network_conn.tcp_conn->housekeeper();
+	}
+}
 int socket::default_pkt_thread(void *arg1, void *arg2){
 	int ret ;
 	while (g_boot_completed == 0){
@@ -715,6 +719,7 @@ int socket::default_pkt_thread(void *arg1, void *arg2){
 		unsigned char *buf = 0;
 		int buf_len=0;
 		int read_flags=0;
+
 		ret = default_socket->queue.remove_from_queue(&buf, &buf_len,&read_flags);
 		if (ret == JSUCCESS) {
 			default_socket->default_pkt_process(buf,buf_len);
@@ -884,7 +889,7 @@ int SYS_accept4(int fd,unsigned long sockaddr, unsigned long addrlen,int accept_
 
 
 	SYSCALL_DEBUG("accept %d \n", fd);
-	ut_log("accept :fd: %d \n",fd);
+	ut_printf("accept :fd: %d \n",fd);
 	if (sock_check(fd) == JFAIL)
 		return SYSCALL_FAIL; /* TCP/IP sockets are not supported */
 
@@ -915,12 +920,15 @@ int SYS_accept4(int fd,unsigned long sockaddr, unsigned long addrlen,int accept_
 	struct socket *new_inode = (struct socket *) new_file->vinode;
 	new_inode->network_conn.proto_connection = (unsigned long) 0;
 	new_inode->network_conn.src_ip = inode->network_conn.src_ip;
-	new_inode->network_conn.src_port = inode->network_conn.src_port;
-	new_inode->network_conn.dest_ip = inode->network_conn.new_child_connection.dest_ip;
-	new_inode->network_conn.dest_port = inode->network_conn.new_child_connection.dest_port;
+	new_inode->network_conn.src_port = new_tcp_conn->srcport;
+	new_inode->network_conn.dest_port= new_tcp_conn->destport;
+
+//	new_inode->network_conn.dest_ip = inode->network_conn.new_child_connection.dest_ip;
+//	new_inode->network_conn.dest_port = inode->network_conn.new_child_connection.dest_port;
 
 	inode->data_available_for_consumption = 0;
-	inode->network_conn.new_child_connection.dest_port = 0;
+//	inode->network_conn.new_child_connection.dest_port = 0;
+
 	new_inode->network_conn.tcp_conn = new_tcp_conn;
 	remove_new_conn(&inode->network_conn,new_tcp_conn);
 	new_inode->network_conn.dest_port= new_tcp_conn->destport;
@@ -931,6 +939,7 @@ int SYS_accept4(int fd,unsigned long sockaddr, unsigned long addrlen,int accept_
 
 	//inode->network_conn.child_connection = &(new_inode->network_conn);
 	SYSCALL_DEBUG("accept retfd %d \n", i);
+	ut_printf("Ret accept :fd: %d \n",fd);
 
 	return i;
 }

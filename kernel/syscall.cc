@@ -57,7 +57,7 @@ unsigned long SYS_fs_readlink(uint8_t *path, char *buf, int bufsiz);
 unsigned long SYS_fs_mkdir(unsigned char *name, int mode);
 int SYS_getpeername(int sockfd, struct sockaddr *addr, int *addrlen);
 int SYS_getsockname(int sockfd, struct sockaddr *addr, int *addrlen);
-unsigned long SYS_rt_sigaction();
+/*unsigned long SYS_rt_sigaction();
 unsigned long SYS_getuid();
 unsigned long SYS_getgid();
 unsigned long SYS_setsid();
@@ -67,10 +67,10 @@ unsigned long SYS_setpgid(unsigned long pid, unsigned long gid);
 unsigned long SYS_geteuid() ;
 unsigned long SYS_sigaction();
 unsigned long SYS_rt_sigprocmask();
-unsigned long SYS_ioctl(int d, int request, unsigned long *addr);
+unsigned long SYS_ioctl(int d, int request, unsigned long *addr);*/
 unsigned long SYS_getpid();
 unsigned long SYS_getppid();
-unsigned long SYS_getpgrp();
+//unsigned long SYS_getpgrp();
 unsigned long SYS_exit_group();
 unsigned long SYS_wait4(int pid, void *status,  unsigned long  option, void *rusage);
 unsigned long SYS_set_tid_address(unsigned long tid_address);
@@ -92,16 +92,16 @@ struct pollfd {
 	short events; /* requested events */
 	short revents; /* returned events */
 };
-unsigned long SYS_poll(struct pollfd *fds, int nfds, struct timeval *timeout);
+unsigned long SYS_poll_PART(struct pollfd *fds, int nfds, struct timeval *timeout);
 /*************************************************************************/
 
 unsigned long SYS_nanosleep(const struct timespec *req, struct timespec *rem);
 unsigned long SYS_getcwd(uint8_t *buf, int len);
-unsigned long SYS_chroot(uint8_t *filename);
+unsigned long SYS_chroot_PART(uint8_t *filename);
 unsigned long SYS_chdir(uint8_t *filename);
 unsigned long SYS_fs_fcntl(int fd, int cmd, int args);
-unsigned long SYS_setsockopt(int sockfd, int level, int optname,
-		const void *optval, int optlen);
+//unsigned long SYS_setsockopt(int sockfd, int level, int optname,
+//		const void *optval, int optlen);
 unsigned long SYS_gettimeofday(time_t *tv, struct timezone *tz);
 unsigned long SYS_pipe(unsigned int *fds);
 unsigned long SYS_alarm(int seconds);
@@ -113,7 +113,11 @@ typedef struct {
 } syscalltable_t;
 
 
-
+void count_sycall_partial(){
+	if (g_current_task->curr_syscall_id < MAX_SYSCALL && g_current_task->stats.syscalls!=0){
+		g_current_task->stats.syscalls[g_current_task->curr_syscall_id].partial_calls++;
+	}
+}
 
 #define UTSNAME_LENGTH	65 
 /* Structure describing the system and machine.  */
@@ -251,57 +255,69 @@ unsigned long SYS_gettimeofday(time_t *tv, struct timezone *unused_arg_tz) {
 /*****************************************
  TODO : Below are hardcoded system calls , need to make generic *
  ******************************************/
-unsigned long SYS_getuid() {
+unsigned long SYS_getuid_PART() {
+	count_sycall_partial();
 	SYSCALL_DEBUG("getuid(Hardcoded) :\n");
 	return TEMP_UID;
 }
-unsigned long SYS_getgid() {
+unsigned long SYS_getgid_PART() {
+	count_sycall_partial();
 	SYSCALL_DEBUG("getgid(Hardcoded) :\n");
 	return TEMP_GID;
 }
-unsigned long SYS_setuid(unsigned long uid) {
+unsigned long SYS_setuid_PART(unsigned long uid) {
+	count_sycall_partial();
 	SYSCALL_DEBUG("setuid(Hardcoded) :%x(%d)\n", uid, uid);
 	return 0;
 }
-unsigned long SYS_setgid(unsigned long gid) {
+unsigned long SYS_setgid_PART(unsigned long gid) {
+	count_sycall_partial();
 	SYSCALL_DEBUG("setgid(Hardcoded) :%x(%d)\n", gid, gid);
 	return 0;
 }
 static unsigned long temp_pgid = 0;
-unsigned long SYS_setpgid(unsigned long pid, unsigned long gid) {
+unsigned long SYS_setpgid_PART(unsigned long pid, unsigned long gid) {
+	count_sycall_partial();
 	SYSCALL_DEBUG("setpgid(Hardcoded) :%x(%d)\n", gid, gid);
 	temp_pgid = gid;
 	return 0;
 }
-unsigned long SYS_getpgid() {
+unsigned long SYS_getpgid_PART() {
+	count_sycall_partial();
 	SYSCALL_DEBUG("SYS_getpgid(Hardcoded) :\n");
 	return temp_pgid;
 }
-unsigned long  SYS_setsid(){
+unsigned long  SYS_setsid_PART(){
+	count_sycall_partial();
 	SYSCALL_DEBUG("setsid(Hardcoded) :\n");
 	return g_current_task->task_id;
 }
-unsigned long SYS_geteuid() {
+unsigned long SYS_geteuid_PART() {
+	count_sycall_partial();
 	SYSCALL_DEBUG("geteuid(Hardcoded) :\n");
 	return 500;
 }
-unsigned long SYS_getpgrp() {
+unsigned long SYS_getpgrp_PART() {
+	count_sycall_partial();
 	SYSCALL_DEBUG("getpgrp(Hardcoded) :\n");
 	return 0x123;
 }
-unsigned long SYS_rt_sigaction() {
+unsigned long SYS_rt_sigaction_PART() {
+	count_sycall_partial();
 	SYSCALL_DEBUG("sigaction(Dummy) \n");
 	return SYSCALL_SUCCESS;
 }
 int Jcmd_maps(char *arg1, char *arg2);
-unsigned long SYS_rt_sigprocmask() {
+unsigned long SYS_rt_sigprocmask_PART() {
+	count_sycall_partial();
 	SYSCALL_DEBUG("sigprocmask(Dummy) \n");
 	//Jcmd_maps(0,0);
 	SYSCALL_DEBUG("sigprocmask(Dummy) END \n");
 	return SYSCALL_SUCCESS;
 }
 #define TIOCSPGRP 0x5410
-unsigned long SYS_ioctl(int d, int request, unsigned long *addr) {//TODO
+unsigned long SYS_ioctl_PART(int d, int request, unsigned long *addr) {//TODO
+	count_sycall_partial();
 	SYSCALL_DEBUG("ioctl(Dummy) d:%x request:%x addr:%x\n", d, request, addr);
 	if (request == TIOCSPGRP && addr != 0) {
 		*addr = temp_pgid;
@@ -441,7 +457,8 @@ unsigned long SYS_alarm(int seconds){
 	g_current_task->sys_alaram = g_jiffies + (seconds*100);
 	return SYSCALL_SUCCESS;
 }
-unsigned long SYS_chroot(uint8_t *filename) {
+unsigned long SYS_chroot_PART(uint8_t *filename) {
+	count_sycall_partial();
 	SYSCALL_DEBUG("chroot(TODO) :%s \n", filename);
 	return SYSCALL_SUCCESS;
 }
@@ -525,11 +542,12 @@ int SYS_select(int nfds, int *readfds, int *writefds, int *exceptfds, struct tim
 
 	return 0;
 }
-unsigned long SYS_poll(struct pollfd *fds, int nfds, struct timeval *timeout) {
+unsigned long SYS_poll_PART(struct pollfd *fds, int nfds, struct timeval *timeout) {
 	int i,fd;
 	struct file *file;
 	unsigned long time_duration;
 
+	count_sycall_partial();
 	SYSCALL_DEBUG("poll(partial)  fds:%x nfds:%d timeout:%x  \n", fds, nfds, timeout);
 	if (nfds > 1){
 		SYSCALL_DEBUG("poll(partial)  fds[0]:%x fds[1]:%x  \n",fds[0].fd,fds[1].fd );
@@ -571,20 +589,22 @@ int SYS_socketpair(int domain,int type, int protocol, int *fd_pair){
 
 	return 0;/* on success */
 }
-unsigned long SYS_setsockopt(int sockfd, int level, int optname,
+unsigned long SYS_setsockopt_PART(int sockfd, int level, int optname,
 		const void *optval, int optlen) {
 	SYSCALL_DEBUG(
 			"Setsocklopt (TODO) fd:%d level:%d optname:%d optval:%x optlen:%d\n", sockfd, level, optname, optval, optlen);
+	count_sycall_partial();
 	if (optname == 8) /* SO_RECVBUF */
 	{
 
 	}
 	return SYSCALL_SUCCESS;
 }
-unsigned long SYS_getsockopt(int sockfd, int level, int optname,
+unsigned long SYS_getsockopt_PART(int sockfd, int level, int optname,
 		const void *optval, int optlen) {
 	SYSCALL_DEBUG(
 			"Getsocklopt (TODO) fd:%d level:%d optname:%d optval:%x optlen:%d\n", sockfd, level, optname, optval, optlen);
+	count_sycall_partial();
 	if (optname == 8) /* SO_RECVBUF */
 	{
 
@@ -670,29 +690,34 @@ int SYS_getrlimit(int resource, struct rlimit *rlim){
 	rlim->rlim_max = rlimits[resource].rlim_max;
 	return 0;
 }
-int SYS_tgkill(int tid, int sig){
+int SYS_tgkill_PART(int tid, int sig){
+	count_sycall_partial();
 	ut_printf(" TODO: tg kill not yet supported \n");
 	return -1;
 }
 /* TODO */
-long SYS_get_robust_list(int pid, struct robust_list_head **head_ptr, size_t *st){
+long SYS_get_robust_list_PART(int pid, struct robust_list_head **head_ptr, size_t *st){
+	count_sycall_partial();
 	SYSCALL_DEBUG(" get_robust_list : not supported\n");
 	return 0;
 }
 /* TODO */
-long SYS_setrlimit(unsigned int resource, void *rlim){
+long SYS_setrlimit_PART(unsigned int resource, void *rlim){
+	count_sycall_partial();
 	SYSCALL_DEBUG(" set_rlimit : not supported\n");
 		return 0;
 }
 /* TODO */
-long SYS_clock_gettime(unsigned int arg1, int arg2){
+long SYS_clock_gettime_PART(unsigned int arg1, int arg2){
+	count_sycall_partial();
 	SYSCALL_DEBUG(" clock_gettime : not supported\n");
-		return -1;
+	return -1;
 }
 
 /* TODO */
-long SYS_set_robust_list(struct robust_list_head *head, size_t len){
-	SYSCALL_DEBUG(" set_robust_list : not supported\n");
+long SYS_set_robust_list_PART(struct robust_list_head *head, size_t len){
+	count_sycall_partial();
+	SYSCALL_DEBUG(" set_robust_list : not supported len:%d\n",len);
 	return 0;
 }
 #define MADV_NORMAL     0               /* no further special treatment */
@@ -714,22 +739,26 @@ long SYS_set_robust_list(struct robust_list_head *head, size_t len){
                                             overrides the coredump filter bits */
 #define MADV_DODUMP     17              /* Clear the MADV_DONTDUMP flag */
 
+
 /* TODO */
-int SYS_madvise(void *addr, size_t length, int advise){
+int SYS_madvise_PART(void *addr, size_t length, int advise){
 	if ((advise == MADV_DONTNEED) || (advise == MADV_REMOVE)){
-		SYSCALL_DEBUG("MADVISE partially implemented: addr:%x length:%x advise:%x\n",addr,length,advise);
+		ut_printf("MADVISE partially implemented: addr:%x length:%x advise:%x\n",addr,length,advise);
 		ut_memset(addr, 0 , length);
 	}else{
+		count_sycall_partial();
 		SYSCALL_DEBUG("TODO  madvise : addr:%x lenght: %d  advise:%d \n",addr,length,advise);
 	}
 	return 0;
 }
-int SYS_sched_getaffinity(){
+int SYS_sched_getaffinity_PART(){
 	SYSCALL_DEBUG("TODO  SYS_sched_getaffinity\n");
+	count_sycall_partial();
 	return 0;
 }
-int SYS_sigalt_stack(){
+int SYS_sigalt_stack_PART(){
 	SYSCALL_DEBUG("TODO  SYS_sigaltstack\n");
+	count_sycall_partial();
 	return 0;
 }
 extern int SYS_fs_openat(int unused,char *filename, int mode, int flags);
@@ -740,16 +769,16 @@ extern unsigned long SYS_sched_yield();
 syscalltable_t syscalltable[] = {
 /* 0 */
 { SYS_fs_read },/* 0 */{ SYS_fs_write }, { SYS_fs_open }, { SYS_fs_close }, { SYS_fs_stat }, { SYS_fs_fstat }, /* 5 */
-{ SYS_fs_stat }, { SYS_poll }, { SYS_fs_lseek }, { SYS_vm_mmap }, { SYS_vm_mprotect },/* 10 */
-{ SYS_vm_munmap }, { SYS_vm_brk }, { SYS_rt_sigaction }, { SYS_rt_sigprocmask }, { snull }, /* 15 */
-{ SYS_ioctl }, { snull }, { snull }, { SYS_fs_readv }, { SYS_fs_writev }, /* 20 */
+{ SYS_fs_stat }, { SYS_poll_PART }, { SYS_fs_lseek }, { SYS_vm_mmap }, { SYS_vm_mprotect },/* 10 */
+{ SYS_vm_munmap }, { SYS_vm_brk }, { SYS_rt_sigaction_PART }, { SYS_rt_sigprocmask_PART }, { snull }, /* 15 */
+{ SYS_ioctl_PART }, { snull }, { snull }, { SYS_fs_readv }, { SYS_fs_writev }, /* 20 */
 { SYS_fs_access }, { SYS_pipe }, { SYS_select }, { SYS_sched_yield }, { snull }, /* 25 */
-{ snull }, { snull }, { SYS_madvise }, { snull }, { snull }, /* 30 */
+{ snull }, { snull }, { SYS_madvise_PART }, { snull }, { snull }, /* 30 */
 { snull }, { SYS_fs_dup }, { SYS_fs_dup2 }, { snull }, { SYS_nanosleep }, /* 35 = nanosleep */
 { snull }, { SYS_alarm }, { snull }, { SYS_getpid }, { snull }, /* 40 */
 { SYS_socket }, { SYS_connect }, { SYS_accept }, { SYS_sendto }, { SYS_recvfrom }, /* 45 */
 { SYS_sendmsg }, { SYS_recvmsg }, { snull }, { SYS_bind }, { SYS_listen }, /* 50 */
-{ SYS_getsockname }, { SYS_getpeername }, { SYS_socketpair }, { SYS_setsockopt }, { SYS_getsockopt }, /* 55 */
+{ SYS_getsockname }, { SYS_getpeername }, { SYS_socketpair }, { SYS_setsockopt_PART }, { SYS_getsockopt_PART }, /* 55 */
 { SYS_sc_clone }, { SYS_sc_fork }, { SYS_sc_vfork }, { SYS_sc_execve }, { SYS_sc_exit }, /* 60 */
 { SYS_wait4 }, { SYS_sc_kill }, { SYS_uname }, { snull }, { snull }, /* 65 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 70 */
@@ -759,19 +788,19 @@ syscalltable_t syscalltable[] = {
 { snull }, { SYS_fs_unlink }, { snull }, { SYS_fs_readlink }, { snull }, /* 90 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 95 */
 { SYS_gettimeofday }, { SYS_getrlimit }, { snull }, { SYS_sysinfo }, { snull }, /* 100 */
-{ snull }, { SYS_getuid }, { snull }, { SYS_getgid }, { SYS_setuid }, /* 105 */
-{ SYS_setgid }, { SYS_geteuid }, { SYS_getpgid }, { SYS_setpgid }, { SYS_getppid }, /* 110 */
-{ SYS_getpgrp }, { SYS_setsid }, { snull }, { snull }, { snull }, /* 115 */
+{ snull }, { SYS_getuid_PART }, { snull }, { SYS_getgid_PART }, { SYS_setuid_PART }, /* 105 */
+{ SYS_setgid_PART }, { SYS_geteuid_PART }, { SYS_getpgid_PART }, { SYS_setpgid_PART }, { SYS_getppid }, /* 110 */
+{ SYS_getpgrp_PART }, { SYS_setsid_PART }, { snull }, { snull }, { snull }, /* 115 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 120 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 125 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 130 */
-{ SYS_sigalt_stack }, { snull }, { snull }, { snull }, { snull }, /* 135 */
+{ SYS_sigalt_stack_PART }, { snull }, { snull }, { snull }, { snull }, /* 135 */
 { snull }, { SYS_fs_stat }, { snull }, { snull }, { snull }, /* 140 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 145 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 150 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 155 */
-{ SYS_sysctl }, { snull }, { SYS_arch_prctl }, { snull }, { SYS_setrlimit }, /* 160 */
-{ SYS_chroot }, { SYS_sync }, { snull }, { snull }, { snull }, /* 165 */
+{ SYS_sysctl }, { snull }, { SYS_arch_prctl }, { snull }, { SYS_setrlimit_PART }, /* 160 */
+{ SYS_chroot_PART }, { SYS_sync }, { snull }, { snull }, { snull }, /* 165 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 170 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 175 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 180 */
@@ -779,13 +808,13 @@ syscalltable_t syscalltable[] = {
 { SYS_gettid }, { snull }, { snull }, { snull }, { snull }, /* 190 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 195 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 200 */
-{ SYS_time }, { SYS_futex }, { snull }, { SYS_sched_getaffinity }, { snull }, /* 205 */
+{ SYS_time }, { SYS_futex }, { snull }, { SYS_sched_getaffinity_PART }, { snull }, /* 205 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 210 */
 { snull }, { snull }, { SYS_epoll_create }, { snull }, { snull }, /* 215 */
 { snull }, { snull }, { SYS_set_tid_address }, { snull }, { snull }, /* 220 */
 { SYS_fs_fadvise }, { snull }, { snull }, { snull }, { snull }, /* 225 */
-{ snull }, { snull }, { SYS_clock_gettime }, { snull }, { snull }, /* 230  */
-{ SYS_exit_group }, { SYS_epoll_wait }, { SYS_epoll_ctl }, { SYS_tgkill }, { snull }, /* 235 */
+{ snull }, { snull }, { SYS_clock_gettime_PART }, { snull }, { snull }, /* 230  */
+{ SYS_exit_group }, { SYS_epoll_wait }, { SYS_epoll_ctl }, { SYS_tgkill_PART }, { snull }, /* 235 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 240 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 245 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 250 */
@@ -793,7 +822,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { SYS_fs_openat }, { snull }, { snull }, { snull }, /* 260 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 265 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 270 */
-{ snull }, { snull }, { SYS_set_robust_list }, { SYS_get_robust_list }, { snull }, /* 275 */
+{ snull }, { snull }, { SYS_set_robust_list_PART }, { SYS_get_robust_list_PART }, { snull }, /* 275 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 280 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 285 */
 { snull }, { snull }, { SYS_accept4 }, { snull }, { snull }, /* 290 */
@@ -827,11 +856,11 @@ void print_syscall_stat(struct task_struct *task, int output){
 	int count=0;
 	if (task->stats.syscalls==0) return;
 	for (i=0; i<MAX_SYSCALL; i++){
-		if ( task->stats.syscalls[i].count > 0){
+		if ( task->stats.syscalls[i].call_count > 0){
 			if (output ==0 ){
-				ut_printf("%d-%d: %s: %s -> %d\n",count,task->task_id,task->name,ut_get_symbol(syscalltable[i].func),task->stats.syscalls[i].count);
+				ut_printf("%d: %s: %s -> %d(%d)\n",count,task->name,ut_get_symbol(syscalltable[i].func),task->stats.syscalls[i].call_count,task->stats.syscalls[i].partial_calls);
 			}else{
-				ut_log("%d-%d: %s: %s -> %d\n",count,task->task_id,task->name,ut_get_symbol(syscalltable[i].func),task->stats.syscalls[i].count);
+				ut_log("%d: %s: %s -> %d(%d)\n",count,task->name,ut_get_symbol(syscalltable[i].func),task->stats.syscalls[i].call_count,task->stats.syscalls[i].partial_calls);
 			}
 			count++;
 		}

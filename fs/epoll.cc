@@ -184,21 +184,23 @@ static int get_fds(struct epoll_struct *epoll_p,struct epoll_event *events, uint
 	}
 	return e;
 }
+extern int net_bh();
 int SYS_epoll_wait(uint32_t efd, struct epoll_event *events, uint32_t maxevents, uint32_t timeout){
 	struct file *efilep;
 	struct epoll_struct *epoll_p;
 	int fd,i,e=0;
 	int ret=0;
 
+	net_bh();
 	efilep = fd_to_file(efd);
 	if (efilep == 0 || efilep->type!=EVENT_POLL_FILE){
 		SYSCALL_DEBUG("ERROR wait efd:%d  \n", efd);
 		return -1;
 	}
 	epoll_p=efilep->vinode;
-	if (epoll_p->fd_waiting == 1){
+	//if (epoll_p->fd_waiting == 1){
 		ret = get_fds(epoll_p,events,maxevents);
-	}
+	//}
 	if (ret <= 0){
 		epoll_p->waitq->wait(timeout);
 		if (epoll_p->fd_waiting == 1){

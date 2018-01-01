@@ -662,10 +662,10 @@ void sc_before_syscall() {
 	g_current_task->curr_syscall_id = g_cpu_state[getcpuid()].md_state.syscall_id;
 	g_current_task->callstack_top = 0;
 	g_current_task->stats.syscall_count++;
-    net_bh();
+
 #if 1
 	if (g_current_task->curr_syscall_id < MAX_SYSCALL && g_current_task->stats.syscalls!=0){
-		g_current_task->stats.syscalls[g_current_task->curr_syscall_id].count++;
+		g_current_task->stats.syscalls[g_current_task->curr_syscall_id].call_count++;
 	}
 #endif
 }
@@ -695,7 +695,6 @@ void sc_after_syscall() {
 	/* Handle any pending signal */
 	//SYSCALL_DEBUG("syscall ret  state:%x\n",g_current_task->state);
 
-	//net_bh();
 	STAT_INC(g_stat_syscall_count);
 
 	g_cpu_state[getcpuid()].stats.syscalls++;
@@ -782,7 +781,10 @@ void sc_schedule() { /* _schedule function task can land here. */
 	/* remove dead tasks */
 	sc_remove_dead_tasks();
 }
-
+extern "C" {
+int g_conf_cpu_stick  __attribute__ ((section ("confdata"))) = 99; /* auto mode, */
+int g_conf_cpu_sched_ticks  __attribute__ ((section ("confdata"))) = 50000; /* keep 5 for 50 ms time slice */
+}
 static unsigned long _schedule(unsigned long flags) {
 	struct task_struct *prev, *next;
 	int cpuid = getcpuid();
@@ -835,7 +837,7 @@ static unsigned long _schedule(unsigned long flags) {
 		apic_set_task_priority(g_cpu_state[cpuid].cpu_priority);
 	}
 	/* if  prev and next are having same address space , then avoid tlb flush */
-	next->counter = 5; /* 50 ms time slice */
+	next->counter = g_conf_cpu_sched_ticks; /* 50 ms time slice */
 	if (prev->mm->pgd != next->mm->pgd) /* TODO : need to make generic */
 	{
 		flush_tlb(next->mm->pgd);
@@ -1112,9 +1114,7 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	return 1;
 }
 
-extern "C" {
-int g_conf_cpu_stick  __attribute__ ((section ("confdata"))) = 99; /* auto mode, */
-}
+
 static int get_free_cpu() {
 	static int i = 0;
 	int k;
@@ -1296,6 +1296,7 @@ int SYS_sc_exit(int status) {
 	unsigned long flags;
 	SYSCALL_DEBUG("sys exit : status:%d \n", status);
 	SYSCALL_DEBUG(" pid:%d existed cause:%d name:%s \n", g_current_task->task_id, status, g_current_task->name);
+
 	//ut_log(" pid:%d existed cause:%d name:%s \n",g_current_task->pid,status,g_current_task->name);
 	ar_updateCpuState(g_current_task, 0);
 

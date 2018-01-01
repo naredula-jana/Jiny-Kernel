@@ -493,6 +493,7 @@ void vm_vma_stat(struct vm_area_struct *vma, unsigned long vaddr,
 	vma->stat_log_index++;
 	return;
 }
+extern void print_syscall_stat(struct task_struct *task, int output);
 /************************** API function *****************/
 extern task_queue_t g_task_queue;
 int Jcmd_maps(char *arg1, char *arg2) {
@@ -589,7 +590,10 @@ last:
 	}
     ut_printf(buf);
 	vfree(buf);
+	print_syscall_stat(task,0);
 	spin_unlock_irqrestore(&g_global_lock, flags);
+
+
 	return 1;
 }
 }

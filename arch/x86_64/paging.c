@@ -681,7 +681,7 @@ struct stat_fault{
 	unsigned long  addr,fault_ip;
 } stat_fault;
 struct stat_fault stat_faults[MAX_STAT_FAULTS+1];
-
+int g_conf_segfault =0;
 static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_fault, struct fault_ctx *ctx)
 {
 	struct mm_struct *mm;
@@ -738,11 +738,16 @@ if (g_stat_pagefault>6){
 
 			ut_printf("ERROR: in user program Segmentaion Fault addr:%x  ip:%x :%s\n",addr,faulting_ip,g_current_task->name);
 
-			Jcmd_maps(0,0);
+			//Jcmd_maps(0,0);
 			//ut_log("ERROR: user Segmentation fault page fault addr:%x ip:%x  \n",addr,faulting_ip);
 			//Jcmd_lsmod(0,0);
 			//BUG();
+			//while(1) {}
+			if (g_conf_segfault == 1){
+				BUG();
+			}
 			//ut_showTrace(&stack_var);
+
 			SYS_sc_exit(902);
 			return 1;
 		}
