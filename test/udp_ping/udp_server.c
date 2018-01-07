@@ -27,8 +27,8 @@ struct {
 	unsigned long sec,usec;
 }pkt_log[MAX_LOG_PKTS];
 
+char rbuf[84240] = "";
 void recv_func() {
-	char buf[1424] = "";
 	int l, ret;
 	int rc;
 
@@ -44,21 +44,21 @@ void recv_func() {
 		rc = 2;
 	//	rc = select(sfd + 1, &readSet, NULL, NULL, &timeout);
 		if (rc != 0) {
-			ret = recvfrom(sfd, buf, 1224, 0, (struct sockaddr *) &client, &l);
+			ret = recvfrom(sfd, rbuf, 50224, 0, (struct sockaddr *) &client, &l);
 			if (recv_pkts <MAX_LOG_PKTS){
 				gettimeofday(&td, (struct timezone *) 0);
 				pkt_log[recv_pkts].sec = td.tv_sec;
 				pkt_log[recv_pkts].usec = td.tv_usec;
 			}
 			if (ret > 0 && (send_on == 1)) {
-				ret = sendto(sfd, buf, ret, 0, (struct sockaddr *) &client,
+				ret = sendto(sfd, rbuf, ret, 0, (struct sockaddr *) &client,
 						sizeof(client));
 				if (ret > 0)
 					send_pkts++;
 			}
 			recv_pkts++;
 #ifdef DEBUG
-			printf("MESSAGE FROM CLIENT:%s\n", buf);
+			printf("MESSAGE FROM CLIENT:%s\n", rbuf);
 #endif
 		}
 	}

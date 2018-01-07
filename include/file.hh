@@ -53,7 +53,7 @@ public:
 
 #include "ipc.hh"
 
-#define MAX_EPOLL_FDS 50
+#define MAX_EPOLL_FDS 60
 struct epoll_struct{
 	int count;
 	int fds[MAX_EPOLL_FDS];
@@ -159,10 +159,9 @@ class socket: public vinode {
 public:
 	class network_connection network_conn;
 	network_stack *net_stack;
-	class fifo_queue queue;
+	class fifo_queue input_queue;
 	unsigned char *peeked_msg;
 	int peeked_msg_len;
-	class fifo_queue tcpdata_queue;
 
 	static unsigned long stat_raw_attached;
 	static unsigned long  stat_raw_drop;

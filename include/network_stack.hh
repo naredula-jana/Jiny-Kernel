@@ -27,13 +27,14 @@ enum _socket_type
 #define IPPROTO_TCP 0x06
 class network_connection ;
 
-#define MAX_TCP_LISTEN 10
+#define MAX_TCP_LISTEN 30
 class network_connection{
 public:
 	int magic_no;
 	int family;
 	int type; /* udp or tcp */
 
+	uint8_t  mac_dest[6],mac_src[6];
 	uint32_t dest_ip,src_ip;
 	uint16_t dest_port,src_port;
 	uint8_t 	protocol; /* ip_protocol , tcp or udp */

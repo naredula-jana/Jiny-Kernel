@@ -53,20 +53,17 @@ int socket::attach_rawpkt(unsigned char *buff, unsigned int len) {
 			sock = udp_list.list[i];
 			if (sock == 0) continue;
 			if ((pkt->udphdr.dest == sock->network_conn.src_port)) {
-				sock->queue.add_to_queue(buff, len,0,1);
+				sock->input_queue.add_to_queue(buff, len,0,1);
 				sock->epoll_fd_wakeup();
 				return JSUCCESS;
 			}
 		}
-	} else if(pkt->iphdr.protocol == IPPROTO_TCP){
+	} else {
 		/* queue to default queue */
 		default_socket->default_pkt_process(buff,len);
 		return JSUCCESS;
 	}
 
-	default_socket->queue.add_to_queue(buff, len,0,1);
-	stat_raw_default++;
-	return JSUCCESS;
 last:
 	jfree_page(buff);
 	stat_raw_drop++;
@@ -243,7 +240,6 @@ int tcp_read_listen_pkts(network_connection *conn, uint8_t *recv_data, int recv_
 void socket::default_pkt_process(unsigned char *arg_buf, int buf_len) {
 	int i, ret = 0;
 	unsigned char *buf = arg_buf;
-//	unsigned char *port;
 	socket *sock = 0;
 	network_connection *conn = 0;
 
@@ -272,7 +268,7 @@ void socket::default_pkt_process(unsigned char *arg_buf, int buf_len) {
 
 				ret = conn->tcp_conn->tcp_read(buf, buf_len);
 				if (ret > 0) {
-					sock->tcpdata_queue.add_to_queue((unsigned char *) buf,4096, 0, 1);
+					sock->input_queue.add_to_queue((unsigned char *) buf,4096, 0, 1);
 					buf = 0;
 					sock->epoll_fd_wakeup();
 				} else if (ret == 0 && conn->tcp_conn->state==TCP_CONN_CLOSED_RECV) {
@@ -312,7 +308,8 @@ last:
 	}
 	return;
 }
-unsigned char *test_app=0;
+
+extern int udp_read(network_connection *conn, uint8_t *recv_data, int recv_len, uint8_t *app_data, int app_len);
 int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int read_flags, int unused_flags) {
 	int ret = 0;
 	unsigned char *buf = 0;
@@ -326,7 +323,7 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int
 			return 0;
 		}
 		while(tcp_data == 0){
-			tcpdata_queue.peep_from_queue((unsigned char **)&tcp_data, &tcp_len,0);
+			input_queue.peep_from_queue((unsigned char **)&tcp_data, &tcp_len,0);
 			if (tcp_data == 0){
 				if (read_flags & O_NONBLOCK) {
 					return -EAGAIN;
@@ -348,69 +345,40 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int
 			ut_memcpy(app_data,&tcp_data->data[tcp_data->offset + tcp_data->consumed],ret_len);
 			tcp_data->consumed = tcp_data->consumed +ret_len;
 			if (tcp_data->len == tcp_data->consumed){
-				tcpdata_queue.remove_from_queue((unsigned char **)&tcp_data, &tcp_len,&unsued_flags);
+				input_queue.remove_from_queue((unsigned char **)&tcp_data, &tcp_len,&unsued_flags);
 				free_page((unsigned long)tcp_data);
 			}
-			if (tcpdata_queue.queue_size() == 0){
+			if (input_queue.queue_size() == 0){
 				data_available_for_consumption =0;
 			}
 			stat_in++;
 			stat_in_bytes = stat_in_bytes + ret_len;
 
-			if (test_app != 0){
-			//	ut_printf(" OLD DATA: %x:%x:%x:%x: cont:%d  \n",test_app[45],test_app[46],test_app[47],test_app[48],g_current_task->stats.total_contexts);
-			}
-			//ut_printf(" TCP READ retlen:%d applen:%d tcpdatalen:%d  appdat:%x data :%s: \n",ret_len,app_len,pkt_len,app_data,app_data);
-			test_app = app_data;
 			return ret_len;
 		}
 		return ret_len;
-	}
-
-	net_bh();  /* check the packets if there and to pending recv from driver */
-
-	/* if the message is peeked, then get the message from the peeked buf*/
-	if (peeked_msg_len != 0){
-		buf_len = peeked_msg_len;
-		if (buf_len > app_len) buf_len=app_len;
-
-		ut_memcpy(app_data,peeked_msg, buf_len);
-		peeked_msg_len =0;
-		return buf_len;
-	}
-read_again:
-	/* push a packet in to protocol stack  */
-	ret = queue.remove_from_queue(&buf, &buf_len,&read_flags);
-	if (ret == JSUCCESS) {
-		network_connection *conn=&network_conn;
-		if (network_conn.type == 0){ /* default socket */
-			conn=0;
-		}
-		ret = net_stack->read(conn, buf, buf_len, app_data, app_len);
-		if (ret > 0) {
-			stat_in++;
-			stat_in_bytes = stat_in_bytes + ret;
-		} else{ /* when tcp control packets are consumed, need to look for the data packets */
-			stat_in++;
-			statin_err++;
-			if (buf > 0) {
-				free_page((unsigned long)buf);
-				buf=0;
+	}else{
+		unsigned char *udp_data=0;
+		int unsued_flags;
+		int udp_len;
+		ret_len=0;
+		while(udp_data == 0){
+			input_queue.peep_from_queue((unsigned char **)&udp_data, &udp_len,0);
+			if (udp_data == 0){
+				if (read_flags & O_NONBLOCK) {
+					return -EAGAIN;
+				}
+				sc_sleep(2);
 			}
-			if (ret < 0 || this==default_socket){
-				return 0;
-			}
-			goto read_again;  /* tcp control packets will get consumed, nothing ouput */
 		}
+		if (udp_data){
+			input_queue.remove_from_queue((unsigned char **)&udp_data, &udp_len,&unsued_flags);
+			ret_len = udp_read(&network_conn,udp_data,udp_len, app_data,app_len);
+			stat_in++;
+			stat_in_bytes = stat_in_bytes + ret_len;
+		}
+		return ret_len;
 	}
-
-	if (buf > 0) {
-		free_page((unsigned long)buf);
-	}
-	if (ret == JFAIL && (read_flags & O_NONBLOCK)){
-		return -1;
-	}
-	return ret;
 }
 int socket::peek(){
 	if (peeked_msg_len == 0 ){
@@ -436,7 +404,7 @@ int socket::write_iov(struct iovec *msg_iov, int iov_len) {
 	}
 	return ret;
 }
-
+extern int udp_write( network_connection *conn, unsigned char *data, int data_len);
 int socket::write(unsigned long offset_unused, unsigned char *app_data, int app_len, int wr_flags_unused) {
 	struct iovec  iov;
 	int ret = 0;
@@ -457,7 +425,7 @@ int socket::write(unsigned long offset_unused, unsigned char *app_data, int app_
 			sc_sleep(2);
 		}
 	}else{
-		ret = net_stack->write(&network_conn, &iov, 1);
+		ret = udp_write(&network_conn,app_data,app_len);
 	}
 
 	if (ret > 0) {
@@ -517,14 +485,14 @@ int socket::ioctl(unsigned long arg1, unsigned long arg2) {
 			ret = net_stack->connect(&network_conn);
 		}
 	}else if (arg1 == SOCK_IOCTL_WAITFORDATA){
-		if ((queue.is_empty() == JSUCCESS)  && (arg2 != 0)){
-			if (queue.waitq){
-				queue.waitq->wait(arg2);
+		if ((input_queue.is_empty() == JSUCCESS)  && (arg2 != 0)){
+			if (input_queue.waitq){
+				input_queue.waitq->wait(arg2);
 			}
 		}
-		return queue.queue_size();
+		return input_queue.queue_size();
 	}else if (arg1 == GENERIC_IOCTL_PEEK_DATA){
-		return queue.queue_size();
+		return input_queue.queue_size();
 	}
 	return ret;
 }
@@ -532,7 +500,7 @@ int socket::ioctl(unsigned long arg1, unsigned long arg2) {
 void socket::print_stats(unsigned char *arg1,unsigned char *arg2){
 	ut_printf("socket: count:%d type:%d local:%x:%x remote:%x:%x ( Stat: in:%d/%d out:%d/%d error:%d:%d Qfull:%d  QReadfail:%i Qlen:%i) epoll:%x\n",
 			count.counter,network_conn.type,network_conn.src_ip,network_conn.src_port,network_conn.dest_ip,network_conn.dest_port,stat_in,stat_in_bytes
-	    ,stat_out,stat_out_bytes, statout_err,statin_err,queue.error_full,queue.error_empty_check,queue.queue_size(),epoll_list[0]);
+	    ,stat_out,stat_out_bytes, statout_err,statin_err,input_queue.error_full,input_queue.error_empty_check,input_queue.queue_size(),epoll_list[0]);
 	if (network_conn.tcp_conn) {
 		network_conn.tcp_conn->print_stats(0,0);
 	}
@@ -588,7 +556,7 @@ int socket::delete_sock(socket *sock) {
 	int i;
     ut_log("Deleting  the socket resources \n");
 
-	sock->queue.free();
+	sock->input_queue.free();
 	if (delete_sock_from_list(&socket::tcp_listner_list,sock)==JSUCCESS){
 		return JSUCCESS;
 	}
@@ -602,14 +570,14 @@ int socket::delete_sock(socket *sock) {
 }
 int socket::init_socket(int type){
 	int ret = JFAIL;
-	queue.init((unsigned char*)"socket",1);
+	input_queue.init((unsigned char*)"socket_input",1);
 	arch_spinlock_link(&_netstack_lock);
 
 	net_stack = net_stack_list[0];
 	network_conn.family = AF_INET;
 	network_conn.type = type;
 	network_conn.src_ip = 0;
-	tcpdata_queue.init((unsigned char *)"tcpdata",0);
+
 	stat_in = 0;
 	stat_in_bytes =0;
 	stat_out =0;
@@ -625,7 +593,7 @@ int socket::init_socket(int type){
 		network_conn.protocol = 0;
 	}
 	if (ret == JFAIL){
-		queue.free();
+		input_queue.free();
 		ut_log("ERROR:   socket Open fails \n");
 		ut_printf("ERROR:  socket Open fails \n");
 	}
@@ -714,16 +682,14 @@ int socket::default_pkt_thread(void *arg1, void *arg2){
 		sc_sleep(1);
 	}
 	while(1){
-		//ret = default_socket->queue.peep_from_queue(0,0,0);
-		//if (ret == JSUCCESS) {
+
 		unsigned char *buf = 0;
 		int buf_len=0;
 		int read_flags=0;
 
-		ret = default_socket->queue.remove_from_queue(&buf, &buf_len,&read_flags);
+		ret = default_socket->input_queue.remove_from_queue(&buf, &buf_len,&read_flags);
 		if (ret == JSUCCESS) {
 			default_socket->default_pkt_process(buf,buf_len);
-			//default_socket->read(0,0,0,0,0);
 		}
 	}
 	return 1;

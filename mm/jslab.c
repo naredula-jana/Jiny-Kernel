@@ -572,12 +572,17 @@ static struct page_bucket *get_bucket(struct page_bucket *in){
 	return ret;
 }
 int g_conf_percpu_pagecache  __attribute__ ((section ("confdata"))) =1;
+int g_stat_memalloc_large=0;
+int g_stat_memalloc_small=0;
+int g_stat_memfree_large=0;
+int g_stat_memfree_small=0;
 unsigned long jalloc_page(int flags) {
+	unsigned long ret =0;
 	int cpu = getcpuid(); /* local for each cpu */
 
 	if (flags & MEM_CLEAR) {
 		stat_page_alloc_zero++;
-	} else if (g_conf_percpu_pagecache == 1) {
+	} else if ((g_conf_percpu_pagecache == 1) && (flags & MEM_NETBUF)) { /* insert in to page cache with MEM_NETBUF set */
 		struct page_bucket *bucket;
 		if (page_cache[cpu].inuse == 1) {
 			goto last;
@@ -591,7 +596,7 @@ unsigned long jalloc_page(int flags) {
 		}
 
 		if (bucket && bucket->top > 0) {
-			unsigned long ret = bucket->stack[bucket->top - 1];
+			ret = bucket->stack[bucket->top - 1];
 			bucket->top--;
 			page_cache[cpu].count--;
 			page_cache[cpu].inuse = 0;
@@ -609,25 +614,39 @@ last:
 		if (page != 0) return page;
 	}
 	stat_page_allocs++;
-	return mm_getFreePages(flags, 0);
+	if (flags & MEM_NETBUF){
+		ret = mm_getFreePages(flags, 1); /* 2 pages for network */
+		if (ret != 0){
+			PageSetNetBuf(virt_to_page(ret));
+			g_stat_memalloc_large++;
+		}
+		return ret;
+	}else{
+		ret = mm_getFreePages(flags, 0);
+		if (ret != 0){
+			g_stat_memalloc_small++;
+		}
+		return ret;
+	}
 }
-int g_conf_jfree_check __attribute__ ((section ("confdata"))) =1;
+
 int Bulk_free_pages(struct struct_mbuf *mbufs, int list_len){
 	int cpu = getcpuid();
 	int index =0;
 	int ret;
 	unsigned long p;
+	int flags=0;
 
 	while (index < list_len) {
 		p=mbufs[index].buf;
 
-		if (g_conf_jfree_check == 1) {
-			if (PageNetBuf(virt_to_page(p))) {
-				BRK;
-			}
+		if (PageNetBuf(virt_to_page(p))) {
+			flags = MEM_NETBUF;
+		}else{
+			flags=0;
 		}
-
-		if (g_conf_percpu_pagecache == 1) {/* TODO:1)  we are adding the address without validation, 2) large page also into this cache which is wrong need to avoid. */
+/* insert only big pages in to the cache, means with  MEM_NETBUF set   */
+		if ((g_conf_percpu_pagecache == 1) && (flags == MEM_NETBUF)) {/* TODO:1)  we are adding the address without validation, 2) large page also into this cache which is wrong need to avoid. */
 			struct page_bucket *bucket;
 			int count=0;
 			if (page_cache[cpu].inuse == 1) {
@@ -672,16 +691,23 @@ int Bulk_free_pages(struct struct_mbuf *mbufs, int list_len){
 			}
 		}
 		stat_page_frees++;
-		ret = mm_putFreePages(p, 0);
+		if (flags & MEM_NETBUF){
+			PageClearNetBuf(virt_to_page(p));
+			ret = mm_putFreePages(p, 1);
+			g_stat_memalloc_large--;
+		}else{
+			ret = mm_putFreePages(p, 0);
+			g_stat_memalloc_small--;
+		}
 success:
-	      index++;
+	    index++;
 	}/* end of while */
 }
 
 int jfree_page(unsigned long p){
 	struct struct_mbuf mbufs;
 	mbufs.buf = p;
-	mbufs.len = 4096;
+	mbufs.len = 4096;  /* TODO: this is not correct, actually length is checked using NET_MBUF flag */
 
 	return Bulk_free_pages(&mbufs, 1);
 }

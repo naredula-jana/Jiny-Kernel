@@ -24,9 +24,13 @@ unsigned long g_stat_tcpNewConn=0;
 unsigned long g_stat_tcpDupSYN=0;
 unsigned long g_stat_tcpBufAllocs=0;
 unsigned long g_stat_tcpBufFrees=0;
-unsigned long g_conf_tcpDebug __attribute__ ((section ("confdata"))) =0;
 unsigned long g_stat_tcpSendBlocked=0;
+unsigned long g_stat_udpSend=0;
+unsigned long g_stat_udpRecv=0;
+unsigned long g_stat_udpFailSend=0;
+unsigned long g_stat_udpFailRecv=0;
 
+unsigned long g_conf_tcpDebug __attribute__ ((section ("confdata"))) =0;
 }
 #include "file.hh"
 #include "network.hh"
@@ -87,6 +91,7 @@ static u16_t chksum(u16_t sum, const u8_t *data, u16_t len) {
 #define IPH_LEN    20
 #define LLH_LEN    14
 #define PROTO_TCP   6
+#define PROTO_UDP   17
 static u16_t upper_layer_chksum(u8_t *data, u8_t proto) {
 	struct tcpip_hdr *BUF = (struct tcpip_hdr *) (data + LLH_LEN);
 	u16_t upper_layer_len;
@@ -115,6 +120,9 @@ int tcp_connection::send_tcp_pkt(uint8_t flags, unsigned char *data, int data_le
 	struct tcpip_hdr *send_tcp_hdr;
 	int ip_len;
 
+	if (data_len > MEM_NETBUF_SIZE){
+		return 0;
+	}
 	unsigned char *buf = (unsigned long) jalloc_page(MEM_NETBUF);
 	if (buf == 0) {
 		return 0;
@@ -295,13 +303,90 @@ void tcp_connection::housekeeper() {
 	return;
 }
 
+int udp_read(network_connection *conn,uint8_t *recv_data, int recv_len, uint8_t *app_data, int app_len) {
+	struct ether_pkt *recv_pkt = (struct ether_pkt *) (recv_data + 10);
+	struct udphdr *udphdr;
+	int udp_data_len;
+	int ret=0;
+
+	if (recv_data == 0) return 0;
+	udphdr = (struct udphdr *) &(recv_pkt->iphdr);
+
+	conn->src_ip = recv_pkt->iphdr.saddr;
+	conn->dest_ip = recv_pkt->iphdr.daddr;
+	conn->dest_port = recv_pkt->udphdr.source;
+
+	udp_data_len = htons(recv_pkt->iphdr.tot_len) - (20 + 8);
+	if ((udp_data_len > 0)  && (app_len > udp_data_len)) {
+		ut_memcpy(app_data,recv_data+10+20+8,udp_data_len);
+		ret = udp_data_len;
+		//ut_printf(" UDP RECV DATA size :%d\n",udp_data_len);
+		g_stat_udpRecv++;
+	}else{
+	    ut_printf(" Error UDP RECV DATA size :%d applen:%d\n",udp_data_len,app_len);
+		g_stat_udpFailRecv++;
+	}
+	free_page((unsigned long)recv_data);
+	return ret;
+}
+
+int udp_write( network_connection *conn, unsigned char *data, int data_len) {
+	struct ether_pkt *send_pkt;
+	int ret, send_len;
+	int ip_len;
+
+	if (data_len > MEM_NETBUF_SIZE){
+		return 0;
+	}
+	unsigned char *buf = (unsigned long) jalloc_page(MEM_NETBUF);
+	if (buf == 0) {
+		return 0;
+	}
+	ut_memset(buf, 0, 10);
+	send_pkt = (struct ether_pkt *) (buf + 10);
+	ut_memcpy(send_pkt->machdr.src, &conn->mac_src[0], 6);
+	ut_memcpy(send_pkt->machdr.dest, &conn->mac_dest[0], 6);
+	send_pkt->machdr.type[0] = 0x8;
+	send_pkt->machdr.type[1] = 0;
+
+	send_pkt->iphdr.daddr = conn->src_ip;
+	send_pkt->iphdr.saddr = conn->dest_ip;
+	send_pkt->iphdr.frag_off = 0x40;
+
+	send_pkt->udphdr.source = conn->src_port;
+	send_pkt->udphdr.dest = conn->dest_port;
+
+	ip_len = 40 + data_len;
+	send_len = 14 + 20 + 8 + data_len; /* ethernet+ip+udp*/
+	send_pkt->iphdr.check = 0;
+
+	ut_memcpy(buf + 10 + 14 + 40, data, data_len);
+
+	send_pkt->udphdr.checksum = 0;
+	send_pkt->udphdr.checksum = ~(upper_layer_chksum((unsigned char *) send_pkt,
+			PROTO_UDP));
+	send_pkt->iphdr.check = ~(ipchksum((unsigned char *) send_pkt));
+
+	ret = net_send_eth_frame((unsigned char *) send_pkt, send_len, 0);
+	if (ret != JFAIL) {
+		//ut_printf(" UDP SEND DATA size :%d\n",send_len);
+		g_stat_udpSend++;
+	} else {
+		unsigned char *buf = (unsigned char *) send_pkt;
+		jfree_page(buf - 10);
+		g_stat_udpFailSend++;
+		//g_stat_tcpBufFrees++;
+	}
+	return ret;
+}
+
 /* TODO: send entire user data in multiple iterations */
 int tcp_connection::tcp_write( uint8_t *app_data, int app_maxlen) {
 	int i;
 	int copied = 0;
 
-	if (app_maxlen > (PAGE_SIZE - 100)) {
-		app_maxlen = PAGE_SIZE - 100;
+	if (app_maxlen > (MEM_NETBUF_SIZE - 100)) {
+		app_maxlen = MEM_NETBUF_SIZE - 100;
 	}
 
 	for (i = 0; i < MAX_TCPSND_WINDOW; i++) {
@@ -350,6 +435,7 @@ int tcp_read_listen_pkts(network_connection *conn, uint8_t *recv_data, int recv_
 	return 0;
 }
 
+
 /* this happens in the context of ISR or polling mode or this should in syncronous mode, this should be as fast as possible */
 int tcp_connection::tcp_read(uint8_t *recv_data, int recv_len)   {
 	struct ether_pkt *recv_pkt = (struct ether_pkt *) (recv_data + 10);
@@ -392,9 +478,10 @@ int tcp_connection::tcp_read(uint8_t *recv_data, int recv_len)   {
 			app_data->len = tcp_data_len;
 			app_data->consumed = 0;
 			app_data->offset = 10 + 14 + 20 + tcp_header_len - TCP_USER_DATA_HDR ;  /* TODO: ip header assumed 20 */
-			if ((app_data->len+ app_data->offset) > 4096){
+			if ((app_data->len+ app_data->offset) > MEM_NETBUF_SIZE){
 				BUG();
 			}
+			//ut_printf(" TCP RECV DATA size :%d\n",tcp_data_len);
 			g_stat_tcpInData++;
 			//flags = flags | TCP_ACK;
 		} else {

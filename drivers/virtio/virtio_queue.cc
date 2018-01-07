@@ -514,7 +514,7 @@ int virtio_queue::BulkAddToQueue(struct struct_mbuf *mbuf_list, int list_len,
 			//mbuf_list[index].buf = 0;
 		} else {
 			data = (unsigned char *) jalloc_page(MEM_NETBUF);
-			len = 4096; /* page size */
+			len = MEM_NETBUF_SIZE; /* buf size */
 			ut_memset(data, 0, 10);
 		}
 		if (data == 0) {

@@ -188,7 +188,7 @@ int vmxnet3_jdriver::refill_recv_queue() {
 
 		pkt = (unsigned char *) jalloc_page(MEM_NETBUF);
 		adapter->rx_queues[0].ring1[i].addr = __pa(pkt+10); /* TODO: 10 bytes header is added to make consistent with vitio */
-		adapter->rx_queues[0].ring1[i].len = PAGE_SIZE;
+		adapter->rx_queues[0].ring1[i].len = MEM_NETBUF_SIZE;
 		adapter->rx_queues[0].ring1[i].gen = adapter->rx_queues[0].gen & (0x1);
 		adapter->rx_queues[0].next2refill++;
 		adapter->rx_queues[0].stat_refills++;

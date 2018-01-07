@@ -83,6 +83,7 @@ extern unsigned long g_kernelspace_starting_address;
 #define MEM_FOR_CACHE  0x4000000
 #define MEM_NETBUF     0x0200000
 //#define MEM_FOR_GLOBAL 0x2000000  /* pages for global , not allocated from task context */
+#define MEM_NETBUF_SIZE 8192
 
 /* protection flags matches to that elf flags */
 #define PROT_READ       0x4             /* page can be read */

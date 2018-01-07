@@ -140,7 +140,7 @@ static int virtnet_send_command(net_virtio_queue *vq, uint16_t mq_len) {
 
 	if (buf == 0) {
 		buf = (unsigned char *) jalloc_page(MEM_NETBUF);
-		len = 4096; /* page size */
+		len = MEM_NETBUF_SIZE; /* page size */
 	}
 	if (buf == 0) {
 		BRK

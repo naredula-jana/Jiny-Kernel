@@ -327,7 +327,7 @@ int network_stack::connect(network_connection *conn) { // only for TCP
 		ret = JFAIL;
 		goto last;
 	}
-	buf = (unsigned long) jalloc_page(0);
+	buf = (unsigned long) jalloc_page(MEM_NETBUF);
 	if (buf ==0) {
 		goto last;
 	}else{
