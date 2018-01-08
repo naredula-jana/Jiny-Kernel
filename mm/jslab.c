@@ -576,6 +576,15 @@ int g_stat_memalloc_large=0;
 int g_stat_memalloc_small=0;
 int g_stat_memfree_large=0;
 int g_stat_memfree_small=0;
+
+int jpage_dup(unsigned long addr){
+	struct page *page = virt_to_page(addr);
+
+	if (PageNetBuf(page)){
+		atomic_inc(&page->count);
+	}
+	return JSUCCESS;
+}
 unsigned long jalloc_page(int flags) {
 	unsigned long ret =0;
 	int cpu = getcpuid(); /* local for each cpu */
@@ -615,9 +624,10 @@ last:
 	}
 	stat_page_allocs++;
 	if (flags & MEM_NETBUF){
-		ret = mm_getFreePages(flags, 1); /* 2 pages for network */
+		ret = mm_getFreePages(flags, 2); /* 4 continous pages for network */
 		if (ret != 0){
-			PageSetNetBuf(virt_to_page(ret));
+			struct page *page = virt_to_page(ret);
+			PageSetNetBuf(page);
 			g_stat_memalloc_large++;
 		}
 		return ret;
@@ -639,9 +649,15 @@ int Bulk_free_pages(struct struct_mbuf *mbufs, int list_len){
 
 	while (index < list_len) {
 		p=mbufs[index].buf;
+		p = p & (PAGE_MASK);
+		struct page *page = virt_to_page(p);
 
-		if (PageNetBuf(virt_to_page(p))) {
+		if (PageNetBuf(page)) {
 			flags = MEM_NETBUF;
+			if (page->count.counter > 1){
+				atomic_dec(&page->count);
+				goto success;
+			}
 		}else{
 			flags=0;
 		}
@@ -649,6 +665,7 @@ int Bulk_free_pages(struct struct_mbuf *mbufs, int list_len){
 		if ((g_conf_percpu_pagecache == 1) && (flags == MEM_NETBUF)) {/* TODO:1)  we are adding the address without validation, 2) large page also into this cache which is wrong need to avoid. */
 			struct page_bucket *bucket;
 			int count=0;
+
 			if (page_cache[cpu].inuse == 1) {
 				goto last;
 			}
@@ -693,7 +710,7 @@ int Bulk_free_pages(struct struct_mbuf *mbufs, int list_len){
 		stat_page_frees++;
 		if (flags & MEM_NETBUF){
 			PageClearNetBuf(virt_to_page(p));
-			ret = mm_putFreePages(p, 1);
+			ret = mm_putFreePages(p, 2);  /* 4 continous pages for NETBUF */
 			g_stat_memalloc_large--;
 		}else{
 			ret = mm_putFreePages(p, 0);

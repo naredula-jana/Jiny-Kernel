@@ -50,16 +50,12 @@ typedef struct kmem_cache_s kmem_cache_t;
 //#define HIGHPRIORITY_APP_SYSCALLTABLE 0x800000
 
 extern unsigned long g_kernelspace_starting_address;
-//unsigned long __va(unsigned long addr);
-//unsigned long __pa(unsigned long addr);
+
 
 #define  __va(addr)  (unsigned long)({ (g_kernelspace_starting_address == 1) ? ((unsigned long)(addr)+KERNEL_CODE_START) : ((unsigned long)(addr)+g_kernelspace_starting_address) ;})
 #define  __pa(addr)  (unsigned long)({ (g_kernelspace_starting_address == 1) ? ((unsigned long)(addr)-KERNEL_CODE_START) : ((addr > KERNEL_CODE_START) ? ((unsigned long)(addr)-KERNEL_CODE_START) : ((unsigned long)(addr)-g_kernelspace_starting_address)) ;})
 
 
-
-//#define USERANONYMOUS_ADDR 0x20000000
-//#define USERSTACK_ADDR     0x30000000
 #define USERANONYMOUS_ADDR 0x7fff00000000
 #define USERSTACK_ADDR     0x7fffdbaac000
 #define USERSTACK_LEN  0x100000
@@ -83,7 +79,7 @@ extern unsigned long g_kernelspace_starting_address;
 #define MEM_FOR_CACHE  0x4000000
 #define MEM_NETBUF     0x0200000
 //#define MEM_FOR_GLOBAL 0x2000000  /* pages for global , not allocated from task context */
-#define MEM_NETBUF_SIZE 8192
+#define MEM_NETBUF_SIZE 16384  /* 4096*4 =
 
 /* protection flags matches to that elf flags */
 #define PROT_READ       0x4             /* page can be read */

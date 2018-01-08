@@ -93,6 +93,7 @@ void memleakHook_alloc(unsigned char *ptr, int size, int type, void *cachep);
 int mm_set_debug_data(unsigned long addr, unsigned long data);
 int mm_check_debug_data(unsigned long addr, unsigned long data);
 
+int jpage_dup(unsigned long addr);
 unsigned long jalloc_page(int flags);
 int jfree_page(unsigned long p);
 #define alloc_page(flags) jalloc_page(flags)

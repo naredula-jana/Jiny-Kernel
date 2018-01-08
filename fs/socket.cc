@@ -43,30 +43,8 @@ int wait_for_sock_data(vinode *inode, int timeout){
  remove_from_queue->net_stack:read
  */
 int socket::attach_rawpkt(unsigned char *buff, unsigned int len) {
-	unsigned char *port;
-	socket *sock;
-	int i;
-
-	struct ether_pkt *pkt = (struct ether_pkt *) (buff + 10);
-	if (pkt->iphdr.protocol == IPPROTO_UDP) {
-		for (i=0; i<udp_list.size; i++) {
-			sock = udp_list.list[i];
-			if (sock == 0) continue;
-			if ((pkt->udphdr.dest == sock->network_conn.src_port)) {
-				sock->input_queue.add_to_queue(buff, len,0,1);
-				sock->epoll_fd_wakeup();
-				return JSUCCESS;
-			}
-		}
-	} else {
 		/* queue to default queue */
-		default_socket->default_pkt_process(buff,len);
-		return JSUCCESS;
-	}
-
-last:
-	jfree_page(buff);
-	stat_raw_drop++;
+	default_socket->default_pkt_process(buff,len);
 	return JSUCCESS;
 }
 extern "C" {
@@ -292,7 +270,18 @@ void socket::default_pkt_process(unsigned char *arg_buf, int buf_len) {
 				goto last;
 			}
 		}
-	} else { /* non-tcp packets like udp,arp */
+	} else if (pkt->iphdr.protocol == IPPROTO_UDP) {
+		for (i=0; i<udp_list.size; i++) {
+			sock = udp_list.list[i];
+			if (sock == 0) continue;
+			if ((pkt->udphdr.dest == sock->network_conn.src_port)) {
+				sock->input_queue.add_to_queue(buf, buf_len,0,1);
+				buf =0;
+				sock->epoll_fd_wakeup();
+				goto last;
+			}
+		}
+	}else { /* non-tcp/udp packets like arp,ping */
 		ret = net_stack->read(0, buf, buf_len, 0, 0);
 		if (ret > 0) {
 			stat_in_bytes = stat_in_bytes + ret;
@@ -498,7 +487,7 @@ int socket::ioctl(unsigned long arg1, unsigned long arg2) {
 }
 
 void socket::print_stats(unsigned char *arg1,unsigned char *arg2){
-	ut_printf("socket: count:%d type:%d local:%x:%x remote:%x:%x ( Stat: in:%d/%d out:%d/%d error:%d:%d Qfull:%d  QReadfail:%i Qlen:%i) epoll:%x\n",
+	ut_printf("sockets: count:%d type:%d local:%x:%x remote:%x:%x ( STAT: in:%d/%d out:%d/%d error:%d:%d Qfull:%d  QReadfail:%i Qlen:%i) epoll:%x\n",
 			count.counter,network_conn.type,network_conn.src_ip,network_conn.src_port,network_conn.dest_ip,network_conn.dest_port,stat_in,stat_in_bytes
 	    ,stat_out,stat_out_bytes, statout_err,statin_err,input_queue.error_full,input_queue.error_empty_check,input_queue.queue_size(),epoll_list[0]);
 	if (network_conn.tcp_conn) {

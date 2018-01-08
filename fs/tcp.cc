@@ -286,16 +286,9 @@ void tcp_connection::housekeeper() {
 		if (g_jiffies == send_queue[i].lastsend_ts){
 			continue;
 		}
-		if (send_tcp_pkt( flags,
-				send_queue[i].buf,
-				send_queue[i].len,
-				send_queue[i].seq_no) == JSUCCESS) {
-			if (send_queue[i].lastsend_ts != 0){ /* this is not the first time */
-				g_stat_tcpOutRetrans++;
-			}else{
-				g_stat_tcpOutData++;
-			}
-			send_queue[i].lastsend_ts = g_jiffies ;
+		if (send_tcp_pkt( flags, send_queue[i].buf, send_queue[i].len, send_queue[i].seq_no) == JSUCCESS) {
+			g_stat_tcpOutRetrans++;
+			send_queue[i].lastsend_ts = g_jiffies;
 		}
 	}
 	retransmit_ts = g_jiffies;
@@ -371,6 +364,7 @@ int udp_write( network_connection *conn, unsigned char *data, int data_len) {
 	if (ret != JFAIL) {
 		//ut_printf(" UDP SEND DATA size :%d\n",send_len);
 		g_stat_udpSend++;
+		ret = send_len;
 	} else {
 		unsigned char *buf = (unsigned char *) send_pkt;
 		jfree_page(buf - 10);
@@ -401,9 +395,9 @@ int tcp_connection::tcp_write( uint8_t *app_data, int app_maxlen) {
 			send_queue[i].lastsend_ts = g_jiffies;
 			atomic_inc(&squeue_size);
 			send_queue[i].len = app_maxlen;
-
 			send_seq_no = send_seq_no + app_maxlen;
 			copied = 1;
+			g_stat_tcpOutData++;
 			break;
 		}
 	}

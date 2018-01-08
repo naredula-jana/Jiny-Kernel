@@ -55,7 +55,8 @@ public:
 
 #define MAX_EPOLL_FDS 60
 struct epoll_struct{
-	int count;
+	atomic_t epoll_count; /* usage count */
+	int fd_count;
 	int fds[MAX_EPOLL_FDS];
 	int fd_waiting;
 	wait_queue *waitq;

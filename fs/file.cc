@@ -712,6 +712,7 @@ int fs_write(struct file *filep, uint8_t *buff, unsigned long len) {
 	filep->offset = filep->offset+ret;
 	return ret;
 }
+extern int epoll_dup(unsigned char *vinode);
 struct file *fs_dup(struct file *old_filep, struct file *new_filep) {
 
 	if (old_filep == 0)
@@ -744,6 +745,8 @@ struct file *fs_dup(struct file *old_filep, struct file *new_filep) {
 		}
 		atomic_inc(&ninode->count);
 		//fs_dup_pipe(new_filep);
+	} else if (new_filep->type == EVENT_POLL_FILE){
+		epoll_dup(new_filep->vinode);
 	}
 	return new_filep;
 }

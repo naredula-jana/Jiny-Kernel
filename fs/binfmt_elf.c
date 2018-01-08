@@ -172,8 +172,8 @@ error:
 		ut_log(" Error: user stack creation failed :%s:\n",g_current_task->name);
 		vfree((unsigned long)stack);
 	}
-	mm_putFreePages((unsigned long)target_argv, 0);
-	mm_putFreePages((unsigned long)target_env, 0);
+	free_page((unsigned long)target_argv);
+	free_page((unsigned long)target_env);
 	return ret;
 }
 unsigned long fs_elf_check_prepare(struct file *file,unsigned char **argv, unsigned char **env,unsigned long *t_argc, unsigned long *t_argv,unsigned long  *stack_len, unsigned long *aux_addr,unsigned char **elf_interpreter, unsigned long *tmp_stackp) {
