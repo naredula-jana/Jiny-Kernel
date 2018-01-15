@@ -35,6 +35,7 @@ extern int g_net_interrupts_disable;
 extern int g_conf_netbh_cpu;
 
 int g_conf_cpu_stats __attribute__ ((section ("confdata"))) = 1;
+int g_conf_syscallStat __attribute__ ((section ("confdata"))) = 0;
 int g_conf_idle_cpuspin __attribute__ ((section ("confdata"))) = 1;
 int g_conf_dynamic_assign_cpu __attribute__ ((section ("confdata"))) = 0; /* minimizes the IPI interrupt by reassigning the the task to running cpu */
 static int stat_dynamic_assign_errors = 1;
@@ -664,7 +665,7 @@ void sc_before_syscall() {
 	g_current_task->stats.syscall_count++;
 
 #if 1
-	if (g_current_task->curr_syscall_id < MAX_SYSCALL && g_current_task->stats.syscalls!=0){
+	if (g_conf_syscallStat==1 && g_current_task->curr_syscall_id < MAX_SYSCALL && g_current_task->stats.syscalls!=0){
 		g_current_task->stats.syscalls[g_current_task->curr_syscall_id].call_count++;
 	}
 #endif
@@ -701,7 +702,7 @@ void sc_after_syscall() {
 	check_signals();
 
 	g_current_task->callstack_top = 0;
-	sc_schedule();
+//	sc_schedule();
 }
 #define MAX_DEADTASKLIST_SIZE 100
 static struct task_struct *deadtask_list[MAX_DEADTASKLIST_SIZE + 1];
@@ -778,6 +779,7 @@ void sc_schedule() { /* _schedule function task can land here. */
 	intr_flags = _schedule(intr_flags);
 	local_irq_restore(intr_flags);
 
+	ut_get_systemtime_ns(); /* this is to update system clock time in global variable, so that the value can picked from user space */
 	/* remove dead tasks */
 	sc_remove_dead_tasks();
 }

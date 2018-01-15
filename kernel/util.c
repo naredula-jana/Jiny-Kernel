@@ -105,6 +105,70 @@ void ut_memcpy(uint8_t *dest, uint8_t *src, long len){
 	}
 	return;
 }
+void ut_mmx_memcpy(void *to, const void *from, int len)
+{
+        void *p;
+        int i;
+
+        p = to;
+        i = len >> 6; /* len/64 */
+
+
+        for ( ; i > 5; i--) {
+                __asm__ __volatile__ (
+                "  prefetch 320(%0)\n"
+                "  movq (%0), %%mm0\n"
+                "  movq 8(%0), %%mm1\n"
+                "  movq 16(%0), %%mm2\n"
+                "  movq 24(%0), %%mm3\n"
+                "  movq %%mm0, (%1)\n"
+                "  movq %%mm1, 8(%1)\n"
+                "  movq %%mm2, 16(%1)\n"
+                "  movq %%mm3, 24(%1)\n"
+                "  movq 32(%0), %%mm0\n"
+                "  movq 40(%0), %%mm1\n"
+                "  movq 48(%0), %%mm2\n"
+                "  movq 56(%0), %%mm3\n"
+                "  movq %%mm0, 32(%1)\n"
+                "  movq %%mm1, 40(%1)\n"
+                "  movq %%mm2, 48(%1)\n"
+                "  movq %%mm3, 56(%1)\n"
+                        : : "r" (from), "r" (to) : "memory");
+
+                from += 64;
+                to += 64;
+        }
+        for ( ; i > 0; i--) {
+                __asm__ __volatile__ (
+                "  movq (%0), %%mm0\n"
+                "  movq 8(%0), %%mm1\n"
+                "  movq 16(%0), %%mm2\n"
+                "  movq 24(%0), %%mm3\n"
+                "  movq %%mm0, (%1)\n"
+                "  movq %%mm1, 8(%1)\n"
+                "  movq %%mm2, 16(%1)\n"
+                "  movq %%mm3, 24(%1)\n"
+                "  movq 32(%0), %%mm0\n"
+                "  movq 40(%0), %%mm1\n"
+                "  movq 48(%0), %%mm2\n"
+                "  movq 56(%0), %%mm3\n"
+                "  movq %%mm0, 32(%1)\n"
+                "  movq %%mm1, 40(%1)\n"
+                "  movq %%mm2, 48(%1)\n"
+                "  movq %%mm3, 56(%1)\n"
+                        : : "r" (from), "r" (to) : "memory");
+
+                from += 64;
+                to += 64;
+        }
+        /*
+         * Now do the tail of the block:
+         */
+        ut_memcpy(to, from, len & 63);
+        return;
+}
+
+
 unsigned char test_dest[4096],test_src[4096];
 int g_conf_memloops=1000;
 void Jcmd_memcpy(void *arg1,void *arg2){

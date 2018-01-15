@@ -197,7 +197,6 @@ static int sendq_add(unsigned char *buf, int len, int write_flags){
 
 	if (sendqs_empty == 1 && ret==JSUCCESS){
 		sendqs_empty = 0;
-//		PageSetNetBuf(virt_to_page(buf));
 	}
 	return ret;
 }
@@ -210,7 +209,7 @@ int netif_rx(unsigned char *data, unsigned int len) {
 	if (data == 0){
 		return JFAIL;
 	}
-	//PageClearNetBuf(virt_to_page(data));
+
 	if (socket::attach_rawpkt(data, len) == JFAIL) {
 		jfree_page(data);
 	}

@@ -37,7 +37,8 @@ struct pvclock_wall_clock {
 static struct pvclock_wall_clock wall_clock;
 static volatile struct pvclock_vcpu_time_info vcpu_time[MAX_CPUS];
 static int kvm_clock_available = 0;
-static uint64_t start_time, curr_system_time = 0; /* updated by the boot cpu */
+extern uint64_t g_system_start_time;
+static uint64_t curr_system_time = 0; /* updated by the boot cpu */
 static unsigned long stored_system_times[MAX_CPUS];
 unsigned long ar_read_tsc(void);
 
@@ -60,7 +61,7 @@ int ut_get_wallclock(unsigned long *sec, unsigned long *usec) {
 #endif
 		unsigned long sys_time = ut_get_systemtime_ns();
 		if (sec != 0) {
-			*sec = (sys_time / 1000000000) + start_time;
+			*sec = (sys_time / 1000000000) + g_system_start_time;
 		}
 		if (usec != 0) {
 			*usec = (sys_time / 1000) % 1000000;
@@ -68,6 +69,12 @@ int ut_get_wallclock(unsigned long *sec, unsigned long *usec) {
 //	}
 	return 1;
 }
+void fast_clock(unsigned long *sec, unsigned long *usec){
+	unsigned long sys_time = g_cpu_state[0].system_times_ns;;
+	*sec = (sys_time / 1000000000) + g_system_start_time;
+	*usec = (sys_time / 1000) % 1000000;
+}
+
 
 #define DECLARE_ARGS(val, low, high)    unsigned low, high
 #define EAX_EDX_RET(val, low, high)     "=a" (low), "=d" (high)
@@ -93,6 +100,7 @@ static unsigned long total_tsc_per_jiffie __attribute__ ((section ("confdata")))
 //static unsigned long stored_system_times_ns[MAX_CPUS];
 static unsigned long stored_start_times[MAX_CPUS];
 static unsigned long store_common_time_ns=0;
+extern unsigned long g_system_times_ns;
 unsigned long g_stat_clock_errors;
 static unsigned long get_percpu_ns() { /* get percpu nano seconds */
 	unsigned long time_ns;
@@ -130,6 +138,9 @@ static unsigned long get_percpu_ns() { /* get percpu nano seconds */
 	}
 	//stored_system_times_ns[cpu] = time_ns;
 	g_cpu_state[cpu].system_times_ns = time_ns;
+	if (time_ns > g_system_times_ns){
+		g_system_times_ns = time_ns;
+	}
 	return time_ns;
 }
 int ut_sleep_ns(int dur_ns){
@@ -178,6 +189,7 @@ void ar_update_jiffie() {
 		}
 	}else{
 		g_jiffies++;
+		//ut_get_systemtime_ns();
 	}
 	unsigned long curr_tsc =ar_read_tsc();
 
@@ -225,7 +237,7 @@ int init_clock(int cpu_id) {
 			msr_write(MSR_KVM_SYSTEM_TIME_NEW, __pa(&vcpu_time[cpu_id]) | 1);
 		}
 		stored_system_times[cpu_id] = 0;
-		start_time = wall_clock.sec;
+		g_system_start_time = wall_clock.sec;
 		ut_log("	Succeded: KVM Clock Signature :%s: cpuid: %x \n", signature,
 				cpuid_ret[0]);
 		for (i=0; i< getmaxcpus(); i++){

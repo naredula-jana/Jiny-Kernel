@@ -274,10 +274,11 @@ int elf_initialize_userspace_stack(struct elfhdr elf_ex,unsigned long aux_addr,u
 			AUX_ENT(AT_FLAGS, 0);
 			AUX_ENT(AT_ENTRY, p_entry);
 
-			/* TODO: the below is somehow not working, statically build binaries and the one build using statifier not working dynamically */
+			/* TODO: the below is somehow not working, statically build binaries and the one build using statifier not working dynamically:
+			 * this is because of vso, it expects shared library instesd of  cfunction. */
 	/*		AUX_ENT(AT_SYSINFO, __vsyscall_page);
 			AUX_ENT(AT_SYSINFO_HDR, USER_SYSCALL_PAGE); */
-			//ut_printf("setting the sysinfo page............................\n");
+			//ut_printf("NOT setting the sysinfo page.. : %x \n",USER_SYSCALL_PAGE);
 
 			AUX_ENT(AT_UID, 0x1f4); /* TODO : remove  UID hard coded to 0x1f4 for the next four entries  */
 			AUX_ENT(AT_EUID, 0x1f4);
@@ -305,6 +306,7 @@ int elf_initialize_userspace_stack(struct elfhdr elf_ex,unsigned long aux_addr,u
 	}
 	return JFAIL;
 }
+extern  unsigned long VSYS_gettimeofday(time_t *tv, struct timezone *unused_arg_tz) ;
 //unsigned long fs_loadElfLibrary(struct file *file, unsigned long tmp_stack, unsigned long stack_len, unsigned long aux_addr) {
 unsigned long fs_elf_load(struct file *file,unsigned long tmp_stack, unsigned long stack_len, unsigned long aux_addr) {
 	struct elf_phdr *elf_phdata;
@@ -422,9 +424,11 @@ unsigned long fs_elf_load(struct file *file,unsigned long tmp_stack, unsigned lo
 		task->mm->stack_bottom = USERSTACK_ADDR+USERSTACK_LEN;
 		 elf_initialize_userspace_stack(elf_ex,aux_addr,tmp_stack, stack_len,load_addr);
 
-		vm_mmap(0, USER_SYSCALL_PAGE, 0x1000, PROT_READ | PROT_EXEC |PROT_WRITE, MAP_ANONYMOUS, 0,"fst_syscal");
-			//ut_memset((unsigned char *)SYSCALL_PAGE,(unsigned char )0xcc,0x1000);
-		ut_memcpy((unsigned char *)USER_SYSCALL_PAGE,(unsigned char *)&__vsyscall_page,0x1000);
+//		vm_mmap(0, USER_SYSCALL_PAGE, 0x1000, PROT_READ | PROT_EXEC |PROT_WRITE, MAP_ANONYMOUS, 0,"fst_syscal");
+//		ut_memcpy((unsigned char *)USER_SYSCALL_PAGE,(unsigned char *)&__vsyscall_page,0x1000);
+
+		vm_mmap(0, USER_SYSCALL_PAGE, 0x2000, PROT_READ | PROT_EXEC |PROT_WRITE, MAP_FIXED, __pa(&VSYS_gettimeofday),"fst_syscal");
+
 		if (g_conf_syscall_debug==1){
 			//pagetable_walk(4,g_current_task->mm->pgd,1,0);
 		}

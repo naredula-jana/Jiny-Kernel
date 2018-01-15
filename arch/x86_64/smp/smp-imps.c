@@ -334,7 +334,8 @@ static int enable_ssx_avx(){
 	ut_log("CPUID Feature INFO  eax:%x ebx:%x ecx:%x edx: %x\n",eax,ebx,ecx,edx);
 
 	native_write_cr2(cr2 | 0x2);
-	native_write_cr4(cr4 |X86_CR4_OSXSAVE | X86_CR4_OSFXSR | X86_CR4_OSXMMEXCPT);
+	//native_write_cr4(cr4 |X86_CR4_OSXSAVE | X86_CR4_OSFXSR | X86_CR4_OSXMMEXCPT);
+	native_write_cr4(cr4 | X86_CR4_OSXMMEXCPT);
 	//native_write_cr4(0);
 	if (xfeatures_mask != 0){
 	    xsetbv(XCR_XFEATURE_ENABLED_MASK, XFEATURE_MASK_FPSSE | XFEATURE_MASK_YMM);
@@ -395,7 +396,7 @@ ut_log("		imps:smp : before the bsp_switch\n");  // TODO : uncommeting this line
 	}
 	local_bsp_apic_init(); /* TODO : Need to call this twice to get APIC enabled */
 
-	//enable_ssx_avx();
+	enable_ssx_avx();
 
 	wait_non_bootcpus = 0; /* from this point onwards  all non-boot cpus starts */
 //while(1);

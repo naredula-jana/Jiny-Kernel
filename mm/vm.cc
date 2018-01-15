@@ -258,7 +258,9 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, 
 
 	//ut_printf(" mmap : name:%s -- %s file:%x addr:%x len:%x pgoff:%x flags:%x  protection:%x,state:%x\n",name,file->filename,file,addr,len,pgoff,flags,prot,g_current_task->state);
 	vma = vm_findVma(mm, addr, len);
-	if (vma){
+	if (vma && !(flags & MAP_ANONYMOUS)){
+		Jcmd_maps(0,0);
+		BUG();
 		ut_log("VMA ERROR:  Already Found :%x \n",addr);
 		return 0;
 	}

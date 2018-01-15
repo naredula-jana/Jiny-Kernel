@@ -238,15 +238,23 @@ long int SYS_time(__time_t *time) {
 	//SYSCALL_DEBUG("Return time :%x seconds \n", *time);
 	return *time;
 }
+void fast_clock(unsigned long *sec, unsigned long *usec);
 unsigned long SYS_gettimeofday(time_t *tv, struct timezone *unused_arg_tz) {
 
-	if (tv == 0)
+	if (tv == 0){
 		return SYSCALL_FAIL;
-
+	}
+#if 0
 	if (ar_check_valid_address((addr_t)tv,sizeof(time_t))==JFAIL){
 		BUG();
 	}
+#endif
+
+#if 1
+	fast_clock(&(tv->tv_sec),&(tv->tv_usec));
+#else
 	ut_get_wallclock(&(tv->tv_sec),&(tv->tv_usec));
+#endif
 	//SYSCALL_DEBUG("gettimeofday sec:%d(%x) usec:%d(%x)\n", tv->tv_sec,tv->tv_sec, tv->tv_usec,tv->tv_usec);
 	return SYSCALL_SUCCESS;
 }

@@ -246,7 +246,7 @@ void socket::default_pkt_process(unsigned char *arg_buf, int buf_len) {
 
 				ret = conn->tcp_conn->tcp_read(buf, buf_len);
 				if (ret > 0) {
-					sock->input_queue.add_to_queue((unsigned char *) buf,4096, 0, 1);
+					sock->input_queue.add_to_queue((unsigned char *) buf,ret, 0, 1);
 					buf = 0;
 					sock->epoll_fd_wakeup();
 				} else if (ret == 0 && conn->tcp_conn->state==TCP_CONN_CLOSED_RECV) {
@@ -297,7 +297,10 @@ last:
 	}
 	return;
 }
-
+extern "C"{
+void ut_mmx_memcpy(void *to, const void *from, int len);
+extern unsigned long g_conf_memcpy;
+}
 extern int udp_read(network_connection *conn, uint8_t *recv_data, int recv_len, uint8_t *app_data, int app_len);
 int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int read_flags, int unused_flags) {
 	int ret = 0;
@@ -331,11 +334,22 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int
 			if ((ret_len < app_len) && (ret_len > 0)){
 				app_data[ret_len]='\0';
 			}
-			ut_memcpy(app_data,&tcp_data->data[tcp_data->offset + tcp_data->consumed],ret_len);
+			if ((tcp_data->offset + tcp_data->consumed) > MEM_NETBUF_SIZE ){
+				struct page *page = virt_to_page(tcp_data);
+				BUG();
+			}
+			if (g_conf_memcpy == 1){
+				ut_mmx_memcpy(app_data,&tcp_data->data[tcp_data->offset + tcp_data->consumed],ret_len);
+			}else{
+				ut_memcpy(app_data,&tcp_data->data[tcp_data->offset + tcp_data->consumed],ret_len);
+			}
 			tcp_data->consumed = tcp_data->consumed +ret_len;
 			if (tcp_data->len == tcp_data->consumed){
-				input_queue.remove_from_queue((unsigned char **)&tcp_data, &tcp_len,&unsued_flags);
-				free_page((unsigned long)tcp_data);
+				if (input_queue.remove_from_queue((unsigned char **)&tcp_data, &tcp_len,&unsued_flags) == JSUCCESS){
+					free_page((unsigned long)tcp_data);
+				}else{
+					BUG();
+				}
 			}
 			if (input_queue.queue_size() == 0){
 				data_available_for_consumption =0;

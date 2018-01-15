@@ -35,7 +35,7 @@ OBJ_ARCH=  arch/$(ARCH_DIR)/vsyscall_emu_64.o \
 	
 OBJ_DRIVER = drivers/display.o drivers/driver_keyboard.o drivers/driver_serial.o drivers/vmware/vmxnet3_main.o drivers/vmware/pvscsi.o
 
-OBJ_KERNEL = kernel/debug.o kernel/jdevices.o kernel/init.o  kernel/acpi.o kernel/ipc.o  kernel/network_sched.o kernel/kshell.o  kernel/symbol_table.o  kernel/syscall.o  kernel/sched_task.o  kernel/util.o kernel/module_app.o kernel/blk_sched.o
+OBJ_KERNEL = kernel/vsyscall.o kernel/debug.o kernel/jdevices.o kernel/init.o  kernel/acpi.o kernel/ipc.o  kernel/network_sched.o kernel/kshell.o  kernel/symbol_table.o  kernel/syscall.o  kernel/sched_task.o  kernel/util.o kernel/module_app.o kernel/blk_sched.o
 	
 OBJ_MEM= mm/memory.o mm/jslab.o mm/pagecache.o mm/vm.o
 OBJ_FS=	fs/binfmt_elf.o fs/epoll.o fs/pipe.o fs/file.o fs/fs_api.o fs/socket.o fs/tcp.o fs/proc_fs.o fs/tar_fs.o 

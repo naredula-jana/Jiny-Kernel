@@ -292,6 +292,7 @@ public:
 	tcp_connection(){
 	}
 	int send_tcp_pkt(uint8_t flags, unsigned char *data, int data_len, uint32_t seq_no);
+	int generate_tcp_pkt(uint8_t flags, unsigned char *buf, unsigned char *data, int data_len,uint32_t seq_no);
 	int tcp_read(uint8_t *recv_data, int recv_len);
 	int tcp_write( uint8_t *app_data, int app_maxlen);
 	void  housekeeper();

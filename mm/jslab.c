@@ -582,8 +582,11 @@ int jpage_dup(unsigned long addr){
 
 	if (PageNetBuf(page)){
 		atomic_inc(&page->count);
+		return JSUCCESS;
+	}else{
+		return JFAIL;
 	}
-	return JSUCCESS;
+
 }
 unsigned long jalloc_page(int flags) {
 	unsigned long ret =0;
@@ -684,13 +687,13 @@ int Bulk_free_pages(struct struct_mbuf *mbufs, int list_len){
 				page_cache[cpu].count++;
 				page_cache[cpu].inuse = 0;
 				page_cache[cpu].stat_frees++;
-				if ((index+1) < list_len){
+				/*if ((index+1) < list_len){
 					index++;
 					p=mbufs[index].buf;
 					page_cache[cpu].inuse = 1;
-				}else{
-					goto success;
-				}
+				}else{*/
+				goto success;
+				//}
 				count++;
 			}
 			if (count>0){ /* not fully done but bucket is full */

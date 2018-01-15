@@ -277,6 +277,9 @@ int mm_putFreePages(unsigned long addr, unsigned long order) {
 		if (PageReserved(map)) {
 			BUG();
 		}
+		if (PageNetBuf(map)){
+			BUG();
+		}
 #ifdef MEMORY_DEBUG
 		if (map->option_data != 0){
 			BUG();

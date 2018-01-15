@@ -31,7 +31,7 @@ SECTIONS
  . = ALIGN(4096 ); 
  .text : AT(ADDR(.text) - kernelStart ) {
         __text_start = . ;
-        *(EXCLUDE_FILE (*arch/x86_64/boot.o *arch/x86_64/smp/head.o *arch/x86_64/smp/trampoline_64.o *arch/x86_64/end.o)
+        *(EXCLUDE_FILE (*arch/x86_64/boot.o *arch/x86_64/smp/head.o *arch/x86_64/smp/trampoline_64.o *arch/x86_64/end.o *kernel/vsyscall.o)
           .text)
         __text_end = .;
  }
@@ -43,6 +43,19 @@ SECTIONS
 	
  }
  __confdata_end = .;
+ 
+  . = ALIGN(4096 );  
+ vsyscode : AT(ADDR(vsyscode) - kernelStart ){
+ 	kernel/vsyscall.o(.text)
+ }
+ __vsyscode_end = .;
+ 
+  . = ALIGN(4096 );  
+ vsysdata : AT(ADDR(vsysdata) - kernelStart ){
+ 	*(EXCLUDE_FILE (*kernel/end.o)vsysdata)
+ }
+ __vsysdata_end = .;
+ 
   
  .data : AT(ADDR(.data) - kernelStart ){
  

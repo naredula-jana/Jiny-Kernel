@@ -31,10 +31,12 @@ unsigned long g_stat_udpFailSend=0;
 unsigned long g_stat_udpFailRecv=0;
 
 unsigned long g_conf_tcpDebug __attribute__ ((section ("confdata"))) =0;
+unsigned long g_conf_memcpy __attribute__ ((section ("confdata"))) =0;
+unsigned long g_conf_tcpcksum __attribute__ ((section ("confdata"))) =1;
 }
 #include "file.hh"
 #include "network.hh"
-//#include "network_stack.hh"
+
 #include "types.h"
 struct tcpip_hdr {
 	/* IPv4 header. */
@@ -62,6 +64,7 @@ struct tcpip_hdr {
 #define u16_t uint16_t
 #define u8_t uint8_t
 void static tcp_retransmit(network_connection *conn) ;
+
 static u16_t chksum(u16_t sum, const u8_t *data, u16_t len) {
 	u16_t t;
 	const u8_t *dataptr;
@@ -88,6 +91,47 @@ static u16_t chksum(u16_t sum, const u8_t *data, u16_t len) {
 	/* Return sum in host byte order. */
 	return sum;
 }
+static unsigned short checksumForLarge(unsigned short arg_sum, const char *buf,
+		unsigned int arg_size) {
+	unsigned long sum = 0;
+	const unsigned long *b = (unsigned long *) buf;
+	unsigned short in_sum = arg_sum;
+	unsigned int size = arg_size;
+
+	unsigned t1, t2;
+	unsigned short t3, t4;
+
+	/* Main loop - 8 bytes at a time */
+	while (size >= sizeof(unsigned long)) {
+		unsigned long s = (*b++);
+		sum += s;
+		if (sum < s)
+			sum++;
+		size -= 8;
+	}
+
+	/* Fold down to 16 bits */
+	t1 = sum;
+	t2 = sum >> 32;
+	t1 += t2;
+	if (t1 < t2)
+		t1++;
+	t3 = t1;
+	t4 = t1 >> 16;
+	t3 += t4;
+	if (t3 < t4)
+		t3++;
+	t4 = htons(t3);
+
+	t3 = chksum(t4,(unsigned char *) b, size);
+	t4 = t3 + in_sum;
+	if (t4 < t3) {
+		t4++;
+	}
+	return t4;
+}
+
+
 #define IPH_LEN    20
 #define LLH_LEN    14
 #define PROTO_TCP   6
@@ -105,7 +149,12 @@ static u16_t upper_layer_chksum(u8_t *data, u8_t proto) {
 	sum = chksum(sum, (u8_t *) &BUF->srcipaddr[0], 2 * 4);
 
 	/* Sum TCP header and data. */
-	sum = chksum(sum, &data[IPH_LEN + LLH_LEN], upper_layer_len);
+	if (g_conf_tcpcksum==1){
+		sum = checksumForLarge(sum, &data[IPH_LEN + LLH_LEN], upper_layer_len);
+	}else{
+		sum = chksum(sum, &data[IPH_LEN + LLH_LEN], upper_layer_len);
+	}
+
 	return (sum == 0) ? 0xffff : htons(sum);
 }
 
@@ -127,7 +176,27 @@ int tcp_connection::send_tcp_pkt(uint8_t flags, unsigned char *data, int data_le
 	if (buf == 0) {
 		return 0;
 	}
-	//g_stat_tcpBufAllocs++;
+
+	send_len = generate_tcp_pkt(flags,buf,data, data_len,seq_no);
+
+	ret = net_send_eth_frame((unsigned char *) buf+10, send_len, 0);
+	if (ret != JFAIL) {
+
+	} else {
+		unsigned char *buf = (unsigned char *) send_pkt;
+		jfree_page(buf - 10);
+	}
+	return 0;
+}
+extern "C"{
+void ut_mmx_memcpy(void *to, const void *from, int len);
+}
+int tcp_connection::generate_tcp_pkt(uint8_t flags, unsigned char *buf,unsigned char *data, int data_len,uint32_t seq_no) {
+	struct ether_pkt *send_pkt;
+	int ret, send_len;
+	struct tcpip_hdr *send_tcp_hdr;
+	int ip_len;
+
 	ut_memset(buf, 0, 10);
 	send_pkt = (struct ether_pkt *) (buf + 10);
 
@@ -169,11 +238,19 @@ int tcp_connection::send_tcp_pkt(uint8_t flags, unsigned char *data, int data_le
 			send_tcp_hdr->seqno = net_htonl(seq_no);
 		}
 	}
-	send_tcp_hdr->ackno = net_htonl(recv_seq_no);
+	if (send_tcp_hdr->flags & TCP_ACK){
+		send_tcp_hdr->ackno = net_htonl(recv_seq_no);
+	}else{
+		send_tcp_hdr->ackno = 0;
+	}
 
 	if (data_len > 0) {
 		send_tcp_hdr->flags = send_tcp_hdr->flags | TCP_PSH;
-		ut_memcpy(buf + 10 + 14 + 40, data, data_len);
+		if (g_conf_memcpy == 1){
+			ut_mmx_memcpy(buf + 10 + 14 + 40, data, data_len);
+		}else{
+			ut_memcpy(buf + 10 + 14 + 40, data, data_len);
+		}
 		send_tcp_hdr->seqno = net_htonl(seq_no);
 	}else{
 		g_stat_tcpOutAck++;
@@ -183,19 +260,12 @@ int tcp_connection::send_tcp_pkt(uint8_t flags, unsigned char *data, int data_le
 			PROTO_TCP));
 	send_pkt->iphdr.check = ~(ipchksum((unsigned char *) send_pkt));
 
-	ret = net_send_eth_frame((unsigned char *) send_pkt, send_len, 0);
-	if (ret != JFAIL) {
-
-	} else {
-		unsigned char *buf = (unsigned char *) send_pkt;
-		jfree_page(buf - 10);
-		//g_stat_tcpBufFrees++;
-	}
-	return ret;
+	return send_len;
 }
 
 
 /**********************   TCP api functions ***********************************************/
+
 int tcp_conn_new(network_connection *conn, struct ether_pkt *recv_pkt) {
 	int i;
 	struct tcpip_hdr *recv_tcp_hdr = (struct tcpip_hdr *) &(recv_pkt->iphdr);
@@ -226,6 +296,7 @@ int tcp_conn_new(network_connection *conn, struct ether_pkt *recv_pkt) {
 
 	for (i = 0; i < MAX_TCPSND_WINDOW; i++) {
 		tcp_conn->send_queue[i].buf = jalloc_page(MEM_NETBUF);
+		struct page *page = virt_to_page(tcp_conn->send_queue[i].buf);  /* TODO remove later */
 		tcp_conn->send_queue[i].len = 0;
 		tcp_conn->send_queue[i].seq_no = 0;
 		g_stat_tcpBufAllocs++;
@@ -242,6 +313,7 @@ int tcp_conn_new(network_connection *conn, struct ether_pkt *recv_pkt) {
 }
 int tcp_conn_free(tcp_connection *tcp_conn) {
 	int i;
+
 	for (i = 0; i < MAX_TCPSND_WINDOW; i++) {
 		if (tcp_conn->send_queue[i].buf != 0) {
 			jfree_page(tcp_conn->send_queue[i].buf);
@@ -249,6 +321,7 @@ int tcp_conn_free(tcp_connection *tcp_conn) {
 			g_stat_tcpBufFrees++;
 		}
 	}
+
 	ut_free(tcp_conn);
 }
 void tcp_connection::print_stats(unsigned char *arg1,unsigned char *arg2){
@@ -266,7 +339,7 @@ void tcp_connection::print_stats(unsigned char *arg1,unsigned char *arg2){
 
 /* TODO: merge all segments and send in bigger buffer */
 void tcp_connection::housekeeper() {
-	int i;
+	int i,ret;
 
 	if ((retransmit_inuse == 1) || (squeue_size.counter==0) || (retransmit_ts==g_jiffies)){
 		return;
@@ -286,10 +359,25 @@ void tcp_connection::housekeeper() {
 		if (g_jiffies == send_queue[i].lastsend_ts){
 			continue;
 		}
+
+#if 0
 		if (send_tcp_pkt( flags, send_queue[i].buf, send_queue[i].len, send_queue[i].seq_no) == JSUCCESS) {
 			g_stat_tcpOutRetrans++;
 			send_queue[i].lastsend_ts = g_jiffies;
 		}
+#else
+		if (jpage_dup(send_queue[i].buf) == JFAIL){
+			struct page *page = virt_to_page(send_queue[i].buf);
+			BUG();
+		}
+		ret = net_send_eth_frame((unsigned char *) send_queue[i].buf+10, send_queue[i].len, 0);
+		if (ret == JFAIL) {
+			jfree_page(send_queue[i].buf);
+		}else{
+			g_stat_tcpOutRetrans++;
+			send_queue[i].lastsend_ts = g_jiffies;
+		}
+#endif
 	}
 	retransmit_ts = g_jiffies;
 	retransmit_inuse = 0;
@@ -378,6 +466,7 @@ int udp_write( network_connection *conn, unsigned char *data, int data_len) {
 int tcp_connection::tcp_write( uint8_t *app_data, int app_maxlen) {
 	int i;
 	int copied = 0;
+	int ret;
 
 	if (app_maxlen > (MEM_NETBUF_SIZE - 100)) {
 		app_maxlen = MEM_NETBUF_SIZE - 100;
@@ -389,12 +478,27 @@ int tcp_connection::tcp_write( uint8_t *app_data, int app_maxlen) {
 			continue;
 		}
 		if (send_queue[i].len == 0) {
-			ut_memcpy(send_queue[i].buf, app_data, app_maxlen);
+
 			send_queue[i].seq_no = send_seq_no;
+
+#if 0
+			ut_memcpy(send_queue[i].buf, app_data, app_maxlen);
 			send_tcp_pkt(TCP_ACK, send_queue[i].buf, app_maxlen, send_queue[i].seq_no);
+			send_queue[i].len = app_maxlen;
+#else
+			send_queue[i].len = generate_tcp_pkt(TCP_ACK,send_queue[i].buf,app_data, app_maxlen,send_queue[i].seq_no);
+			if (jpage_dup(send_queue[i].buf) == JFAIL){
+				BUG();
+			}
+			ret = net_send_eth_frame((unsigned char *) send_queue[i].buf+10, send_queue[i].len, 0);
+			if (ret == JFAIL) {
+				jfree_page(send_queue[i].buf);
+			}else{
+
+			}
+#endif
 			send_queue[i].lastsend_ts = g_jiffies;
 			atomic_inc(&squeue_size);
-			send_queue[i].len = app_maxlen;
 			send_seq_no = send_seq_no + app_maxlen;
 			copied = 1;
 			g_stat_tcpOutData++;
