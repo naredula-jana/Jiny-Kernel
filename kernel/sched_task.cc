@@ -1126,7 +1126,7 @@ static int get_free_cpu() {
 		k = 0;
 	}
 	if (k == g_conf_netbh_cpu && getmaxcpus()>1){
-		//i++; /* not use cpu-0 for userlevel threads */
+		i++; /* not use cpu-0 for userlevel threads */
 		k = i % getmaxcpus();
 	}
 

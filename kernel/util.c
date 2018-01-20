@@ -105,6 +105,19 @@ void ut_memcpy(uint8_t *dest, uint8_t *src, long len){
 	}
 	return;
 }
+
+/* TODO : check hardward capabilty using cpuid, if it does not support fallback to old one */
+ void ut_memcpy_movsb(void *d, const void *s, size_t n) {
+  asm volatile ("rep movsb"
+                : "=D" (d),
+                  "=S" (s),
+                  "=c" (n)
+                : "0" (d),
+                  "1" (s),
+                  "2" (n)
+                : "memory");
+  return;
+}
 void ut_mmx_memcpy(void *to, const void *from, int len)
 {
         void *p;

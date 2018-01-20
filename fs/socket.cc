@@ -49,7 +49,7 @@ int socket::attach_rawpkt(unsigned char *buff, unsigned int len) {
 }
 extern "C" {
 int g_conf_fifo_max_qlen __attribute__ ((section ("confdata")))= 256;
-int g_conf_tcp_retransmit_ticks __attribute__ ((section ("confdata")))= 6;
+int g_conf_tcp_retransmit_ticks __attribute__ ((section ("confdata")))= 8;
 }
 void fifo_queue::init(unsigned char *arg_name,int wq_enable){
 	ut_snprintf(name,MAX_FILENAME,"fqueue_%s",arg_name);
@@ -299,6 +299,7 @@ last:
 }
 extern "C"{
 void ut_mmx_memcpy(void *to, const void *from, int len);
+void ut_memcpy_movsb(void *to, const void *from, int len);
 extern unsigned long g_conf_memcpy;
 }
 extern int udp_read(network_connection *conn, uint8_t *recv_data, int recv_len, uint8_t *app_data, int app_len);
@@ -307,6 +308,8 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int
 	unsigned char *buf = 0;
 	int buf_len,ret_len=-EAGAIN;
 
+	net_bh();
+	socket::tcp_housekeep();
 	if (network_conn.type == SOCK_STREAM){ /* read app data without reading the raw packets for tcp */
 		struct tcp_data *tcp_data=0;
 		int unsued_flags;
@@ -340,6 +343,8 @@ int socket::read(unsigned long offset, unsigned char *app_data, int app_len, int
 			}
 			if (g_conf_memcpy == 1){
 				ut_mmx_memcpy(app_data,&tcp_data->data[tcp_data->offset + tcp_data->consumed],ret_len);
+			}else if (g_conf_memcpy == 2){
+				ut_memcpy_movsb(app_data,&tcp_data->data[tcp_data->offset + tcp_data->consumed],ret_len);
 			}else{
 				ut_memcpy(app_data,&tcp_data->data[tcp_data->offset + tcp_data->consumed],ret_len);
 			}
@@ -413,7 +418,7 @@ int socket::write(unsigned long offset_unused, unsigned char *app_data, int app_
 	int ret = 0;
 	if (app_data == 0)
 		return 0;
-
+	socket::tcp_housekeep();
 	iov.iov_base = app_data;
 	iov.iov_len = app_len;
 	if (network_conn.protocol == IPPROTO_TCP){
@@ -430,7 +435,7 @@ int socket::write(unsigned long offset_unused, unsigned char *app_data, int app_
 	}else{
 		ret = udp_write(&network_conn,app_data,app_len);
 	}
-
+	net_bh();
 	if (ret > 0) {
 		stat_out++;
 		stat_out_bytes = stat_out_bytes + ret;
@@ -556,20 +561,20 @@ static int delete_sock_from_list(sock_list_t *listp,socket *sock){
 	return JFAIL;
 }
 int socket::delete_sock(socket *sock) {
-	int i;
-    ut_log("Deleting  the socket resources \n");
+  //  ut_log("Deleting  the socket resources \n");
+    int ret = JFAIL;
 
-	sock->input_queue.free();
 	if (delete_sock_from_list(&socket::tcp_listner_list,sock)==JSUCCESS){
-		return JSUCCESS;
+		ret = JSUCCESS;
 	}
 	if (delete_sock_from_list(&socket::udp_list,sock)==JSUCCESS){
-		return JSUCCESS;
+		ret = JSUCCESS;
 	}
 	if (delete_sock_from_list(&socket::tcp_connected_list,sock)==JSUCCESS){
-		return JSUCCESS;
+		ret = JSUCCESS;
 	}
-	return JFAIL;
+	sock->input_queue.free();
+	return ret;
 }
 int socket::init_socket(int type){
 	int ret = JFAIL;
@@ -665,7 +670,7 @@ vinode* socket::create_new(int arg_type) {
 	return (vinode *) sock;
 }
 void  tcp_retransmit(struct tcp_connection *tcp_conn);
-void socket::tcp_housekeep(){
+void socket::tcp_housekeep(){ /* TODO: currently this is not SMP friendly need to protect by locks */
 	int i;
 	static uint64_t last_ts=0;
 

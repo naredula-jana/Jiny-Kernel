@@ -91,7 +91,7 @@ static u16_t chksum(u16_t sum, const u8_t *data, u16_t len) {
 	/* Return sum in host byte order. */
 	return sum;
 }
-static unsigned short checksumForLarge(unsigned short arg_sum, const char *buf,
+static unsigned short checksumForLarge1(unsigned short arg_sum, const char *buf,
 		unsigned int arg_size) {
 	unsigned long sum = 0;
 	const unsigned long *b = (unsigned long *) buf;
@@ -130,6 +130,58 @@ static unsigned short checksumForLarge(unsigned short arg_sum, const char *buf,
 	}
 	return t4;
 }
+unsigned short checksumForLarge2(unsigned short in_sum, const char *buf,
+		unsigned int arg_size) {
+	unsigned long sum = 0;
+	unsigned char *b = (unsigned char *) buf;
+	unsigned t1, t2;
+	unsigned short t3, t4;
+
+	__asm__ __volatile__ (
+			" mov %2, %%ecx\n"
+			" mov %1, %%rdi\n"
+			" xor %%eax, %%eax\n"
+			" shr $5, %%ecx\n"
+			"je 2f \n"
+			"clc \n"
+			".align 16 \n"
+		"1: adc (%%rdi), %%rax\n"
+			" adc 8(%%rdi), %%rax\n"
+			" adc 16(%%rdi), %%rax\n"
+			" adc 24(%%rdi), %%rax\n"
+			" lea 32(%%rdi), %%rdi\n"
+			" dec %%ecx\n"
+			" jne 1b\n"
+			"adc $0, %%rax\n"
+			"2:  \n"
+			: "=r" (sum) : "r" (buf), "r" (arg_size) : "ecx","rdi");
+
+
+	/* Fold down to 16 bits */
+	t1 = sum;
+	t2 = sum >> 32;
+	t1 += t2;
+	if (t1 < t2)
+		t1++;
+	t3 = t1;
+	t4 = t1 >> 16;
+	t3 += t4;
+	if (t3 < t4)
+		t3++;
+	t4 = htons(t3);
+
+	unsigned int len = arg_size & (0x1f);
+	if (len ==0){
+		t3 = t4 ;
+	}else{
+		t3 = chksum(t4, buf+arg_size-len, len );
+	}
+	t4 = t3 + in_sum;
+	if (t4 < t3) {
+		t4++;
+	}
+	return t4;
+}
 
 
 #define IPH_LEN    20
@@ -150,7 +202,7 @@ static u16_t upper_layer_chksum(u8_t *data, u8_t proto) {
 
 	/* Sum TCP header and data. */
 	if (g_conf_tcpcksum==1){
-		sum = checksumForLarge(sum, &data[IPH_LEN + LLH_LEN], upper_layer_len);
+		sum = checksumForLarge2(sum, &data[IPH_LEN + LLH_LEN], upper_layer_len);
 	}else{
 		sum = chksum(sum, &data[IPH_LEN + LLH_LEN], upper_layer_len);
 	}
@@ -190,6 +242,7 @@ int tcp_connection::send_tcp_pkt(uint8_t flags, unsigned char *data, int data_le
 }
 extern "C"{
 void ut_mmx_memcpy(void *to, const void *from, int len);
+void ut_memcpy_movsb(void *to, const void *from, int len);
 }
 int tcp_connection::generate_tcp_pkt(uint8_t flags, unsigned char *buf,unsigned char *data, int data_len,uint32_t seq_no) {
 	struct ether_pkt *send_pkt;
@@ -248,6 +301,8 @@ int tcp_connection::generate_tcp_pkt(uint8_t flags, unsigned char *buf,unsigned 
 		send_tcp_hdr->flags = send_tcp_hdr->flags | TCP_PSH;
 		if (g_conf_memcpy == 1){
 			ut_mmx_memcpy(buf + 10 + 14 + 40, data, data_len);
+		}else if (g_conf_memcpy == 2){
+			ut_memcpy_movsb(buf + 10 + 14 + 40, data, data_len);
 		}else{
 			ut_memcpy(buf + 10 + 14 + 40, data, data_len);
 		}

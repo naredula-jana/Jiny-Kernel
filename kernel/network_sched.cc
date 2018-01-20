@@ -163,25 +163,19 @@ int net_bh(){
 
 	int cpu = getcpuid();
 
-	if (g_conf_net_pmd==1  && g_conf_netbh_cpu != cpu){
+	//if (g_conf_net_pmd==1  && g_conf_netbh_cpu != cpu){
+	if (g_conf_netbh_cpu != cpu){
 		return 0;
 	}
 	if (g_cpu_state[cpu].net_bh.inprogress == 1){
 		return 0;
 	}
 	g_cpu_state[cpu].net_bh.inprogress =1;  /* this is to protect to enter this function by the same thread during soft interrupts */
-	socket::tcp_housekeep();
+	//socket::tcp_housekeep();
 	int ret = 0;
 	do {
-		ret = 0;
 		ret = net_bh_send();
-#if 1 /* for test purpose, to bypass the recv */
-		if (g_conf_test_dummy_send > 0) {
-			//goto last;
-		}else{
-#endif
-			ret = ret + net_bh_recv();
-		}
+		ret = ret + net_bh_recv();
 		g_cpu_state[cpu].net_bh.pkts_processed = g_cpu_state[cpu].net_bh.pkts_processed + ret;
 	} while (ret > 0);
 
