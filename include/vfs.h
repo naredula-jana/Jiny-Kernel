@@ -151,4 +151,24 @@ typedef struct fileStat fileStat_t;
 #define fd_to_file(fd) (fd >= 0 && g_current_task->fs->total > fd) ? (g_current_task->fs->filep[fd]) : ((struct file *)0)
 int fs_data_sync(int num_pages);
 
+/************************  ASYNC fdatasync ***************************/
+#define ASYNC_FSYNC_IOCTL 0xff00
+struct AsyncFsync_UserToOs{
+	unsigned long LastByteWritten;
+	unsigned long freeMemoryFlag;
+} __attribute__ ((aligned (128)));
+
+struct AsyncFsync_OsToUser{
+	unsigned long lastByteFlushed;
+	unsigned long fsyncPollStatus;
+	unsigned long syncInterval;
+	unsigned long blockSize;
+} __attribute__ ((aligned (128)));
+
+struct AsyncFsyncSharedMem {
+	struct AsyncFsync_UserToOs userToOs __attribute__ ((aligned (128)));
+	struct AsyncFsync_OsToUser osToUser __attribute__ ((aligned (128)));
+};
+
+/**********************************************************************/
 #endif

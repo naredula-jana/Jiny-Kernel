@@ -323,13 +323,18 @@ unsigned long SYS_rt_sigprocmask_PART() {
 	SYSCALL_DEBUG("sigprocmask(Dummy) END \n");
 	return SYSCALL_SUCCESS;
 }
+
 #define TIOCSPGRP 0x5410
-unsigned long SYS_ioctl_PART(int d, int request, unsigned long *addr) {//TODO
+extern unsigned long fs_shm_fsync_setup(int fd);
+unsigned long SYS_ioctl_PART(int fd, int request, unsigned long *addr) {//TODO
 	count_sycall_partial();
-	SYSCALL_DEBUG("ioctl(Dummy) d:%x request:%x addr:%x\n", d, request, addr);
+	SYSCALL_DEBUG("ioctl(Dummy) d:%x request:%x addr:%x\n", fd, request, addr);
 	if (request == TIOCSPGRP && addr != 0) {
 		*addr = temp_pgid;
 		return 0;
+	} else if (request == ASYNC_FSYNC_IOCTL && addr != 0){
+		*addr = fs_shm_fsync_setup(fd);
+		return SYSCALL_SUCCESS;
 	}
 	if (addr != 0) {
 		*addr = 0x123;

@@ -71,6 +71,7 @@ fs_inode::fs_inode(uint8_t *arg_filename, unsigned long mode, struct filesystem 
 	stat_last_offset=0;
 	read_ahead_offset=0;
 	hard_links=0;
+	asyncShareMem=0;
 	open_mode = mode;
 	vfs = arg_vfs;
 	ut_strcpy(filename, (uint8_t *) arg_filename);
@@ -291,6 +292,9 @@ int fs_inode::write(unsigned long offset, unsigned char *data, int len, int wr_f
 	ret = tmp_len;
 	error: return ret;
 }
+extern "C" {
+static void fs_shm_fsync_close(struct fs_inode *inode);
+}
 int fs_inode::close() {
 	int ret = JFAIL;
 
@@ -310,6 +314,9 @@ int fs_inode::close() {
 	if (ret == JSUCCESS){
 		//mm_slab_cache_free(fs_inode::slab_objects, this);
 		jfree_obj((unsigned long)this);
+	}
+	if (asyncShareMem != 0){
+		fs_shm_fsync_close(this);
 	}
 
 	return ret;
@@ -386,6 +393,100 @@ int Jcmd_unmount(uint8_t *arg1, uint8_t *arg2) {
 	return JSUCCESS;
 }
 #endif
+
+/********************************* Start of  ASYNC fsync shared memory ******************
+TODO : currently supports one file across the system */
+static int shm_inode_fsync(struct fs_inode *inode) {
+	unsigned long offset;
+	struct page *page;
+	uint64_t len;
+	struct filesystem *vfs_fs = inode->vfs;
+	int ret;
+
+	if (inode->asyncShareMem == 0){
+		return JFAIL;
+	}
+	for (offset = inode->asyncShareMem->osToUser.lastByteFlushed; offset < inode->asyncShareMem->userToOs.LastByteWritten;
+			offset = offset + PAGE_SIZE) {
+		page = pc_getInodePage(inode, offset);
+		if (page == NULL) {
+			continue;
+		}
+		uint64_t len = inode->fileStat.st_size;
+		if (len < (page->offset + PC_PAGESIZE)) {
+			len = len - page->offset;
+		} else {
+			len = PC_PAGESIZE;
+		}
+		if (len > 0) {
+			assert(page->magic_number == PAGE_MAGIC);
+			ret = vfs_fs->write(inode, page->offset, pcPageToPtr(page), len);
+			if (ret == len) {
+				pc_pagecleaned(page);
+			}
+			inode->asyncShareMem->osToUser.lastByteFlushed = inode->asyncShareMem->osToUser.lastByteFlushed + len;
+			return JSUCCESS;
+		}
+	}
+	return JFAIL;
+}
+#define MAX_SHM_INODES 2
+static struct fs_inode *shm_inodes[MAX_SHM_INODES];
+static void shm_fsync_thread(){
+	while(1){
+		int ret=JFAIL;
+		if (shm_inodes[0] != 0){
+			ret = shm_inode_fsync(shm_inodes[0]);
+		}else {
+			sc_sleep(1000);
+			continue;
+		}
+		if (ret == JFAIL){
+			sc_sleep(10);
+		}else{
+			sc_sleep(2);
+		}
+	}
+}
+int  init_fs_shm_fsync(unsigned long unused_arg){
+	int i;
+
+	for (i=0; i<MAX_SHM_INODES; i++){
+		shm_inodes[i]=0;
+	}
+	sc_createKernelThread(shm_fsync_thread, 0, (unsigned char *) "shm_fsync_housekeeper",0);
+	return JSUCCESS;
+}
+static void fs_shm_fsync_close(struct fs_inode *inode){
+	if (shm_inodes[0] == inode){
+		shm_inodes[0]=0;
+	}
+	if (inode->asyncShareMem !=0 ){
+		free_page(inode->asyncShareMem);
+		inode->asyncShareMem =0;
+	}
+	return;
+}
+unsigned long fs_shm_fsync_setup(int fd){
+	struct file *file;
+	struct fs_inode *inode;
+
+	file = fd_to_file(fd);
+	if (file == 0){
+		return 0;
+	}
+	inode = (struct fs_inode *) file->vinode;
+	if (inode->asyncShareMem !=0){
+		return 0;
+	}
+	inode->asyncShareMem = alloc_page(MEM_CLEAR);
+	vm_mmap(0, USER_FSYNC_SHM_PAGE, 0x1000, PROT_READ | PROT_EXEC |PROT_WRITE, MAP_FIXED, __pa(inode->asyncShareMem),"fasync_shm");
+	shm_inodes[0]=inode;
+	return USER_FSYNC_SHM_PAGE;
+}
+/********************************* End of  ASYNC fsync shared memory *******************/
+
+
 static void inode_sync(struct fs_inode *inode, unsigned long truncate) {
 	struct page *page;
 	int ret;
@@ -877,6 +978,7 @@ unsigned long fs_fdatasync(struct file *filep) {
 
 	return 0;
 }
+
 int fs_stat(struct file *filep, struct fileStat *stat) {
 	int ret;
 	struct fs_inode *inode = (struct fs_inode *) filep->vinode;

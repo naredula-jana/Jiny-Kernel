@@ -227,6 +227,8 @@ public:
 
 	int flags; /* short leaved (MRU) or long leaved (LRU) */
 
+	struct AsyncFsyncSharedMem *asyncShareMem;
+
 	struct fileStat fileStat;
 	char fileStat_insync;
 	hard_link_t *hard_links;

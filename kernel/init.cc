@@ -55,6 +55,7 @@ int init_syscall(unsigned long cpuid);
 int init_networking(unsigned long arg);
 extern int init_ipc(unsigned long arg);
 extern int init_procfs(unsigned long unused);
+extern int init_fs_shm_fsync(unsigned long unused_arg);
 
 typedef struct {
 	int (*func)(unsigned long arg);
@@ -90,6 +91,7 @@ static inittable_t inittable[] = {
 #ifdef NETWORKING
 		{init_networking,0,       "network_sched",0},  /* should be after smp,since it uses number of ax core */
 #endif
+		{init_fs_shm_fsync, 0, "fs shm fsync",0},
 	//	{init_clock,0,       "clock"},
 //		{init_code_readonly,0,       "Making code readonly",0},
 		{init_kernel_vmaps, 0, "Kernel Vmaps",0},
@@ -294,7 +296,7 @@ void cmain() {  /* This is the first c function to be executed */
 	sc_createKernelThread(shell_main, 0, (unsigned char *)"shell_main",0);
 	sc_createKernelThread(housekeeper_thread, 0, (unsigned char *)"house_keeper",0);
 #endif
-	ut_log("	HP version 1.004 Initialization COMPLETED\n-------------------\n");
+	ut_log("	HP version 1.004 Initialization COMPLETED: version with fsync-api: \n-------------------\n");
 //	while(1);
 	idleTask_func();
 	return;
