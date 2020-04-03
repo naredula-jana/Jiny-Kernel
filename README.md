@@ -1,9 +1,9 @@
 ## JINY (Jana's tINY kernel)
-[JINY](https://github.com/naredula-jana/Jiny-Kernel) is a cloud os designed from ground up for superior performance on virtual machine.
+[JINY](https://github.com/naredula-jana/Jiny-Kernel) is a cloud OS designed from ground up for superior performance on virtual machine.
 
 1. **What is JINY?**.
- - Unlike tranditional os Jiny is thin kernel desined for cloud. Jiny provides posix interface similar to linux, so as linux app can directly run on it without recompiling.
- - Designed from ground up: It is cloud os designed from the ground up to give superior performance on virtual machine(VM). The performance gain comes from reducing isolation, reducing protection, increasing  memory and cpu effeciency. 
+ - Unlike traditional os Jiny is thin kernel designed for cloud. Jiny provides posix interface similar to linux, so linux app can directly run on it without recompiling.
+ - Designed from ground up: It is cloud os designed from the ground up to give superior performance on virtual machine(VM). The performance gain comes from reducing isolation, reducing protection, increasing  memory and cpu efficiency. 
  - High priority and normal priority mode: Jiny OS runs in two modes. 
      - **High priority mode or Single App mode**: In this mode, kernel functions like library os and does the supporting role for the app, designed with low overhead. Only one app can be launched in the OS, and app runs in the same ring as that of os(i.e ring-0). The functions which are considered “system calls” on Linux( e.g., futex,read ,..etc)  are ordinary function calls in Jiny and do not incur syscall call overheads, nor do they incur the cost of user to kernel parameter copying which is unnecessary in  single-application OS. fork and exec posix calls are not supported in this mode. App is launched in a different way. Apart from posix calls, Non posix API’s between app and Guest OS will further decreases latency and improves throughput of the app.  Currently golang and C  apps are supported in this mode.  
      - **Normal priority mode**: Jiny kernel emulates most of the posix calls(system calls) compatible to linux, so that linux binaries can run as it is. Multiple applications can run in this mode at the same time similar to traditional OS.  
