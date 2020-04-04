@@ -296,7 +296,7 @@ void cmain() {  /* This is the first c function to be executed */
 	sc_createKernelThread(shell_main, 0, (unsigned char *)"shell_main",0);
 	sc_createKernelThread(housekeeper_thread, 0, (unsigned char *)"house_keeper",0);
 #endif
-	ut_log("	HP version 1.004 Initialization COMPLETED: version with fsync-api: \n-------------------\n");
+	ut_log("	Jiny version 1.005 Initialization COMPLETED: version with fsync-api: \n-------------------\n");
 //	while(1);
 	idleTask_func();
 	return;

@@ -726,7 +726,13 @@ long SYS_clock_gettime_PART(unsigned int arg1, int arg2){
 	SYSCALL_DEBUG(" clock_gettime : not supported\n");
 	return -1;
 }
+long SYS_getrandom(void *buf, size_t buflen, unsigned int flags){
+	SYSCALL_DEBUG(" SYS_getrandom : partiall supported\n");
+	unsigned long  *rand = buf;
+	buf=g_jiffies;
 
+	return 5;
+}
 /* TODO */
 long SYS_set_robust_list_PART(struct robust_list_head *head, size_t len){
 	count_sycall_partial();
@@ -844,7 +850,7 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 305 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 310 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 315 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 320 */
+{ snull }, { snull }, { SYS_getrandom }, { snull }, { snull }, /* 320 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 325 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 330 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 335 */
