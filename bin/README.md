@@ -1,17 +1,17 @@
 
-**procedure to Build the Image**
+**Procedure to Build the Image from master and run:**
+
+Below Docker Container will pull the code from master branch, after that it build the image and then execute the image. 
 
 ```
-  cd <directory where Jiny source code is installed >
-  make all
-  cd bin
-  ./update_image 
-  docker build --tag naredulajana/jiny_run .
-  docker push naredulajana/jiny_run
-```
-
-**procedure to Run the Image**
+ docker run --privileged --rm -it --entrypoint "/run/jiny_compile"  naredulajana/jiny:latest
 
 ```
-  docker run --rm -it naredulajana/jiny_run:latest
+
+**Procedure to Run the default Image:**
+
+Below Docker Container will execute the default image from master branch. 
+
+```
+  docker run --rm -it  naredulajana/jiny:latest
 ```

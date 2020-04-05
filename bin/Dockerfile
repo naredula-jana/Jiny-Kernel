@@ -22,16 +22,19 @@ COPY Docker_run.sh /run/jiny_run
 COPY addon_disk /run/
 COPY disk.img /run/
 
+
 # TODO:  docker build will fail due to absence of this file, move the below large file in some repo
 COPY gcc-4.8.2.tar.gz /opt/
 COPY gcc_files/libmpfr.so.4 /usr/lib/x86_64-linux-gnu/
 COPY gcc_files/libmpc.so.3 /usr/lib/x86_64-linux-gnu/
 COPY gcc_files/include.tar.gz /
 
+
+
 VOLUME /image
 
 # ENTRYPOINT ["/run/jiny_run"]
-ENTRYPOINT ["/run/jiny_compile"]
+ENTRYPOINT ["/run/jiny_run"]
 
 # Mostly users will probably want to configure memory usage.
 CMD ["-m", "512M"]

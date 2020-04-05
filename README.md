@@ -21,6 +21,10 @@
  - Running multiple normal priority application like any traditional unix like systems with optimizations for vm. 
 
 
+## Procedure to  compile and run:
+ 
+More details for compiling and running using Docker is available at [Compile and Run.](../master/bin/README.md).  
+
 ## Performance and Benchmarks:
 
 More details of the Benchmarks are available at [Jiny-Benchmarks.](../master/doc/benchmarks.md).   
