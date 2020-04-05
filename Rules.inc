@@ -11,7 +11,7 @@ INCLUDE=. -I $(SOURCE_ROOT)/include -I $(SOURCE_ROOT)/mm  -I $(SOURCE_ROOT)/arch
 
 # ubuntu gcc-4.8.2 as the issue: it generates binary of large size, because it place the binary at wrong location 
 # get the gcc-4.8.2 from open source and compile 
-NEW_GCC=/opt/gcc-4.8.2/bin/
+#NEW_GCC=/opt/gcc-4.8.2/bin/
 #NEW_GCC=/usr/bin/ /* this will fail , if it is from ubuntu or any other version */
 
 
