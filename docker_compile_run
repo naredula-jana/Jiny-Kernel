@@ -1,0 +1,1 @@
+docker run -v $PWD:/opt/jiny_src/ --privileged --rm -it --entrypoint "/run/local_compile_run"  naredulajana/jiny_base:latest

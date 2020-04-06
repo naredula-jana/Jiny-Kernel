@@ -2,15 +2,15 @@
 [JINY](https://github.com/naredula-jana/Jiny-Kernel) is a cloud OS designed from ground up for superior performance on virtual machine.
 
 1. **What is JINY?**.
- - Unlike traditional os Jiny is thin kernel designed for cloud. Jiny provides posix interface similar to linux, so linux app can directly run on it without recompiling.
- - Designed from ground up: It is cloud os designed from the ground up to give superior performance on virtual machine(VM). The performance gain comes from reducing isolation, reducing protection, increasing  memory and cpu efficiency. 
- - High priority and normal priority mode: Jiny OS runs in two modes. 
-     - **High priority mode or Single App mode**: In this mode, kernel functions like library os and does the supporting role for the app, designed with low overhead. Only one app can be launched in the OS, and app runs in the same ring as that of os(i.e ring-0). The functions which are considered “system calls” on Linux( e.g., futex,read ,..etc)  are ordinary function calls in Jiny and do not incur syscall call overheads, nor do they incur the cost of user to kernel parameter copying which is unnecessary in  single-application OS. fork and exec posix calls are not supported in this mode. App is launched in a different way. Apart from posix calls, Non posix API’s between app and Guest OS will further decreases latency and improves throughput of the app.  Currently golang and C  apps are supported in this mode.  
+ - Unlike traditional kernel Jiny is thin kernel designed for cloud. Jiny provides posix interface similar to linux, so linux application can directly run on it without recompiling.
+ - Designed from ground up: It is cloud OS designed from the ground up to give superior performance on virtual machine(VM). The performance gain comes from reducing isolation, reducing protection, increasing  memory and cpu efficiency. 
+ - High Priority(HP) and normal priority mode: Jiny OS runs in two modes. 
+     - **High priority mode or Single App mode**: In this mode, kernel functions like library OS and does the supporting role for the app, designed with low overhead. Only one application can be launched in the OS, and application runs in the same ring as that of OS(i.e ring-0). The functions which are considered “system calls” on Linux( e.g., futex,read ,..etc)  are ordinary function calls in Jiny and do not incur syscall call overheads, nor do they incur the cost of user to kernel parameter copying which is unnecessary in  single-application OS. fork and exec posix calls are not supported in this mode. App is launched in a different way. Apart from posix calls, Non posix API’s between application and Guest OS will further decreases latency and improves throughput.  Currently golang and C  application are supported in this mode.  
      - **Normal priority mode**: Jiny kernel emulates most of the posix calls(system calls) compatible to linux, so that linux binaries can run as it is. Multiple applications can run in this mode at the same time similar to traditional OS.  
 
 2. **How different is Jiny from OS like Linux?**
- - **Thin kernel** : Jiny is thin kernel, it is having very small set of drivers based on virtio, since it runs on hypervisor. Currently it supports only on x86_64 architecture. this makes the size of code small when compare to linux.
- - **OS for Cloud**: designed from groundup  to run on hypervisor, So it runs faster when compare to linux.
+ - **Thin kernel** : Jiny is thin kernel, it is having very small set of drivers based on virtio, since it runs on hypervisor. Currently it supports only x86_64 architecture, this makes the size of code small when compare to linux.
+ - **OS for Cloud**: Designed from ground-up  to run on hypervisor, So it runs faster when compare to linux.
  - **Object oriented**: Most of subsystems are in object oriented language c++11.
  - **Non-posix api's for jvm and golang runtime system**: Supports special api's for jvm and golang runtime system for running app in HP mode. Here java and golang app does not need any change.
  - **Single app inside the vm**: Designed to run single application efficiently when compare to traditional os.
@@ -23,7 +23,7 @@
 
 ## Procedure to  compile and run:
  
-More details for compiling and running using Docker is available at [Compile and Run.](../master/bin/README.md).  
+More details of [compiling and running Jiny Kernel is available here.](../master/bin/README.md).  
 
 ## Performance and Benchmarks:
 
