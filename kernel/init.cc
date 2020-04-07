@@ -74,7 +74,7 @@ static inittable_t inittable[] = {
 		{init_kmem_cache,0,       "kmem cache",0},
 #endif
 		{init_ipc,0,       "ipc",0},
-		{init_jslab,0,"Jslab initialization",0},
+		{init_jslab,0,"Jslab",0},
 		//{init_syscall,0,       "syscalls",0},
 
 		{init_vfs,0,       "vfs",0},
@@ -269,7 +269,8 @@ void cmain() {  /* This is the first c function to be executed */
 //	ut_log(" Before g_conf_func_debug-> :%x(%d) current task:%x\n",g_conf_func_debug,g_conf_func_debug,g_cpu_state[0].current_task);
 	for (i=0; inittable[i].func != 0; i++){
 		g_init_loglevel = inittable[i].log_level ;
-		ut_log("%d : INITIALIZING :%s  ...\n",i, inittable[i].comment);
+		ut_log("------------------------------------------------------------------------------------------------------------\n");
+		ut_log("%d :INITIALIZING :%s \n",i, inittable[i].comment);
 		ret = inittable[i].func(inittable[i].arg1);
 		if (ret==JSUCCESS){
 

@@ -169,16 +169,16 @@ static int __local_apic_chkerr(void)
 
   esr=local_apic->esr;
 
-  if (esr.rx_cs_err) { i++; kprintf("[LA] Receive checksum failed.\n"); }
-  if (esr.tx_accept_err) { i++; kprintf("[LA] Transfer failed.\n"); }
-  if (esr.rx_accept_err) { i++; kprintf("[LA] IPI is not accepted by any CPU.\n"); }
+  if (esr.rx_cs_err) { i++; kprintf("     [LA] Receive checksum failed.\n"); }
+  if (esr.tx_accept_err) { i++; kprintf("     [LA] Transfer failed.\n"); }
+  if (esr.rx_accept_err) { i++; kprintf("     [LA] IPI is not accepted by any CPU.\n"); }
   if (esr.tx_illegal_vector) { //i++;
          kprintf("ERROR [LA] Illegal transfer vector.\n"); }
-  if (esr.rx_illegal_vector) { kprintf("[LA] Illegal receive vector.\n"); }
+  if (esr.rx_illegal_vector) { kprintf("     [LA] Illegal receive vector.\n"); }
   if (esr.reg_illegal_addr){
 	     i++;
 	      //while(1);
-	      kprintf("APIC: ERROR Illegal register address.\n"); }
+	      kprintf("     APIC: ERROR Illegal register address.\n"); }
   if (i>0){
 	  while(1);
   }
@@ -273,12 +273,12 @@ static int __local_apic_init(bool msgout)
   apic_icr1_t icr1;
 
 	if (msgout) {
-		kprintf("APIC: Checking APIC is present ... ");
+		kprintf("     APIC: Checking APIC is present ... ");
 		if(__local_apic_check()<0) {
-			kprintf("FAIL\n");
+			kprintf("     FAIL\n");
 			return -1;
 		} else{
-			kprintf("OK\n");
+			kprintf("     OK\n");
 		}
 	}
 	
@@ -286,14 +286,14 @@ static int __local_apic_init(bool msgout)
 
   v=get_apic_version();
 	if (msgout)
-		kprintf("APIC: APIC version: %d apic id:%x\n",v,get_local_apic_id());
+		kprintf("     APIC: APIC version: %d apic id:%x\n",v,get_local_apic_id());
 
   /* first we're need to clear APIC to avoid magical results */
   __local_apic_clear();
   __disable_apic();
 
   set_apic_dfr_mode(0xf); 
-  kprintf(" APIC id:%d  destination id :%d \n",get_local_apic_id(),(1 << (__apics_number & 7)));
+  kprintf("     APIC id:%d  destination id :%d \n",get_local_apic_id(),(1 << (__apics_number & 7)));
   set_apic_ldr_logdest(1 << (__apics_number & 7));
 	__apics_number++;
 
@@ -365,7 +365,7 @@ static void __unmask_extint(void)
 	lvt_lint.mask = 0;
 	local_apic->lvt_lint1.reg = lvt_lint.reg;
 	__local_apic_chkerr();
-	kprintf("APIC: enabling extenal interrupt -----------------------\n");
+	kprintf("    APIC: enabling extenal interrupt -----------------------\n");
 }
 
 void enable_ext_interrupt(){
@@ -374,11 +374,11 @@ __unmask_extint();
 
 void local_apic_bsp_switch(void)
 {
-  kprintf("APIC: Leaving PIC mode to APIC mode ... ");
+  kprintf("     APIC: Leaving PIC mode to APIC mode ... ");
   outb(0x22,0x70);
   outb(0x23,0x01); /* old port - 0x71,0x23 */
 
-  kprintf("APIC: OK\n");
+  kprintf("     APIC: OK\n");
 }
 
 /* APIC timer implementation */
@@ -423,12 +423,12 @@ static void local_apic_timer_calibrate(uint32_t hz)
   uint32_t x1,x2;
   local_apic_timer_disable();
 
-  kprintf("APIC: Calibrating lapic delay_loop ...");
+  kprintf("     APIC: Calibrating lapic delay_loop ...");
 
   x1=local_apic->timer_ccr.count; /*get current counter*/
   local_apic->timer_icr.count=0xffffffff; /*fillful initial counter */
 
-  kprintf("APIC: ccr %ld\n",local_apic->timer_ccr.count);
+  kprintf("     APIC: ccr %ld\n",local_apic->timer_ccr.count);
 
   while(local_apic->timer_icr.count==x1) /* wait while cycle will be end */ {
         kprintf("APIC: %ld\n",local_apic->timer_icr.count);
@@ -443,7 +443,7 @@ static void local_apic_timer_calibrate(uint32_t hz)
   //delay_loop=11931;
   //delay_loop=67489;
   //delay_loop=600;
-  kprintf("APIC: delay loop: %d \n",delay_loop);
+  kprintf("     APIC: delay loop: %d \n",delay_loop);
 
   /*ok, let's write a difference to icr*/
   /* recevies 100 timer interrupts per sec */
@@ -580,7 +580,7 @@ int local_ap_apic_init(void)
 	set_local_apic_timer(LOCAL_TIMER_CPU_IRQ_VEC, TICKS_PER_SECOND/10);
 
 	__unmask_extint();
-	 kprintf("APIC: external interrupts enabled\n");
+	 kprintf("     APIC: external interrupts enabled\n");
 	ready_for_broadcast=1;
 	return 0;
 }
@@ -594,7 +594,7 @@ int local_bsp_apic_init(void)
 	}
 
 	local_apic_timer_init(LOCAL_TIMER_CPU_IRQ_VEC);
-    kprintf("APIC: timer init done ....\n");
+    kprintf("     APIC: timer init done ....\n");
 	__unmask_extint(); /* TODO: commented out for Virtual box and vmware , otherwise it hangs at this point */
 
   return 0;

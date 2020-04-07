@@ -503,7 +503,7 @@ wait_queue::wait_queue( char *arg_name, unsigned long arg_flags) {
 			name = arg_name;
 
 			wait_queue::wait_queues[i] = this;
-			ut_log(" Initalled new waitqueue at:%d %s flags:%x\n",i,arg_name,arg_flags);
+			ut_log("        Initalled new waitqueue at:%d %s flags:%x\n",i,arg_name,arg_flags);
 			used_for = 0;
 			flags = arg_flags;
 			goto last;

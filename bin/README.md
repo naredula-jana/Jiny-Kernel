@@ -10,8 +10,8 @@ Below Docker Container will execute the default image from master branch.
 
 **Procedure to Build the Image from local source and run:**
 
-Below Docker Container will refer the source code from  local host, after that it build the image and then execute the image. 
-Execute the below command from the top directory.
+ 
+Execute the below docker script from the top directory. Docker Container will refer the source code from  local host, after that it build the image and then execute the image.
 
 ```
  docker run -v $PWD:/opt/jiny_src/ --privileged --rm -it --entrypoint "/run/local_compile_run"  naredulajana/jiny_base:latest
@@ -34,6 +34,7 @@ Below Docker Container will pull the code from master branch, after that it buil
 
 
 ** Useful calls: **
+
 
 Below are commands used to peak the kernel:
 
@@ -80,7 +81,7 @@ DEBUG :
 k dmesg :  log 
 k call_stats :  call stats
 k locks : list of locks and stats.
-k obj_list : list of c++ objects and instants
+k obj_list : list of c++ objects types and instants
 
 
 ```

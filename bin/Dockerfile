@@ -17,7 +17,7 @@ RUN apt-get update && apt-get -y upgrade && \
 
 # RUN apt-get install gcc-4.8
 
-COPY Docker_master_compile_run.sh /run/master_compile_run
+COPY Docker_master_run.sh /run/master_run
 COPY Docker_run.sh /run/jiny_run
 COPY Docker_local_compile_run.sh /run/local_compile_run
 COPY addon_disk /run/
