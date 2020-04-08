@@ -1,33 +1,29 @@
 
 
-**Procedure to Run the default Image:**
+**Procedure to Run the Image from master branch:**
 
 Below Docker Container will execute the default image from master branch. 
 
 ```
-  docker run --rm -it  naredulajana/jiny_base:latest
-```
-
-**Procedure to Build the Image from local source and run:**
-
- 
-Execute the below docker script from the top directory. Docker Container will refer the source code from  local host, after that it build the image and then execute the image.
+  docker run --privileged --rm -it --entrypoint "/run/master_run"  naredulajana/jiny_base:latest
 
 ```
- docker run -v $PWD:/opt/jiny_src/ --privileged --rm -it --entrypoint "/run/local_compile_run"  naredulajana/jiny_base:latest
+
+**Procedure to Build the Image from local git repo source and run:**
+
  
- or
- 
+Execute the below docker script from the top directory. Docker Container will pick the source code from  local host, after that it build the image and then execute the image.
+
+``` 
  ./docker_compile_run
-
-```
-
-**Procedure to Build the Image from master and run:**
-
-Below Docker Container will pull the code from master branch, after that it build the image and then execute the image. 
-
-```
- docker run --privileged --rm -it --entrypoint "/run/master_compile_run"  naredulajana/jiny_base:latest
+ 
+ with Optional configurations: 
+ 
+  ./docker_compile_run -smp 2    /* by default only one cpu core, run the jiny kernel with 2 or more cores */
+  ./docker_compile_run -enable-kvm /* use kvm hypervisor, this option will make kernel to run lot faster due to hardware accelaration from vt-x */
+  ./docker_compile_run -gdb tcp::1336 /* with this option gdb can be attach to debug the kernel */
+  ./docker_compile_run  -netdev tap,id=guest0 -device virtio-net-pci,mac=00:30:48:DB:5E:09,netdev=guest0   /* with nic card */
+ 
 
 ```
 

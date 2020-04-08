@@ -82,7 +82,7 @@ test_file:
 	cp modules/test_file/test_file.o test/root/
 	gcc modules/test_file/test_file.c -static -o test/root/test_file
 	
-all: 	clean	
+all: 		
 	make SOURCE_ROOT=$$PWD -C kernel
 	make SOURCE_ROOT=$$PWD -C drivers
 #	make SOURCE_ROOT=$$PWD -C drivers/xen
