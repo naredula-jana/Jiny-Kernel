@@ -29,7 +29,7 @@ Execute the below docker script from the top directory. Docker Container will pi
 
 
 
-** Useful calls: **
+** Useful calls:**
 
 
 Below are commands used to peak the kernel:

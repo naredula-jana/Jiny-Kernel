@@ -730,10 +730,25 @@ void Jcmd_insmod(unsigned char *filename, unsigned char *arg) {
 
 	return;
 }
+extern int Jcmd_maps(char *arg1, char *arg2);
+void start_insexe(unsigned char *filename, unsigned char *arg);
 unsigned long g_temp_hp_stack_len=0; /* TODO : remove later */
 extern unsigned long fs_elf_check_prepare(struct file *file,unsigned char **argv, unsigned char **env,unsigned long *t_argc, unsigned long *t_argv,unsigned long  *stack_len, unsigned long *aux_addr,unsigned char **elf_interpreter, unsigned long *tmp_stackp);
 extern int elf_initialize_userspace_stack(struct elfhdr elf_ex,unsigned long aux_addr,unsigned long tmp_stack, unsigned long stack_len,unsigned long load_addr);
+
+unsigned char g_conf_hp_filename[MAX_FILENAME]="";
+unsigned char g_conf_hp_arg[MAX_FILENAME];
 void Jcmd_insexe(unsigned char *filename, unsigned char *arg) {
+
+	ut_strncpy(g_conf_hp_filename, filename, MAX_FILENAME);
+	ut_strncpy(g_conf_hp_arg, arg, MAX_FILENAME);
+
+	//sc_createKernelThread(start_insexe, 0, (unsigned char *) "hp_starter", 0);
+	start_insexe(g_conf_hp_filename,g_conf_hp_arg);
+	sc_sleep(2000); /* sleep so that idle kernel thread will pickup and start start_insexe, */
+	return;
+}
+void start_insexe(unsigned char *unused_filename, unsigned char *unused_arg) {
 	struct file *file = 0;
 	struct elfhdr elf_ex;
 	Elf64_Shdr *elf_shdata;
@@ -752,6 +767,7 @@ void Jcmd_insexe(unsigned char *filename, unsigned char *arg) {
 	binary_source_t source;
 	int total_symbols = 0;
 	unsigned long elf_bss, bss_start, bss;
+	unsigned char *filename=g_conf_hp_filename;
 
 	source.code_start = 0;
 	source.code_length = 0;
@@ -765,6 +781,7 @@ void Jcmd_insexe(unsigned char *filename, unsigned char *arg) {
 	}
 	error = 0;
 	file = (struct file *) fs_open(filename, 0, 0);
+	filename[0]=0;
 	if (file == 0) {
 		error = "Fail to open the module file";
 		goto out;
@@ -1003,9 +1020,11 @@ out:
 					tmp_stack_top = fs_elf_check_prepare(file, (unsigned char **)argv, (unsigned char **)env, &t_argc, &t_argv, &stack_len, &tmp_aux, &elf_interp, &tmp_stack);
 					elf_initialize_userspace_stack(elf_ex, tmp_aux,tmp_stack_top, stack_len, ELF_PAGESTART(eppnt->p_vaddr));
 					g_temp_hp_stack_len = stack_len;
+					ut_printf(" stack: %x len:%d \n",tmp_stack_top,g_temp_hp_stack_len);
 					SYS_sc_clone(CLONE_VM | CLONE_KERNEL_THREAD| CLONE_HP_THREAD | CLONE_FS, tmp_stack_top, 0, modulep->highpriority_app_main, 0,0);
 			}
 			ut_printf(" Successfull loaded the high priority app\n");
+			Jcmd_maps(0,0);
 		}
 		return;
 	}

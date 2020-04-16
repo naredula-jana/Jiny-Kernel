@@ -251,7 +251,7 @@ extern struct jdevice *serial2_device;
 //#define USERLEVEL_SHELL "/jiny_root/busybox"
 int kshell::main(void *arg) {
 	int i, cmd_type;
-	int ret = 1;
+	int ret = 0;
 
 	ut_log("   loading the kernel shell :%s:\n", USERLEVEL_SHELL);
 	if (ret != 0) {
@@ -262,6 +262,11 @@ int kshell::main(void *arg) {
 			ret = sh_create((unsigned char *) USERLEVEL_SHELL,(unsigned char *) "sh", 0, DEVICE_SERIAL2);
 		}
 #endif
+		sc_set_fsdevice(DEVICE_KEYBOARD, DEVICE_SERIAL2); /* kshell on vga console */
+		input_device = DEVICE_KEYBOARD;
+	}else{
+		sc_set_fsdevice(DEVICE_SERIAL1, DEVICE_SERIAL1); /* kshell on vga console */
+		input_device = DEVICE_SERIAL1;
 	}
 
 	ut_log(" user shell thread creation ret :%x\n", ret);
@@ -269,8 +274,6 @@ int kshell::main(void *arg) {
 	for (i = 0; i < MAX_CMD_HISTORY; i++)
 		cmd_history[i][0] = '\0';
 
-	sc_set_fsdevice(DEVICE_KEYBOARD, DEVICE_SERIAL2); /* kshell on vga console */
-	input_device = DEVICE_KEYBOARD;
 	kshell_process();
 
 	return 1;

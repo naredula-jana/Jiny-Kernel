@@ -641,6 +641,8 @@ static void schedule_kernelSecondHalf() { /* kernel thread second half:_schedule
 	restore_flags(g_current_task->flags);
 	if (g_current_task->thread.userland.user_stack != 0){ /* HP thread */
 		unsigned char c[1024];
+		unsigned char *temp_ip;
+		temp_ip = (unsigned char *)g_current_task->thread.real_ip; /* TODO : this is to avoid pagefault */
 		ut_memcpy(&c[0],g_current_task->thread.userland.user_stack,g_temp_hp_stack_len);
 		if (g_current_task->HP_thread == 0){ /* parent HP thread */
 			g_current_task->process_id = g_current_task->task_id; /* process id is created for HP process */
@@ -877,6 +879,8 @@ static unsigned long _schedule(unsigned long flags) {
 	return g_current_task->flags;
 }
 #if 1
+extern unsigned char g_conf_hp_filename[], g_conf_hp_arg[];
+extern void start_insexe(unsigned char *filename, unsigned char *arg);
 int do_softirq() {
 	static unsigned long house_keeper_count=0;
 	int i;
@@ -896,8 +900,8 @@ int do_softirq() {
 		ipc_check_waitqueues();
 	}
 
+
 	if (cpuid == g_conf_netbh_cpu){
-	//if (1){
 		net_bh();
 	}
 	if (g_current_task->counter <= 0 ) {
@@ -1235,6 +1239,7 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 			p->thread.userland.user_stack = child_stack;
 		}else if (g_current_task->HP_thread == 1){ /* child HP thread */
 			unsigned long *rbp;
+			unsigned long r12;
 			unsigned char *test_p;
 			test_p = child_stack; /*TODO: temporary solution , touch child stack to avoid page fault in the user space*/
 			test_p = *test_p;
@@ -1251,7 +1256,10 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 			p->thread.user_regs.gpres.rdi = clone_flags;
 			p->thread.user_regs.gpres.r8 = args;
 			p->thread.user_regs.gpres.r9 = tls_area;
-			p->thread.user_regs.gpres.r12 = fn;
+			//p->thread.user_regs.gpres.r12 = fn;
+			asm volatile("movq %%r12,%0" : "=r" (r12));
+			p->thread.user_regs.gpres.r12 = r12;
+
 			ut_strcpy(p->name,"childHP_thread");
 			p->thread.ip = (void *) schedule_childHPSecondHalf;
 		}else { /* any other non-HP kernel thread */

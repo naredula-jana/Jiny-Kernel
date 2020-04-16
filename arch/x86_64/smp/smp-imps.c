@@ -333,6 +333,8 @@ static int enable_ssx_avx(){
 	cpuid_count(0x1, 0, &eax, &ebx, &ecx, &edx);  /* get feature information type==1 */
 	ut_log("CPUID Feature INFO  eax:%x ebx:%x ecx:%x edx: %x\n",eax,ebx,ecx,edx);
 
+//ut_log("CHANGES for VBOX , this work\n");
+//return;
 	native_write_cr2(cr2 | 0x2);
 	//native_write_cr4(cr4 |X86_CR4_OSXSAVE | X86_CR4_OSFXSR | X86_CR4_OSXMMEXCPT);
 	native_write_cr4(cr4 | X86_CR4_OSXMMEXCPT);

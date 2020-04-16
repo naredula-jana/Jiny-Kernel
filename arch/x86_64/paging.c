@@ -675,6 +675,7 @@ int check_kernel_address(unsigned long addr){
 		return 0;
 	}
 }
+
 #define MAX_STAT_FAULTS 5000
 struct stat_fault{
 	int index;
@@ -682,6 +683,7 @@ struct stat_fault{
 } stat_fault;
 struct stat_fault stat_faults[MAX_STAT_FAULTS+1];
 int g_conf_segfault =0;
+extern int Jcmd_maps(char *arg1, char *arg2);
 static int handle_mm_fault(addr_t addr,unsigned long faulting_ip, int write_fault, struct fault_ctx *ctx)
 {
 	struct mm_struct *mm;
@@ -751,6 +753,7 @@ if (g_stat_pagefault>6){
 			SYS_sc_exit(902);
 			return 1;
 		}
+		Jcmd_maps(0,0);
 		BUG();
 	}
 	pl4=(unsigned long *)(mm->pgd);

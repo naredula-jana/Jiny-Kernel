@@ -276,6 +276,7 @@ uint8_t *ut_strcpy(uint8_t *dest, const uint8_t *src)
 }
 uint8_t *ut_strncpy(uint8_t *dest, const uint8_t *src,int n)
 {
+	if (src==0 ) return dest;
 	int len=0;
         do
         {

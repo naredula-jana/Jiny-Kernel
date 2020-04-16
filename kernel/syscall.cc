@@ -188,6 +188,7 @@ unsigned long SYS_uname(unsigned long *args) {
 			sizeof(g_utsname));
 	return 0;
 }
+extern int Jcmd_maps(char *arg1, char *arg2);
 
 #define ARCH_SET_FS 0x1002
 unsigned long SYS_arch_prctl(unsigned long code, unsigned long addr) {
@@ -196,6 +197,7 @@ unsigned long SYS_arch_prctl(unsigned long code, unsigned long addr) {
 		ar_archSetUserFS(addr);
 	else
 		SYSCALL_DEBUG(" ERROR arc_prctl code is invalid \n");
+//	Jcmd_maps(0,0);
 	return 0;
 }
 unsigned long SYS_getpid() {
