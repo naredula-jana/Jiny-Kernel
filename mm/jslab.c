@@ -314,7 +314,7 @@ void *  jslab_alloc_from_cache(jcache_t *cachep, int flags){
 
 	return ret;
 }
-void * jslab_alloc_from_predefined(size_t obj_size, int flags) {
+void * jslab_alloc_from_predefined(size_t obj_size, int arg_flags) {
 	jcache_t *cachep = NULL;
 	void *ret;
 	int i;
@@ -335,6 +335,10 @@ void * jslab_alloc_from_predefined(size_t obj_size, int flags) {
 	spin_lock_irqsave(&(cachep->spinlock), intr_flags);
 	ret = _alloc_obj(cachep);
 	spin_unlock_irqrestore(&(cachep->spinlock), intr_flags);
+
+	if (ret && (arg_flags & MEM_CLEAR)){
+		ut_memset(ret,0,obj_size);
+	}
 
 	return  ret;
 }

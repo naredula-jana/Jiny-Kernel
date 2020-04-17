@@ -315,6 +315,10 @@ void Jcmd_help(){
 	ut_printf("Cmd variables:\n");
 	ut_symbol_show(SYMBOL_CMD);
 }
+void Jcmd_set(){
+	ut_printf("settting conf variable:");
+	ut_symbol_execute(SYMBOL_CONF, "syscallStat", "1",0);
+}
 
 }
 

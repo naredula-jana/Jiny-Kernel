@@ -138,7 +138,9 @@ enum {
 #define MAX_SYSCALL 255
 struct syscall_stat{
 	int call_count; /* total call count */
-	int partial_calls; /* out of the call count , the number of partial features hit */
+
+    unsigned long syscall_time; /* time spend in application between kernel */
+	unsigned long appcall_time; /* time spend in application between syscall */
 };
 struct task_struct {
 	unsigned long unused[4];
@@ -209,6 +211,7 @@ struct task_struct {
 		unsigned long start_tsc;
 #if 1
 		struct syscall_stat *syscalls;
+
 #endif
 	} stats;
 

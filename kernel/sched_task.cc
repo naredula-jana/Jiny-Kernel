@@ -662,15 +662,21 @@ static void schedule_kernelSecondHalf() { /* kernel thread second half:_schedule
 
 /* NOT do not add any extra code in this function, if any register is used syscalls will not function properly */
 void sc_before_syscall() {
-	g_current_task->curr_syscall_id = g_cpu_state[getcpuid()].md_state.syscall_id;
+	//g_current_task->curr_syscall_id = g_cpu_state[getcpuid()].md_state.syscall_id;
 	g_current_task->callstack_top = 0;
-	g_current_task->stats.syscall_count++;
 
 #if 1
 	if (g_conf_syscallStat==1 && g_current_task->curr_syscall_id < MAX_SYSCALL && g_current_task->stats.syscalls!=0){
-		g_current_task->stats.syscalls[g_current_task->curr_syscall_id].call_count++;
+		if (g_current_task->stats.start_tsc != 0){
+			unsigned long curr_tsc = ar_read_tsc();
+			g_current_task->stats.syscalls[g_current_task->curr_syscall_id].appcall_time =  g_current_task->stats.syscalls[g_current_task->curr_syscall_id].appcall_time +( curr_tsc -  g_current_task->stats.start_tsc);
+			g_current_task->stats.start_tsc = curr_tsc;
+		}else{
+			g_current_task->stats.start_tsc =  ar_read_tsc();
+		}
 	}
 #endif
+
 }
 extern "C" {
 unsigned long g_stat_syscall_count;
@@ -695,16 +701,30 @@ static void check_signals(){
 	}
 }
 void sc_after_syscall() {
-	/* Handle any pending signal */
-	//SYSCALL_DEBUG("syscall ret  state:%x\n",g_current_task->state);
+	//STAT_INC(g_stat_syscall_count);
+#if 1
+	g_current_task->stats.syscall_count++;
+	g_current_task->curr_syscall_id = g_cpu_state[getcpuid()].md_state.syscall_id;
 
-	STAT_INC(g_stat_syscall_count);
+#if 1
+	if (g_conf_syscallStat==1 && g_current_task->curr_syscall_id < MAX_SYSCALL && g_current_task->stats.syscalls!=0){
+		g_current_task->stats.syscalls[g_current_task->curr_syscall_id].call_count++;
+		if (g_current_task->stats.start_tsc != 0){
+			unsigned long curr_tsc = ar_read_tsc();
+			g_current_task->stats.syscalls[g_current_task->curr_syscall_id].syscall_time =  g_current_task->stats.syscalls[g_current_task->curr_syscall_id].syscall_time +( curr_tsc -  g_current_task->stats.start_tsc);
+			g_current_task->stats.start_tsc = curr_tsc;
+		}else{
+			g_current_task->stats.start_tsc =  ar_read_tsc();
+		}
+	}
+#endif
+
+#endif
 
 	g_cpu_state[getcpuid()].stats.syscalls++;
 	check_signals();
 
 	g_current_task->callstack_top = 0;
-//	sc_schedule();
 }
 #define MAX_DEADTASKLIST_SIZE 100
 static struct task_struct *deadtask_list[MAX_DEADTASKLIST_SIZE + 1];
@@ -1025,7 +1045,7 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	unsigned char *buf;
 	int all = 0;
 
-	ut_printf(" [tid:pid:ppid] (syscount) allocatedcpu: state (cont-switches/total ticks)  mm:mm_count name cpu\n");
+	ut_printf(" [tid:pid:ppid] (syscalls) allocatedcpu: state (cont-switches/total ticks)  mm:mm_count name cpu\n");
 
 	if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "all") == 0) {
 		all = 1;
@@ -1036,9 +1056,9 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	}else if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "fd") == 0) {
 		all =4;
 	}
-	len = PAGE_SIZE * 100;
-	max_len = len;
-	buf = (unsigned char *) vmalloc(len, 0);
+	max_len = PAGE_SIZE * 100;
+	len = max_len;
+	buf = (unsigned char *) vmalloc(max_len, 0);
 	if (buf == 0) {
 		ut_printf(" Unable to get vmalloc memory \n");
 		return 0;
@@ -1055,7 +1075,16 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 						task->name, task->sleep_ticks, task->current_cpu, task->fs->cwd,
 						task->count.counter, task->status_info, task->stick_to_cpu);
 	}
+	spin_unlock_irqrestore(&g_global_lock, flags);
+	if (g_current_task->mm == g_kernel_mm)
+		ut_printf("%s", buf);
+	else
+		fs_fd_write(1, buf, len);
+
 	list_for_each(pos, &g_task_queue.head) {
+		len = max_len;
+		spin_lock_irqsave(&g_global_lock, flags);
+
 		task = list_entry(pos, struct task_struct, task_queue);
 		if (is_kernelThread(task))
 			len = len - ut_snprintf(buf + max_len - len, len, "[%2x(%d):%2x:%2x](%d)", task->task_id,task->task_id,task->process_id,task->parent_process_pid,task->stats.syscall_count);
@@ -1072,23 +1101,38 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 		//if (task->state != TASK_RUNNING) {
 		if (1) {
 			if (all == 1) {
-				ut_getBackTrace((unsigned long *) task->thread.rbp, (unsigned long) task, &temp_bt);
+				ut_getBackTrace((unsigned long*) task->thread.rbp,
+						(unsigned long) task, &temp_bt);
 				for (i = 0; i < temp_bt.count; i++) {
-					len = len
-							- ut_snprintf(buf + max_len - len, len, "          %d: %9s - %x \n", i, temp_bt.entries[i].name,
+					len = len - ut_snprintf(buf + max_len - len, len,
+									"          %d: %9s - %x \n", i,
+									temp_bt.entries[i].name,
 									temp_bt.entries[i].ret_addr);
 				}
-			}else if (all == 2){
-				print_syscall_stat(task,0);
-			}else if (all == 4){
-				for (j=0; j<task->fs->total; j++){
+			}  else if (all == 4) {
+				for (j = 0; j < task->fs->total; j++) {
 					if (task->fs->filep[j] != 0)
-					len = len - ut_snprintf(buf + max_len - len, len, "    %d: fd:%s type:%d \n", j,task->fs->filep[j]->filename,task->fs->filep[j]->type);
+						len = len - ut_snprintf(buf + max_len - len, len,
+										"    %d: fd:%s type:%d \n", j,
+										task->fs->filep[j]->filename,
+										task->fs->filep[j]->type);
 				}
 			}
 		}
 
-	}
+		spin_unlock_irqrestore(&g_global_lock, flags);
+		if (g_current_task->mm == g_kernel_mm)
+			ut_printf("%s", buf);
+		else
+			fs_fd_write(1, buf, len);
+
+		if (all == 2){
+			print_syscall_stat(task,0);
+		}
+	}/* end of thread-loop */
+
+	len = max_len;
+	spin_lock_irqsave(&g_global_lock, flags);
 	len = len
 			- ut_snprintf(buf + max_len - len, len,
 					" CPU Processors:  cpuid contexts(user/total) <state 0=idle, intr-disabled > name pid runq_len\n");

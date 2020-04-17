@@ -115,7 +115,7 @@ typedef struct {
 
 void count_sycall_partial(){
 	if (g_current_task->curr_syscall_id < MAX_SYSCALL && g_current_task->stats.syscalls!=0){
-		g_current_task->stats.syscalls[g_current_task->curr_syscall_id].partial_calls++;
+		//g_current_task->stats.syscalls[g_current_task->curr_syscall_id].partial_calls++;
 	}
 }
 
@@ -879,9 +879,11 @@ void print_syscall_stat(struct task_struct *task, int output){
 	for (i=0; i<MAX_SYSCALL; i++){
 		if ( task->stats.syscalls[i].call_count > 0){
 			if (output ==0 ){
-				ut_printf("%d: %s: %s -> %d(%d)\n",count,task->name,ut_get_symbol(syscalltable[i].func),task->stats.syscalls[i].call_count,task->stats.syscalls[i].partial_calls);
+				//ut_printf("        %d:  %s -> %d(sys: %d- app: %d)\n",count,ut_get_symbol(syscalltable[i].func),task->stats.syscalls[i].call_count,task->stats.syscalls[i].appcall_time,task->stats.syscalls[i].syscall_time);
+
+				ut_printf("        %d:  %s -> %d\n",count,ut_get_symbol(syscalltable[i].func),task->stats.syscalls[i].call_count);
 			}else{
-				ut_log("%d: %s: %s -> %d(%d)\n",count,task->name,ut_get_symbol(syscalltable[i].func),task->stats.syscalls[i].call_count,task->stats.syscalls[i].partial_calls);
+				ut_log("          %d:  %s -> %d\n",count,ut_get_symbol(syscalltable[i].func),task->stats.syscalls[i].call_count);
 			}
 			count++;
 		}
