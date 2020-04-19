@@ -315,7 +315,11 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, 
 					}
 				}
 			}
-			vma->name = "anonymous" ;
+			if (g_current_task->HP_thread==1){
+				vma->name = "hp_anonymous" ;
+			}else{
+				vma->name = "anonymous" ;
+			}
 			vma->vm_start = mm->anonymous_addr;
 			vma->vm_end = vma->vm_start + len;
 			mm->anonymous_addr = mm->anonymous_addr + len;
@@ -351,7 +355,11 @@ void * SYS_vm_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
 	file = fd_to_file(fd);
 
 	//spin_lock_irqsave(&vmm_lock, irq_flags);
-	ret = vm_mmap(file, addr, len, prot, flags, pgoff,"syscall");
+	if(g_current_task->HP_thread==1){
+		ret = vm_mmap(file, addr, len, prot, flags, pgoff,"hp_syscall");
+	}else{
+		ret = vm_mmap(file, addr, len, prot, flags, pgoff,"syscall");
+	}
 	//spin_unlock_irqrestore(&vmm_lock, irq_flags);
 
 	SYSCALL_DEBUG("mmap ret :%x \n",ret);
@@ -379,7 +387,11 @@ unsigned long vm_setupBrk(unsigned long addr, unsigned long len) {
 
 	g_current_task->mm->brk_addr = (addr + PAGE_SIZE) & PAGE_MASK;
 	g_current_task->mm->brk_len = len;
-	ret = vm_mmap(0, g_current_task->mm->brk_addr, len, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0,"anon_brk");
+	if(g_current_task->HP_thread==1){
+		ret = vm_mmap(0, g_current_task->mm->brk_addr, len, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0,"hp_anon_brk");
+	}else{
+		ret = vm_mmap(0, g_current_task->mm->brk_addr, len, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0,"anon_brk");
+	}
 
 	return ret;
 }

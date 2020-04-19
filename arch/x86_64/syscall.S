@@ -158,7 +158,11 @@ HP_syscall:
 	pushq %rbx // old stack
 
     pushq %rax
+    pushq %rdx
+    pushq %rsi
     call sc_before_syscall
+    popq %rsi
+    popq %rdx
     popq %rax
 
 	call *syscalltable(,%rax,8)

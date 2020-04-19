@@ -662,21 +662,25 @@ static void schedule_kernelSecondHalf() { /* kernel thread second half:_schedule
 
 /* NOT do not add any extra code in this function, if any register is used syscalls will not function properly */
 void sc_before_syscall() {
-	//g_current_task->curr_syscall_id = g_cpu_state[getcpuid()].md_state.syscall_id;
 	g_current_task->callstack_top = 0;
 
-#if 1
+
 	if (g_conf_syscallStat==1 && g_current_task->curr_syscall_id < MAX_SYSCALL && g_current_task->stats.syscalls!=0){
+#if 0
+		g_current_task->stats.start_tsc = g_jiffies;
+
+#else
+		g_current_task->stats.start_tsc = ar_read_tsc();
+#endif
+#if 0
 		if (g_current_task->stats.start_tsc != 0){
-			unsigned long curr_tsc = ar_read_tsc();
 			g_current_task->stats.syscalls[g_current_task->curr_syscall_id].appcall_time =  g_current_task->stats.syscalls[g_current_task->curr_syscall_id].appcall_time +( curr_tsc -  g_current_task->stats.start_tsc);
 			g_current_task->stats.start_tsc = curr_tsc;
 		}else{
-			g_current_task->stats.start_tsc =  ar_read_tsc();
+			g_current_task->stats.start_tsc =  curr_tsc;
 		}
-	}
 #endif
-
+	}
 }
 extern "C" {
 unsigned long g_stat_syscall_count;
@@ -702,24 +706,36 @@ static void check_signals(){
 }
 void sc_after_syscall() {
 	//STAT_INC(g_stat_syscall_count);
-#if 1
 	g_current_task->stats.syscall_count++;
 	g_current_task->curr_syscall_id = g_cpu_state[getcpuid()].md_state.syscall_id;
 
-#if 1
 	if (g_conf_syscallStat==1 && g_current_task->curr_syscall_id < MAX_SYSCALL && g_current_task->stats.syscalls!=0){
 		g_current_task->stats.syscalls[g_current_task->curr_syscall_id].call_count++;
-		if (g_current_task->stats.start_tsc != 0){
-			unsigned long curr_tsc = ar_read_tsc();
-			g_current_task->stats.syscalls[g_current_task->curr_syscall_id].syscall_time =  g_current_task->stats.syscalls[g_current_task->curr_syscall_id].syscall_time +( curr_tsc -  g_current_task->stats.start_tsc);
-			g_current_task->stats.start_tsc = curr_tsc;
-		}else{
-			g_current_task->stats.start_tsc =  ar_read_tsc();
-		}
-	}
+
+#if 0
+		unsigned long curr_tsc = g_jiffies;
+#else
+		unsigned long curr_tsc = ar_read_tsc();
 #endif
 
-#endif
+		int id = g_current_task->curr_syscall_id;
+		long systime = ( curr_tsc -  g_current_task->stats.start_tsc)/1000;
+		if (systime < 0){
+			systime=0;
+		}
+		long apptime = ((curr_tsc - g_current_task->stats.end_tsc)/1000) - systime;
+		if (apptime < 0){
+			apptime=0;
+		}
+		if (g_current_task->stats.start_tsc != 0 ){
+			g_current_task->stats.syscalls[id].syscall_time =  g_current_task->stats.syscalls[id].syscall_time +systime;
+		}
+		if (g_current_task->stats.end_tsc != 0 ){
+			g_current_task->stats.syscalls[id].appcall_time =  g_current_task->stats.syscalls[id].appcall_time +apptime;
+		}
+		g_current_task->stats.end_tsc =  curr_tsc;
+	}
+
 
 	g_cpu_state[getcpuid()].stats.syscalls++;
 	check_signals();
@@ -1274,17 +1290,22 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 		p->thread.ip = (void *) schedule_userSecondHalf;
 		ut_strncpy(p->name,g_current_task->name,MAX_TASK_NAME);
 	} else { /* kernel level thread */
+		static unsigned int hp_threads=0;
 		p->thread.ip = (void *) schedule_kernelSecondHalf;
 		save_flags(p->flags);
 		p->thread.argv = args;
 		p->thread.real_ip = fn;
 		if ((clone_flags & CLONE_HP_THREAD)){/* first/parent HP thread */
-			ut_strcpy(p->name,"HP_thread");
+			hp_threads++;
+			ut_snprintf(p->name,MAX_TASK_NAME,"hp_go_thread_%d",hp_threads);
 			p->thread.userland.user_stack = child_stack;
 		}else if (g_current_task->HP_thread == 1){ /* child HP thread */
 			unsigned long *rbp;
 			unsigned long r12;
 			unsigned char *test_p;
+
+			hp_threads++;
+
 			test_p = child_stack; /*TODO: temporary solution , touch child stack to avoid page fault in the user space*/
 			test_p = *test_p;
 #if 0
@@ -1304,7 +1325,7 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 			asm volatile("movq %%r12,%0" : "=r" (r12));
 			p->thread.user_regs.gpres.r12 = r12;
 
-			ut_strcpy(p->name,"childHP_thread");
+			ut_snprintf(p->name,MAX_TASK_NAME,"hp_go_thread_%d",hp_threads);
 			p->thread.ip = (void *) schedule_childHPSecondHalf;
 		}else { /* any other non-HP kernel thread */
 			ut_strncpy(p->name,g_current_task->name,MAX_TASK_NAME);

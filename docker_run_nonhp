@@ -1,0 +1,2 @@
+cp bin/addon_disk_nonhp bin/addon_disk
+docker run -v $PWD:/opt/jiny_src/ --privileged --rm -it --entrypoint "/run/local_run"  naredulajana/jiny_base:latest  "$@"

@@ -27,7 +27,7 @@ class kshell {
 	void tokenise(unsigned char *p, unsigned char *tokens[]);
 	int get_cmd(unsigned char *line);
 	int process_command(int cmd, unsigned char *p);
-	int cmd_func(unsigned char *arg1, unsigned char *arg2);
+	int cmd_func(unsigned char *arg1, unsigned char *arg2, unsigned char *arg3);
 
 public:
 	int input_device;
@@ -70,14 +70,14 @@ void kshell::tokenise(unsigned char *p, unsigned char *tokens[]) {
 	}
 	return;
 }
-int kshell::cmd_func(unsigned char *arg1, unsigned char *arg2) {
+int kshell::cmd_func(unsigned char *arg1, unsigned char *arg2, unsigned char *arg3) {
 	int ret;
 #if 1
 	if (arg1 == 0) {
 		ut_printf("Command list:\n");
 		ret = ut_symbol_show(SYMBOL_CMD);
 	} else {
-		ret = ut_symbol_execute(SYMBOL_CMD, (char *) arg1, arg2, 0);
+		ret = ut_symbol_execute(SYMBOL_CMD, (char *) arg1, arg2, arg3);
 	}
 	if (ret == 0)
 		ut_printf("Not Found: %s\n", arg1);
@@ -120,7 +120,7 @@ int kshell::process_command(int cmd, unsigned char *p) {
 	tokenise(p, token);
 	symbls = 0;
 
-	cmd_func(token[0], token[1]);
+	cmd_func(token[0], token[1], token[2]);
 	if (cmd == CMD_FILLVAR && symbls > 0) {
 		ut_printf("\n");
 		return 1;
@@ -229,14 +229,42 @@ void enable_ext_interrupt();
 //void enable_avx();
 
 }
+#define MAX_START_FILE 3096
+static unsigned char startup_buf[MAX_START_FILE+1];
 void kshell::kshell_process(){
 	int  cmd_type;
+	int i;
 	curr_line[0] = '\0';
 //	enable_avx();
-	ut_printf(" JINY OS .. STARTED======\n");
+	ut_printf(" JINY OS .. STARTED with startup script .....\n");
+	//Jcmd_jdevices(0,0);
 
 
-Jcmd_jdevices(0,0);
+	if (1) {
+		struct file *file = 0;
+		file = (struct file*) fs_open("/data/start", 0, 0);
+		if (file == 0) {
+			ut_printf("failed to open startup file\n");
+		} else {
+			ut_printf("started executing the start file\n");
+			fs_lseek(file, 0, 0);
+			int file_size = fs_read(file, (unsigned char*) startup_buf,
+					MAX_START_FILE);
+			int start;
+			start = 0;
+
+			for (i = 0; i < file_size; i++) {
+				if (startup_buf[i] == '\n') {
+					startup_buf[i] = 0;
+					ut_printf(" executing command  :%s:\n ",
+							&startup_buf[start]);
+					process_command(CMD_GETVAR, &startup_buf[start]);
+					start = i + 1;
+				}
+			}
+
+		}
+	}
 
 	while (1) {
 		ut_printf(CMD_PROMPT);
@@ -315,10 +343,14 @@ void Jcmd_help(){
 	ut_printf("Cmd variables:\n");
 	ut_symbol_show(SYMBOL_CMD);
 }
-void Jcmd_set(){
-	ut_printf("settting conf variable:");
-	ut_symbol_execute(SYMBOL_CONF, "syscallStat", "1",0);
+void Jcmd_set(unsigned char *variable, unsigned char *value){
+	ut_printf("setting conf variable: %s -> %s \n",variable,value);
+	ut_symbol_execute(SYMBOL_CONF, variable, value,0);
 }
+void Jcmd_run(unsigned char *command, unsigned char *options){
+	ut_printf("Executing command: %s -> %s \n",command,options);
 
+	sh_create((unsigned char *) command,(unsigned char *) options, 0, DEVICE_SERIAL1);
+}
 }
 

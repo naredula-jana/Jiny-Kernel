@@ -876,17 +876,26 @@ void print_syscall_stat(struct task_struct *task, int output){
 	int i;
 	int count=0;
 	if (task->stats.syscalls==0) return;
+	long systime=0;
+	long apptime=0;
 	for (i=0; i<MAX_SYSCALL; i++){
-		if ( task->stats.syscalls[i].call_count > 0){
+		int syscount=task->stats.syscalls[i].call_count;
+		if ( syscount > 0){
 			if (output ==0 ){
-				//ut_printf("        %d:  %s -> %d(sys: %d- app: %d)\n",count,ut_get_symbol(syscalltable[i].func),task->stats.syscalls[i].call_count,task->stats.syscalls[i].appcall_time,task->stats.syscalls[i].syscall_time);
+				ut_printf("     %d: calls:%4d(per-sys:%4d app:%4d) :%s\n",count,syscount,task->stats.syscalls[i].syscall_time/syscount,task->stats.syscalls[i].appcall_time,ut_get_symbol(syscalltable[i].func));
 
-				ut_printf("        %d:  %s -> %d\n",count,ut_get_symbol(syscalltable[i].func),task->stats.syscalls[i].call_count);
+				//ut_printf("        %d:  %s -> %d\n",count,ut_get_symbol(syscalltable[i].func),task->stats.syscalls[i].call_count);
 			}else{
 				ut_log("          %d:  %s -> %d\n",count,ut_get_symbol(syscalltable[i].func),task->stats.syscalls[i].call_count);
 			}
 			count++;
+			systime=systime+task->stats.syscalls[i].syscall_time;
+			apptime=apptime+task->stats.syscalls[i].appcall_time;
 		}
+	}
+	long total=systime+apptime;
+	if (total > 0){
+		ut_printf("        sys percentage: %d app :%d \n",(systime*100)/total,(apptime*100)/total);
 	}
 }
 static int strace_progress_id=0;

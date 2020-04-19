@@ -734,10 +734,11 @@ extern int Jcmd_maps(char *arg1, char *arg2);
 void start_insexe(unsigned char *filename, unsigned char *arg);
 unsigned long g_temp_hp_stack_len=0; /* TODO : remove later */
 extern unsigned long fs_elf_check_prepare(struct file *file,unsigned char **argv, unsigned char **env,unsigned long *t_argc, unsigned long *t_argv,unsigned long  *stack_len, unsigned long *aux_addr,unsigned char **elf_interpreter, unsigned long *tmp_stackp);
-extern int elf_initialize_userspace_stack(struct elfhdr elf_ex,unsigned long aux_addr,unsigned long tmp_stack, unsigned long stack_len,unsigned long load_addr);
+extern int elf_initialize_userspace_stack(struct elfhdr elf_ex,unsigned long aux_addr,unsigned long tmp_stack, unsigned long stack_len,unsigned long load_addr,unsigned char *name);
 
 unsigned char g_conf_hp_filename[MAX_FILENAME]="";
 unsigned char g_conf_hp_arg[MAX_FILENAME];
+unsigned int g_conf_hp_max_procs=1;
 void Jcmd_insexe(unsigned char *filename, unsigned char *arg) {
 
 	ut_strncpy(g_conf_hp_filename, filename, MAX_FILENAME);
@@ -748,7 +749,7 @@ void Jcmd_insexe(unsigned char *filename, unsigned char *arg) {
 	sc_sleep(2000); /* sleep so that idle kernel thread will pickup and start start_insexe, */
 	return;
 }
-void start_insexe(unsigned char *unused_filename, unsigned char *unused_arg) {
+static void start_insexe(unsigned char *unused_filename, unsigned char *unused_arg) {
 	struct file *file = 0;
 	struct elfhdr elf_ex;
 	Elf64_Shdr *elf_shdata;
@@ -913,7 +914,7 @@ void start_insexe(unsigned char *unused_filename, unsigned char *unused_arg) {
 			unsigned long end_addr = eppnt->p_filesz
 					+ ELF_PAGEOFFSET(eppnt->p_vaddr);
 			addr = vm_mmap(file, start_addr, end_addr, eppnt->p_flags, 0,
-					(eppnt->p_offset - ELF_PAGEOFFSET(eppnt->p_vaddr)), "text");
+					(eppnt->p_offset - ELF_PAGEOFFSET(eppnt->p_vaddr)), "hp_text");
 			if (addr == 0)
 				error = 0;
 		}else{
@@ -931,7 +932,7 @@ void start_insexe(unsigned char *unused_filename, unsigned char *unused_arg) {
 			vm_setupBrk(bss_start, bss - bss_start);
 		}
 	}
-	vm_mmap(0, HIGHPRIORITY_APP_SYSCALLTABLE, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0,"syscalltable");
+	vm_mmap(0, HIGHPRIORITY_APP_SYSCALLTABLE, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0,"hp_syscalltable");
 	modulep->str_table = mm_malloc(sec_str->sh_size, 0);
 	if (modulep->str_table == 0) {
 		error = "allocating str_table";
@@ -1001,7 +1002,7 @@ out:
 		if (modulep->highpriority_app_main != 0) {
 			unsigned char *temp_addr;
 
-			vm_mmap(0, USER_SYSCALL_PAGE, 0x1000, PROT_READ | PROT_EXEC |PROT_WRITE, MAP_ANONYMOUS, 0,"fst_syscal");
+			vm_mmap(0, USER_SYSCALL_PAGE, 0x1000, PROT_READ | PROT_EXEC |PROT_WRITE, MAP_ANONYMOUS, 0,"hp_fst_syscal");
 			ut_memcpy((unsigned char *)USER_SYSCALL_PAGE,(unsigned char *)&__HP_vsyscall_page,0x1000);
 
 			temp_addr =(unsigned char *) modulep->highpriority_app_main;
@@ -1012,13 +1013,15 @@ out:
 					unsigned long t_argc, t_argv;
 					unsigned long stack_len, tmp_stack, tmp_stack_top, tmp_aux;
 					unsigned char *elf_interp = 0;
+					unsigned char env_str[100];
 
 					argv[0]="highpriorityapp"; /* zero arguments */
 					argv[1]=0;
-					env[0]="USER=jana"; /* zero envs */
+					ut_snprintf(&env_str[0],100,"GOMAXPROCS=%d",g_conf_hp_max_procs);
+					env[0]=env_str;
 					env[1]=0;
 					tmp_stack_top = fs_elf_check_prepare(file, (unsigned char **)argv, (unsigned char **)env, &t_argc, &t_argv, &stack_len, &tmp_aux, &elf_interp, &tmp_stack);
-					elf_initialize_userspace_stack(elf_ex, tmp_aux,tmp_stack_top, stack_len, ELF_PAGESTART(eppnt->p_vaddr));
+					elf_initialize_userspace_stack(elf_ex, tmp_aux,tmp_stack_top, stack_len, ELF_PAGESTART(eppnt->p_vaddr),"hp_userstack");
 					g_temp_hp_stack_len = stack_len;
 					ut_printf(" stack: %x len:%d \n",tmp_stack_top,g_temp_hp_stack_len);
 					SYS_sc_clone(CLONE_VM | CLONE_KERNEL_THREAD| CLONE_HP_THREAD | CLONE_FS, tmp_stack_top, 0, modulep->highpriority_app_main, 0,0);

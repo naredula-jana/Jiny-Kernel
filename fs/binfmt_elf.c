@@ -250,12 +250,12 @@ out:
 	return tmp_stack_top;
 }
 
-int elf_initialize_userspace_stack(struct elfhdr elf_ex,unsigned long aux_addr,unsigned long tmp_stack, unsigned long stack_len,unsigned long load_addr) {
+int elf_initialize_userspace_stack(struct elfhdr elf_ex,unsigned long aux_addr,unsigned long tmp_stack, unsigned long stack_len,unsigned long load_addr,unsigned char *stackname) {
 	unsigned long *aux_vec, aux_index;
 	Elf64_Addr p_entry;
 
 	p_entry = elf_ex.e_entry;
-	vm_mmap(0, USERSTACK_ADDR, USERSTACK_LEN, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0, "userstack");
+	vm_mmap(0, USERSTACK_ADDR, USERSTACK_LEN, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, 0, stackname);
 	if (stack_len > 0) {
 		aux_vec = (unsigned long *) aux_addr;
 		if (aux_vec != 0) {
@@ -422,7 +422,7 @@ unsigned long fs_elf_load(struct file *file,unsigned long tmp_stack, unsigned lo
 		ut_log(" ERROR in elf loader filename :%s :%d\n",file->filename,-error);
 	} else {
 		task->mm->stack_bottom = USERSTACK_ADDR+USERSTACK_LEN;
-		 elf_initialize_userspace_stack(elf_ex,aux_addr,tmp_stack, stack_len,load_addr);
+		 elf_initialize_userspace_stack(elf_ex,aux_addr,tmp_stack, stack_len,load_addr,"userstack");
 
 //		vm_mmap(0, USER_SYSCALL_PAGE, 0x1000, PROT_READ | PROT_EXEC |PROT_WRITE, MAP_ANONYMOUS, 0,"fst_syscal");
 //		ut_memcpy((unsigned char *)USER_SYSCALL_PAGE,(unsigned char *)&__vsyscall_page,0x1000);
