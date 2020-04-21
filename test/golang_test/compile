@@ -1,0 +1,2 @@
+export GOROOT=/opt/host_folder/Golang-Ring0/go1.9/
+/opt/host_folder/Golang-Ring0/go1.6/bin/go build file.go

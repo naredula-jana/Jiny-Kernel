@@ -1099,6 +1099,7 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 
 	list_for_each(pos, &g_task_queue.head) {
 		len = max_len;
+		buf[0]=0;
 		spin_lock_irqsave(&g_global_lock, flags);
 
 		task = list_entry(pos, struct task_struct, task_queue);
@@ -1140,7 +1141,7 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 		if (g_current_task->mm == g_kernel_mm)
 			ut_printf("%s", buf);
 		else
-			fs_fd_write(1, buf, len);
+			fs_fd_write(1, buf, max_len - len);
 
 		if (all == 2){
 			print_syscall_stat(task,0);
@@ -1372,6 +1373,10 @@ int SYS_sc_exit(int status) {
 	SYSCALL_DEBUG("sys exit : status:%d \n", status);
 	SYSCALL_DEBUG(" pid:%d existed cause:%d name:%s \n", g_current_task->task_id, status, g_current_task->name);
 
+	if (g_current_task->HP_thread == 1){ /* TODO: for hp  threads, sleep for long duration for debugging further after the app exit */
+		sc_sleep(1000000);
+	}
+
 	//ut_log(" pid:%d existed cause:%d name:%s \n",g_current_task->pid,status,g_current_task->name);
 	ar_updateCpuState(g_current_task, 0);
 
@@ -1515,6 +1520,7 @@ int SYS_sc_kill(unsigned long pid, unsigned long signal) {
 	int ret = SYSCALL_FAIL;
 
 	SYSCALL_DEBUG("kill pid:%d signal:%d \n", pid, signal);
+
 	spin_lock_irqsave(&g_global_lock, flags);
 	list_for_each(pos, &g_task_queue.head) {
 		task = list_entry(pos, struct task_struct, task_queue);

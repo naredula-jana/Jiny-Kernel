@@ -632,6 +632,10 @@ unsigned long SYS_exit_group() {
 	struct list_head *pos;
 	struct task_struct *task;
 
+	if (g_current_task->HP_thread == 1){ /* TODO: for hp  threads, sleep for long duration for debugging further after the app exit */
+		sc_sleep(1000000);
+	}
+
 	spin_lock_irqsave(&g_global_lock, flags);
 	list_for_each(pos, &g_task_queue.head) {
 		task = list_entry(pos, struct task_struct, task_queue);

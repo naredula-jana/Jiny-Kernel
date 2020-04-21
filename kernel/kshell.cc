@@ -24,7 +24,7 @@ class kshell {
 	int his_line_no;
 	unsigned char curr_line[MAX_LINE_LENGTH];
 
-	void tokenise(unsigned char *p, unsigned char *tokens[]);
+	int tokenise(unsigned char *p, unsigned char *tokens[]);
 	int get_cmd(unsigned char *line);
 	int process_command(int cmd, unsigned char *p);
 	int cmd_func(unsigned char *arg1, unsigned char *arg2, unsigned char *arg3);
@@ -32,6 +32,7 @@ class kshell {
 public:
 	int input_device;
 	void kshell_process();
+	void execute_startupfile();
 	int main(void *arg);
 };
 kshell console_ksh; /* kernel shellon console */
@@ -45,12 +46,12 @@ int putchar(unsigned char c){
 	buf[0]=c;
 	return fs_fd_write(1,buf,1);
 }
-void kshell::tokenise(unsigned char *p, unsigned char *tokens[]) {
-	int i, k, j;
+int kshell::tokenise(unsigned char *p, unsigned char *tokens[]) {
+	int i, k, count;
 
 	i = 0;
 	k = 1;
-	j = 1;
+	count = 1;
 	tokens[0] = p;
 	while (p[i] != '\0') {
 		if (p[i] == ' ') {
@@ -60,15 +61,15 @@ void kshell::tokenise(unsigned char *p, unsigned char *tokens[]) {
 			continue;
 		}
 		if (k == 0) {
-			tokens[j] = p + i;
-			j++;
+			tokens[count] = p + i;
+			count++;
 			k = 1;
 		}
 		i++;
-		if (j > 2)
-			return;
+		if (count > 2)
+			return count;
 	}
-	return;
+	return count;
 }
 int kshell::cmd_func(unsigned char *arg1, unsigned char *arg2, unsigned char *arg3) {
 	int ret;
@@ -117,15 +118,13 @@ int kshell::process_command(int cmd, unsigned char *p) {
 	}
 	for (i = 0; i < 3; i++)
 		token[i] = 0;
-	tokenise(p, token);
-	symbls = 0;
+	symbls = tokenise(p, token);
 
 	cmd_func(token[0], token[1], token[2]);
 	if (cmd == CMD_FILLVAR && symbls > 0) {
 		ut_printf("\n");
 		return 1;
-	} else
-		ut_printf("Not found :%s: \n", p);
+	}
 	p[0] = '\0';
 	return 0;
 }
@@ -223,6 +222,7 @@ static int sh_create(unsigned char *bin_file, unsigned char *name, unsigned char
 	return ret;
 }
 extern "C" {
+int g_conf_hp_mode=0;
 void Jcmd_jdevices(unsigned char *arg1,unsigned char *arg2);
 void Jcmd_cpu(unsigned char *arg1,unsigned char *arg2);
 void enable_ext_interrupt();
@@ -231,40 +231,37 @@ void enable_ext_interrupt();
 }
 #define MAX_START_FILE 3096
 static unsigned char startup_buf[MAX_START_FILE+1];
+void kshell::execute_startupfile(){
+	int i;
+	struct file *file = 0;
+	file = (struct file*) fs_open("/data/start", 0, 0);
+	if (file == 0) {
+		ut_printf("failed to open startup file\n");
+	} else {
+		ut_printf("started executing the start file:\n");
+		fs_lseek(file, 0, 0);
+		int file_size = fs_read(file, (unsigned char*) startup_buf,
+				MAX_START_FILE);
+		int start;
+		start = 0;
+
+		for (i = 0; i < file_size; i++) {
+			if (startup_buf[i] == '\n') {
+				startup_buf[i] = 0;
+				//ut_printf(" executing command  :%s:\n ", &startup_buf[start]);
+				process_command(CMD_GETVAR, &startup_buf[start]);
+				start = i + 1;
+			}
+		}
+
+	}
+}
 void kshell::kshell_process(){
 	int  cmd_type;
-	int i;
+
 	curr_line[0] = '\0';
 //	enable_avx();
-	ut_printf(" JINY OS .. STARTED with startup script .....\n");
-	//Jcmd_jdevices(0,0);
-
-
-	if (1) {
-		struct file *file = 0;
-		file = (struct file*) fs_open("/data/start", 0, 0);
-		if (file == 0) {
-			ut_printf("failed to open startup file\n");
-		} else {
-			ut_printf("started executing the start file\n");
-			fs_lseek(file, 0, 0);
-			int file_size = fs_read(file, (unsigned char*) startup_buf,
-					MAX_START_FILE);
-			int start;
-			start = 0;
-
-			for (i = 0; i < file_size; i++) {
-				if (startup_buf[i] == '\n') {
-					startup_buf[i] = 0;
-					ut_printf(" executing command  :%s:\n ",
-							&startup_buf[start]);
-					process_command(CMD_GETVAR, &startup_buf[start]);
-					start = i + 1;
-				}
-			}
-
-		}
-	}
+	//ut_printf(" JINY OS .. STARTED with startup script .....\n");
 
 	while (1) {
 		ut_printf(CMD_PROMPT);
@@ -281,8 +278,12 @@ int kshell::main(void *arg) {
 	int i, cmd_type;
 	int ret = 0;
 
-	ut_log("   loading the kernel shell :%s:\n", USERLEVEL_SHELL);
-	if (ret != 0) {
+	sc_set_fsdevice(DEVICE_SERIAL1, DEVICE_SERIAL1); /* kshell on vga console */
+	input_device = DEVICE_SERIAL1;
+
+	execute_startupfile();
+	if (g_conf_hp_mode == 0) {
+		ut_log("   loading the kernel shell :%s:\n", USERLEVEL_SHELL);
 		ret = sh_create((unsigned char *) USERLEVEL_SHELL,(unsigned char *) "sh", 0, DEVICE_SERIAL1); // start the user level shell
 #if 1
 		if (serial2_device != 0 && serial2_device->driver != 0) {
@@ -334,7 +335,7 @@ void kernel_web_server(void *arg1, void *arg2){
 	}
 }
 void shell_main(){
-	sc_createKernelThread(kernel_web_server, 0 ,"kernel_ws",0);
+	//sc_createKernelThread(kernel_web_server, 0 ,"kernel_ws",0);
 	console_ksh.main(0);
 }
 void Jcmd_help(){

@@ -391,7 +391,7 @@ char *module_t::load_symbols_for_HP_app(binary_source_t *source, Elf64_Sym **arg
 
 		if ((ut_strcmp(symbol_table[j].name, (uint8_t *) "main") == 0)) {
 			highpriority_app_main = symbol_table[j].address;
-			ut_printf("		%d: symbol name:%s: value:%x type:%x length:%x(%d)\n", j, symbol_table[j].name, symbol_table[j].address, symbol_table[j].type, tsemb->st_size);
+			//ut_printf("		%d: symbol name:%s: value:%x type:%x length:%x(%d)\n", j, symbol_table[j].name, symbol_table[j].address, symbol_table[j].type, tsemb->st_size);
 		}
 		j++;
 	}
@@ -953,7 +953,7 @@ static void start_insexe(unsigned char *unused_filename, unsigned char *unused_a
 	modulep->secs[SEC_TEXT].addr = 0x400000;
 	modulep->mem_start = 0x400000;
 	modulep->mem_end = 0x400000 + modulep->secs[SEC_TEXT].length + modulep->secs[SEC_BSS].length;
-	ut_printf(" addr: %x - %x\n",modulep->secs[SEC_TEXT].addr,modulep->mem_end );
+	//ut_printf(" addr: %x - %x\n",modulep->secs[SEC_TEXT].addr,modulep->mem_end );
 	i = (unsigned char )modulep->secs[SEC_TEXT].addr[0];/* reading memory */
 
 	if (modulep->secs[SEC_TEXT].addr == 0) {
@@ -978,7 +978,7 @@ static void start_insexe(unsigned char *unused_filename, unsigned char *unused_a
 	}
 #endif
 	modulep->highpriority_app_main = elf_ex.e_entry ;
-	ut_printf("New HP starting address :%x \n",modulep->highpriority_app_main);
+	//ut_printf("New HP starting address :%x \n",modulep->highpriority_app_main);
 	spin_lock_irqsave(&g_global_lock, flags);
 	if (error == 0 && (total_modules < MAX_MODULES)) {
 		ut_strncpy(modulep->name, filename, MAX_FILENAME);
@@ -1023,11 +1023,11 @@ out:
 					tmp_stack_top = fs_elf_check_prepare(file, (unsigned char **)argv, (unsigned char **)env, &t_argc, &t_argv, &stack_len, &tmp_aux, &elf_interp, &tmp_stack);
 					elf_initialize_userspace_stack(elf_ex, tmp_aux,tmp_stack_top, stack_len, ELF_PAGESTART(eppnt->p_vaddr),"hp_userstack");
 					g_temp_hp_stack_len = stack_len;
-					ut_printf(" stack: %x len:%d \n",tmp_stack_top,g_temp_hp_stack_len);
+					//ut_printf(" stack: %x len:%d \n",tmp_stack_top,g_temp_hp_stack_len);
 					SYS_sc_clone(CLONE_VM | CLONE_KERNEL_THREAD| CLONE_HP_THREAD | CLONE_FS, tmp_stack_top, 0, modulep->highpriority_app_main, 0,0);
 			}
-			ut_printf(" Successfull loaded the high priority app\n");
-			Jcmd_maps(0,0);
+			ut_printf(" Successfull loaded the high priority app\n------------------------------\n");
+			//Jcmd_maps(0,0);
 		}
 		return;
 	}
