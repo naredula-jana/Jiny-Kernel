@@ -135,7 +135,7 @@ enum {
 #define CLONE_HP_THREAD 0x40000000 /* proparatory */
 #define CLONE_KERNEL_THREAD 0x80000000 /* proparatory */
 /* - task can be on run queue or in wait queues */
-#define MAX_SYSCALL 255
+#define MAX_SYSCALL 330
 struct syscall_stat{
 	int call_count; /* total call count */
 

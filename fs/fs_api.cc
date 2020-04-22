@@ -213,9 +213,9 @@ int fs_fd_write(unsigned long fd, uint8_t *buff, unsigned long len) {
 int SYS_fs_write(unsigned long fd, uint8_t *buff, unsigned long len) {
 	int ret;
 
-	SYSCALL_DEBUG("write fd:%d buff:%x len:%x data:%x:\n", fd, buff, len,buff);
+	//SYSCALL_DEBUG("write fd:%d buff:%x len:%x data:%x:\n", fd, buff, len,buff);
 	ret = fs_fd_write(fd, buff, len);
-	SYSCALL_DEBUG("write return : fd:%d ret:%d \n",fd,ret);
+	//SYSCALL_DEBUG("write return : fd:%d ret:%d \n",fd,ret);
 	return ret;
 }
 long SYS_fs_writev(int fd, const struct iovec *iov, int iovcnt) {

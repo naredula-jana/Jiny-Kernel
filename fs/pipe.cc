@@ -296,4 +296,9 @@ unsigned long SYS_pipe(int *fds) {
 
 	return ret;
 }
+unsigned long SYS_pipe2_PART(int *fds, int unused_flags) {
+	/* TODO : difference between pipe and pipe2 is additiona parameter flag, this currently not implemented */
+	SYSCALL_DEBUG("pipe2  fds:%x  args:%x Partially Implemented \n", fds,unused_flags);
+	return SYS_pipe(fds);
+}
 }

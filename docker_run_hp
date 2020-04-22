@@ -1,2 +1,5 @@
 cp bin/addon_disk_hp bin/addon_disk
-docker run -v $PWD:/opt/jiny_src/ --privileged --rm -it --entrypoint "/run/local_run"  naredulajana/jiny_base:latest  "$@"
+cd bin
+tar  --append start --file addon_disk
+cd ../
+sudo docker run -v $PWD:/opt/jiny_src/ --privileged --rm -it --entrypoint "/run/local_run"  naredulajana/jiny_base:latest  "$@"

@@ -96,8 +96,8 @@ func main() {
     buf := make([]byte, 1024)
     total:=0;
     
-    fmt.Println("Start Time:", time.Now().Format(time.RFC850))
-    for i = 0; i < 90000000; i++ {
+    fmt.Println("New Start Time:New New ", time.Now().Format(time.RFC850))
+    for i = 0; i < 90000; i++ {
     	count, _ := fo.Write(buf[:30])
     	total =total+count
     }

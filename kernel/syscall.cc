@@ -49,7 +49,8 @@ long int SYS_time(__time_t *time);
 
 unsigned long SYS_fs_fstat(int fd, struct stat *buf);
 unsigned long SYS_fs_stat(const char *path, struct stat *buf);
-
+unsigned long SYS_pipe2_PART(int *fds, int unused_flags);
+int SYS_epoll_pwait_PART(uint32_t efd, struct epoll_event *events, uint32_t maxevents, uint32_t timeout);
 int SYS_fs_dup2(int fd1, int fd2);
 int SYS_fs_dup(int fd1);
 unsigned long SYS_fs_unlink(uint8_t *path);
@@ -94,7 +95,7 @@ struct pollfd {
 };
 unsigned long SYS_poll_PART(struct pollfd *fds, int nfds, struct timeval *timeout);
 /*************************************************************************/
-
+int SYS_epoll_create1_PART(int unused_flags);
 unsigned long SYS_nanosleep(const struct timespec *req, struct timespec *rem);
 unsigned long SYS_getcwd(uint8_t *buf, int len);
 unsigned long SYS_chroot_PART(uint8_t *filename);
@@ -786,6 +787,11 @@ int SYS_sigalt_stack_PART(){
 	count_sycall_partial();
 	return 0;
 }
+int SYS_readlinkat_PART(int dirfd, const char *pathname,char *buf, size_t bufsiz){
+	SYSCALL_DEBUG("TODO  SYS_readlinkat_PART: \n");
+
+	return 0;
+}
 extern int SYS_fs_openat(int unused,char *filename, int mode, int flags);
 extern int SYS_epoll_create(int flags);
 extern int SYS_epoll_ctl(uint32_t  efd, uint32_t op, uint32_t fd, struct epoll_event *event);
@@ -846,12 +852,12 @@ syscalltable_t syscalltable[] = {
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 255 */
 { snull }, { SYS_fs_openat }, { snull }, { snull }, { snull }, /* 260 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 265 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 270 */
+{ snull }, { SYS_readlinkat_PART }, { snull }, { snull }, { snull }, /* 270 */
 { snull }, { snull }, { SYS_set_robust_list_PART }, { SYS_get_robust_list_PART }, { snull }, /* 275 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 280 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 285 */
+{ SYS_epoll_pwait_PART }, { snull }, { snull }, { snull }, { snull }, /* 285 */
 { snull }, { snull }, { SYS_accept4 }, { snull }, { snull }, /* 290 */
-{ snull }, { snull }, { snull }, { snull }, { snull }, /* 295 */
+{ SYS_epoll_create1_PART }, { snull }, { SYS_pipe2_PART }, { snull }, { snull }, /* 295 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 300 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 305 */
 { snull }, { snull }, { snull }, { snull }, { snull }, /* 310 */

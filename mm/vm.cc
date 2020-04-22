@@ -169,7 +169,7 @@ struct vm_area_struct *vm_findVma(struct mm_struct *mm, unsigned long addr, unsi
 		return 0;
 	while (vma) {
 		DEBUG(" [ %x - %x ] - %x - %x\n",vma->vm_start,vma->vm_end,addr,(addr+len));
-		if ((vma->vm_start <= addr) && ((addr + len) < vma->vm_end)) {
+		if ((vma->vm_start <= addr) && ((addr + len) <= vma->vm_end)) {
 			return vma;
 		}
 		vma = vma->vm_next;
@@ -258,6 +258,12 @@ unsigned long vm_mmap(struct file *file, unsigned long addr, unsigned long len, 
 
 	//ut_printf(" mmap : name:%s -- %s file:%x addr:%x len:%x pgoff:%x flags:%x  protection:%x,state:%x\n",name,file->filename,file,addr,len,pgoff,flags,prot,g_current_task->state);
 	vma = vm_findVma(mm, addr, len);
+	if (vma){
+		ut_log("WARNING: vma_map: second time call :%x \n",addr);
+		vma->vm_flags = flags;
+		vma->vm_prot = prot;
+		return addr;
+	}
 	if (vma && !(flags & MAP_ANONYMOUS)){
 		Jcmd_maps(0,0);
 		BUG();
@@ -356,9 +362,9 @@ void * SYS_vm_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
 
 	//spin_lock_irqsave(&vmm_lock, irq_flags);
 	if(g_current_task->HP_thread==1){
-		ret = vm_mmap(file, addr, len, prot, flags, pgoff,"hp_syscall");
+		ret = vm_mmap(file, addr, len, prot, flags, pgoff,"hp_syscall_mmap");
 	}else{
-		ret = vm_mmap(file, addr, len, prot, flags, pgoff,"syscall");
+		ret = vm_mmap(file, addr, len, prot, flags, pgoff,"syscall_mmap");
 	}
 	//spin_unlock_irqrestore(&vmm_lock, irq_flags);
 

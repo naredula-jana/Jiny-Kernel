@@ -1,0 +1,8 @@
+
+SRC=/opt/host_folder/Golang-Ring0/go1.14.2/src
+cp runtime1.go $SRC/runtime/runtime1.go
+cp sys_linux_amd64.s $SRC/runtime/
+cp stack.go $SRC/runtime/
+cp asm_linux_amd64.s $SRC/syscall/
+
+

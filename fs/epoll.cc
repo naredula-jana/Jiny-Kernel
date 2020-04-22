@@ -76,6 +76,7 @@ int epoll_dup(unsigned char *vinode){
 	atomic_inc(&epoll_p->epoll_count);
 	return JSUCCESS;
 }
+
 int SYS_epoll_create(int unused_flags) {
 	int fd = -1;
 	struct file *filep;
@@ -92,6 +93,9 @@ int SYS_epoll_create(int unused_flags) {
 	}
 	ut_log("epoll create: %x\n",filep->vinode);
 	return fd;
+}
+int SYS_epoll_create1_PART(int unused_flags) {
+	return SYS_epoll_create(unused_flags);
 }
 
 int SYS_epoll_ctl(uint32_t  efd, uint32_t op, uint32_t fd, struct epoll_event *unused_event){
@@ -222,5 +226,8 @@ int SYS_epoll_wait(uint32_t efd, struct epoll_event *events, uint32_t maxevents,
 	}
 	SYSCALL_DEBUG("epoll_wait efd:%d maxevents:%d timeout:%d ret:%d\n", efd,maxevents,timeout,ret);
 	return ret;
+}
+int SYS_epoll_pwait_PART(uint32_t efd, struct epoll_event *events, uint32_t maxevents, uint32_t timeout){
+  return  SYS_epoll_wait(efd, events,  maxevents,  timeout);
 }
 }

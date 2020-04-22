@@ -1309,6 +1309,9 @@ unsigned long SYS_sc_clone(int clone_flags, void *child_stack, void *pid, int (*
 
 			test_p = child_stack; /*TODO: temporary solution , touch child stack to avoid page fault in the user space*/
 			test_p = *test_p;
+			test_p = child_stack-16;
+			test_p = *test_p;
+
 #if 0
 			asm("movq %%rbp,%0" : "=m" (rbp));
 			rbp=rbp+2+2; /* 2- for pushing r8,r9 */
