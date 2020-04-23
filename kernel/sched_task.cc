@@ -647,7 +647,7 @@ static void schedule_kernelSecondHalf() { /* kernel thread second half:_schedule
 		if (g_current_task->HP_thread == 0){ /* parent HP thread */
 			g_current_task->process_id = g_current_task->task_id; /* process id is created for HP process */
 			g_current_task->thread.userland.sp = &c[0];
-			g_current_task->thread.userland.argc = 0; /* TODO: Hard coded , other wise it is crashing*/
+			g_current_task->thread.userland.argc = 2; /* TODO: Hard coded , other wise it is crashing*/
 			g_current_task->HP_thread = 1;
 			asm("movq %[new_sp],%%rsp\n\t" : [new_sp] "=m" (g_current_task->thread.userland.user_stack));
 			asm("movq %[new_sp],%%rbp\n\t" : [new_sp] "=m" (cpu_current_task(getcpuid())->thread.userland.user_stack));

@@ -742,7 +742,11 @@ unsigned int g_conf_hp_max_procs=1;
 void Jcmd_insexe(unsigned char *filename, unsigned char *arg) {
 
 	ut_strncpy(g_conf_hp_filename, filename, MAX_FILENAME);
-	ut_strncpy(g_conf_hp_arg, arg, MAX_FILENAME);
+	if (arg != 0){
+		ut_strncpy(g_conf_hp_arg, arg, MAX_FILENAME);
+	}else{
+		ut_snprintf(g_conf_hp_arg,MAX_FILENAME,"dummy");
+	}
 
 	//sc_createKernelThread(start_insexe, 0, (unsigned char *) "hp_starter", 0);
 	start_insexe(g_conf_hp_filename,g_conf_hp_arg);
@@ -769,6 +773,8 @@ static void start_insexe(unsigned char *unused_filename, unsigned char *unused_a
 	int total_symbols = 0;
 	unsigned long elf_bss, bss_start, bss;
 	unsigned char *filename=g_conf_hp_filename;
+	unsigned char *application_arg=g_conf_hp_arg;
+	ut_printf(" Starting golang app :%s:  args :%s: \n",filename,application_arg);
 
 	source.code_start = 0;
 	source.code_length = 0;
@@ -1016,7 +1022,12 @@ out:
 					unsigned char env_str[100];
 
 					argv[0]="highpriorityapp"; /* zero arguments */
-					argv[1]=0;
+					if (argv ==0){
+						argv[1]=0;
+					}else{
+						argv[1]=application_arg;
+						argv[2]=0;
+					}
 					ut_snprintf(&env_str[0],100,"GOMAXPROCS=%d",g_conf_hp_max_procs);
 					env[0]=env_str;
 					env[1]=0;

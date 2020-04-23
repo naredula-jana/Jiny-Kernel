@@ -60,7 +60,7 @@ func argv_index(argv **byte, i int32) *byte {
 func args(c int32, v **byte) {
 	argc = c
 	argv = v
-        argc=1
+        argc=2
         p := unsafe.Pointer(uintptr(unsafe.Pointer(v)) + uintptr(8))
         argv = (**byte)(p)
 // jana removed 	sysargs(c, v)

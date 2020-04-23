@@ -2,7 +2,8 @@ package main
 
 import (
     "fmt"
-
+   "flag"
+   "os"
 //    "time"
 )
 
@@ -40,7 +41,13 @@ func process4(in chan int,out chan int ) {
   }
 }
 func main() {
-    fmt.Println("Go Channel for SEDA architecture")
+    maxCount  := flag.Int("count", 1000, "max count")
+flag.Parse()
+    fmt.Println("Go Channel for SEDA architecture:: %d",*maxCount)
+
+arg := os.Args
+
+    fmt.Println("all: ",arg)
 
     in := make(chan int)
     out := make(chan int)
@@ -56,7 +63,7 @@ func main() {
     go process4(p3, out)
 
     total:=0
-    for i:=0; i<1000; i++ {
+    for i:=0; i<*maxCount; i++ {
        in <- i
        k :=<- out
        //fmt.Println(k)
