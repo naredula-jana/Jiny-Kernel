@@ -1,0 +1,4 @@
+set syscallStat 1
+set hp_max_procs 6
+set hp_mode 1
+set syscall_debug 0

@@ -12,6 +12,7 @@
 #define CPU_STATE_USER_IP 0x40
 #define CPU_STATE_CPUID 0x48   // TODO: currently hardcoded in getcpuid , before changing this , change in getcpuid also
 #define CPU_STATE_SYSCALLID 0x50
+#define CPU_STATE_HP_APPLICATION_RBP 0x58
 //#define CPU_STATE_CURRENT_TASK 0x58
 
 
@@ -145,6 +146,7 @@ struct md_cpu_state { /* NOTE: do not alter the attributes, there location matte
         unsigned long user_ip; /* Stats and debugging pupose */
         unsigned long cpu_id;
         unsigned long syscall_id;
+        unsigned long hp_application_rbp;
 //        unsigned long current_task;
 };
 

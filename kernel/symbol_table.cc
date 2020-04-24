@@ -516,7 +516,42 @@ void ut_storeBackTrace(unsigned long *bt, unsigned long max_length) {
 	}
 	return;
 }
+unsigned char *ut_mod_get_symbol_name(unsigned long addr);
+void ut_getModuleBackTrace(unsigned long *rbp, unsigned long task_addr, backtrace_t *bt) {
+	int i;
+	unsigned char *name;
+	unsigned long lower_addr, upper_addr;
+	struct vm_area_struct *vma;
 
+	if (bt==0 || rbp==0){
+		return;
+	}
+	for (i = 0; i < 6; i++) {
+		//if (rbp < lower_addr || rbp > upper_addr)
+		//	break;
+
+		vma=vm_findVma(g_kernel_mm,((unsigned long )rbp & PAGE_MASK),8);
+		if (vma ==0){
+			break;
+		}
+		name = ut_mod_get_symbol_name(*(rbp + 1));
+		if (name==0){
+			break;
+		}
+		if (bt) {
+			bt->entries[i].name = name;
+			bt->entries[i].ret_addr = *(rbp + 1);
+			bt->count = i + 1;
+		} else {
+			ut_log(" %d :%s - %x\n", i + 1, name, *(rbp + 1));
+		}
+		rbp = *rbp;
+
+		//if (rbp < lower_addr || rbp > upper_addr)
+		//	break;
+	}
+	return;
+}
 void ut_getBackTrace(unsigned long *rbp, unsigned long task_addr, backtrace_t *bt) {
 	int i;
 	unsigned char *name;
@@ -541,6 +576,9 @@ void ut_getBackTrace(unsigned long *rbp, unsigned long task_addr, backtrace_t *b
 		if (bt) {
 			bt->entries[i].name = name;
 			bt->entries[i].ret_addr = *(rbp + 1);
+			if (bt->entries[i].ret_addr == MAGIC_LONG){
+				break;
+			}
 			bt->count = i + 1;
 		} else {
 			ut_log(" %d :%s - %x\n", i + 1, name, *(rbp + 1));

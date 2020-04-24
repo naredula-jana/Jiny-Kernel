@@ -671,6 +671,7 @@ void sc_before_syscall() {
 
 #else
 		g_current_task->stats.start_tsc = ar_read_tsc();
+//		g_current_task->stats.hp_rbp = g_cpu_state[getcpuid()].md_state.user_ip;
 #endif
 #if 0
 		if (g_current_task->stats.start_tsc != 0){
@@ -707,7 +708,7 @@ static void check_signals(){
 void sc_after_syscall() {
 	//STAT_INC(g_stat_syscall_count);
 	g_current_task->stats.syscall_count++;
-	g_current_task->curr_syscall_id = g_cpu_state[getcpuid()].md_state.syscall_id;
+	g_current_task->curr_syscall_id = g_cpu_state[getcpuid()].md_state.syscall_id; /*TODO: it should in before_syscall */
 
 	if (g_conf_syscallStat==1 && g_current_task->curr_syscall_id < MAX_SYSCALL && g_current_task->stats.syscalls!=0){
 		g_current_task->stats.syscalls[g_current_task->curr_syscall_id].call_count++;
@@ -796,6 +797,13 @@ unsigned long g_stat_idle_errs;
 void sc_schedule() { /* _schedule function task can land here. */
 	unsigned long intr_flags;
 	int cpuid = getcpuid();
+
+	if (g_current_task->HP_thread == 1){
+		if (g_cpu_state[getcpuid()].md_state.hp_application_rbp != 0){
+			g_current_task->stats.hp_rbp = g_cpu_state[getcpuid()].md_state.hp_application_rbp;
+			g_cpu_state[getcpuid()].md_state.hp_application_rbp=0;
+		}
+	}
 
 	if (g_cpu_state[cpuid].idle_state == 1){
 		g_cpu_state[cpuid].idle_state = 0;
@@ -1053,6 +1061,7 @@ int Jcmd_kill(uint8_t *arg1, uint8_t *arg2) {
 extern void print_syscall_stat(struct task_struct *task, int output);
 void Jcmd_stat_diskio(unsigned char *,unsigned char *);
 void Jcmd_locks(unsigned char *,unsigned char *);
+void ut_getModuleBackTrace(unsigned long *rbp, unsigned long task_addr, backtrace_t *bt);
 int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	unsigned long flags;
 	struct list_head *pos;
@@ -1125,6 +1134,18 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 									"          %d: %9s - %x \n", i,
 									temp_bt.entries[i].name,
 									temp_bt.entries[i].ret_addr);
+				}
+
+				if  (task->HP_thread == 1){
+					temp_bt.count = 0;
+					ut_getModuleBackTrace((unsigned long*) task->stats.hp_rbp,
+							(unsigned long) task, &temp_bt);
+					for (i = 0; i < temp_bt.count; i++) {
+						len = len - ut_snprintf(buf + max_len - len, len,
+										"    HP    %d: %9s - %x  stack:%x\n", i,
+										temp_bt.entries[i].name,
+										temp_bt.entries[i].ret_addr,task->stats.hp_rbp);
+					}
 				}
 			}  else if (all == 4) {
 				for (j = 0; j < task->fs->total; j++) {

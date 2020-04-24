@@ -148,6 +148,7 @@ HP_syscall:
 	pushq %r8
 	pushq %r9
     movq %rax,%gs:CPU_STATE_SYSCALLID /* used for stat */
+    movq %rbp,%gs:CPU_STATE_HP_APPLICATION_RBP /* used for stat */
 	pushq %rbx
 	pushq %rbp
 	movq %rsp, %rbx

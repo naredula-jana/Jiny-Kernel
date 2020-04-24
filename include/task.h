@@ -210,6 +210,7 @@ struct task_struct {
 		unsigned long start_time;
 		unsigned long start_tsc;
 		unsigned long end_tsc; /* end of syscall */
+		unsigned long hp_rbp;
 #if 1
 		struct syscall_stat *syscalls;
 

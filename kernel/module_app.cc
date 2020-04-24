@@ -32,6 +32,7 @@ public:
 	void sort_symbols();
 	void rank_symbols_by_hits(int max_ranks);
 	unsigned long _get_symbol_addr(unsigned char *name);
+	unsigned char *_get_symbol_name(unsigned long addr);
 	void free_module();
 	char* do_relocation(struct file *file, Elf64_Sym *symb, int total_symbols, Elf64_Shdr *sec_rel,int sec_type);
 	char *load_symbols_for_HP_app(binary_source_t *source, Elf64_Sym **arg_symb, Elf64_Shdr *sec_symb);
@@ -110,6 +111,18 @@ void module_t::sort_symbols() {
 		}
 	}
 	symb_table_length = i;
+}
+unsigned char *module_t::_get_symbol_name(unsigned long addr) {
+	int i;
+	unsigned char *ret = 0;
+
+	for (i = 0; symbol_table[i].name != 0; i++) {
+		if (addr>=symbol_table[i].address && addr<=(symbol_table[i].address+symbol_table[i].len)){
+			return symbol_table[i].name;
+		}
+	}
+
+	return ret;
 }
 unsigned long module_t::_get_symbol_addr(unsigned char *name) {
 	int i;
@@ -388,6 +401,7 @@ char *module_t::load_symbols_for_HP_app(binary_source_t *source, Elf64_Sym **arg
 #endif
 		symbol_table[j].name = str_table + tsemb->st_name;
 		symbol_table[j].address = tsemb->st_value;
+		symbol_table[j].len = tsemb->st_size;
 
 		if ((ut_strcmp(symbol_table[j].name, (uint8_t *) "main") == 0)) {
 			highpriority_app_main = symbol_table[j].address;
@@ -1183,6 +1197,19 @@ void Jcmd_rmmod(unsigned char *filename, unsigned char *arg) {
 		}
 	}
 	last: return;
+}
+
+unsigned char *ut_mod_get_symbol_name(unsigned long addr) {
+	int i;
+	module_t *modulep = 0;
+	unsigned char *ret = 0;
+
+	for (i = 1; i < total_modules; i++) {
+		modulep = g_modules[i];
+		ret = modulep->_get_symbol_name(addr);
+	}
+
+	return ret;
 }
 
 unsigned long ut_mod_get_symbol_addr(unsigned char *name) {

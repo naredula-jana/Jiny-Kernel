@@ -9,6 +9,17 @@ Below Docker Container will execute the default image from master branch.
 
 ```
 
+**Procedure to Run the Image from local checkout:**
+
+Below Docker Container will execute the default image from local directory. 
+
+```
+  ./docker_run_hp    /* run in HP mode: any golang app can started in HP mode*/
+  ./docker_run_nonhp    /* run in non HP mode,  busybox shell will be running*/
+
+```
+ 
+
 **Procedure to Build the Image from local git repo source and run:**
 
  
