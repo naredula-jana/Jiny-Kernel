@@ -42,18 +42,22 @@ func process4(in chan int,out chan int ) {
 }
 func main() {
     maxCount  := flag.Int("count", 1000, "max count")
-flag.Parse()
-    fmt.Println("Go Channel for SEDA architecture:: %d",*maxCount)
+    flag.Parse()
+    fmt.Println("SEDA: Sample Go Channel for SEDA architecture: ",*maxCount)
 
-arg := os.Args
+    arg := os.Args
 
-    fmt.Println("all: ",arg)
+    fmt.Println("SEDA:   Arguments to application  :",arg)
 
     in := make(chan int)
     out := make(chan int)
-  p1 := make(chan int)
-  p2 := make(chan int)
-  p3 := make(chan int)
+    
+    p1 := make(chan int)
+    p2 := make(chan int)
+    p3 := make(chan int)
+    defer close(p1)
+    defer close(p2)
+    defer close(p3)
     defer close(in)
     defer close(out)
 
@@ -69,5 +73,5 @@ arg := os.Args
        //fmt.Println(k)
        total=total+k
      }
-     fmt.Println("total: ",total)
+     fmt.Println("SEDA: Final total: ",total)
 }

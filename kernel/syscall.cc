@@ -712,7 +712,7 @@ int SYS_getrlimit(int resource, struct rlimit *rlim){
 }
 int SYS_tgkill_PART(int tid, int sig){
 	count_sycall_partial();
-	ut_printf(" TODO: tg kill not yet supported \n");
+	//ut_printf(" TODO: tg kill not yet supported \n");
 	return -1;
 }
 /* TODO */
