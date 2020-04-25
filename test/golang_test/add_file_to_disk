@@ -1,2 +1,2 @@
-tar --delete nseda --file /opt/host_folder/Jiny-Kernel/bin/addon_disk_hp
-tar --append nseda --file /opt/host_folder/Jiny-Kernel/bin/addon_disk_hp
+tar --delete nseda --file /opt/host_folder/Jiny-Kernel/bin/addon_disk_hp.tar
+tar --append nseda --file /opt/host_folder/Jiny-Kernel/bin/addon_disk_hp.tar

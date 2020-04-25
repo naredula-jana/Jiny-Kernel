@@ -1075,11 +1075,13 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 	if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "all") == 0) {
 		all = 1;
 	} else if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "syscall") == 0) {
-		all =2;
+		all = 2;
 	}else if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "cpu") == 0) {
-		all =3;
+		all = 3;
 	}else if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "fd") == 0) {
-		all =4;
+		all = 4;
+	}else if (arg1 != 0 && ut_strcmp(arg1, (uint8_t *) "hp") == 0) {
+		all = 5;
 	}
 	max_len = PAGE_SIZE * 100;
 	len = max_len;
@@ -1135,7 +1137,7 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 									temp_bt.entries[i].name,
 									temp_bt.entries[i].ret_addr);
 				}
-
+			}else if (all == 5) {
 				if  (task->HP_thread == 1){
 					temp_bt.count = 0;
 					ut_getModuleBackTrace((unsigned long*) task->stats.hp_rbp,
@@ -1147,7 +1149,7 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 										temp_bt.entries[i].ret_addr,task->stats.hp_rbp);
 					}
 				}
-			}  else if (all == 4) {
+			}else if (all == 4) {
 				for (j = 0; j < task->fs->total; j++) {
 					if (task->fs->filep[j] != 0)
 						len = len - ut_snprintf(buf + max_len - len, len,
@@ -1188,11 +1190,13 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 		}
 	}
 	spin_unlock_irqrestore(&g_global_lock, flags);
-	if (g_current_task->mm == g_kernel_mm)
-		ut_printf("%s", buf);
-	else
-		fs_fd_write(1, buf, len);
 
+	if (all == 1){
+		if (g_current_task->mm == g_kernel_mm)
+			ut_printf("%s", buf);
+		else
+			fs_fd_write(1, buf, len);
+	}
 	vfree((unsigned long) buf);
 
 	if (all == 1){

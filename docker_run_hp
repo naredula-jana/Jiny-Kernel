@@ -1,4 +1,4 @@
-cp bin/addon_disk_hp bin/addon_disk
+cp bin/addon_disk_hp.tar bin/addon_disk
 cd bin
 tar  --append start --file addon_disk
 cd ../
