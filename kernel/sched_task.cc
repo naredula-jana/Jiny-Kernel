@@ -664,23 +664,11 @@ static void schedule_kernelSecondHalf() { /* kernel thread second half:_schedule
 void sc_before_syscall() {
 	g_current_task->callstack_top = 0;
 
+	if (g_conf_syscallStat>=1 && g_current_task->curr_syscall_id < MAX_SYSCALL && g_current_task->stats.syscalls!=0){
 
-	if (g_conf_syscallStat==1 && g_current_task->curr_syscall_id < MAX_SYSCALL && g_current_task->stats.syscalls!=0){
-#if 0
-		g_current_task->stats.start_tsc = g_jiffies;
-
-#else
-		g_current_task->stats.start_tsc = ar_read_tsc();
-//		g_current_task->stats.hp_rbp = g_cpu_state[getcpuid()].md_state.user_ip;
-#endif
-#if 0
-		if (g_current_task->stats.start_tsc != 0){
-			g_current_task->stats.syscalls[g_current_task->curr_syscall_id].appcall_time =  g_current_task->stats.syscalls[g_current_task->curr_syscall_id].appcall_time +( curr_tsc -  g_current_task->stats.start_tsc);
-			g_current_task->stats.start_tsc = curr_tsc;
-		}else{
-			g_current_task->stats.start_tsc =  curr_tsc;
+		if (g_conf_syscallStat >= 2) {
+		    g_current_task->stats.start_tsc = ar_read_tsc();
 		}
-#endif
 	}
 }
 extern "C" {
@@ -706,37 +694,38 @@ static void check_signals(){
 	}
 }
 void sc_after_syscall() {
-	//STAT_INC(g_stat_syscall_count);
+
 	g_current_task->stats.syscall_count++;
 	g_current_task->curr_syscall_id = g_cpu_state[getcpuid()].md_state.syscall_id; /*TODO: it should in before_syscall */
 
-	if (g_conf_syscallStat==1 && g_current_task->curr_syscall_id < MAX_SYSCALL && g_current_task->stats.syscalls!=0){
+	if (g_conf_syscallStat>=1 && g_current_task->curr_syscall_id < MAX_SYSCALL && g_current_task->stats.syscalls!=0){
 		g_current_task->stats.syscalls[g_current_task->curr_syscall_id].call_count++;
 
-#if 0
-		unsigned long curr_tsc = g_jiffies;
-#else
-		unsigned long curr_tsc = ar_read_tsc();
-#endif
 
-		int id = g_current_task->curr_syscall_id;
-		long systime = ( curr_tsc -  g_current_task->stats.start_tsc)/1000;
-		if (systime < 0){
-			systime=0;
+		if (g_conf_syscallStat >= 2) {
+			unsigned long curr_tsc = ar_read_tsc();
+			int id = g_current_task->curr_syscall_id;
+			long systime = (curr_tsc - g_current_task->stats.start_tsc) / 1000;
+			if (systime < 0) {
+				systime = 0;
+			}
+			long apptime = ((curr_tsc - g_current_task->stats.end_tsc) / 1000)
+					- systime;
+			if (apptime < 0) {
+				apptime = 0;
+			}
+			if (g_current_task->stats.start_tsc != 0) {
+				g_current_task->stats.syscalls[id].syscall_time =
+						g_current_task->stats.syscalls[id].syscall_time
+								+ systime;
+			}
+			if (g_current_task->stats.end_tsc != 0) {
+				g_current_task->stats.syscalls[id].appcall_time =
+						g_current_task->stats.syscalls[id].appcall_time + apptime;
+			}
+			g_current_task->stats.end_tsc = curr_tsc;
 		}
-		long apptime = ((curr_tsc - g_current_task->stats.end_tsc)/1000) - systime;
-		if (apptime < 0){
-			apptime=0;
-		}
-		if (g_current_task->stats.start_tsc != 0 ){
-			g_current_task->stats.syscalls[id].syscall_time =  g_current_task->stats.syscalls[id].syscall_time +systime;
-		}
-		if (g_current_task->stats.end_tsc != 0 ){
-			g_current_task->stats.syscalls[id].appcall_time =  g_current_task->stats.syscalls[id].appcall_time +apptime;
-		}
-		g_current_task->stats.end_tsc =  curr_tsc;
 	}
-
 
 	g_cpu_state[getcpuid()].stats.syscalls++;
 	check_signals();
@@ -1128,7 +1117,7 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 		temp_bt.count = 0;
 		//if (task->state != TASK_RUNNING) {
 		if (1) {
-			if (all == 1) {
+			if (all == 1 || all == 5) {
 				ut_getBackTrace((unsigned long*) task->thread.rbp,
 						(unsigned long) task, &temp_bt);
 				for (i = 0; i < temp_bt.count; i++) {
@@ -1137,7 +1126,8 @@ int Jcmd_ps(uint8_t *arg1, uint8_t *arg2) {
 									temp_bt.entries[i].name,
 									temp_bt.entries[i].ret_addr);
 				}
-			}else if (all == 5) {
+			}
+			if (all == 5) {
 				if  (task->HP_thread == 1){
 					temp_bt.count = 0;
 					ut_getModuleBackTrace((unsigned long*) task->stats.hp_rbp,
