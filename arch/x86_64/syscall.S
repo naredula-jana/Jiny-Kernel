@@ -158,13 +158,13 @@ HP_syscall:
 	subq $16, %rbp
 	pushq %rbx // old stack
 
-    pushq %rax
+/*    pushq %rax
     pushq %rdx
     pushq %rsi
     call sc_before_syscall
     popq %rsi
     popq %rdx
-    popq %rax
+    popq %rax */
 
 	call *syscalltable(,%rax,8)
 

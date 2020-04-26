@@ -694,17 +694,19 @@ static void check_signals(){
 	}
 }
 void sc_after_syscall() {
+	struct task_struct *curr_task=g_current_task;
+	curr_task->stats.syscall_count++;
+	//g_cpu_state[getcpuid()].stats.syscalls++;
 
-	g_current_task->stats.syscall_count++;
-	g_current_task->curr_syscall_id = g_cpu_state[getcpuid()].md_state.syscall_id; /*TODO: it should in before_syscall */
+	curr_task->curr_syscall_id = g_cpu_state[getcpuid()].md_state.syscall_id; /*TODO: it should in before_syscall */
+	int id = curr_task->curr_syscall_id;
 
-	if (g_conf_syscallStat>=1 && g_current_task->curr_syscall_id < MAX_SYSCALL && g_current_task->stats.syscalls!=0){
-		g_current_task->stats.syscalls[g_current_task->curr_syscall_id].call_count++;
-
+	if (g_conf_syscallStat>=1 && id < MAX_SYSCALL && curr_task->stats.syscalls!=0){
+		curr_task->stats.syscalls[id].call_count++;
 
 		if (g_conf_syscallStat >= 2) {
 			unsigned long curr_tsc = ar_read_tsc();
-			int id = g_current_task->curr_syscall_id;
+
 			long systime = (curr_tsc - g_current_task->stats.start_tsc) / 1000;
 			if (systime < 0) {
 				systime = 0;
@@ -726,11 +728,9 @@ void sc_after_syscall() {
 			g_current_task->stats.end_tsc = curr_tsc;
 		}
 	}
+	//check_signals();
 
-	g_cpu_state[getcpuid()].stats.syscalls++;
-	check_signals();
-
-	g_current_task->callstack_top = 0;
+	curr_task->callstack_top = 0;
 }
 #define MAX_DEADTASKLIST_SIZE 100
 static struct task_struct *deadtask_list[MAX_DEADTASKLIST_SIZE + 1];

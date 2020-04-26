@@ -1052,6 +1052,7 @@ out:
 					SYS_sc_clone(CLONE_VM | CLONE_KERNEL_THREAD| CLONE_HP_THREAD | CLONE_FS, tmp_stack_top, 0, modulep->highpriority_app_main, 0,0);
 			}
 			ut_printf(" Successfull loaded the high priority app\n------------------------------\n");
+			Jcmd_reset_cpu_stat();
 			//Jcmd_maps(0,0);
 		}
 		return;
