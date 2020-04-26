@@ -1,166 +1,107 @@
-## Benchmarks and Performance improvements in Opensource Virtual Infra.
+##  Performance improvements.
 
-[Jiny kernel](https://github.com/naredula-jana/Jiny-Kernel) was designed from ground up for superior performance on virtual infrastructure, so as vm can run to near native performance. This paper mainly compares throughput of [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel) with Linux kernel on different workloads like cpu,network,storage,memory,IPC,.. etc, with hypervisors like kvm. Apart from kernel,other key virtual infra components like virtual switch throughput are also compared.
-In each benchmark the bottlenecks and corresponding optimizations were highlighted.  This paper was limited only to the opensource virtual infrastructure software components like Jiny,Linux, kvm, qemu, virtual switches(linux bridge,userspace switch,ovs,snabb),DPDK..etc.  There are lot of performance centric areas like storage,memory.. etc that are yet to be explored.
+### Benchmark-1( Golang in Ring0): 
 
-**About me:**
- I have started developing Jiny Kernel almost 5 years back from scratch, Along with Jiny development, these Benchmarks are developed over the period of time. The paper highlights performance improvements in areas like pagecache suitable for Hadoop workloads, IPC improvements for multi threaded apps, Network throughput improvements for inter vm communication within same host suitable for NFV,..etc. 
+Comparision of [golang14.2 application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/file.go) compiled in  Ring-0 versus default golang14.2 on linux machine:
 
-   <table border="1" style="width:100%">
-  <tr>
-    <td><b> -  </b></td>
-    <td><b> Area </b></td>
-    <td><b>Description </b></td>
-    <td><b> Improvements</b></td>
-    </tr>
-    <tr><td>Benchmark-1</td><td>CPU centric</td> <td> Comparisions of cpu centric app running in linux vm versus same app running in Jiny vm.</td> <td> 7X </td></tr>
-    <tr><td>Benchmark-2</td><td>Network centric</td> <td>Comparisions of network throughput in linux vm versus Jiny vm as against with linux bridge and user space switch. Jiny on user space switch outperforms when compare to the kernel based switch like linux bridge.</td> <td> 7X </td></tr>
-     <tr><td>Benchmark-3</td><td>Storage</td> <td> Incomplete</td> <td> - </td></tr>
-     <tr><td>Benchmark-4</td><td>PageCache</td> <td> Comparisions of Read/write throughput for Hadoop workload, especially hdfs or IO centric. </td> <td> 20% </td></tr>
-     <tr><td>Benchmark-5</td><td>Memory</td> <td> Memory  improvements with zero page accumulation and other related techiniques</td> <td> - </td></tr>
-      <tr><td>Benchmark-6</td><td>IPC</td> <td> IPC and message passing.</td> <td> 140% </td></tr>
-    </table>
-    
-----------------------------------------------------------------------------------
+** Perf Test Results **
 
-### Benchmark-1(CPU centric): 
-**Overview:** An application execution time on the metal is compared with the same app wrapped using thin OS like Jiny and launched as vm. The single app running in Jiny vm outperforms by completing in 6 seconds when compare to the same running on the metal that took 44sec. The key reason for superior performance in Jiny os is, it accelerates the app by allowing  it to run in ring-0 so that the overhead of system calls and context switches are minimized. The protection of system from app malfunctioning is left to virtulization hardware, means if the app crashes in ring-0 at the maximum vm goes down, but not the host. To run in Jiny vm, the app need to recompile using the modified c library. libc need to modify to convert the system calls in to plain function calls.
-
-**Application(app) used for testing:** A simple C application that read and writes into a /dev/null file repeatedly in a tight loop is used, the app is a system call intensive. [The app](https://github.com/naredula-jana/Jiny-Kernel/blob/master/modules/test_file/test_file.c) is executed in four environments on the metal, inside the Jiny as High priority, as normal priority inside Jiny  and inside the linux vm.   
-
-##### Completion time of app in different environments:
-
-1. **case-1:** app as high priority inside Jiny vm:      6 sec
-2. **case-2:** same app on the metal(linux host): 44 sec
-3. **case-3:** same app as normal priority in Jiny vm: 55 sec
-4. **case-4:** same app on the linux vm:          43 sec
-
-##### Reasons for better performance:
-
-- **From cpu point of view**: when app runs inside jiny vm(case-1), virtualization hardware(like intel VT-x) is active and it will protect system  from app malfunctioning, here app runs in ring-0 along with Jiny kernel. means if the app crashes it will not bring down the host, but only the vm crashes at the maximum. when app on the metal(case-2) , virtualization hardware is passive/disabled and the os surrounding(i.e host os) will make sure that the app malfunctioning will not bring down the host by running the app in ring-3. 
-
- One key difference between case-1 and case-2 is, in case-1 vt-x hardware is used while in case-2 host os software does the job of system protection from app malfunctioning. Jiny OS will allow the app to run in the same address space, it does not spend cpu cycles to protect the system or os from app malfunciton, at the maximum the vm goes down since only one app is running it is equal to single app crashing without effecting the system.
-
-        
-- **From end user point of view**: To run the app inside the Jiny vm as high priority app, it need to recompile so the syscall located in libc will replaced with corresponding function calls. app is not required any change , only libc will be modified. start time in the first case will be slightly slower since vm need to be started before the app. so long running applications like servers will be suitable for high priority app.
-
-##### summary
- 1. Virtulization hardware(vt-x) along with thin OS like Jiny can function as hardware assit layer to speedup the app. Launching single app using Jiny Vm will be useful not only from virtulization point of view but also to increase the speed.
- 2. In the test, syscall intensive app was used, and  as shown huge improvement when compare to app on metal, but other workload like io intensive will not give that large improvement.  Speeds of virtulization io path are improving continuously both in software or hardware,  so  io intensive  apps also will become better. 
-
-----------------------------------------------------------------------------------
-
-### Benchmark-2(Network centric): 
-
-This benchmark measures the network throughput between two vm's using virtual switch on the same host. This mainly highlight the bottlenecks in quest kernel or virtual switch connecting the vm's. Networking in Jiny is based on the [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). This benchmark gives the maxumum throughput in terms of packets per second(PPS) at which first vm can send udp packets to second vm using the virtual switch in between. 
-
- - **Test Environment**:  In this benchmark, udp client and udp server socket applications are used to send and recv the udp packets from one vm to another. udp server acts like a reflector, responds back the same packet recvied from udp client. udp client counts the number of packet it got responded back from the udp server. udp client is executed in the first vm and udp server is executed in the second vm. The below test results shows the network thoughput(in terms of million packets processed per second(MPPS) on sending/recving side.The  tests mentioned in the table compares Jiny and Linux kernel througput using one of the two virtual switches with various configurations.  
- - **kernels** : Jiny kernel(2.x) , linux kernel(3.18) are used. 
- - **virtual switch**: Linux Bridge(LB), [User Space Switch(USS)](https://github.com/naredula-jana/Jiny-Kernel/tree/master/test/virtio-switch): These two vswitches are compared against the above two kernels. USS is a simple two port virtual user space switch to connect two vm's. It is based on opensource vhost-user vNIC, this vNIC is available in kvm hypervisor. other User space virtual switch are Snabb,DPDK,..etc . 
- - **VNIC type**: uses vhost-kernel or virtio-vhost with LB, uses vhost-user with USS bypassing host kernel.
- - **Packet size** used by udp client/server: 50/200 bytes. 
- - **Number of cpu cores**:  vm with 2 to 6 cores are used, udp client consumes 1 to 4 thread/cores to generate and recv such large number of packets.  
- - **Hypervisor**: kvm/qemu-2.4/linux host-kernel-3.18.
- - **two way versus one way test**: "two way" means udp client sends the packets to the udp server running on other vm, where udp_server recves the packets it response back the same packet to the udp client. In the one way, udp server will not be running on the destination vm,so the packets will be dropped in the recving side of the OS or in the switch. 
 
  <table border="1" style="width:100%">
   <tr>
     <td><b>Test# </b></td>
     <td><b> Description</b></td>
-    <td><b>Using Linux kernel inside both vm's</b></td>
-    <td><b>Using Jiny kernel inside both vm's</b></td>
-    </tr>
-  <tr>
-    <td> 1 </td>
-    <td> vm1 -LB- vm2 </td>
-    <td>Throughput for two way: 0.120 MPPS<br>Bottleneck: linux kernel </td>
-    <td>Throughput for two way: 0.225 MPPS<br>Throughput for one way: 0.266 MPPS<br>Bottleneck: LB </td>
+    <td><b>Throughput</b></td>
+    <td><b>Comment</b></td>
   </tr>
   <tr>
-    <td> 2 </td>
-    <td>vm1- USS -vm2</td>
-    <td> ???? </td>
-    <td><b>Throughput</b>(halfway: from vm to switch) : 6.50 MPPS ,<br> <b>Bottleneck</b>: USS/Jiny os start dropping, both need to improve further. <hr> <b>Throughput</b>(one way: from first vm to second vm through switch): 2.500 MPPS ,<br> <b>Bottleneck</b> : USS is a single thread and fetch one packet from queue.  <hr><b>Throughput</b>(two way: from first vm to senond vm through switch, and back to first vm): 0.400 MPPS  ,<br> <b>Bottleneck:</b> udpserver on recv side is single thread. 
-        </td>
-   </tr>  
-   <tr>
-    <td> 3 </td>
-    <td>vm1- LB -vm2, <br>with multichannel vNIC(5 queues)</td>
-    <td> ???? </td>
-    <td> Throughput till switch: 1.000MPPS (oneway) <br>Bottleneck: LB cannot send to other side using multiqueue, send side of the switch uses only one queue, due to this the packets recved at  other end are lot less</td>
-    </tr> 
-       <tr>
-    <td> 4 </td>
-    <td>vm1- USS -vm2 <br>with multichannel vNIC(5queues)</td>
-    <td> ???? </td>
-    <td> ???? <br>TODO:vhost-user vNIC with multichannel is not fully implemented in kvm </td>
-    </tr>
+    <td>1 </td>
+    <td> default Golang14.2 app on linux platform  </td>
+    <td> timetaken = 208 sec</td>
+    <td>  </td> 
+  </tr>
     <tr>
-    <td> 5 </td>
-    <td>vm1 - USS -vm2 <br>with DPDK based USS</td>
-     <td>????</td>
-     <td>????</td>
-    </tr>
-    </tr> 
-    <tr>
-     <td> 6 </td>
-     <td>vm1- USS -vm2 <br>with VMFUNC inside vm  </td>
-     <td>????</td>
-     <td>????<br>
-      Using Fast switch Path: Acessing other vm's virtio ring using Hardware Assist VMFUNC instruction, need changes in kvm/qemu accordingly as mentioned in the below papers. </td>
-    </tr>
-</table> 
-
-##### TODO's :
-With the below enhancements, the maximum throughput can be pushed further.
- 
-1. Low cost or low latency Notification : using the following :Monitor/wait, pause loop, posted interrupts.
-2. Multi-queue with vhost-user: code is present, but need to test, this Depends on vhost-user mq support from qemu.
-3. Fast-switch between vm to vm using VMFUNC. Depends on VMFUNC support from qemu/kvm and cpu support.
-4. Making udp-client/server to run as High priority app, so that client,server  can process more pkts/sec. curently server is bottleneck in recving all the packets at the recving vm, it is getting dropped in the recv guest kernel itself.
-5. currently USS is a single thread app,  USS need to improve further to forward more packets. 
-
-
-##### Summary of Tests:
-1. Test-1/2 : USS versus LB with Jiny VM's: USS as outperformed when compare to LB.
-2. Test-1 : Jiny kernel versus Linux kernel: Jiny as performed better when compare to linux.This can be mitigated in Linux kernel using DPDK. The application need to change accordingly when used with DPDK. Jiny does not need DPDK, linux based application can directly run on jiny kernel without DPDK  and get the performance close to that.
-
-##### Reasons for Better throughput in Jiny kernel when compare to linux kernel:
-1. Network bottom half is very thin, and entire computation of send/recv packet is done in the application context, means the network stack runs  as part of application context concurrently without locks, this makes most of the packet processing computation on the same core and avoid locking. The implementaion of network frame work is similar to [VanJacbson paper](http://www.lemis.com/grog/Documentation/vj/lca06vj.pdf). 
-2. lockless implementation of memory management in acquiring and releasing the memory buffers.
-3. Poll Mode Driver (PMD): Minimising the virtio kicks in send path and in recv path using the bulk operations. Operates in Poll Mode at high rate by switching off the interupts.
-4. **Area to Improve* further*: a) checksum computation takes large amount of cpu cycles, need to improve further in this area. b) using Multichannel vNIC, current kvm hypervisor does not support fully. c) third party open source networking stack from uip is used, it can be further finetuned.
-
-
-##### Reasons for Better throughput in User-Space-Switch(USS) when compare to Linux-Bridge(LB):
-1. lesser context switches in USS when compare to LB.
-2. minimum copies, userspace switch directly copies from source vm ring to destination vm ring without intermediate copies because of shared memory. It uses shared memory between vm and switch.
-3. user space switch uses huge pages, lesser TLB misses.
-
-##### Conclusion :
-1. Network throughput in virtual environment  is decided by the kernel throughput and the virtual switch connecting the vm's. The shortfall in linux kernel network throughput can be mitigated by DPDK to a larger extent, but apps need to change accordingly.
-2. User Space virtual switch will outperform Kernel based switch like Linux bridge or OVS.  USS provide faster virtual infra when compare to linux bridge or switch inside the host kernel.
-3. Changes in Jiny as suggested in TODO will improve the maximum throught from 4.50MPPS further.
-
-##### Similar papers:
-
-1. [Fast Switch using VMFUNC:](http://www.linux-kvm.org/images/8/87/02x09-Aspen-Jun_Nakajima-KVM_as_the_NFV_Hypervisor.pdf)
-2. [openNFV](https://wiki.opnfv.org/vm2vm_mst)
-
----------------------------------------------------------------------------------- 
-### Benchmark-3(Storage centric): In Progress:
-  currently jiny uses  [tar file sytem](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/tar_fs.md):  
-
-----------------------------------------------------------------------------------
-### Benchmark-4(PageCache): 
-   Details available in this paper ["Page cache optimizations for Hadoop".](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/PageCache-Open-Cirrus.pdf).  This paper was presented in opencirrus 2011 summit. Jiny uses same page algorithm as mentioned in the paper.
+    <td>2 </td>
+    <td>  golang14.2 app in  Ring-0 on Jiny platform </td>
+    <td> timetaken = 22sec </td>
+    <td> almost 10X improvement  </td> 
+  </tr>
    
-----------------------------------------------------------------------------------
-### Benchmark-5(Malloc): In Progress
-  Memory allocation improvements like zero page accumulation and other related techiniques: Based on this technique one round of testing is done but it as not given the substantial improvements as expected, need to improve and redo.
-   
-----------------------------------------------------------------------------------
-### Benchmark-6( IPC Improvements): 
+  </table>
+
+```
+Running Golang app in ring-0 on Jiny platform:
+
+-->insexe /data/nfile -count=400000000
+
+ Starting golang app :/data/nfile:  args :-count=400000000: 
+ Successfull loaded the high priority app
+------------------------------
+FileApp:  SAMPLE File application count:  400000000
+New Start Time:New New  Sunday, 26-Apr-20 11:19:44 UTC
+total data count : 12000000000  write count:400000000
+End Time: Sunday, 26-Apr-20 11:20:06 UTC
+
+--------------
+
+Running default Golang app  on Linux  platform:
+
+root:/opt_src/Jiny-Kernel/test/golang_test# ./file -count=400000000
+FileApp:  SAMPLE File application count:  400000000
+New Start Time:New New  Sunday, 26-Apr-20 16:44:58 IST
+total data count : 12000000000  write count:400000000
+End Time: Sunday, 26-Apr-20 16:48:26 IST
+root:/opt_src/Jiny-Kernel/test/golang_test# 
+
+```
+
+Profiling Data of Golang14.2 in Ring-0. Here both the Jiny kernel and Golang methods profiling data are as follows:
+
+```
+    2:t:84 hits:3253(3253:0) (rip=ffffffff80144e1a) idleTask_func -> ffffffff80144cdb (0) 
+    3:t:84 hits: 209(209:0) (rip=ffffffff801412da) sc_after_syscall -> ffffffff80141245 (0) 
+    4:t:116 hits: 182(182:0) (rip=ffffffff8012d3aa) io_delay -> ffffffff8012d395 (23) 
+    5:t:72 hits: 118(118:0) (rip=ffffffff80112427) HP_syscall -> ffffffff80112427 (0) 
+    6:t:84 hits: 114(114:0) (rip=ffffffff8015cd69) fs_fd_write -> ffffffff8015cd34 (0) 
+    7:t:84 hits:  84(84:0) (rip=ffffffff8015b45b) fs_write -> ffffffff8015b40f (265) 
+    8:t:84 hits:  83(83:0) (rip=ffffffff801757ca) ut_putchar_vga -> ffffffff8017570c (0) 
+    9:t:84 hits:  73(73:0) (rip=ffffffff8015ce04) SYS_fs_write -> ffffffff8015cdd6 (51) 
+   10:t:84 hits:  49(49:0) (rip=ffffffff801177a9) ar_check_valid_address -> ffffffff80117789 (39) 
+   11:t:116 hits:  28(28:0) (rip=ffffffff80141244) check_signals -> ffffffff80141175 (0) 
+   12:t:84 hits:   9(9:0) (rip=ffffffff80137462) net_bh -> ffffffff80137405 (262) 
+   13:t:84 hits:   7(7:0) (rip=ffffffff801153df) pci_read -> ffffffff801152c4 (313) 
+   14:t:116 hits:   4(4:0) (rip=ffffffff80137404) net_bh_recv -> ffffffff80137329 (0) 
+   15:t:116 hits:   4(4:0) (rip=ffffffff801379e1) net_bh_send -> ffffffff801378f6 (0) 
+   16:t:116 hits:   3(3:0) (rip=ffffffff80144c87) cpuspin_before_halt -> ffffffff80144b6d (0) 
+   17:t:84 hits:   3(3:0) (rip=ffffffff80151b9b) vmalloc -> ffffffff80151a81 (0) 
+   18:t:84 hits:   1(1:0) (rip=ffffffff8012d3be) udelay -> ffffffff8012d3ac (33) 
+   19:t:116 hits:   1(1:0) (rip=ffffffff8012decc) read_ioapic_register -> ffffffff8012deb3 (39) 
+1:  symbls count:2874
+	 1: addr:400000 - 590770 
+	10: addr:588440 - 58f770 
+	 2: addr:4a8000 - 4fa174 
+	11: addr:590770 - 5ba1e0 
+    1:t: 0 hits: 649(649:0) (rip=0000000000433ff4) runtime.casgstatus -> 0000000000433f30 (382) 
+    2:t: 0 hits: 395(395:0) (rip=00000000004390f3) runtime.reentersyscall -> 0000000000439000 (568) 
+    3:t: 0 hits: 331(331:0) (rip=00000000004961c6) internal/poll.(*fdMutex).rwlock -> 0000000000496130 (358) 
+    4:t: 0 hits: 264(264:0) (rip=0000000000439961) runtime.exitsyscallfast -> 00000000004398a0 (251) 
+    5:t: 0 hits: 250(250:0) (rip=00000000004962a0) internal/poll.(*fdMutex).rwunlock -> 00000000004962a0 (282) 
+    6:t: 0 hits: 221(221:0) (rip=0000000000496bac) internal/poll.(*FD).Write -> 0000000000496b30 (1055) 
+    7:t: 0 hits: 175(175:0) (rip=000000000043bef9) runtime.wirep -> 000000000043beb0 (345) 
+    8:t: 0 hits: 168(168:0) (rip=000000000043978d) runtime.exitsyscall -> 0000000000439620 (630) 
+    9:t: 0 hits: 145(145:0) (rip=000000000049735c) os.(*File).Write -> 00000000004972e0 (814) 
+   10:t: 0 hits:  84(84:0) (rip=000000000048c6b2) syscall.write -> 000000000048c610 (267) 
+   11:t: 0 hits:  53(53:0) (rip=0000000000439266) runtime.entersyscall -> 0000000000439240 (48) 
+   12:t: 0 hits:  52(52:0) (rip=00000000004399c2) runtime.exitsyscallfast_reacquired -> 00000000004399a0 (129) 
+   13:t: 0 hits:  52(52:0) (rip=000000000049647e) internal/poll.(*FD).writeUnlock -> 0000000000496440 (90) 
+   14:t: 0 hits:  41(41:0) (rip=0000000000438fb0) runtime.save -> 0000000000438fb0 (65) 
+   15:t: 0 hits:  41(41:0) (rip=000000000048cb0b) syscall.Syscall -> 000000000048cab0 (97) 
+   16:t: 0 hits:  41(41:0) (rip=00000000004a819e) main.main -> 00000000004a7ed0 (1147) 
+   17:t: 0 hits:  36(36:0) (rip=00000000004965e0) internal/poll.(*pollDesc).prepare -> 00000000004965e0 (325) 
+ No hits for rank :18 
+```
+
+### Benchmark-2( IPC Improvements): 
 
 This benchmark measures InterProcess Communication(mutex,semphore,messages passing etc) in virtual environment. 
 
@@ -235,15 +176,5 @@ Same Problem was solved by changing KVM hypervisor in this [paper](http://www.li
 2. **Solution to the problem:** It was fixed in guest kernel(Jiny kernel) in this paper, and the problem was solved completely. Whereas in other paper, it is fixed in hypervisor(kvm) , due to this the problem is solved partially(slide-29). 
 3. Both solutions to the same problem can co-exist. since the problem is solved at two different layers(kernel and hypervisor). 
 
-----------------------------------------------------------------------------------
-## Papers:
- -   [Page cache optimizations for Hadoop, published and presented in open cirrus-2011 summit](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/PageCache-Open-Cirrus.pdf) .
- -   [Memory optimization techniques](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/malloc_paper_techpulse_submit_final.pdf).
- -   [Jiny pagecache implementation](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/pagecache.txt)
- -   [Tar Fs - Jiny root file system](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/tar_fs.md)
 
-## Related Projects:
- -   [Jiny Kernel](https://github.com/naredula-jana/Jiny-Kernel) .
- -   [Vmstate](https://github.com/naredula-jana/vmstate): Virtualmachine state capture and analysis.
- -   [User Space virtual Switch using Vhost-user](https://github.com/naredula-jana/Jiny-Kernel/tree/master/test/virtio-switch): Works only with kvm hypervisor.
  
