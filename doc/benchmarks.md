@@ -1,10 +1,13 @@
 ##  Performance improvements.
 
-### Benchmark-1( Golang in Ring0): 
+### Benchmark-1( Golang in Ring0):
+ 
 
-Comparision of [golang14.2 application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/file.go) compiled in  Ring-0 versus default golang14.2 on linux machine:
+**Test Description:** Comparision of performance between [golang14.2 application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/file.go) in  Ring-0 on Jiny platform versus default golang14.2 on linux x86-64 platform. In this comparision if the application is system call intesive then Ring-0 platform performs much better when compare to linux platform, the reason is system call need lot of cpu resources in switching from ring-3 to ring-0 and vice-versa. If the number of system calls are less then both run at the same speed. The test results shows that for the system call intensive app, golang app completes in 22sec versus 202 on default platform, means it is almost 10X improvent. 
 
-** Perf Test Results **
+**Golang14.2 in Ring-0:** [Golang Runtime system is modified](https://github.com/naredula-jana/Golang-Ring0/commit/f28f33636e253a59792495bc17727466ef819cf9) to run only in Ring-0 on a Jiny platform. Jiny kernel already supports any runtime systems like Java, Golang,..etc to run in ring-0. 
+
+**Perf Test Results**
 
 
  <table border="1" style="width:100%">
@@ -29,8 +32,10 @@ Comparision of [golang14.2 application](https://github.com/naredula-jana/Jiny-Ke
    
   </table>
 
+
+Running Golang app in ring-0 on Jiny platform: (Test completed in 22 sec):
+
 ```
-Running Golang app in ring-0 on Jiny platform:
 
 -->insexe /data/nfile -count=400000000
 
@@ -43,8 +48,11 @@ total data count : 12000000000  write count:400000000
 End Time: Sunday, 26-Apr-20 11:20:06 UTC
 
 --------------
+```
 
-Running default Golang app  on Linux  platform:
+Running default Golang app  on Linux  platform: (Test completed in 208 sec):
+
+```
 
 root:/opt_src/Jiny-Kernel/test/golang_test# ./file -count=400000000
 FileApp:  SAMPLE File application count:  400000000
