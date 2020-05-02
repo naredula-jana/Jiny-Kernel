@@ -33,12 +33,12 @@ func process(in chan int,out chan int ) {
 func main() {
     maxCount  := flag.Int("count", 1000, "max count")
     flag.Parse()
-    fmt.Println("SERVER:  SAMPLE application with files and channels: ",*maxCount)
+    fmt.Println("SERVER:  ver=1.0 SAMPLE application with files and channels: ",*maxCount)
     arg := os.Args
     fmt.Println("SERVER:   Arguments to application  :",arg)
 
     fo, _ = os.Create("/dev/null")
-    buf := make([]byte, 1024)
+   // buf := make([]byte, 1024)
     maxGoroutines :=50
     var in [50]chan int
     var out [50]chan int
@@ -61,9 +61,9 @@ func main() {
     	for j:=0; j<maxGoroutines; j++ {
 	       in[j] <- i
     	}
-    	for j:=0; j<maxGoroutines; j++ {
+    	/*for j:=0; j<maxGoroutines; j++ {
 	       _, _ = fo.Write(buf[:30])
-    	}
+    	}*/
     	for j:=0; j<maxGoroutines; j++ {
 	       k=<- out[j]
            total=total+k
