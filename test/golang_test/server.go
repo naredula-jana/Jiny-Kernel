@@ -4,7 +4,7 @@ import (
     "fmt"
    "flag"
    "os"
-    "time"
+ //   "time"
 )
 
 var fo *os.File
@@ -49,7 +49,7 @@ func main() {
     total:=0
     k:=0
     
-    fmt.Println("SERVER Start Time: ", time.Now().Format(time.RFC850))
+    //fmt.Println("SERVER Start Time: ", time.Now().Format(time.RFC850))
     for i:=0; i<*maxCount; i++ {
     	for j:=0; j<maxGoroutines; j++ {
 	       in[j] <- i
@@ -62,6 +62,6 @@ func main() {
            total=total+k
     	}
      }
-    fmt.Println("SERVER End Time: ", time.Now().Format(time.RFC850))
+    //fmt.Println("SERVER End Time: ", time.Now().Format(time.RFC850))
     fmt.Println("SERVER: Final total: ",total)
 }
