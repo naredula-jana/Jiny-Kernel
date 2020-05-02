@@ -1,2 +1,4 @@
 export GOROOT=/opt/host_folder/test/Golang-Ring0/go1.14.2/
-/opt/host_folder/test/Golang-Ring0/go1.14.2/bin/go build seda.go
+/opt/host_folder/test/Golang-Ring0/go1.14.2/bin/go build ioseda.go
+/opt/host_folder/test/Golang-Ring0/go1.14.2/bin/go build file.go
+/opt/host_folder/test/Golang-Ring0/go1.14.2/bin/go build server.go

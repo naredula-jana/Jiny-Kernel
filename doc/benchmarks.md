@@ -3,9 +3,9 @@
 ### Benchmark-1( Golang in Ring0):
  
 
-**Test Description:** Comparision of performance between [golang14.2 application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/file.go) in  Ring-0 on Jiny platform versus default golang14.2 on linux x86-64 platform. In this comparision if the application is system call intesive then Ring-0 platform performs much better when compare to linux platform, the reason is system call need lot of cpu resources in switching from ring-3 to ring-0 and vice-versa. If the number of system calls are less then both run at the same speed. The test results shows that for the system call intensive app, golang app completes in 22sec versus 202 on default platform, means it is almost 10X improvent. 
+**Test Description:** Comparision of performance between [golang14.2 application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/file.go) in  Ring-0 on Jiny platform versus default golang14.2 on linux x86-64 platform. In this comparision if the application is system call intesive then Ring-0 Jiny platform performs much better when compare to linux platform, the reason is system call need lot of cpu resources in switching from ring-3 to ring-0 and vice-versa. If the number of system calls are less then both run at the same speed. The test results shows that for the system call intensive app, golang app completes in 22sec on Jiny platform versus 202sec on default linux platform, means it is almost 10X improvement. 
 
-**Golang14.2 in Ring-0:** [Golang Runtime system is modified](https://github.com/naredula-jana/Golang-Ring0/commit/f28f33636e253a59792495bc17727466ef819cf9) to run only in Ring-0 on a Jiny platform. Jiny kernel already supports any runtime systems like Java, Golang,..etc to run in ring-0. 
+**Golang14.2 in Ring-0:** [Golang Runtime system is modified](https://github.com/naredula-jana/Golang-Ring0/commit/f28f33636e253a59792495bc17727466ef819cf9) to run only in Ring-0 on a Jiny platform. Jiny kernel already supports any runtime systems like Java, Golang,..etc to run in ring-0. More details are available [here:](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/GolangAppInRing0.pdf) 
 
 **Perf Test Results**
 
