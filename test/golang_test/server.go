@@ -4,7 +4,7 @@ import (
     "fmt"
    "flag"
    "os"
-//    "time"
+    "time"
 )
 
 var fo *os.File
@@ -20,8 +20,7 @@ func process(in chan int,out chan int ) {
 	 buf := make([]byte, 1024)
   for {
     msg := <- in
-    //fmt.Println(msg)
-   // time.Sleep(time.Millisecond * 1)
+ 
     count, _ := fo.Write(buf[:30])
     out <- msg*2*count*spin(100)
   }
@@ -30,7 +29,7 @@ func process(in chan int,out chan int ) {
 func main() {
     maxCount  := flag.Int("count", 1000, "max count")
     flag.Parse()
-    fmt.Println("SERVER:  SAMPLE SEDA application with files and channels: ",*maxCount)
+    fmt.Println("SERVER:  SAMPLE application with files and channels: ",*maxCount)
     arg := os.Args
     fmt.Println("SERVER:   Arguments to application  :",arg)
 
@@ -50,6 +49,7 @@ func main() {
     total:=0
     k:=0
     
+    fmt.Println("SERVER Start Time: ", time.Now().Format(time.RFC850))
     for i:=0; i<*maxCount; i++ {
     	for j:=0; j<maxGoroutines; j++ {
 	       in[j] <- i
@@ -62,5 +62,6 @@ func main() {
            total=total+k
     	}
      }
-     fmt.Println("SERVER: Final total: ",total)
+    fmt.Println("SERVER End Time: ", time.Now().Format(time.RFC850))
+    fmt.Println("SERVER: Final total: ",total)
 }
