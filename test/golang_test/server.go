@@ -4,11 +4,12 @@ import (
     "fmt"
    "flag"
    "os"
+   "runtime"
  //   "time"
 )
 
 var fo *os.File
-
+var ready int
 func spin(arg int) int {
 	ret:=0
 	for k:=0; k<arg*10; k++ {
@@ -18,7 +19,10 @@ func spin(arg int) int {
 }
 func process(in chan int,out chan int ) {
 	 buf := make([]byte, 1024)
-  for {
+	 for ready < 1 {
+	 	runtime.Gosched()
+	 }
+    for {
     msg := <- in
  
     count, _ := fo.Write(buf[:30])
@@ -38,6 +42,8 @@ func main() {
     maxGoroutines :=50
     var in [50]chan int
     var out [50]chan int
+    ready=0
+    
     for i:=0; i<maxGoroutines; i++ {
 	    in[i] = make(chan int)
 	    out[i] = make(chan int)
@@ -47,6 +53,8 @@ func main() {
 
     total:=0
     k:=0
+    ready=1
+    
     
     //fmt.Println("SERVER Start Time: ", time.Now().Format(time.RFC850))
     for i:=0; i<*maxCount; i++ {
