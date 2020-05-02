@@ -41,8 +41,7 @@ func main() {
     for i:=0; i<maxGoroutines; i++ {
 	    in[i] = make(chan int)
 	    out[i] = make(chan int)
-	    defer close(in[i])
-        defer close(out[i])
+
         go process(in[i], out[i])
     }
 
@@ -62,6 +61,10 @@ func main() {
            total=total+k
     	}
      }
+    for i:=0; i<maxGoroutines; i++ {
+    	defer close(in[i])
+        defer close(out[i])
+    }
     //fmt.Println("SERVER End Time: ", time.Now().Format(time.RFC850))
     fmt.Println("SERVER: Final total: ",total)
 }
