@@ -8,7 +8,7 @@ import (
  //   "time"
 )
 
-var fo *os.File
+
 var ready int
 func spin(arg int) int {
 	ret:=0
@@ -22,23 +22,25 @@ func process(in chan int,out chan int ) {
 	 for ready < 1 {
 	 	runtime.Gosched()
 	 }
-    for {
-    msg := <- in
- 
-    count, _ := fo.Write(buf[:30])
-    out <- msg*2*count*spin(100)
-  }
+	 
+	 fd, _ := os.Create("/dev/null")
+     for {
+       msg := <- in
+       count, _ := fd.Write(buf[:30])
+       out <- msg*2*count*spin(100)
+    }
 }
 
 func main() {
+	var fo *os.File
     maxCount  := flag.Int("count", 1000, "max count")
     flag.Parse()
-    fmt.Println("SERVER:  ver=1.0 SAMPLE application with files and channels: ",*maxCount)
+    fmt.Println("SERVER:  ver=1.1 SAMPLE application with files and channels: ",*maxCount)
     arg := os.Args
     fmt.Println("SERVER:   Arguments to application  :",arg)
 
     fo, _ = os.Create("/dev/null")
-   // buf := make([]byte, 1024)
+    buf := make([]byte, 1024)
     maxGoroutines :=50
     var in [50]chan int
     var out [50]chan int
@@ -47,6 +49,7 @@ func main() {
     for i:=0; i<maxGoroutines; i++ {
 	    in[i] = make(chan int)
 	    out[i] = make(chan int)
+
 
         go process(in[i], out[i])
     }
@@ -61,9 +64,9 @@ func main() {
     	for j:=0; j<maxGoroutines; j++ {
 	       in[j] <- i
     	}
-    	/*for j:=0; j<maxGoroutines; j++ {
+    	for j:=0; j<maxGoroutines; j++ {
 	       _, _ = fo.Write(buf[:30])
-    	}*/
+    	}
     	for j:=0; j<maxGoroutines; j++ {
 	       k=<- out[j]
            total=total+k
