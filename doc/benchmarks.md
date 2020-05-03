@@ -1,14 +1,14 @@
 ##  Performance improvements.
 
 ### Benchmark-1( Golang in Ring0):
+
+ **Golang14.2 in Ring-0:** [Golang Runtime system is modified](https://github.com/naredula-jana/Golang-Ring0/commit/f28f33636e253a59792495bc17727466ef819cf9) to run only in Ring-0 on a Jiny platform. Jiny kernel already supports any runtime systems like Java, Golang,..etc to run in ring-0. More details are available [here:](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/GolangAppInRing0.pdf) 
  
 
-**Test Description:** Comparision of performance between [golang14.2 application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/file.go) in  Ring-0 on Jiny platform versus default golang14.2 on linux x86-64 platform. In this comparision if the application is system call intesive then Ring-0 Jiny platform performs much better when compare to linux platform, the reason is system call need lot of cpu resources in switching from ring-3 to ring-0 and vice-versa. If the number of system calls are less then both run at the same speed. The test results shows that for the system call intensive app, golang app completes in 22sec on Jiny platform versus 202sec on default linux platform, means it is almost 10X improvement. 
+**Test-1 :** Comparision of performance between [golang14.2 application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/file.go) in  Ring-0 on Jiny platform versus default golang14.2 on linux x86-64 platform. In this comparision the application is system call intesive, due to this app in Ring-0 Jiny platform performs much better when compare to linux platform, the reason is system call need lot of cpu resources in switching from ring-3 to ring-0 and vice-versa. If the number of system calls are less then both run at the same speed. The test results shows that for the system call intensive app, golang app completes in 22sec on Jiny platform versus 202sec on default linux platform, means it is almost 10X improvement. 
 
-**Golang14.2 in Ring-0:** [Golang Runtime system is modified](https://github.com/naredula-jana/Golang-Ring0/commit/f28f33636e253a59792495bc17727466ef819cf9) to run only in Ring-0 on a Jiny platform. Jiny kernel already supports any runtime systems like Java, Golang,..etc to run in ring-0. More details are available [here:](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/GolangAppInRing0.pdf) 
 
-**Perf Test Results**
-
+** Test-1 Results**
 
  <table border="1" style="width:100%">
   <tr>
@@ -109,6 +109,167 @@ Profiling Data of Golang14.2 in Ring-0. Here both the Jiny kernel and Golang met
  No hits for rank :18 
 ```
 
+**Test-2:** Comparision of performance between [golang14.2 application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/server.go) in  Ring-0 on Jiny platform versus default golang14.2 on linux x86-64 platform. In this comparision the application is goroutines,channel and system call intesive, app in Ring-0 Jiny platform performs much better when compare to linux platform, the reason is futex system calls in channel communication and system calls for IO  need lot of cpu resources in switching from ring-3 to ring-0 and vice-versa. If the number of system calls are less then both run at the same speed. The test results shows that golang app completes in 90sec on Jiny platform versus 180sec on default linux platform, means it is almost 2X improvement. 
+
+
+** Test-2 Results**
+
+ <table border="1" style="width:100%">
+  <tr>
+    <td><b>Test# </b></td>
+    <td><b> Description</b></td>
+    <td><b>Throughput</b></td>
+    <td><b>Comment</b></td>
+  </tr>
+  <tr>
+    <td>1 </td>
+    <td> default Golang14.2 app on linux platform  </td>
+    <td> timetaken = 180 sec</td>
+    <td>  </td> 
+  </tr>
+    <tr>
+    <td>2 </td>
+    <td>  golang14.2 app in  Ring-0 on Jiny platform </td>
+    <td> timetaken = 96sec </td>
+    <td> almost 2X improvement : lot of futex calls from channels and write system calls contributed the improvement  </td> 
+  </tr>
+   
+  </table>
+
+
+Running Golang app in ring-0 on Jiny platform:
+
+```
+
+-->insexe /data/server -count=3000000
+
+ Starting golang app :/data/server:  args :-count=3000000: 
+ Successfull loaded the high priority app
+------------------------------
+SERVER:  ver=1.1 SAMPLE application with files and channels:  3000000
+SERVER:   Arguments to application  : [highpriorityapp -count=3000000]
+-->SERVER: Final total:  3387232619202732032
+
+--------------
+```
+
+Running default Golang app  on Linux  platform: (Test completed in 208 sec):
+
+```
+
+root@nvnr:/opt_src/Jiny-Kernel/test/golang_test# date; ./server -count=3000000 ; date
+Sun May  3 17:12:52 IST 2020
+SERVER:  ver=1.1 SAMPLE application with files and channels:  3000000
+SERVER:   Arguments to application  : [./server -count=3000000]
+SERVER: Final total:  3387232619202732032
+Sun May  3 17:15:44 IST 2020
+
+```
+
+Profiling Data of Golang14.2 in Ring-0. Here both the Jiny kernel and Golang methods profiling data are as follows:
+
+```
+System calls stats:
+[11(17):11: f](105882801)cpu-5:   1 (426431/      0)  3ffd8020:10 hp_go_thread_1 sleeptick(998347) cpu:65535 :/: count:1 status:WAIT-timer: 1000000 stickcpu:ffff
+     0: calls:103804240(per-sys:0        app:0       ) :SYS_fs_write
+     1: calls:18      (per-sys:0        app:0       ) :SYS_vm_mmap
+     2: calls:114     (per-sys:0        app:0       ) :SYS_rt_sigaction_PART
+     3: calls:8       (per-sys:0        app:0       ) :SYS_rt_sigprocmask_PART
+     4: calls:503116  (per-sys:0        app:0       ) :SYS_sched_yield
+     5: calls:219060  (per-sys:0        app:0       ) :SYS_nanosleep
+     6: calls:3       (per-sys:0        app:0       ) :SYS_sc_clone
+     7: calls:1       (per-sys:0        app:0       ) :SYS_uname
+     8: calls:3       (per-sys:0        app:0       ) :SYS_fs_fcntl
+     9: calls:7       (per-sys:0        app:0       ) :SYS_gettimeofday
+     10: calls:2       (per-sys:0        app:0       ) :SYS_sigalt_stack_PART
+     11: calls:1       (per-sys:0        app:0       ) :SYS_arch_prctl
+     12: calls:1       (per-sys:0        app:0       ) :SYS_gettid
+     13: calls:1356068 (per-sys:0        app:0       ) :SYS_futex
+     14: calls:1       (per-sys:0        app:0       ) :SYS_sched_getaffinity_PART
+     15: calls:103     (per-sys:0        app:0       ) :SYS_epoll_ctl
+     16: calls:52      (per-sys:0        app:0       ) :SYS_fs_openat
+     17: calls:1       (per-sys:0        app:0       ) :SYS_readlinkat_PART
+     18: calls:1       (per-sys:0        app:0       ) :SYS_epoll_create1_PART
+     19: calls:1       (per-sys:0        app:0       ) :SYS_pipe2_PART
+[12(18):11:11](13719)cpu-1:   1 ( 9089/      0)  3ffd8020:10 hp_go_thread_2 sleeptick( 12) cpu:65535 :/: count:1 status:WAIT-futex: 50 stickcpu:ffff
+     0: calls:1       (per-sys:0        app:0       ) :SYS_rt_sigprocmask_PART
+     1: calls:4591    (per-sys:0        app:0       ) :SYS_nanosleep
+     2: calls:4592    (per-sys:0        app:0       ) :SYS_gettimeofday
+     3: calls:2       (per-sys:0        app:0       ) :SYS_sigalt_stack_PART
+     4: calls:1       (per-sys:0        app:0       ) :SYS_arch_prctl
+     5: calls:2       (per-sys:0        app:0       ) :SYS_gettid
+     6: calls:4530    (per-sys:0        app:0       ) :SYS_epoll_pwait_PART
+[13(19):11:11](94294308)cpu-2:   1 (373374/    434)  3ffd8020:10 hp_go_thread_3 sleeptick(  8) cpu:65535 :/: count:1 status:WAIT-futex: 50 stickcpu:ffff
+     0: calls:92393459(per-sys:0        app:0       ) :SYS_fs_write
+     1: calls:1       (per-sys:0        app:0       ) :SYS_vm_mmap
+     2: calls:1       (per-sys:0        app:0       ) :SYS_rt_sigprocmask_PART
+     3: calls:470214  (per-sys:0        app:0       ) :SYS_sched_yield
+     4: calls:204618  (per-sys:0        app:0       ) :SYS_nanosleep
+     5: calls:2       (per-sys:0        app:0       ) :SYS_sigalt_stack_PART
+     6: calls:1       (per-sys:0        app:0       ) :SYS_arch_prctl
+     7: calls:2       (per-sys:0        app:0       ) :SYS_gettid
+     8: calls:1226010 (per-sys:0        app:0       ) :SYS_futex
+[14(20):11:11](105970963)cpu-3:   1 (421786/      0)  3ffd8020:10 hp_go_thread_4 sleeptick(  0) cpu:65535 :/: count:1 status:WAIT-timer: 1000000 stickcpu:ffff
+     0: calls:103802337(per-sys:0        app:0       ) :SYS_fs_write
+     1: calls:1       (per-sys:0        app:0       ) :SYS_rt_sigprocmask_PART
+     2: calls:534602  (per-sys:0        app:0       ) :SYS_sched_yield
+     3: calls:242563  (per-sys:0        app:0       ) :SYS_nanosleep
+     4: calls:1       (per-sys:0        app:0       ) :SYS_getpid
+     5: calls:2       (per-sys:0        app:0       ) :SYS_sigalt_stack_PART
+     6: calls:1       (per-sys:0        app:0       ) :SYS_arch_prctl
+     7: calls:2       (per-sys:0        app:0       ) :SYS_gettid
+     8: calls:1391453 (per-sys:0        app:0       ) :SYS_futex
+     9: calls:1       (per-sys:0        app:0       ) :SYS_tgkill_PART
+     
+  function call stat:
+     1:t:84 hits:31866(10654:8429) (rip=ffffffff80144dad) idleTask_func -> ffffffff80144c6e (0) 
+    2:t:84 hits:5069(0:0) (rip=0000000000000000) sc_schedule -> ffffffff80141636 (515) 
+    3:t:116 hits:4647(0:67) (rip=0000000000000000) cpuspin_before_halt -> ffffffff80144b00 (0) 
+    4:t:84 hits:2291(0:27) (rip=0000000000000000) net_bh -> ffffffff80137411 (262) 
+    5:t:84 hits:  87(0:0) (rip=0000000000000000) sc_after_syscall -> ffffffff80141251 (628) 
+    6:t:72 hits:  50(0:0) (rip=0000000000000000) HP_syscall -> ffffffff80112427 (0) 
+    7:t:84 hits:  38(0:0) (rip=0000000000000000) _ZN10wait_queue13wait_internalEmP10spinlock_t -> ffffffff801368b2 (0) 
+    8:t:84 hits:  38(0:0) (rip=0000000000000000) fs_write -> ffffffff8015b3a7 (265) 
+    9:t:84 hits:  35(0:0) (rip=0000000000000000) fs_fd_write -> ffffffff8015cccc (0) 
+   10:t:84 hits:  34(0:0) (rip=0000000000000000) SYS_fs_write -> ffffffff8015cd6e (51) 
+   11:t:84 hits:  26(0:0) (rip=0000000000000000) _ZN10wait_queue6wakeupEv -> ffffffff8013675e (340) 
+   12:t:84 hits:  23(0:0) (rip=0000000000000000) ar_check_valid_address -> ffffffff80117789 (39) 
+   13:t:116 hits:  17(0:0) (rip=0000000000000000) find_futex -> ffffffff80134d86 (147) 
+   14:t:115 hits:  12(0:0) (rip=0000000000000000) spin -> ffffffff80134602 (0) 
+   15:t:84 hits:   4(0:0) (rip=0000000000000000) _ZN14serial_jdriver14dr_serialWriteEPci -> ffffffff80176e44 (0) 
+   16:t:116 hits:   3(0:0) (rip=0000000000000000) arch_spinlock_unlock -> ffffffff801347dd (0) 
+   17:t:116 hits:   2(0:0) (rip=0000000000000000) get_percpu_ns -> ffffffff801127ba (629) 
+   18:t:84 hits:   2(0:0) (rip=0000000000000000) apic_send_ipi_vector -> ffffffff8012ed97 (0) 
+   19:t:116 hits:   2(0:0) (rip=0000000000000000) arch_spinlock_lock -> ffffffff8013455a (361) 
+1:  symbls count:2819
+	 1: addr:400000 - 582530 
+	10: addr:57a3c0 - 581530 
+	 2: addr:4a0000 - 4f00f7 
+	11: addr:582530 - 5abf20 
+    1:t: 0 hits:3816(0:0) (rip=0000000000000000) main.spin -> 000000000049fe30 (35) 
+    2:t: 0 hits: 936(0:0) (rip=0000000000000000) runtime.casgstatus -> 0000000000434090 (382) 
+    3:t: 0 hits: 438(0:0) (rip=0000000000000000) runtime.lock -> 0000000000409ff0 (412) 
+    4:t: 0 hits: 341(0:0) (rip=0000000000000000) runtime.unlock -> 000000000040a190 (193) 
+    5:t: 0 hits: 289(0:0) (rip=0000000000000000) internal/poll.(*fdMutex).rwlock -> 000000000048e090 (358) 
+    6:t: 0 hits: 233(0:0) (rip=0000000000000000) runtime.runqput -> 000000000043e010 (249) 
+    7:t: 0 hits: 205(0:0) (rip=0000000000000000) runtime.chanrecv -> 0000000000405980 (1716) 
+    8:t: 0 hits: 195(0:0) (rip=0000000000000000) runtime.runqget -> 000000000043e310 (168) 
+    9:t: 0 hits: 177(0:0) (rip=0000000000000000) main.process -> 000000000049fe60 (359) 
+   10:t: 0 hits: 149(0:0) (rip=0000000000000000) runtime.gopark -> 0000000000432500 (309) 
+   11:t: 0 hits: 141(0:0) (rip=0000000000000000) runtime.chansend -> 0000000000404e60 (1557) 
+   12:t: 0 hits: 135(0:0) (rip=0000000000000000) runtime.reentersyscall -> 0000000000439160 (568) 
+   13:t: 0 hits: 116(0:0) (rip=0000000000000000) runtime.ready -> 00000000004337e0 (704) 
+   14:t: 0 hits: 111(0:0) (rip=0000000000000000) internal/poll.(*fdMutex).rwunlock -> 000000000048e200 (282) 
+   15:t: 0 hits: 106(0:0) (rip=0000000000000000) runtime.runqgrab -> 000000000043e3c0 (335) 
+   16:t: 0 hits: 105(0:0) (rip=0000000000000000) runtime.exitsyscallfast -> 0000000000439a00 (251) 
+   17:t: 0 hits:  93(0:0) (rip=0000000000000000) internal/poll.(*FD).Write -> 000000000048ea90 (1055) 
+   18:t: 0 hits:  92(0:0) (rip=0000000000000000) runtime.schedule -> 0000000000437d70 (1316) 
+   19:t: 0 hits:  90(0:0) (rip=0000000000000000) runtime.releaseSudog -> 0000000000432a40 (904) 
+ Total modules: 2 total Hits:0  unknownhits:0 unown ip:0000000000000000 
+ 
+ 
+```
+
 ### Benchmark-2( IPC Improvements): 
 
 This benchmark measures InterProcess Communication(mutex,semphore,messages passing etc) in virtual environment. 
@@ -185,4 +346,4 @@ Same Problem was solved by changing KVM hypervisor in this [paper](http://www.li
 3. Both solutions to the same problem can co-exist. since the problem is solved at two different layers(kernel and hypervisor). 
 
 
- 
+
