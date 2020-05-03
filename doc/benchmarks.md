@@ -1,41 +1,49 @@
-##  Performance improvements.
+##  Golang in Ring0 Performance improvements.
 
-### Benchmark-1( Golang in Ring0):
+### Performance Improvement-1:
 
- **Golang14.2 in Ring-0:** [Golang Runtime system is modified](https://github.com/naredula-jana/Golang-Ring0/commit/f28f33636e253a59792495bc17727466ef819cf9) to run only in Ring-0 on a Jiny platform. Jiny kernel already supports any runtime systems like Java, Golang,..etc to run in ring-0. More details are available [here:](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/GolangAppInRing0.pdf) 
+ **Golang-14.2 in Ring-0:** [Golang in Ring-0 uses modified Runtime system of Golang-14.2](https://github.com/naredula-jana/Golang-Ring0/commit/f28f33636e253a59792495bc17727466ef819cf9) to run on a Jiny platform. Jiny kernel already supports any runtime systems like Java, Golang,..etc to run in ring-0. More details are available [here:](https://github.com/naredula-jana/Jiny-Kernel/blob/master/doc/GolangAppInRing0.pdf). Below are the sample golang applications tested on both the platforms, one is on Jiny and other is Linux. On Jiny platform golang will be running in ring-0 only, on linux platfom the application will be running in ring-3 and ring-0, and it switches from ring-3 to ring-0 on entry of system call and vice versa on exit, this switching slows down the application. Below Test results shows the application running on Jiny is 2 to 10X faster when compare to linux platform.
+
+ The degree of performance improvement depends on the following factors: 
+ 1.  **Percentage of IO calls:** The amount of io calls used inside the applications, the io calls are file,network read-write. Most of the IO calls like file,network leads to system calls. Test-1 clearly demonstrates the amount the performance gain on Jiny when compare to Linux platform.
+ 2.  **Percentage of channel messages across the cpu-cores:** The amount of channel messages across the go-routines sitting on different cores.
  
 
-**Test-1 :** Comparision of performance between [golang14.2 application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/file.go) in  Ring-0 on Jiny platform versus default golang14.2 on linux x86-64 platform. In this comparision the application is system call intesive, due to this app in Ring-0 Jiny platform performs much better when compare to linux platform, the reason is system call need lot of cpu resources in switching from ring-3 to ring-0 and vice-versa. If the number of system calls are less then both run at the same speed. The test results shows that for the system call intensive app, golang app completes in 22sec on Jiny platform versus 202sec on default linux platform, means it is almost 10X improvement. 
+**Performance Tests:**
+1.   **Test-1 :**  The test results shows that for the IO intensive [application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/file.go) performs better on Jiny due to system call intesive. golang app completes in 22sec on Jiny platform versus 202sec on default linux platform, means it is almost 10X improvement. 
+2.   **Test-2:** The test results shows that for the IO  and channel intensive [application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/server.go) performs better on Jiny, the reason is system calls from IO aswell as futex from channel messages across the cores. If the number of system calls are less then both run at similar speed. The test results shows that golang application completes in 90sec on Jiny platform versus 180sec on default linux platform, means it is almost 2X improvement. 
 
 
-** Test-1 Results**
+**Test-1 Results:**
 
  <table border="1" style="width:100%">
   <tr>
-    <td><b>Test# </b></td>
-    <td><b> Description</b></td>
-    <td><b>Throughput</b></td>
-    <td><b>Comment</b></td>
+    <td><b>Test Number </b></td>
+    <td><b> Throuughput on Jiny-Ring-0 </b></td>
+    <td><b>Throughput on Linux platform</b></td>
+    <td><b>Comments</b></td>
   </tr>
   <tr>
-    <td>1 </td>
-    <td> default Golang14.2 app on linux platform  </td>
+    <td>Test-1 </td>
+    <td> timetaken = 22sec   </td>
     <td> timetaken = 208 sec</td>
-    <td>  </td> 
+    <td>  almost 10X improvement. Reason: large amount of write system calls due to IO. On linux platform system call is a cpu intesive because of switching from ring-3 to ring-0 and vice versa. On Jiny platform system call is light weight function call and runs only in ring-0. </td> 
   </tr>
     <tr>
-    <td>2 </td>
-    <td>  golang14.2 app in  Ring-0 on Jiny platform </td>
-    <td> timetaken = 22sec </td>
-    <td> almost 10X improvement  </td> 
+    <td>Test-2 </td>
+    <td> timetaken = 96sec </td>
+    <td> timetaken = 180 sec </td>
+    <td> almost 2X improvement. Reasons:a) large amount of futex system calls generated due to send/recv function from  channels between go-routines . b)  write system calls due to IO. </td> 
   </tr>
-   
   </table>
 
+  
 
-Running Golang app in ring-0 on Jiny platform: (Test completed in 22 sec):
+**Test-1 on both the platforms:**
 
 ```
+
+Running On Jiny Platform: (Test completed in 22 sec):
 
 -->insexe /data/nfile -count=400000000
 
@@ -48,11 +56,8 @@ total data count : 12000000000  write count:400000000
 End Time: Sunday, 26-Apr-20 11:20:06 UTC
 
 --------------
-```
 
-Running default Golang app  on Linux  platform: (Test completed in 208 sec):
-
-```
+Running on Linux Platform: (Test completed in 208 sec):
 
 root:/opt_src/Jiny-Kernel/test/golang_test# ./file -count=400000000
 FileApp:  SAMPLE File application count:  400000000
@@ -60,10 +65,10 @@ New Start Time:New New  Sunday, 26-Apr-20 16:44:58 IST
 total data count : 12000000000  write count:400000000
 End Time: Sunday, 26-Apr-20 16:48:26 IST
 root:/opt_src/Jiny-Kernel/test/golang_test# 
-
 ```
 
-Profiling Data of Golang14.2 in Ring-0. Here both the Jiny kernel and Golang methods profiling data are as follows:
+
+**Test-1 Profiling Data:**
 
 ```
     2:t:84 hits:3253(3253:0) (rip=ffffffff80144e1a) idleTask_func -> ffffffff80144cdb (0) 
@@ -109,37 +114,11 @@ Profiling Data of Golang14.2 in Ring-0. Here both the Jiny kernel and Golang met
  No hits for rank :18 
 ```
 
-**Test-2:** Comparision of performance between [golang14.2 application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/server.go) in  Ring-0 on Jiny platform versus default golang14.2 on linux x86-64 platform. In this comparision the application is goroutines,channel and system call intesive, app in Ring-0 Jiny platform performs much better when compare to linux platform, the reason is futex system calls in channel communication and system calls for IO  need lot of cpu resources in switching from ring-3 to ring-0 and vice-versa. If the number of system calls are less then both run at the same speed. The test results shows that golang app completes in 90sec on Jiny platform versus 180sec on default linux platform, means it is almost 2X improvement. 
-
-
-** Test-2 Results**
-
- <table border="1" style="width:100%">
-  <tr>
-    <td><b>Test# </b></td>
-    <td><b> Description</b></td>
-    <td><b>Throughput</b></td>
-    <td><b>Comment</b></td>
-  </tr>
-  <tr>
-    <td>1 </td>
-    <td> default Golang14.2 app on linux platform  </td>
-    <td> timetaken = 180 sec</td>
-    <td>  </td> 
-  </tr>
-    <tr>
-    <td>2 </td>
-    <td>  golang14.2 app in  Ring-0 on Jiny platform </td>
-    <td> timetaken = 96sec </td>
-    <td> almost 2X improvement : lot of futex calls from channels and write system calls contributed the improvement  </td> 
-  </tr>
-   
-  </table>
-
-
-Running Golang app in ring-0 on Jiny platform:
+**Test-2 Running on both platform:**
 
 ```
+
+Running  on Jiny platform:
 
 -->insexe /data/server -count=3000000
 
@@ -151,12 +130,10 @@ SERVER:   Arguments to application  : [highpriorityapp -count=3000000]
 -->SERVER: Final total:  3387232619202732032
 
 --------------
-```
 
-Running default Golang app  on Linux  platform: (Test completed in 208 sec):
+Running  on Linux  platform: (Test completed in 208 sec):
 
-```
-
+root@nvnr:/opt_src/Jiny-Kernel/test/golang_test#  export GOMAXPROCS=2
 root@nvnr:/opt_src/Jiny-Kernel/test/golang_test# date; ./server -count=3000000 ; date
 Sun May  3 17:12:52 IST 2020
 SERVER:  ver=1.1 SAMPLE application with files and channels:  3000000
@@ -166,10 +143,10 @@ Sun May  3 17:15:44 IST 2020
 
 ```
 
-Profiling Data of Golang14.2 in Ring-0. Here both the Jiny kernel and Golang methods profiling data are as follows:
+**Test-2 Profiling Data:**
 
 ```
-System calls stats:
+System calls stats on Jiny:
 [11(17):11: f](105882801)cpu-5:   1 (426431/      0)  3ffd8020:10 hp_go_thread_1 sleeptick(998347) cpu:65535 :/: count:1 status:WAIT-timer: 1000000 stickcpu:ffff
      0: calls:103804240(per-sys:0        app:0       ) :SYS_fs_write
      1: calls:18      (per-sys:0        app:0       ) :SYS_vm_mmap
@@ -221,7 +198,13 @@ System calls stats:
      8: calls:1391453 (per-sys:0        app:0       ) :SYS_futex
      9: calls:1       (per-sys:0        app:0       ) :SYS_tgkill_PART
      
-  function call stat:
+  Summary of system calls stats on Jiny:
+   write and futex calls are large in number. 
+     1) Reasons for large amount of write calls: application as a lot of write calls.
+     2) Reasons for large amount of futex calls: lot of channel communication between go-routines and due to GOMAXPROCS is greater then 1. If GOMAXPROCS=1 then  futex calls will be minimum, due to multi core futex calls are used to wake up the other thread. 
+     
+ ----------------------------------------------------    
+  function call stat on Jiny:
      1:t:84 hits:31866(10654:8429) (rip=ffffffff80144dad) idleTask_func -> ffffffff80144c6e (0) 
     2:t:84 hits:5069(0:0) (rip=0000000000000000) sc_schedule -> ffffffff80141636 (515) 
     3:t:116 hits:4647(0:67) (rip=0000000000000000) cpuspin_before_halt -> ffffffff80144b00 (0) 
@@ -242,10 +225,6 @@ System calls stats:
    18:t:84 hits:   2(0:0) (rip=0000000000000000) apic_send_ipi_vector -> ffffffff8012ed97 (0) 
    19:t:116 hits:   2(0:0) (rip=0000000000000000) arch_spinlock_lock -> ffffffff8013455a (361) 
 1:  symbls count:2819
-	 1: addr:400000 - 582530 
-	10: addr:57a3c0 - 581530 
-	 2: addr:4a0000 - 4f00f7 
-	11: addr:582530 - 5abf20 
     1:t: 0 hits:3816(0:0) (rip=0000000000000000) main.spin -> 000000000049fe30 (35) 
     2:t: 0 hits: 936(0:0) (rip=0000000000000000) runtime.casgstatus -> 0000000000434090 (382) 
     3:t: 0 hits: 438(0:0) (rip=0000000000000000) runtime.lock -> 0000000000409ff0 (412) 
@@ -267,83 +246,28 @@ System calls stats:
    19:t: 0 hits:  90(0:0) (rip=0000000000000000) runtime.releaseSudog -> 0000000000432a40 (904) 
  Total modules: 2 total Hits:0  unknownhits:0 unown ip:0000000000000000 
  
+ -------------------------------------------------------------------------------
+ Summary of system call from Linux platform:
+ 
+ root@nvnr:/home/nvnr# ps -ax | grep server
+11761 pts/1    SLl+   0:14 ./server -count=3000000
+11766 pts/2    S+     0:00 grep --color=auto server
+root@nvnr:/home/nvnr# strace -c -f -p 11761
+ ^Cstrace: Process 11761 detached
+strace: Process 11762 detached
+strace: Process 11763 detached
+strace: Process 11764 detached
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 37.41    3.493554         608      5749           nanosleep
+ 32.19    3.006519           2   1627229           write
+ 29.70    2.773982          87     31960       922 futex
+  0.70    0.065674          53      1238           epoll_pwait
+  0.00    0.000042          42         1           restart_syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    9.339771               1666177       922 total
  
 ```
-
-### Benchmark-2( IPC Improvements): 
-
-This benchmark measures InterProcess Communication(mutex,semphore,messages passing etc) in virtual environment. 
-
-##### Problem Definition:
-   During IPC, When cpu sleeps (blocking on "hlt" instruction) and getting awaken up by other cpu using IPI(Inter Processor Interrupt) within short period of time, this as performance implications for IPC and message passing workloads in virtual machines. The cost is more in vm when compare to metal because of vm exists in to hypervisor.
- 
-  
-##### Test Environment and Results
-    
-  IPC Test: This is a Producer-consumer test using semaphores. Producer and consumer runs in two seperate threads. Producer is more cpu intesive when compare to consumer, this make consumer waits for producer at the end of each loop. producer wakes consumer once item is produced. In this way consumer get context switched at the end of every loop. This emulates  producer and consumer with unequal computation to process every item, this is a very common case. The [source code for test available here.] (https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/expirements/sem_test4.c). If the amount of computation for producer and consumer is same then there will be minimum lock contention which will be very rare. 
-
- - **Hypervisor**: kvm/qemu-2.x
- - **host kernel version**:3.13.0-32
- - **command and arguments to run the test**:  "sem 800k 2000"  :  Here 800k represents the number of items produced and consumed, producer loops 2000 times in tight loop to emulate cpu consumption after every item, the more this value the more will be the consumer wait time.
-     
-     
- <table border="1" style="width:100%">
-  <tr>
-    <td><b>Test# </b></td>
-    <td><b> Description</b></td>
-    <td><b>Throughput</b></td>
-    <td><b>Comment</b></td>
-  </tr>
-  <tr>
-    <td>1 </td>
-    <td> linux vm : kernel 3.0.x on 2 cpu,ubuntu-14  </td>
-    <td> timetaken= 22 sec</td>
-    <td> cpu consumption in host=150%,There are large number of IPI interrupts due to IPC test, close to 280k are generated inside the guestos </td> 
-  </tr>
-    <tr>
-    <td>2 </td>
-    <td> Jiny vm : on 2 cpu, version-2  </td>
-    <td> timetaken= 9sec (140% over test-1)</td>
-    <td> host cpu consumption is 200%(2 cpu's) noticed with top utility. No additional IPI interrupts are generated in the quest OS </td> 
-  </tr>
-    <tr>
-    <td>3 </td>
-    <td> linux on metal, with ubutuntu-14, more then 2 cpu  </td>
-    <td> timetaken= 9.2sec (slightly less then Test-2) </td>
-    <td>  </td> 
-  </tr>
-  <tr>
-    <td>4 </td>
-    <td> with ubuntu-14(linux vm - kernel 3.0.x) on 2 cpu, with cpu hogger with low priority in background </td>
-    <td>Throughput: timetaken= 12sec (better then Test-1 by 83%) </td>
-    <td> cpu hogger with low priority makes the cpu core  alive without going to sleep.</td> 
-  </tr>
-  </table>
-  
-          
-##### **Summary of Tests:**
-1. Test-1 versus Teset-2 : Jiny-vm as performed 140% better when compare to linux vm with same test setup, this is mainly interrupts are not generated because cpu avoids hitting "hlt" instruction when the thread is under wait for a short period.
-2. Test-2 versus Test-3 :linux on baremetal is very close to that of jiny vm. 3% to 4% degredation is due to the IPI interrupts are generated on the metal when compare to jiny.
-3. Test-1 versus Test-3 :linux kernel on the metal and on hypervisor(i,e test-1 and test-3) shows a gap of 140%. this is mainly the interrupts speed on hypervisor and hitting hlt instruction frequently. whenever "hlt" instruction is executed in guest os, control goes to kvm and get back to guest os upon wakeup, this transfer is costly when compare to small cpu spin in guest os. This is exactly implmented in jiny os to avoid hitting the "hlt" instruction. 
-
-Issue-1: In IPC, if there is a contention in mutext or semop or other IPC, then one of the thread will be active and other thread goes to sleep. In this situation, It will be costly to wakeup a thread under sleep in virtual environment with linux  when compare to the metal or jiny os. 
-
-##### Solution : Changes in Jiny kernel
-1. In the producer and consumer test, threads will be running on seperate cpu's. when consumer thread goes to sleep due to the lock, and control goes to idle thread before hitting the "hlt" instruction, idle thread checks if there is any threads belonging to the cpu is waiting, if there is any threads under wait then sheduler spin the cpus or does a small house keeping tasks for a short duration(eg: 10ms or 1 tick) then it goes to sleep using "hlt" instruction, In this short duration if the consumer thread got woken up then it saves IPI(interrupts) generation and also exit/entry of the vcpu. In this way it saves around 800k interrupts for 800k loop in Test-2. Interrupts are costly in virtual environment when compare to metal. every interrupt causes exist and entry in the hypervisor. The "hlt" instruction casues context switch at host. 
-
-##### When IPC based apps in linux vm can under perform due to Issue-1
-1. linux as vm and with multicore(more then one cpu). The issue will not be present in single core, to minimum level on metal( shown it is only 3 to 4% as against 140%).
-2. This issue will be more when the cpu's are idle relatively. example: only producer,consumer threads running on different cpu's.  If other app's are hogging the same vcpu as waiting thread then vcpu will not go to sleep and issue-1 will not popup.
-3. The issue will popup if the critical section's in the app's are small and there is contention among the threads. If the critical section are large then waiter thread goes to a long sleep, in this case receving IPI interrupts is better when compare to tight cpu spin.
-
- Monitoring Issue-1: Due to this this, IPI interrupts will be generated in large number, this can be monitered using the number of [Rescheduling Interrupts](https://help.ubuntu.com/community/ReschedulingInterrupts) in /proc/interrupts, Rescheduling interrupts are implemented using Inter Processor Interrupt(IPI). 
- 
-#### Same Problem was solved differently:
-Same Problem was solved by changing KVM hypervisor in this [paper](http://www.linux-kvm.org/images/a/ac/02x03-Davit_Matalack-KVM_Message_passing_Performance.pdf), published in kvm-forum-2105.  Difference between the two solutions are:
-
-1. **Problem definition:** same in both. In this paper IPC workload is used to explain the problem, In other paper "message passing workload" is used to explain the problem.
-2. **Solution to the problem:** It was fixed in guest kernel(Jiny kernel) in this paper, and the problem was solved completely. Whereas in other paper, it is fixed in hypervisor(kvm) , due to this the problem is solved partially(slide-29). 
-3. Both solutions to the same problem can co-exist. since the problem is solved at two different layers(kernel and hypervisor). 
 
 
 

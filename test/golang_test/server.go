@@ -18,17 +18,17 @@ func spin(arg int) int {
 	return ret;
 }
 func process(in chan int,out chan int ) {
-	 buf := make([]byte, 1024)
-	 for ready < 1 {
-	 	runtime.Gosched()
-	 }
+	buf := make([]byte, 1024)
+	for ready < 1 {
+		runtime.Gosched()
+	}
 	 
-	 fd, _ := os.Create("/dev/null")
-     for {
-       msg := <- in
-       count, _ := fd.Write(buf[:30])
-       out <- msg*2*count*spin(100)
-    }
+	fd, _ := os.Create("/dev/null")
+	for {
+		msg := <- in
+		count, _ := fd.Write(buf[:30])
+		out <- msg*2*count*spin(100)
+	}
 }
 
 func main() {
@@ -49,15 +49,12 @@ func main() {
     for i:=0; i<maxGoroutines; i++ {
 	    in[i] = make(chan int)
 	    out[i] = make(chan int)
-
-
         go process(in[i], out[i])
     }
 
     total:=0
     k:=0
     ready=1
-    
     
     //fmt.Println("SERVER Start Time: ", time.Now().Format(time.RFC850))
     for i:=0; i<*maxCount; i++ {
