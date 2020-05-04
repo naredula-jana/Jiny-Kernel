@@ -1580,14 +1580,15 @@ repeat:
  	 g_cpu_state[cpuid].cpu_spinstate.clock_interrupts = 0;
  	 g_cpu_state[cpuid].cpu_spinstate.nonclock_interrupts = 0;
  	 while(g_cpu_state[cpuid].cpu_spinstate.clock_interrupts < 3){
- 		 net_bh();
+
  		 if (g_cpu_state[cpuid].run_queue_length > 0){
  			g_cpu_state[cpuid].task_on_wait = 0;
  			sc_schedule();
  			g_stat_idle_avoided++;
  			goto repeat;
  		 }
- 		prev_ints = g_cpu_state[cpuid].cpu_spinstate.clock_interrupts;
+ 		 net_bh();
+ 		 prev_ints = g_cpu_state[cpuid].cpu_spinstate.clock_interrupts;
  	 }
  	 g_cpu_state[cpuid].task_on_wait = 0;
  	 return 1;

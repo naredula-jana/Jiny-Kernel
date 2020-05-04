@@ -23,13 +23,13 @@ FUTEX_CMD_MASK = ~(FUTEX_PRIVATE_FLAG|FUTEX_CLOCK_REALTIME),
 };
 #define FUTEX_BITSET_MATCH_ANY  0xffffffff
 
-#define MAX_FUTEXS 1024
-int total_futexs=0;
+#define MAX_FUTEXS 1023
+//int total_futexs=0;
 class futex *futex_list[MAX_FUTEXS];
 
 futex::futex(int *uaddr_arg){
 	arch_spinlock_init(&spin_lock,"futexlock");
-	waitq = jnew_obj(wait_queue,"futex", 0);
+	waitq = jnew_obj(wait_queue,"Futex", 0);
 	uaddr = uaddr_arg;
 	mm = g_current_task->mm;
 
@@ -84,14 +84,34 @@ unsigned long _schedule(unsigned long flags);
 void sc_remove_dead_tasks();
 
 static int find_futex(int *uaddr){
-	int i;
-
-	for (i=0; (i<MAX_FUTEXS) && (i<total_futexs); i++){
-		if (i<total_futexs && futex_list[i]!=0 &&  futex_list[i]->mm==g_current_task->mm && futex_list[i]->uaddr==uaddr){
-			return i;
+	int id = ((int)((unsigned long) uaddr + (unsigned long) g_current_task->mm)) % MAX_FUTEXS;
+	int j=0;
+	while (j<MAX_FUTEXS){
+		if (futex_list[id]!=0 &&  futex_list[id]->mm==g_current_task->mm && futex_list[id]->uaddr==uaddr){
+					return id;
 		}
+		id++;
+		id=id%MAX_FUTEXS;
+		j++;
 	}
 	return -1;
+}
+static futex *add_futex(int *uaddr){
+	int id = ((int)((unsigned long) uaddr + (unsigned long) g_current_task->mm)) % MAX_FUTEXS;
+	int j=0;
+	while (j<MAX_FUTEXS){
+		if (futex_list[id]==0 ){
+			futex *p;
+			p = jnew_obj(futex, uaddr);
+			futex_list[id] = p;
+			return p;
+		}
+		id++;
+		id=id%MAX_FUTEXS;
+		j++;
+	}
+	return 0;
+
 }
 static futex *get_futex(int *uaddr){ /* find the futex if not found create it */
 	futex *p;
@@ -106,23 +126,11 @@ static futex *get_futex(int *uaddr){ /* find the futex if not found create it */
 	}
 
 	spin_lock_irqsave(&g_global_lock, irq_flags);
-	for (i=0; i<MAX_FUTEXS && (i<total_futexs); i++){
-		if (i<total_futexs && futex_list[i]==0){
-			break;
-		}
-	}
-	if (i < MAX_FUTEXS) {
-		k = find_futex(uaddr);
-		if (k != -1) {
-			ret = futex_list[k];
-		} else {
-			p = jnew_obj(futex, uaddr);
-			futex_list[i] = p;
-			if (i >= total_futexs){
-				total_futexs = i + 1;
-			}
-			ret = p;
-		}
+	k = find_futex(uaddr);
+	if (k != -1) {
+		ret = futex_list[k];
+	} else {
+		ret = add_futex(uaddr);
 	}
 	spin_unlock_irqrestore(&g_global_lock, irq_flags);
 
@@ -130,8 +138,8 @@ static futex *get_futex(int *uaddr){ /* find the futex if not found create it */
 }
 int destroy_futex(struct mm_struct *mm) {
 	int i;
-	for (i = 0; i < MAX_FUTEXS && (i<total_futexs); i++) {
-		if (i < total_futexs && futex_list[i] != 0 && futex_list[i]->mm == mm) {
+	for (i = 0; i < MAX_FUTEXS ; i++) {
+		if (futex_list[i] != 0 && futex_list[i]->mm == mm) {
 			futex_list[i]->destroy();
 			futex_list[i] = 0;
 		}
