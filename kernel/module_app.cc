@@ -1129,8 +1129,8 @@ void Jcmd_lsmod(unsigned char *arg1, unsigned char *arg2) {
 					continue;
 				}
 
-				ut_snprintf(buf, bsize, "  %3d:t:%2d hits:%4d(%d:%d) (rip=%p) %s -> %p (%d) \n", k,
-						modulep->symbol_table[j].type, modulep->symbol_table[j].total_hits,modulep->symbol_table[j].stats[0].hits,modulep->symbol_table[j].stats[1].hits,
+				ut_snprintf(buf, bsize, "  %3d:t:%2d hits:%4d(%d:%d:%d:%d:%d) (rip=%p) %s -> %p (%d) \n", k,
+						modulep->symbol_table[j].type, modulep->symbol_table[j].total_hits,modulep->symbol_table[j].stats[0].hits,modulep->symbol_table[j].stats[1].hits,modulep->symbol_table[j].stats[2].hits,modulep->symbol_table[j].stats[3].hits,modulep->symbol_table[j].stats[4].hits,
 						modulep->symbol_table[j].stats[0].rip, modulep->symbol_table[j].name, modulep->symbol_table[j].address,
 						modulep->symbol_table[j].len);
 				fs_fd_write(1, buf, ut_strlen(buf));
