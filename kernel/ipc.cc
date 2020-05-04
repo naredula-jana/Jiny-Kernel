@@ -153,8 +153,8 @@ int SYS_futex(int *uaddr, int op, int val, unsigned long timeout,
 
 	}
 	futex_p = get_futex(uaddr);
-	if (futex_p != 0){
-		ut_log("ERROR: futex value is zero \n");
+	if (futex_p == 0){
+		ut_log("ERROR: Futex value is zero \n");
 		return -ENOSYS;
 	}
 	//ut_printf("futex uaddr: %x op:%x val:%x waits:%d wakeups:%d\n", uaddr, op, val,futex_p->stat_waits,futex_p->stat_wakeups);
