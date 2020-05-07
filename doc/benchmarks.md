@@ -10,9 +10,9 @@
  
 
 **Performance Tests:**
-1.   **Test-1 :**  The test results shows that for the IO intensive [application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/file.go) performs better on Jiny due to system call intesive. golang app completes in 22sec on Jiny platform versus 202sec on default linux platform, means it is almost 10X improvement. 
-2.   **Test-2:** The test results shows that for the IO  and channel intensive [application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/server.go) performs better on Jiny, the reason is system calls from IO aswell as futex from channel messages across the cores. If the number of system calls are less then both run at similar speed. The test results shows that golang application completes in 90sec on Jiny platform versus 180sec on default linux platform, means it is almost 2X improvement. 
-
+1.   **Test-1 (IO intensive) :**  The test results shows that for the IO intensive [application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/file.go) performs better on Jiny due to system call intesive. golang app completes in 22sec on Jiny platform versus 202sec on default linux platform, means it is almost 10X improvement. 
+2.   **Test-2: (IO + channel Intensive)** The test results shows that for the IO  and channel intensive [application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/server.go) performs better on Jiny, the reason is system calls from IO aswell as futex from channel messages across the cores. If the number of system calls are less then both run at similar speed. The test results shows that golang application completes in 90sec on Jiny platform versus 180sec on default linux platform, means it is almost 2X improvement. 
+2.   **Test-3( channel intesive):** The test results shows that for the channel intensive [application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/serverchannel.go) performs better on Jiny, the reason is system calls from IO aswell as futex from channel messages across the cores. If the number of system calls are less then both run at similar speed. The test results shows that golang application completes in 60sec on Jiny platform versus 90sec on default linux platform, means it is almost 1.5X improvement. 
 
 **Test-1 Results:**
 
@@ -34,6 +34,12 @@
     <td> timetaken = 96sec </td>
     <td> timetaken = 180 sec </td>
     <td> almost 2X improvement. Reasons:a) large amount of futex system calls generated due to send/recv function from  channels between go-routines . b)  write system calls due to IO. </td> 
+  </tr>
+      <tr>
+    <td>Test-3 </td>
+    <td> timetaken = 60sec </td>
+    <td> timetaken = 90sec </td>
+    <td> almost 2X improvement. Reasons:a) large amount of futex system calls generated due to send/recv function from  channels between go-routines  </td> 
   </tr>
   </table>
 
@@ -268,6 +274,139 @@ strace: Process 11764 detached
 100.00    9.339771               1666177       922 total
  
 ```
+#test-3
 
+```
+-->insexe /data/serverchannel -count=3000000
+
+ Starting golang app :/data/serverchannel:  args :-count=3000000: 
+ Successfull loaded the high priority app
+------------------------------
+SERVERCHANNEL:  ver=1.1 SAMPLE application with files and channels:  3000000
+SERVERCHANNEL:   Arguments to application  : [highpriorityapp -count=3000000]
+SERVERCHANNEL Start Time:  Monday, 04-May-20 20:09:04 UTC
+-->SERVERCHANNEL End Time:  Monday, 04-May-20 20:09:58 UTC
+SERVERCHANNEL: Final total:  3387232619202732032
+
+------------------------
+on Linux platform
+root@nvnr:/opt_src/Jiny-Kernel/test/golang_test# date; ./serverchannel -count=3000000 ; date
+Tue May  5 01:31:43 IST 2020
+SERVERCHANNEL:  ver=1.1 SAMPLE application with files and channels:  3000000
+SERVERCHANNEL:   Arguments to application  : [./serverchannel -count=3000000]
+SERVERCHANNEL Start Time:  Tuesday, 05-May-20 01:31:43 IST
+SERVERCHANNEL End Time:  Tuesday, 05-May-20 01:33:10 IST
+SERVERCHANNEL: Final total:  3387232619202732032
+
+```
+Test-3 Profile Data:
+
+```
+[11(17):11: f](3121047)cpu-2:   1 (583760/      0)  3ffd8020:10 hp_go_thread_1 sleeptick( 42) cpu:65535 :/: count:1 status:WAIT-Futex: 50 stickcpu:ffff
+     0: calls:1       (per-sys:0        app:0       ) :SYS_fs_read
+     1: calls:3       (per-sys:0        app:0       ) :SYS_fs_write
+     2: calls:1       (per-sys:0        app:0       ) :SYS_fs_close
+     3: calls:18      (per-sys:0        app:0       ) :SYS_vm_mmap
+     4: calls:114     (per-sys:0        app:0       ) :SYS_rt_sigaction_PART
+     5: calls:6       (per-sys:0        app:0       ) :SYS_rt_sigprocmask_PART
+     6: calls:783872  (per-sys:0        app:0       ) :SYS_sched_yield
+     7: calls:386979  (per-sys:0        app:0       ) :SYS_nanosleep
+     8: calls:2       (per-sys:0        app:0       ) :SYS_sc_clone
+     9: calls:1       (per-sys:0        app:0       ) :SYS_uname
+     10: calls:3       (per-sys:0        app:0       ) :SYS_fs_fcntl
+     11: calls:9       (per-sys:0        app:0       ) :SYS_gettimeofday
+     12: calls:2       (per-sys:0        app:0       ) :SYS_sigalt_stack_PART
+     13: calls:1       (per-sys:0        app:0       ) :SYS_arch_prctl
+     14: calls:1       (per-sys:0        app:0       ) :SYS_gettid
+     15: calls:1950030 (per-sys:0        app:0       ) :SYS_futex
+     16: calls:1       (per-sys:0        app:0       ) :SYS_sched_getaffinity_PART
+     17: calls:2       (per-sys:0        app:0       ) :SYS_fs_openat
+     18: calls:1       (per-sys:0        app:0       ) :SYS_readlinkat_PART
+[12(18):11:11](12725)cpu-3:   1 ( 6469/      0)  3ffd8020:10 hp_go_thread_2 sleeptick( 43) cpu:65535 :/: count:1 status:WAIT-Futex: 50 stickcpu:ffff
+     0: calls:1       (per-sys:0        app:0       ) :SYS_rt_sigprocmask_PART
+     1: calls:6356    (per-sys:0        app:0       ) :SYS_nanosleep
+     2: calls:1       (per-sys:0        app:0       ) :SYS_getpid
+     3: calls:6359    (per-sys:0        app:0       ) :SYS_gettimeofday
+     4: calls:2       (per-sys:0        app:0       ) :SYS_sigalt_stack_PART
+     5: calls:1       (per-sys:0        app:0       ) :SYS_arch_prctl
+     6: calls:2       (per-sys:0        app:0       ) :SYS_gettid
+     7: calls:2       (per-sys:0        app:0       ) :SYS_futex
+     8: calls:1       (per-sys:0        app:0       ) :SYS_tgkill_PART
+[13(19):11:11](2589775)cpu-4:   1 (495746/      1)  3ffd8020:10 hp_go_thread_3 sleeptick(993553) cpu:65535 :/: count:1 status:WAIT-timer: 1000000 stickcpu:ffff
+     0: calls:2       (per-sys:0        app:0       ) :SYS_fs_write
+     1: calls:1       (per-sys:0        app:0       ) :SYS_vm_mmap
+     2: calls:3       (per-sys:0        app:0       ) :SYS_rt_sigprocmask_PART
+     3: calls:642179  (per-sys:0        app:0       ) :SYS_sched_yield
+     4: calls:305848  (per-sys:0        app:0       ) :SYS_nanosleep
+     5: calls:1       (per-sys:0        app:0       ) :SYS_sc_clone
+     6: calls:2       (per-sys:0        app:0       ) :SYS_gettimeofday
+     7: calls:2       (per-sys:0        app:0       ) :SYS_sigalt_stack_PART
+     8: calls:1       (per-sys:0        app:0       ) :SYS_arch_prctl
+     9: calls:2       (per-sys:0        app:0       ) :SYS_gettid
+     10: calls:1641734 (per-sys:0        app:0       ) :SYS_futex
+[14(20):11:13](2266016)cpu-1:   1 (435057/      0)  3ffd8020:10 hp_go_thread_4 sleeptick(  0) cpu:65535 :/: count:1 status:WAIT-timer: 1000000 stickcpu:ffff
+     0: calls:32      (per-sys:0        app:0       ) :SYS_fs_write
+     1: calls:1       (per-sys:0        app:0       ) :SYS_rt_sigprocmask_PART
+     2: calls:546299  (per-sys:0        app:0       ) :SYS_sched_yield
+     3: calls:274867  (per-sys:0        app:0       ) :SYS_nanosleep
+     4: calls:1       (per-sys:0        app:0       ) :SYS_getpid
+     5: calls:2       (per-sys:0        app:0       ) :SYS_sigalt_stack_PART
+     6: calls:1       (per-sys:0        app:0       ) :SYS_arch_prctl
+     7: calls:2       (per-sys:0        app:0       ) :SYS_gettid
+     8: calls:1444810 (per-sys:0        app:0       ) :SYS_futex
+     9: calls:1       (per-sys:0        app:0       ) :SYS_tgkill_PART
+-->lsmod stat
+
+ Stats for cpu: -1 
+0: kernel symbls count:2025
+	 0: addr:    0 -     0 
+	 0: addr:    0 -     0 
+	 0: addr:    0 -     0 
+	 0: addr:    0 -     0 
+    1:t:84 hits:42643(13954:6161:5684:10702:6142) (rip=ffffffff80144e91) idleTask_func -> ffffffff80144d52 (0) 
+    2:t:116 hits:4079(0:1433:1146:319:1181) (rip=0000000000000000) cpuspin_before_halt -> ffffffff80144be4 (0) 
+    3:t:84 hits:2949(0:2888:32:0:29) (rip=0000000000000000) sc_schedule -> ffffffff8014171a (515) 
+    4:t:84 hits:1895(0:681:520:143:551) (rip=0000000000000000) net_bh -> ffffffff801374f5 (262) 
+    5:t:84 hits:  64(0:0:33:0:31) (rip=0000000000000000) _ZN10wait_queue13wait_internalEmP10spinlock_t -> ffffffff80136996 (0) 
+    6:t:84 hits:  57(0:0:29:0:28) (rip=0000000000000000) _ZN10wait_queue6wakeupEv -> ffffffff80136842 (340) 
+    7:t:115 hits:  18(0:0:11:0:7) (rip=0000000000000000) spin -> ffffffff80134602 (0) 
+    8:t:116 hits:   9(0:0:2:0:7) (rip=0000000000000000) get_percpu_ns -> ffffffff801127ba (629) 
+    9:t:116 hits:   4(0:0:3:0:1) (rip=0000000000000000) arch_spinlock_unlock -> ffffffff801347dd (0) 
+   10:t:84 hits:   4(0:0:0:0:4) (rip=0000000000000000) _ZN14serial_jdriver14dr_serialWriteEPci -> ffffffff80176fc4 (0) 
+   11:t:84 hits:   3(0:0:2:0:1) (rip=0000000000000000) ut_get_systemtime_ns -> ffffffff80112a69 (0) 
+   12:t:116 hits:   3(0:0:2:0:1) (rip=0000000000000000) arch_spinlock_lock -> ffffffff8013455a (361) 
+   13:t:116 hits:   3(0:0:3:0:0) (rip=0000000000000000) find_futex -> ffffffff80134d86 (257) 
+   14:t:116 hits:   3(0:0:0:0:3) (rip=0000000000000000) wakeup_cpus -> ffffffff80135895 (0) 
+   15:t:72 hits:   2(0:0:1:0:1) (rip=0000000000000000) HP_syscall -> ffffffff80112427 (0) 
+   16:t:84 hits:   2(0:0:1:0:1) (rip=0000000000000000) ar_read_tsc -> ffffffff8011279b (0) 
+   17:t:84 hits:   2(0:0:2:0:0) (rip=0000000000000000) SYS_futex -> ffffffff801350bf (0) 
+   18:t:84 hits:   2(0:0:1:0:1) (rip=0000000000000000) sc_after_syscall -> ffffffff80141335 (628) 
+   19:t:84 hits:   1(0:0:0:0:1) (rip=0000000000000000) SYS_nanosleep -> ffffffff8013bd47 (355) 
+1:  symbls count:2874
+	 1: addr:400000 - 590770 
+	10: addr:588440 - 58f770 
+	 2: addr:4a8000 - 4fa0d5 
+	11: addr:590770 - 5ba1c0 
+    1:t: 0 hits:2711(0:0:1427:0:1284) (rip=0000000000000000) main.spin -> 00000000004a7c60 (35) 
+    2:t: 0 hits: 586(0:0:317:0:269) (rip=0000000000000000) runtime.casgstatus -> 0000000000434090 (382) 
+    3:t: 0 hits: 546(0:0:301:0:245) (rip=0000000000000000) runtime.unlock -> 000000000040a190 (193) 
+    4:t: 0 hits: 498(0:0:262:0:236) (rip=0000000000000000) runtime.lock -> 0000000000409ff0 (412) 
+    5:t: 0 hits: 273(0:0:147:0:126) (rip=0000000000000000) runtime.chanrecv -> 0000000000405980 (1716) 
+    6:t: 0 hits: 241(0:0:130:0:111) (rip=0000000000000000) runtime.runqput -> 000000000043e010 (249) 
+    7:t: 0 hits: 234(0:0:120:0:114) (rip=0000000000000000) runtime.runqget -> 000000000043e310 (168) 
+    8:t: 0 hits: 160(0:0:82:0:78) (rip=0000000000000000) runtime.chansend -> 0000000000404e60 (1557) 
+    9:t: 0 hits: 134(0:0:78:0:56) (rip=0000000000000000) runtime.releaseSudog -> 0000000000432a40 (904) 
+   10:t: 0 hits: 114(0:0:63:0:51) (rip=0000000000000000) runtime.ready -> 00000000004337e0 (704) 
+   11:t: 0 hits: 104(0:0:59:0:45) (rip=0000000000000000) runtime.gopark -> 0000000000432500 (309) 
+   12:t: 0 hits: 102(0:0:55:0:47) (rip=0000000000000000) main.process -> 00000000004a7c90 (185) 
+   13:t: 0 hits: 101(0:0:56:0:45) (rip=0000000000000000) runtime.schedule -> 0000000000437d70 (1316) 
+   14:t: 0 hits:  98(0:0:62:0:36) (rip=0000000000000000) runtime.memmove -> 000000000045d860 (1723) 
+   15:t: 0 hits:  93(0:0:54:0:39) (rip=0000000000000000) runtime.runqgrab -> 000000000043e3c0 (335) 
+   16:t: 0 hits:  84(0:0:53:0:31) (rip=0000000000000000) runtime.acquireSudog -> 00000000004326b0 (907) 
+   17:t: 0 hits:  81(0:0:30:0:51) (rip=0000000000000000) runtime.(*waitq).dequeue -> 0000000000406280 (252) 
+   18:t: 0 hits:  75(0:0:44:0:31) (rip=0000000000000000) runtime.execute -> 00000000004369b0 (358) 
+   19:t: 0 hits:  70(0:0:35:0:35) (rip=0000000000000000) runtime.chansend1 -> 0000000000404e20 (63) 
+ Total modules: 2 total Hits:0  unknownhits:0 unown ip:0000000000000000 
+```
 
 

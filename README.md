@@ -25,9 +25,9 @@
  
 More details of [compiling and running Jiny Kernel is available here.](../master/bin/README.md).  
 
-## Performance and Benchmarks:
+## Performance Test results of Golang-14.2 on Jiny:
 
-More details of the Benchmarks are available at [Jiny-Benchmarks.](../master/doc/benchmarks.md).   
+[Golang application runs almost 2X to 10X faster on Jiny-Kernel.](../master/doc/benchmarks.md).   
 
 ## Features currently Available:
 
