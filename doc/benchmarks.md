@@ -12,14 +12,14 @@
 **Performance Tests:**
 1.   **Test-1 (IO intensive) :**  The test results shows that for the IO intensive [application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/file.go) performs better on Jiny due to system call intesive. golang app completes in 22sec on Jiny platform versus 202sec on default linux platform, means it is almost 10X improvement. 
 2.   **Test-2: (IO + channel Intensive)** The test results shows that for the IO  and channel intensive [application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/server.go) performs better on Jiny, the reason is system calls from IO aswell as futex from channel messages across the cores. If the number of system calls are less then both run at similar speed. The test results shows that golang application completes in 90sec on Jiny platform versus 180sec on default linux platform, means it is almost 2X improvement. 
-2.   **Test-3( channel intesive):** The test results shows that for the channel intensive [application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/serverchannel.go) performs better on Jiny, the reason is system calls from IO aswell as futex from channel messages across the cores. If the number of system calls are less then both run at similar speed. The test results shows that golang application completes in 60sec on Jiny platform versus 90sec on default linux platform, means it is almost 1.5X improvement. 
+2.   **Test-3( channel intensive):** The test results shows that for the channel intensive [application](https://github.com/naredula-jana/Jiny-Kernel/blob/master/test/golang_test/serverchannel.go) performs better on Jiny, the reason is system calls from IO aswell as futex from channel messages across the cores. If the number of system calls are less then both run at similar speed. The test results shows that golang application completes in 60sec on Jiny platform versus 90sec on default linux platform, means it is almost 1.5X improvement. 
 
 **Test-1 Results:**
 
  <table border="1" style="width:100%">
   <tr>
     <td><b>Test Number </b></td>
-    <td><b> Throuughput on Jiny-Ring-0 </b></td>
+    <td><b> Throughput on Jiny-Ring-0 </b></td>
     <td><b>Throughput on Linux platform</b></td>
     <td><b>Comments</b></td>
   </tr>
